@@ -3,7 +3,6 @@ const line = require('@line/bot-sdk');
 const axios = require('axios');
 require('dotenv').config();
 
-// LINE 設定
 const config = {
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
   channelSecret: process.env.LINE_CHANNEL_SECRET
@@ -11,26 +10,43 @@ const config = {
 const client = new line.Client(config);
 const app = express();
 
-// 處理圖片訊息
+// 強化日誌中間件
+app.use(express.json());
+app.use((req, res, next) => {
+  console.log("收到請求:", req.method, req.path);
+  next();
+});
+
 app.post('/webhook', line.middleware(config), async (req, res) => {
   try {
     const events = req.body.events;
+    console.log("收到事件數組:", events);
+
+    if (!events || events.length === 0) {
+      console.log("空事件，忽略處理");
+      return res.sendStatus(200);
+    }
+
     const event = events[0];
+    console.log("處理事件類型:", event.type);
 
     if (event.type === 'message' && event.message.type === 'image') {
       const imageId = event.message.id;
       const imageUrl = `https://api-data.line.me/v2/bot/message/${imageId}/content`;
+      console.log("開始下載圖片:", imageUrl);
 
-      // 下載圖片
       const imageResponse = await axios.get(imageUrl, {
-        headers: { Authorization: `Bearer ${config.channelAccessToken}` },
+        headers: { 
+          Authorization: `Bearer ${config.channelAccessToken}`,
+          'User-Agent': 'StainBot/1.0'
+        },
         responseType: 'arraybuffer'
       });
+      console.log("圖片下載完成，大小:", imageResponse.data.length);
 
-      // 轉換為 Base64
       const imageBase64 = Buffer.from(imageResponse.data, 'binary').toString('base64');
+      console.log("Base64 轉換完成");
 
-      // 調用 OpenAI GPT-4 Vision
       const openaiResponse = await axios.post(
         'https://api.openai.com/v1/chat/completions',
         {
@@ -52,30 +68,36 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
               ]
             }
           ],
-          max_tokens: 300
+          max_tokens: 250
         },
         {
           headers: {
             'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'OpenAI-Beta': 'assistants=v1'
           },
-          timeout: 25000 // 25 秒超時
+          timeout: 25000
         }
       ).catch(error => {
-        console.error("OpenAI 請求失敗:", error.message);
+        console.error("OpenAI 請求失敗詳情:", {
+          status: error.response?.status,
+          data: error.response?.data,
+          message: error.message
+        });
         return null;
       });
 
       if (!openaiResponse) {
         await client.replyMessage(event.replyToken, {
           type: 'text',
-          text: '分析超時，請重試或提供更清晰的圖片。'
+          text: '分析服務暫時不可用，請稍後重試。'
         });
         return res.sendStatus(200);
       }
 
-      // 回覆分析結果
+      console.log("OpenAI 回覆:", openaiResponse.data);
       const replyText = openaiResponse.data.choices[0].message.content;
+
       await client.replyMessage(event.replyToken, {
         type: 'text',
         text: replyText
@@ -83,23 +105,12 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
     }
     res.sendStatus(200);
   } catch (error) {
-    console.error("全局錯誤:", error);
-    res.sendStatus(200); // 必須回傳 200 給 LINE
+    console.error("全局捕獲錯誤:", {
+      message: error.message,
+      stack: error.stack
+    });
+    res.sendStatus(200);
   }
 });
 
-// 全局錯誤處理
-app.use((err, req, res, next) => {
-  console.error("全局錯誤捕獲:", err.stack);
-  res.status(500).send('伺服器錯誤');
-});
-
-// 啟動伺服器
-app.listen(process.env.PORT || 3000, () => {
-  console.log(`伺服器運行中，端口: ${process.env.PORT}`);
-});
-
-// 健康檢查路由
-app.get('/', (req, res) => {
-  res.send('汙漬分析機器人運行中！');
-}); 
+// 其他保持不變...
