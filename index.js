@@ -1,5 +1,8 @@
 const express = require('express');
 const line = require('@line/bot-sdk');
+const multer = require('multer');
+const fs = require('fs');
+const path = require('path');
 require('dotenv').config();
 
 // 安全验证环境变量
@@ -21,6 +24,7 @@ const config = {
 
 const client = new line.Client(config);
 const app = express();
+const upload = multer({ dest: 'uploads/' });
 
 // 强化 JSON 解析中间件
 app.use(express.json({
@@ -93,6 +97,30 @@ app.post('/webhook', async (req, res) => {
   }
 });
 
+// 污渍分析端点
+app.post('/analyze-stain', upload.single('image'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: '未上传图片' });
+  }
+
+  const imagePath = path.join(__dirname, req.file.path);
+  console.log(`收到图片: ${imagePath}`);
+
+  // 模拟污渍分析逻辑（可以集成 AI 模型）
+  const analysisResult = {
+    successRate: Math.floor(Math.random() * 100), // 模拟清洁成功率
+    material: 'Cotton', // 假设的衣物材质
+    recommendations: ['使用温水清洗', '避免使用漂白剂']
+  };
+
+  // 删除上传的图片（可选）
+  fs.unlink(imagePath, (err) => {
+    if (err) console.error('删除文件失败:', err);
+  });
+
+  res.json(analysisResult);
+});
+
 // 健康检查端点
 app.get('/health', (req, res) => {
   res.status(200).json({ 
@@ -104,5 +132,6 @@ app.get('/health', (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`服务运行中，监听端口 ${PORT}`);
-  console.log(`Webhook URL: https://stain-bot-production-33a5.up.railway.app/webhook`); // 已替换你的域名
+  console.log(`Webhook URL: https://stain-bot-production-33a5.up.railway.app/webhook`);
+  console.log(`污渍分析端点: https://stain-bot-production-33a5.up.railway.app/analyze-stain`);
 });
