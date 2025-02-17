@@ -2,63 +2,107 @@ const express = require('express');
 const line = require('@line/bot-sdk');
 require('dotenv').config();
 
-// 终极字符过滤器
-const sanitizeHeader = (value) => {
-  return value.toString()
-    .replace(/[^\x20-\x7E]/g, '') // 仅允许可打印 ASCII
-    .trim();
+// 安全验证环境变量
+const validateConfig = () => {
+  const missing = [];
+  if (!process.env.LINE_CHANNEL_ACCESS_TOKEN) missing.push('LINE_CHANNEL_ACCESS_TOKEN');
+  if (!process.env.LINE_CHANNEL_SECRET) missing.push('LINE_CHANNEL_SECRET');
+  if (missing.length > 0) {
+    console.error(`致命错误：缺少环境变量 ${missing.join(', ')}`);
+    process.exit(1);
+  }
 };
-
-// 环境变量加载后立即调试
-console.log("[调试] 原始环境变量:", {
-  LINE_TOKEN: process.env.LINE_CHANNEL_ACCESS_TOKEN ? '存在' : '缺失',
-  OPENAI_KEY: process.env.OPENAI_API_KEY ? '存在' : '缺失'
-});
+validateConfig();
 
 const config = {
-  channelAccessToken: sanitizeHeader(process.env.LINE_CHANNEL_ACCESS_TOKEN || ''),
-  channelSecret: sanitizeHeader(process.env.LINE_CHANNEL_SECRET || '')
+  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
+  channelSecret: process.env.LINE_CHANNEL_SECRET
 };
 
-// 致命错误检查
-if (!config.channelAccessToken) {
-  console.error("致命错误：LINE_TOKEN 无效，十六进制值:", Buffer.from(process.env.LINE_CHANNEL_ACCESS_TOKEN || '').toString('hex'));
-  process.exit(1);
-}
-
-const client = new line.Client(config); // LINE 客户端实例
-
+const client = new line.Client(config);
 const app = express();
 
-// 中间件处理 LINE 请求
-app.use(express.json()); // 解析 JSON 请求体
-
-app.post('/webhook', line.middleware(config), async (req, res) => {
-  const events = req.body.events;
-  
-  // 如果有事件
-  if (events && events.length > 0) {
-    const event = events[0];
-    
-    // 只处理消息类型事件
-    if (event.type === 'message' && event.message.type === 'text') {
-      const replyToken = event.replyToken;
-      const userMessage = event.message.text;
-      
-      // 发送回用户的消息
-      try {
-        await client.replyMessage(replyToken, {
-          type: 'text',
-          text: `你发送了: ${userMessage}`
-        });
-        console.log('消息已发送');
-      } catch (err) {
-        console.error('发送消息失败:', err);
-      }
+// 强化 JSON 解析中间件
+app.use(express.json({
+  verify: (req, res, buf) => {
+    try {
+      JSON.parse(buf.toString()); // 预验证 JSON 格式
+    } catch (e) {
+      console.error('无效的 JSON 格式:', buf.toString());
+      throw new Error('Invalid JSON');
     }
   }
-  
-  res.sendStatus(200); // 返回 200 OK
+}));
+
+// LINE 中间件错误处理
+const lineMiddleware = line.middleware(config);
+app.post('/webhook', (req, res, next) => {
+  lineMiddleware(req, res, (err) => {
+    if (err) {
+      console.error('LINE 签名验证失败:', err.message);
+      return res.status(401).send('Unauthorized');
+    }
+    next();
+  });
 });
 
-app.listen(3000, () => console.log("运行中，监听端口 3000"));
+// 核心逻辑处理
+app.post('/webhook', async (req, res) => {
+  try {
+    const events = req.body.events || [];
+    
+    // 并行处理所有事件
+    const promises = events.map(async (event) => {
+      if (event.type !== 'message' || event.message.type !== 'text') {
+        console.log('忽略非文本消息:', event.type);
+        return;
+      }
+
+      if (!event.replyToken) {
+        console.warn('缺少 replyToken，事件 ID:', event.message.id);
+        return;
+      }
+
+      // 构造响应消息
+      const response = {
+        type: 'text',
+        text: `你发送了: ${event.message.text}`,
+        emojis: [
+          {
+            index: 5, // 在「发送了:」后面添加表情
+            productId: '5ac21a8c040ab15980c9b43f',
+            emojiId: '001'
+          }
+        ]
+      };
+
+      // 发送回复
+      await client.replyMessage(event.replyToken, response);
+      console.log('消息已成功发送，事件 ID:', event.message.id);
+    });
+
+    await Promise.all(promises);
+    res.status(200).end();
+
+  } catch (err) {
+    console.error('全局错误捕获:', err.originalError?.response?.data || err.message);
+    res.status(500).json({
+      error: 'INTERNAL_SERVER_ERROR',
+      details: err.message
+    });
+  }
+});
+
+// 健康检查端点
+app.get('/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'OK',
+    timestamp: new Date().toISOString()
+  });
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`服务运行中，监听端口 ${PORT}`);
+  console.log(`Webhook URL: https://stain-bot-production-33a5.up.railway.app/webhook`); // 已替换你的域名
+});
