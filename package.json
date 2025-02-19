@@ -9,16 +9,27 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
   "dependencies": {
     "@line/bot-sdk": "^9.7.1",
     "axios": "^1.7.9",
+    "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "form-data": "^4.0.2",
+    "fs": "^0.0.1-security",
     "multer": "^1.4.5-lts.1",
     "node-fetch": "^2.7.0",
+    "openai": "^4.85.1",
     "redis": "^4.7.0",
     "sharp": "^0.33.5"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CH-laundry/stain-bot.git"
+  },
+  "bugs": {
+    "url": "https://github.com/CH-laundry/stain-bot/issues"
+  },
+  "homepage": "https://github.com/CH-laundry/stain-bot#readme",
+  "description": ""
 }
