@@ -150,10 +150,10 @@ app.post('/webhook', async (req, res) => {
             ]
           })
 
-          console.log('OpenAI 回應:', openaiResponse.data.choices[0].message.content);
+          console.log('OpenAI 回應:', openaiResponse.choices[0].message.content);
           // 回覆用戶
           await client.pushMessage(userId, [
-            { type: 'text', text: openaiResponse.data.choices[0].message.content }
+            { type: 'text', text: openaiResponse.choices[0].message.content }
           ]);
         } catch (err) {
           console.log("OpenAI 服務出現錯誤: ")
