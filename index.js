@@ -28,7 +28,7 @@ requiredEnvVars.forEach(varName => {
 
 // ============== LINE 客戶端配置 ==============
 const config = {
-  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN.trim(), // 清除前後空格
+  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN.trim(),
   channelSecret: process.env.LINE_CHANNEL_SECRET.trim()
 };
 
@@ -86,7 +86,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // ============== 核心邏輯 ==============
-app.post('/webhook', middleware(config), async (req, res) => {
+app.post('/webhook', async (req, res) => {
   res.status(200).end(); // 確保 LINE 收到回調
 
   try {
