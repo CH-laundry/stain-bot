@@ -84,6 +84,7 @@ app.post('/webhook', async (req, res) => {
 
   try {
     const events = req.body.events;
+    console.log(JSON.stringify(events, null, 2));
     for (const event of events) {
       if (event.type !== 'message' || !event.source.userId) continue;
 
@@ -113,7 +114,7 @@ app.post('/webhook', async (req, res) => {
           const base64Image = buffer.toString('base64');
           const imageHash = createHash('sha256').update(buffer).digest('hex');
 
-          console.log('圖片已接收，hash值:', imageHash); // 打印圖片的 hash 值
+          console.log('圖片已接收，hash值:', imageHash, `消息ID: ${event.message.id}`);
 
           // 調用 OpenAI API 進行圖片分析 (這裡假設圖片已經轉為適當的格式)
           const openaiResponse = await openaiClient.chat.completions.create({
@@ -141,8 +142,7 @@ app.post('/webhook', async (req, res) => {
                   {
                     type: "image_url",
                     image_url: {
-                      url: `data:image/png;base64,${base64Image}`,
-                      detail: "high"
+                      url: `data:image/png;base64,${base64Image}`
                     }
                   }
                 ]
@@ -156,12 +156,8 @@ app.post('/webhook', async (req, res) => {
             { type: 'text', text: openaiResponse.data.choices[0].message.content }
           ]);
         } catch (err) {
-          console.error('OpenAI 錯誤詳情:', {
-            status: err.response?.status,
-            data: err.response?.data,
-            headers: err.config?.headers // 檢查傳送的 headers
-          });
-
+          console.log("OpenAI 服務出現錯誤: ")
+          console.error(err);
           console.log(`用戶ID: ${userId}`);
 
           await client.pushMessage(userId, [
