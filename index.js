@@ -92,15 +92,16 @@ app.post('/webhook', async (req, res) => {
   try {
     const events = req.body.events;
     for (const event of events) {
-      if (event.type !== 'message' || !event.replyToken) continue;
+      if (event.type !== 'message' || !event.source.userId) continue;
 
       const userId = event.source.userId;
-      const replyToken = event.replyToken;
 
       if (event.message.type === 'image') {
         try {
+          console.log(`收到來自 ${userId} 的圖片訊息, 正在處理...`)
+
           if (!(await isUserAllowed(userId))) {
-            await client.replyMessage(replyToken, { type: 'text', text: '您已經達到使用次數上限，請稍後再試。' });
+            await client.pushMessage(userId, { type: 'text', text: '您已經達到使用次數上限，請稍後再試。' });
             continue;
           }
 
@@ -154,8 +155,9 @@ app.post('/webhook', async (req, res) => {
             ]
           })
 
+          console.log('OpenAI 回應:', openaiResponse.data.choices[0].message.content);
           // 回覆用戶
-          await client.replyMessage(replyToken, [
+          await client.pushMessage(userId, [
             { type: 'text', text: openaiResponse.data.choices[0].message.content }
           ]);
         } catch (err) {
@@ -165,9 +167,9 @@ app.post('/webhook', async (req, res) => {
             headers: err.config?.headers // 檢查傳送的 headers
           });
 
-          console.log(`回覆Token: ${replyToken}`);
+          console.log(`用戶ID: ${userId}`);
 
-          await client.replyMessage(replyToken, [
+          await client.pushMessage(userId, [
             { type: 'text', text: '服務暫時不可用，請稍後再試。' }
           ]);
         }
