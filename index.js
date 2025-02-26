@@ -2,7 +2,6 @@ const express = require('express');
 const { Client, middleware } = require('@line/bot-sdk');
 const { createHash } = require('crypto');
 const { OpenAI } = require('openai');
-const ioredis = require('ioredis');
 
 require('dotenv').config();
 
@@ -34,8 +33,6 @@ const config = {
 const client = new Client(config);
 const app = express();
 
-const redis = new ioredis(42549, "nozomi.proxy.rlwy.net");
-
 const openaiClient = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY.trim(),
   organization: process.env.OPENAI_ORG_ID.trim(),
@@ -43,8 +40,10 @@ const openaiClient = new OpenAI({
 })
 
 // ============== Redis 限流 ==============
+const store = new Map();
+
 /**
- * 检查用户是否可以继续使用，如果可以则增加使用次数
+ * 检查用户是否可以继续使用，如果可以则增加使用次数 (使用 Map 存储)
  * @param {string} userId 用户ID
  * @returns {Promise<boolean>} true: 可以使用, false: 达到限制
  */
@@ -54,28 +53,24 @@ async function isUserAllowed(userId) {
   const timePeriodMs = MAX_USES_TIME_PERIOD * 1000;
 
   try {
-    const pipeline = redis.pipeline();
-
-    pipeline.zcount(key, now - timePeriodMs, now);
-    pipeline.zremrangebyscore(key, '-inf', now - timePeriodMs);
-
-    const [countsResult] = await pipeline.exec();
-
-    if (countsResult[0] !== null) {
-      throw countsResult[0];
+    let userActions = store.get(key);
+    if (!userActions) {
+      userActions = [];
     }
-    const currentUses = countsResult[1];
 
-    if (currentUses < MAX_USES_PER_USER) {
-      await redis.zadd(key, now, now);
-      await redis.pexpire(key, timePeriodMs * 2);
+    // 移除过期的 action 时间戳
+    userActions = userActions.filter(timestamp => timestamp > now - timePeriodMs);
+
+    if (userActions.length < MAX_USES_PER_USER) {
+      userActions.push(now); // 添加新的 action 时间戳
+      store.set(key, userActions); // 更新 store
       return true; // 允许使用
     } else {
       return false; // 达到限制，拒绝使用
     }
   } catch (error) {
-    console.error("Redis 限流错误:", error);
-    return false;
+    console.error("Map 存储限流错误:", error);
+    return true;
   }
 }
 
@@ -99,10 +94,12 @@ app.post('/webhook', async (req, res) => {
           console.log(`收到來自 ${userId} 的圖片訊息, 正在處理...`)
 
           if (!(await isUserAllowed(userId))) {
+            console.log(`用戶 ${userId} 使用次數到達上限`);  
             await client.pushMessage(userId, { type: 'text', text: '您已經達到使用次數上限，請稍後再試。' });
             continue;
           }
 
+          console.log(`正在下載來自 ${userId} 的圖片...`)
           // 從 LINE 獲取圖片內容
           const stream = await client.getMessageContent(event.message.id);
           const chunks = [];
