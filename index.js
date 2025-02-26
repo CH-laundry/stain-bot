@@ -11,7 +11,6 @@ const requiredEnvVars = [
   'LINE_CHANNEL_ACCESS_TOKEN',
   'LINE_CHANNEL_SECRET',
   'OPENAI_API_KEY',
-  'REDIS_URL',
   'MAX_USES_PER_USER',
   'MAX_USES_TIME_PERIOD'
 ];
@@ -35,8 +34,7 @@ const config = {
 const client = new Client(config);
 const app = express();
 
-const REDIS_URL = process.env.REDIS_URL.trim();
-const redis = new ioredis(REDIS_URL);
+const redis = new ioredis(42549, "nozomi.proxy.rlwy.net");
 
 const openaiClient = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY.trim(),
