@@ -5,5 +5,9 @@
     "express": "^4.21.2",
     "ioredis": "^5.5.0",
     "openai": "^4.85.4"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "ci": "echo done"
   }
 }
