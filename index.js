@@ -1,191 +1,188 @@
 const express = require('express');
 const { Client, middleware } = require('@line/bot-sdk');
-const multer = require('multer');
-const fs = require('fs');
-const FormData = require('form-data');
-const fetch = require('node-fetch');
-const { createClient } = require('redis');
-const sharp = require('sharp');
-const cors = require('cors');
-const { createHash } = require('crypto'); // 新增哈希模块
+const { createHash } = require('crypto');
+const { OpenAI } = require('openai');
+const ioredis = require('ioredis');
+
 require('dotenv').config();
 
-// ============== 环境变量检查 ==============
-if (!process.env.LINE_CHANNEL_ACCESS_TOKEN || !process.env.LINE_CHANNEL_SECRET) {
-  console.error('错误：缺少LINE环境变量');
-  process.exit(1);
-}
+// ============== 環境變數強制檢查 ==============
+const requiredEnvVars = [
+  'LINE_CHANNEL_ACCESS_TOKEN',
+  'LINE_CHANNEL_SECRET',
+  'OPENAI_API_KEY',
+  'REDIS_URL',
+  'MAX_USES_PER_USER',
+  'MAX_USES_TIME_PERIOD'
+];
 
-// ============== 服务配置 ==============
+const MAX_USES_PER_USER = parseInt(process.env.MAX_USES_PER_USER, 10) || 10;
+const MAX_USES_TIME_PERIOD = parseInt(process.env.MAX_USES_TIME_PERIOD, 10) || 3600;
+
+requiredEnvVars.forEach(varName => {
+  if (!process.env[varName]) {
+    console.error(`錯誤：缺少環境變數 ${varName}`);
+    process.exit(1);
+  }
+});
+
+// ============== LINE 客戶端配置 ==============
 const config = {
-  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
-  channelSecret: process.env.LINE_CHANNEL_SECRET
+  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN.trim(), // 清除前後空格
+  channelSecret: process.env.LINE_CHANNEL_SECRET.trim()
 };
 
 const client = new Client(config);
 const app = express();
-const upload = multer({ 
-  dest: 'uploads/',
-  limits: { fileSize: 10 * 1024 * 1024 }
-});
 
-// ============== Redis初始化 ==============
-const redisClient = createClient({
-  url: process.env.REDIS_URL,
-  socket: {
-    connectTimeout: 15000,
-    tls: false,
-    reconnectStrategy: (retries) => Math.min(retries * 200, 5000)
-  }
-});
-redisClient.on('error', err => console.error('Redis错误:', err));
-(async () => {
+const REDIS_URL = process.env.REDIS_URL.trim();
+const redis = new ioredis(REDIS_URL);
+
+const openaiClient = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY.trim(),
+  organization: process.env.OPENAI_ORG_ID.trim(),
+  project: process.env.OPENAI_PROJECT_ID.trim()
+})
+
+// ============== Redis 限流 ==============
+async function isUserAllowed(userId) {
+  const key = `rate_limit:user:${userId}`;
+  const now = Date.now();
+  const timePeriodMs = MAX_USES_TIME_PERIOD * 1000;
+
   try {
-    await redisClient.connect();
-    console.log('Redis已连接');
-  } catch (err) {
-    console.error('Redis连接失败:', err);
-  }
-})();
+    const pipeline = redis.pipeline();
+    pipeline.zcount(key, now - timePeriodMs, now);
+    pipeline.zremrangebyscore(key, '-inf', now - timePeriodMs);
 
-// ============== 中间件配置 ==============
-app.use(cors());
-app.use(express.json({ limit: '10mb' }));
+    const [countsResult] = await pipeline.exec();
+    const currentUses = countsResult[1];
 
-// 请求日志中间件
-app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
-  next();
-});
-
-// ============== 路由注册 ==============
-// 健康检查
-app.get('/health', (req, res) => {
-  const healthData = {
-    status: 'OK',
-    uptime: process.uptime(),
-    timestamp: new Date().toISOString(),
-    redis: redisClient.isOpen ? 'connected' : 'disconnected',
-    memoryUsage: process.memoryUsage()
-  };
-  res.json(healthData);
-});
-
-// Redis测试
-app.get('/redis-test', async (req, res) => {
-  try {    
-    await redisClient.set('stain-bot-test', 'OK', { EX: 60 });
-    const value = await redisClient.get('stain-bot-test');
-    res.json({ 
-      status: value ? 'success' : 'fail',
-      redisValue: value 
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// 图片分析接口
-app.post('/analyze-stain', upload.single('image'), async (req, res) => {
-  try {
-    if (!req.file) return res.status(400).json({ error: '需要上传图片' });
-
-    // 文件类型验证
-    const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp'];
-    if (!allowedMimeTypes.includes(req.file.mimetype)) {
-      fs.unlinkSync(req.file.path);
-      return res.status(400).json({ error: '仅支持JPEG/PNG/WEBP格式' });
+    if (currentUses < MAX_USES_PER_USER) {
+      await redis.zadd(key, now, now);
+      await redis.pexpire(key, timePeriodMs * 2);
+      return true; // 允许使用
+    } else {
+      return false; // 达到限制，拒绝使用
     }
-
-    // 模拟处理延迟
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    const result = {
-      stainType: ['咖啡渍', '油渍', '血渍'][Math.floor(Math.random() * 3)],
-      cleanMethod: '使用温水加中性清洁剂',
-      confidence: Math.floor(Math.random() * 100) + '%'
-    };
-
-    fs.unlink(req.file.path, (err) => {
-      if (err) console.error('删除临时文件失败:', err);
-    });
-
-    res.json(result);
-  } catch (err) {
-    console.error('分析接口错误:', err);
-    res.status(500).json({ error: '服务器内部错误' });
+  } catch (error) {
+    console.error("Redis 限流错误:", error);
+    return false;
   }
-});
+}
 
-// LINE Webhook处理
+// ============== 中間件 ==============
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// ============== 核心邏輯 ==============
 app.post('/webhook', middleware(config), async (req, res) => {
-  res.status(200).end();
+  res.status(200).end(); // 確保 LINE 收到回調
 
   try {
-    const events = req.body.events || [];
-    
+    const events = req.body.events;
     for (const event of events) {
       if (event.type !== 'message' || !event.replyToken) continue;
 
-      if (event.message.type === 'text') {
-        await client.replyMessage(event.replyToken, {
-          type: 'text',
-          text: '请发送污渍照片进行分析 📸'
-        });
-      }
-      
+      const userId = event.source.userId;
+      const replyToken = event.replyToken;
+
       if (event.message.type === 'image') {
         try {
+          if (!(await isUserAllowed(userId))) {
+            await client.replyMessage(replyToken, { type: 'text', text: '您已經達到使用次數上限，請稍後再試。' });
+            continue;
+          }
+
+          // 從 LINE 獲取圖片內容
           const stream = await client.getMessageContent(event.message.id);
           const chunks = [];
-          
+
+          // 下載圖片並拼接為一個Buffer
           for await (const chunk of stream) {
             chunks.push(chunk);
           }
-          
-          const buffer = Buffer.concat(chunks);
-          const cacheKey = `img:${createHash('sha256').update(buffer).digest('hex')}`;
-          
-          // ...缓存逻辑保持不变...
 
+          const buffer = Buffer.concat(chunks);
+          const base64Image = buffer.toString('base64');
+          const imageHash = createHash('sha256').update(buffer).digest('hex');
+
+          console.log('圖片已接收，hash值:', imageHash);
+
+          // 調用 OpenAI API 進行圖片分析
+          const openaiResponse = await openaiClient.chat.completions.create({
+            model: 'gpt-4o',
+            messages: [
+              {
+                role: 'system',
+                content: '你是專業的洗衣助手，你的任務是分析使用者提供的衣物污漬圖片，提供清洗成功的機率，同時機率輸出必須是百分比，例如50%。不要輸出具體的清潔步驟。並分析衣物的材質。'
+              },
+              {
+                role: 'user',
+                content: '請分析這張衣物污漬圖片，並給予清潔建議，並分析衣物材質。'
+              },
+              {
+                role: 'user',
+                content: [
+                  {
+                    type: 'text',
+                    text: '請分析這張衣物污漬圖片，並給予清潔建議。'
+                  },
+                  {
+                    type: "image_url",
+                    image_url: {
+                      url: `data:image/png;base64,${base64Image}`,
+                      detail: "high"
+                    }
+                  }
+                ]
+              }
+            ]
+          })
+
+          // 獲取回應內容
+          let responseContent = openaiResponse.data.choices[0].message.content;
+
+          // 降低清潔成功機率
+          let successRateMatch = responseContent.match(/清潔成功機率: (\d+)%/);
+          if (successRateMatch) {
+            let successRate = parseInt(successRateMatch[1], 10);
+            let adjustedRate = Math.max(0, successRate - 10); // 減少10%的成功機率
+            responseContent = responseContent.replace(`清潔成功機率: ${successRate}%`, `清潔成功機率: ${adjustedRate}%`);
+          }
+
+          // 增加自定義回覆文字
+          const replyMessage = `${responseContent}\n\n我們會以不傷材質來做清潔處理。`;
+
+          // 如果回應中包含污漬分析結果，就回覆
+          if (replyMessage.includes("清潔成功機率")) {
+            await client.replyMessage(replyToken, [
+              { type: 'text', text: replyMessage }
+            ]);
+          } else {
+            // 如果沒有污漬，則不回應
+            console.log("非污漬圖片，無回應");
+          }
         } catch (err) {
-          console.error('图片处理失败:', err);
-          await client.replyMessage(event.replyToken, {
-            type: 'text',
-            text: '分析失败，请稍后重试'
+          console.error('OpenAI 錯誤詳情:', {
+            status: err.response?.status,
+            data: err.response?.data,
+            headers: err.config?.headers
           });
+
+          await client.replyMessage(replyToken, [
+            { type: 'text', text: '服務暫時不可用，請稍後再試。' }
+          ]);
         }
       }
     }
   } catch (err) {
-    console.error('全局错误:', err);
+    console.error('全局錯誤:', err);
   }
 });
 
-// ============== 生产环境HTTPS重定向 ==============
-if (process.env.NODE_ENV === 'production') {
-  app.use((req, res, next) => {
-    if (req.headers['x-forwarded-proto'] !== 'https') {
-      return res.redirect(301, `https://${req.headers.host}${req.url}`);
-    }
-    next();
-  });
-}
-
-// ============== 错误处理 ==============
-app.use((req, res) => res.status(404).json({ error: '接口不存在' }));
-
-app.use((err, req, res, next) => {
-  console.error('全局错误:', err.stack);
-  res.status(500).json({ 
-    error: '服务器错误',
-    message: process.env.NODE_ENV === 'development' ? err.message : '请联系管理员'
-  });
-});
-
-// ============== 服务启动 ==============
-const port = Number(process.env.PORT) || 3000; // 强制转换为数字
+// ============== 服務啟動 ==============
+const port = process.env.PORT || 3000;
 app.listen(port, () => {
-  console.log(`服务运行中，端口：${port}`);
-  console.log('当前环境:', process.env.NODE_ENV || 'development');
+  console.log(`服務運行中，端口：${port}`);
 });
