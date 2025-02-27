@@ -143,6 +143,12 @@ app.post('/webhook', middleware(config), async (req, res) => {
           // 獲取回應內容
           let responseContent = openaiResponse.data.choices[0].message.content;
 
+          // 檢查回應中是否包含污漬的描述
+          if (!responseContent.includes("清潔成功機率") && !responseContent.includes("污漬")) {
+            console.log("沒有識別出污漬，跳過回應");
+            return;  // 沒有識別到污漬，不回覆
+          }
+
           // 降低清潔成功機率
           let successRateMatch = responseContent.match(/清潔成功機率: (\d+)%/);
           if (successRateMatch) {
@@ -154,15 +160,10 @@ app.post('/webhook', middleware(config), async (req, res) => {
           // 加入“我們會用不傷材質來做清潔處理”文字
           const replyMessage = `${responseContent}\n\n我們會用不傷材質來做清潔處理。`;
 
-          // 判斷是否包含污漬的描述，如果有則回覆
-          if (responseContent.includes("清潔成功機率")) {
-            await client.replyMessage(replyToken, [
-              { type: 'text', text: replyMessage }
-            ]);
-          } else {
-            // 如果沒有污漬，則不回應
-            console.log("非污漬圖片，無回應");
-          }
+          // 回覆給用戶
+          await client.replyMessage(replyToken, [
+            { type: 'text', text: replyMessage }
+          ]);
         } catch (err) {
           console.error('OpenAI 錯誤詳情:', {
             status: err.response?.status,
