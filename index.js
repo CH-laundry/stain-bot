@@ -151,11 +151,11 @@ app.post('/webhook', middleware(config), async (req, res) => {
             responseContent = responseContent.replace(`清潔成功機率: ${successRate}%`, `清潔成功機率: ${adjustedRate}%`);
           }
 
-          // 增加自定義回覆文字
-          const replyMessage = `${responseContent}\n\n我們會以不傷材質來做清潔處理。`;
+          // 加入“我們會用不傷材質來做清潔處理”文字
+          const replyMessage = `${responseContent}\n\n我們會用不傷材質來做清潔處理。`;
 
-          // 如果回應中包含污漬分析結果，就回覆
-          if (replyMessage.includes("清潔成功機率")) {
+          // 判斷是否包含污漬的描述，如果有則回覆
+          if (responseContent.includes("清潔成功機率")) {
             await client.replyMessage(replyToken, [
               { type: 'text', text: replyMessage }
             ]);
