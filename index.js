@@ -86,7 +86,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // ============== 核心邏輯 ==============
-app.post('/webhook', middleware(config), async (req, res) => {
+app.post('/webhook', async (req, res) => {
   res.status(200).end(); // 確保 LINE 收到回調
 
   try {
