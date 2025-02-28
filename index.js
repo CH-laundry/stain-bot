@@ -97,7 +97,7 @@ app.post('/webhook', async (req, res) => {
         const text = event.message.text.trim().toLowerCase();
 
         if (text === '請上傳圖片') {
-          startup_store.set(userId, Date.now() + 3600e3);
+          startup_store.set(userId, Date.now() + 180e3);
           console.log(`用戶 ${userId} 開始使用`);
           await client.pushMessage(userId, { type: 'text', text: '請上傳圖片' });
           continue
