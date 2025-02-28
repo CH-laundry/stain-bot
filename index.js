@@ -74,6 +74,28 @@ async function isUserAllowed(userId) {
   }
 }
 
+const startup_store = new Map();
+
+// 定义一个异步函数startup，接收一个参数uid
+const startup = async (uid) => {
+  // 定义一个key，值为startup:user:uid
+  const key = `startup:user:${uid}`
+  // 如果startup_store中没有key，则将key的值设置为当前时间加上3600秒（1小时）的时间戳，并返回false
+  if (!startup_store.has(key)) {
+    startup_store.set(key, new Date().getTime() + 3600e3)
+    return false;
+  }
+
+  // 如果key的值小于当前时间，则将key的值设置为当前时间加上3600秒（1小时）的时间戳，并返回false
+  if (startup_store.get(key) < new Date().getTime()) {
+    startup_store.set(key, new Date().getTime() + 3600e3)
+    return false;
+  }
+
+  // 否则返回true
+  return true;
+}
+
 // ============== 中間件 ==============
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -96,8 +118,14 @@ app.post('/webhook', async (req, res) => {
 
           if (!(await isUserAllowed(userId))) {
             console.log(`用戶 ${userId} 使用次數到達上限`);  
-            await client.pushMessage(userId, { type: 'text', text: '您已經達到使用次數上限，請稍後再試。' });
+            await client.pushMessage(userId, { type: 'text', text: '您已經達到每週兩次使用次數上限，請稍後再試。' });
             continue;
+          }
+
+          if (!await startup(userId)) {
+            console.log(`用戶 ${userId} 開始使用`);
+            await client.pushMessage(userId, { type: 'text', text: '請上傳圖片' });
+            continue
           }
 
           console.log(`正在下載來自 ${userId} 的圖片...`)
@@ -122,7 +150,7 @@ app.post('/webhook', async (req, res) => {
             messages: [
               {
                 role: 'system',
-                content: '你是專業的洗衣助手，你的任務是分析使用者提供的衣物污漬圖片，提供清洗成功的機率，同時機率輸出必須是百分比，例如50%。不要輸出具體的清潔步驟'
+                content: '你是專業的洗衣助手，你的任務是分析使用者提供的衣物污漬圖片，提供清洗成功的機率，同時機率輸出必須是百分比（例如50%），和具体的污渍等信息。'
               },
               {
                 role: 'user',
@@ -130,7 +158,7 @@ app.post('/webhook', async (req, res) => {
               },
               {
                 role: "assistant",
-                content: '中等（約50-70%），具體結果取決於污漬的種類與深度。'
+                content: '根據這張圖片，這雙鞋為 帆布材質，上有 油漬（或番茄醬/一般污漬），清潔成功的機率約在 60-80%。由於 （污漬類型） 可能已滲透至鞋材內部，實際清潔效果會依污漬的滲透程度、沾染時間與鞋材特性而定。某些污漬可能會變淡但無法完全去除，我們會以不傷害材質盡量做清潔處理。'
               },
               {
                 role: 'user',
