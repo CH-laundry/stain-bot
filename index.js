@@ -76,26 +76,6 @@ async function isUserAllowed(userId) {
 
 const startup_store = new Map();
 
-// 定义一个异步函数startup，接收一个参数uid
-const startup = async (uid, state) => {
-  // 定义一个key，值为startup:user:uid
-  const key = `startup:user:${uid}`
-  // 如果startup_store中没有key，则将key的值设置为当前时间加上3600秒（1小时）的时间戳，并返回false
-  if (!startup_store.has(key) && state) {
-    startup_store.set(key, new Date().getTime() + 3600e3)
-    return false;
-  }
-
-  // 如果key的值小于当前时间，则将key的值设置为当前时间加上3600秒（1小时）的时间戳，并返回false
-  if (startup_store.get(key) < new Date().getTime() && state) {
-    startup_store.set(key, new Date().getTime() + 3600e3)
-    return false;
-  }
-
-  !state && startup_store.delete(key);
-  return true;
-}
-
 // ============== 中間件 ==============
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -112,32 +92,34 @@ app.post('/webhook', async (req, res) => {
 
       const userId = event.source.userId;
 
-
+      // 文字訊息
       if (event.message.type === 'text') {
         const text = event.message.text.trim().toLowerCase();
 
         if (text === '請上傳圖片') {
-          if (!await startup(userId, true)) {
-            console.log(`用戶 ${userId} 開始使用`);
-            await client.pushMessage(userId, { type: 'text', text: '請上傳圖片' });
-            continue
-          }
+          startup_store.set(userId, true);
+          console.log(`用戶 ${userId} 開始使用`);
+          await client.pushMessage(userId, { type: 'text', text: '請上傳圖片' });
+          continue
         }
       }
 
+      // 圖片訊息
       if (event.message.type === 'image') {
         try {
-          console.log(`收到來自 ${userId} 的圖片訊息, 正在處理...`)
-
-          if (!(await isUserAllowed(userId))) {
-            console.log(`用戶 ${userId} 使用次數到達上限`);  
-            await client.pushMessage(userId, { type: 'text', text: '您已經達到每週兩次使用次數上限，請稍後再試。' });
-            continue;
+          if (!startup_store.get(userId)) {
+            console.log(`用戶 ${userId} 上传了图片，但是未开始使用`);
+            continue
           }
 
-          if (!await startup(userId)) {
-            console.log(`用戶 ${userId} 開始使用`);
-            continue
+          console.log(`收到來自 ${userId} 的圖片訊息, 正在處理...`)
+
+          startup_store.delete(userId);
+
+          if (!(await isUserAllowed(userId))) {
+            console.log(`用戶 ${userId} 使用次數到達上限`);
+            await client.pushMessage(userId, { type: 'text', text: '您已經達到每週兩次使用次數上限，請稍後再試。' });
+            continue;
           }
 
           console.log(`正在下載來自 ${userId} 的圖片...`)
