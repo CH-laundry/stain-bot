@@ -92,7 +92,7 @@ const startup = async (uid) => {
     return false;
   }
 
-  // 否则返回true
+  startup_store.delete(key);
   return true;
 }
 
@@ -150,7 +150,7 @@ app.post('/webhook', async (req, res) => {
             messages: [
               {
                 role: 'system',
-                content: '你是專業的洗衣助手，你的任務是分析使用者提供的衣物污漬圖片，提供清洗成功的機率，同時機率輸出必須是百分比（例如50%），和具体的污渍等信息。'
+                content: '你是專業的洗衣助手，你的任務是分析使用者提供的衣物污漬圖片，提供清洗成功的機率，同時機率輸出必須是百分比（例如50%），和具体的污渍类型信息，但是不要提供清洗建议。'
               },
               {
                 role: 'user',
