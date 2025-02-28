@@ -77,22 +77,22 @@ async function isUserAllowed(userId) {
 const startup_store = new Map();
 
 // 定义一个异步函数startup，接收一个参数uid
-const startup = async (uid) => {
+const startup = async (uid, state) => {
   // 定义一个key，值为startup:user:uid
   const key = `startup:user:${uid}`
   // 如果startup_store中没有key，则将key的值设置为当前时间加上3600秒（1小时）的时间戳，并返回false
-  if (!startup_store.has(key)) {
+  if (!startup_store.has(key) && state) {
     startup_store.set(key, new Date().getTime() + 3600e3)
     return false;
   }
 
   // 如果key的值小于当前时间，则将key的值设置为当前时间加上3600秒（1小时）的时间戳，并返回false
-  if (startup_store.get(key) < new Date().getTime()) {
+  if (startup_store.get(key) < new Date().getTime() && state) {
     startup_store.set(key, new Date().getTime() + 3600e3)
     return false;
   }
 
-  startup_store.delete(key);
+  !state && startup_store.delete(key);
   return true;
 }
 
@@ -111,6 +111,18 @@ app.post('/webhook', async (req, res) => {
       if (event.type !== 'message' || !event.source.userId) continue;
 
       const userId = event.source.userId;
+
+
+      if (event.message.type === '請上傳圖片') {
+        const text = event.message.text.trim().toLowerCase();
+
+        if (text === 'start') {
+          if (!await startup(userId, true)) {
+            console.log(`用戶 ${userId} 開始使用`);
+            continue
+          }
+        }
+      }
 
       if (event.message.type === 'image') {
         try {
@@ -150,15 +162,10 @@ app.post('/webhook', async (req, res) => {
             messages: [
               {
                 role: 'system',
-                content: '你是專業的洗衣助手，你的任務是分析使用者提供的衣物污漬圖片，提供清洗成功的機率，同時機率輸出必須是百分比（例如50%），和具体的污渍类型信息，但是不要提供清洗建议。'
-              },
-              {
-                role: 'user',
-                content: '請分析這張衣物污漬圖片，並給予清潔建議。'
-              },
-              {
-                role: "assistant",
-                content: '根據這張圖片，這雙鞋為 帆布材質，上有 油漬（或番茄醬/一般污漬），清潔成功的機率約在 60-80%。由於 （污漬類型） 可能已滲透至鞋材內部，實際清潔效果會依污漬的滲透程度、沾染時間與鞋材特性而定。某些污漬可能會變淡但無法完全去除，我們會以不傷害材質盡量做清潔處理。'
+                content: [
+                  '你是專業的洗衣助手，你的任務是分析使用者提供的衣物污漬圖片，提供清洗成功的機率，同時機率輸出必須是百分比（例如50%），和具体的污渍类型信息，但是不要提供清洗建议，每句话结尾加上 “我們會以不傷害材質盡量做清潔處理。”。',
+                  '你的回复内容可以参考这段文本：“這張圖片顯示白色衣物上有大片咖啡色污漬。這類污漬通常是由於咖啡、茶或醬汁等液體造成的，清潔成功的機率大約在70-80%。由於顏色較深，實際清潔效果會依污漬的滲透程度、沾染時間與鞋材特性而定。某些污漬可能會變淡但無法完全去除，我們會以不傷害材質盡量做清潔處理。”'
+                ].join("\n")
               },
               {
                 role: 'user',
