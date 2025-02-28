@@ -117,7 +117,7 @@ app.post('/webhook', async (req, res) => {
 
           startup_store.delete(userId);
 
-          if (!(await isUserAllowed(userId))) {
+          if (!(await isUserAllowed(userId)) && !process.env.ADMIN.includes(userId)) {
             console.log(`用戶 ${userId} 使用次數到達上限`);
             await client.pushMessage(userId, { type: 'text', text: '您已經達到每週兩次使用次數上限，請稍後再試。' });
             continue;
