@@ -113,12 +113,13 @@ app.post('/webhook', async (req, res) => {
       const userId = event.source.userId;
 
 
-      if (event.message.type === '請上傳圖片') {
+      if (event.message.type === 'text') {
         const text = event.message.text.trim().toLowerCase();
 
-        if (text === 'start') {
+        if (text === '請上傳圖片') {
           if (!await startup(userId, true)) {
             console.log(`用戶 ${userId} 開始使用`);
+            await client.pushMessage(userId, { type: 'text', text: '請上傳圖片' });
             continue
           }
         }
@@ -136,7 +137,6 @@ app.post('/webhook', async (req, res) => {
 
           if (!await startup(userId)) {
             console.log(`用戶 ${userId} 開始使用`);
-            await client.pushMessage(userId, { type: 'text', text: '請上傳圖片' });
             continue
           }
 
