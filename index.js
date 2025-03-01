@@ -1,15 +1,22 @@
 const express = require('express');
-const { Client } = require('@line/bot-sdk');
+const { Client, middleware } = require('@line/bot-sdk');
 const { createHash } = require('crypto');
 const { OpenAI } = require('openai');
+
 require('dotenv').config();
 
-// ============== 環境變數檢查 ==============
+// ============== 環境變數強制檢查 ==============
 const requiredEnvVars = [
   'LINE_CHANNEL_ACCESS_TOKEN',
   'LINE_CHANNEL_SECRET',
-  'OPENAI_API_KEY'
+  'OPENAI_API_KEY',
+  'MAX_USES_PER_USER',
+  'MAX_USES_TIME_PERIOD',
+  'ADMIN' // 無使用次數限制的用戶 ID
 ];
+
+const MAX_USES_PER_USER = parseInt(process.env.MAX_USES_PER_USER, 10) || 10;
+const MAX_USES_TIME_PERIOD = parseInt(process.env.MAX_USES_TIME_PERIOD, 10) || 3600;
 
 requiredEnvVars.forEach(varName => {
   if (!process.env[varName]) {
@@ -18,24 +25,62 @@ requiredEnvVars.forEach(varName => {
   }
 });
 
-// ============== 每週使用限制 ==============
-const MAX_WEEKLY_USES = 2;
-const WEEK_IN_MS = 7 * 24 * 60 * 60 * 1000;
-const usageStore = new Map(); // { userId: timestamp[] }
-
 // ============== LINE 客戶端配置 ==============
-const client = new Client({
+const config = {
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN.trim(),
   channelSecret: process.env.LINE_CHANNEL_SECRET.trim()
-});
+};
 
+const client = new Client(config);
 const app = express();
-app.use(express.json());
 
-// ============== OpenAI 初始化 ==============
 const openaiClient = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY.trim()
+  apiKey: process.env.OPENAI_API_KEY.trim(),
+  organization: process.env.OPENAI_ORG_ID.trim(),
+  project: process.env.OPENAI_PROJECT_ID.trim()
 });
+
+// ============== Redis 限流 ==============
+const store = new Map();
+
+/**
+ * 檢查用戶是否可以繼續使用，如果可以則增加使用次數 (使用 Map 存儲)
+ * @param {string} userId 用戶ID
+ * @returns {Promise<boolean>} true: 可以使用, false: 達到限制
+ */
+async function isUserAllowed(userId) {
+  // 如果是無使用次數限制的用戶，直接返回 true
+  if (userId === process.env.ADMIN) {
+    return true;
+  }
+
+  const key = `rate_limit:user:${userId}`;
+  const now = Date.now();
+  const timePeriodMs = MAX_USES_TIME_PERIOD * 1000;
+
+  try {
+    let userActions = store.get(key);
+    if (!userActions) {
+      userActions = [];
+    }
+
+    // 移除過期的 action 時間戳
+    userActions = userActions.filter(timestamp => timestamp > now - timePeriodMs);
+
+    if (userActions.length < MAX_USES_PER_USER) {
+      userActions.push(now); // 添加新的 action 時間戳
+      store.set(key, userActions); // 更新 store
+      return true; // 允許使用
+    } else {
+      return false; // 達到限制，拒絕使用
+    }
+  } catch (error) {
+    console.error("Map 存儲限流錯誤:", error);
+    return true;
+  }
+}
+
+const startup_store = new Map();
 
 // ============== 模糊關鍵字回應 ==============
 const keywordResponses = {
@@ -68,91 +113,25 @@ const keywordResponses = {
   "醬油": "醬油污漬我們有專門的處理方式，大部分都可以變淡，請放心！🍶"
 };
 
-// ============== 使用次數檢查 ==============
-function checkWeeklyLimit(userId) {
-  const now = Date.now();
-  const userUsages = usageStore.get(userId) || [];
-  const recentUsages = userUsages.filter(t => now - t < WEEK_IN_MS);
-  
-  if (recentUsages.length >= MAX_WEEKLY_USES) return false;
-  usageStore.set(userId, [...recentUsages, now]);
-  return true;
-}
+// ============== 中間件 ==============
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// ============== 圖片分析處理 ==============
-async function handleImage(userId, event) {
-  try {
-    // 檢查使用次數
-    if (!checkWeeklyLimit(userId)) {
-      await client.pushMessage(userId, {
-        type: 'text',
-        text: '您已達本週2次使用上限，請稍後再試。⏳'
-      });
-      return;
-    }
-
-    // 下載圖片
-    const stream = await client.getMessageContent(event.message.id);
-    const chunks = [];
-    for await (const chunk of stream) chunks.push(chunk);
-    const buffer = Buffer.concat(chunks);
-
-    // 調用 OpenAI API
-    const response = await openaiClient.chat.completions.create({
-      model: 'gpt-4-vision-preview',
-      messages: [{
-        role: 'system',
-        content: '嚴格按格式回應：\n1. 污漬類型\n2. 清潔成功率 (百分比)\n3. "我們會以不傷害材質的方式處理"'
-      }, {
-        role: 'user',
-        content: [{
-          type: 'text',
-          text: '分析此污漬'
-        }, {
-          type: 'image_url',
-          image_url: { url: `data:image/png;base64,${buffer.toString('base64')}` }
-        }]
-      }]
-    });
-
-    // 發送分析結果
-    await client.pushMessage(userId, {
-      type: 'text',
-      text: `${response.choices[0].message.content}\n\n✨ 智能分析完成 👕`
-    });
-
-  } catch (error) {
-    console.error('分析失敗:', error);
-    await client.pushMessage(userId, {
-      type: 'text',
-      text: '分析服務暫時不可用，請稍後再試！🛠️'
-    });
-  }
-}
-
-// ============== 動態表情符號 ==============
-function getEmojiForKeyword(text) {
-  if (text.includes('鞋')) return '👟';
-  if (text.includes('窗簾')) return '🪟';
-  if (text.includes('衣服')) return '👕';
-  if (text.includes('包包')) return '👜';
-  return '✨'; // 預設表情
-}
-
-// ============== Webhook 主邏輯 ==============
+// ============== 核心邏輯 ==============
 app.post('/webhook', async (req, res) => {
-  res.status(200).end();
-  
-  try {
-    for (const event of req.body.events) {
-      if (event.type !== 'message' || !event.source?.userId) continue;
-      
-      const userId = event.source.userId;
-      const message = event.message;
+  res.status(200).end(); // 確保 LINE 收到回調
 
-      // 文字消息處理
-      if (message.type === 'text') {
-        const text = message.text.trim();
+  try {
+    const events = req.body.events;
+    console.log(JSON.stringify(events, null, 2));
+    for (const event of events) {
+      if (event.type !== 'message' || !event.source.userId) continue;
+
+      const userId = event.source.userId;
+
+      // 文字訊息
+      if (event.message.type === 'text') {
+        const text = event.message.text.trim();
 
         // 強制不回應「智能污漬分析」
         if (text === '智能污漬分析') {
@@ -161,10 +140,9 @@ app.post('/webhook', async (req, res) => {
 
         // 啟動指令
         if (text === '1') {
-          await client.pushMessage(userId, {
-            type: 'text',
-            text: '請上傳污漬照片進行智能分析 📸'
-          });
+          startup_store.set(userId, Date.now() + 180e3);
+          console.log(`用戶 ${userId} 開始使用`);
+          await client.pushMessage(userId, { type: 'text', text: '請上傳圖片' });
           continue;
         }
 
@@ -179,7 +157,6 @@ app.post('/webhook', async (req, res) => {
         }
 
         // 其他問題由 AI 回應
-        const emoji = getEmojiForKeyword(text);
         const aiResponse = await openaiClient.chat.completions.create({
           model: 'gpt-4',
           messages: [{
@@ -193,13 +170,76 @@ app.post('/webhook', async (req, res) => {
 
         await client.pushMessage(userId, {
           type: 'text',
-          text: `${aiResponse.choices[0].message.content} ${emoji}`
+          text: `${aiResponse.choices[0].message.content} ✨`
         });
       }
 
-      // 圖片消息處理
-      if (message.type === 'image') {
-        await handleImage(userId, event);
+      // 圖片訊息
+      if (event.message.type === 'image') {
+        try {
+          if (!startup_store.get(userId) || startup_store.get(userId) < Date.now()) {
+            console.log(`用戶 ${userId} 上傳了圖片，但是未開始使用`);
+            startup_store.delete(userId);
+            continue;
+          }
+
+          console.log(`收到來自 ${userId} 的圖片訊息, 正在處理...`);
+
+          startup_store.delete(userId);
+
+          if (!(await isUserAllowed(userId))) {
+            console.log(`用戶 ${userId} 使用次數到達上限`);
+            await client.pushMessage(userId, { type: 'text', text: '您已經達到每週兩次使用次數上限，請稍後再試。' });
+            continue;
+          }
+
+          console.log(`正在下載來自 ${userId} 的圖片...`);
+          const stream = await client.getMessageContent(event.message.id);
+          const chunks = [];
+
+          for await (const chunk of stream) {
+            chunks.push(chunk);
+          }
+
+          const buffer = Buffer.concat(chunks);
+          const base64Image = buffer.toString('base64');
+          const imageHash = createHash('sha256').update(buffer).digest('hex');
+
+          console.log('圖片已接收，hash值:', imageHash, `消息ID: ${event.message.id}`);
+
+          // 調用 OpenAI API 進行圖片分析
+          const openaiResponse = await openaiClient.chat.completions.create({
+            model: 'gpt-4-vision-preview',
+            messages: [{
+              role: 'system',
+              content: '嚴格按格式回應：\n1. 污漬類型\n2. 清潔成功率 (百分比)\n3. "我們會以不傷害材質的方式處理"'
+            }, {
+              role: 'user',
+              content: [{
+                type: 'text',
+                text: '請分析這張污漬圖片。'
+              }, {
+                type: 'image_url',
+                image_url: { url: `data:image/png;base64,${base64Image}` }
+              }]
+            }]
+          });
+
+          console.log('OpenAI 回應:', openaiResponse.choices[0].message.content);
+          await client.pushMessage(userId, {
+            type: 'text',
+            text: `${openaiResponse.choices[0].message.content}\n\n✨ 智能分析完成 👕`
+          });
+        } catch (err) {
+          console.log("OpenAI 服務出現錯誤: ");
+          console.error(err);
+          console.log(`用戶ID: ${userId}`);
+
+          await client.pushMessage(userId, {
+            type: 'text',
+            text: '服務暫時不可用，請稍後再試。'
+          });
+        }
       }
     }
   } catch (err) {
@@ -207,8 +247,8 @@ app.post('/webhook', async (req, res) => {
   }
 });
 
-// ============== 啟動伺服器 ==============
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`服務運行中，端口：${PORT}`);
+// ============== 服務啟動 ==============
+const port = process.env.PORT || 3000;
+app.listen(port, () => {
+  console.log(`服務運行中，端口：${port}`);
 });
