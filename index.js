@@ -1,5 +1,5 @@
 const express = require('express');
-const { Client, middleware } = require('@line/bot-sdk');
+const { Client } = require('@line/bot-sdk');
 const { createHash } = require('crypto');
 const { OpenAI } = require('openai');
 
@@ -34,51 +34,52 @@ const client = new Client(config);
 const app = express();
 
 const openaiClient = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY.trim(),
-  organization: process.env.OPENAI_ORG_ID.trim(),
-  project: process.env.OPENAI_PROJECT_ID.trim()
-})
+  apiKey: process.env.OPENAI_API_KEY.trim()
+});
 
-// ============== Redis 限流 ==============
-const store = new Map();
+// ============== FAQ 及 AI 客服邏輯 ==============
+const FAQ_KEYWORDS = [
+  { keywords: ["營業", "開門", "休息", "開店", "有開"], reply: "您好 😊 我們的營業時間是 **10:30 - 20:00**，週六固定公休哦！" },
+  { keywords: ["收送", "到府", "上門", "收衣", "預約"], reply: "我們有 **免費到府收送** 服務喔！\n📍 **江翠北芳鄰** 滿 1 件即可收送。\n📍 **板橋、新莊、三重、中和、永和** 滿 3 件或滿 **500 元** 也能免費收送！" },
+  { keywords: ["清洗", "清潔", "洗多久", "多久", "會好", "送洗時間"], reply: "我們清潔時間約 **7-10 個工作天**，清潔完成後會 **自動通知您**，請放心哦！" },
+  { keywords: ["付費", "付款"], reply: "我們接受 **現金、信用卡、LINE Pay、轉帳**，怎麼方便怎麼來 😊" },
+  { keywords: ["洗好了嗎", "洗好"], reply: "幫您確認中...\n營業時間內查詢好會馬上通知您！\n💡 **您也可以透過網頁查詢目前的清洗進度哦～**" },
+  { keywords: ["送回", "拿回"], reply: "我們會 **親自送回** 您的衣物 💁‍♀️\n🚚 **送達後會通知您，請放心**！" },
+  { keywords: ["洗的掉", "洗掉", "染色", "退色", "油漬", "血漬", "醬油"], reply: "我們會 **盡量處理污漬**，但成功率視污漬種類與衣物材質而定。\n💡 **建議越快送洗效果會越好喔！**" }
+];
 
-/**
- * 检查用户是否可以继续使用，如果可以则增加使用次数 (使用 Map 存储)
- * @param {string} userId 用户ID
- * @returns {Promise<boolean>} true: 可以使用, false: 达到限制
- */
-async function isUserAllowed(userId) {
-  const key = `rate_limit:user:${userId}`;
-  const now = Date.now();
-  const timePeriodMs = MAX_USES_TIME_PERIOD * 1000;
-
-  try {
-    let userActions = store.get(key);
-    if (!userActions) {
-      userActions = [];
-    }
-
-    // 移除过期的 action 时间戳
-    userActions = userActions.filter(timestamp => timestamp > now - timePeriodMs);
-
-    if (userActions.length < MAX_USES_PER_USER) {
-      userActions.push(now); // 添加新的 action 时间戳
-      store.set(key, userActions); // 更新 store
-      return true; // 允许使用
+function getFAQResponse(userMessage) {
+  userMessage = userMessage.toLowerCase();
+  
+  // **處理價格詢問**
+  if (userMessage.includes("多少錢") || userMessage.includes("價格") || userMessage.includes("費用")) {
+    if (userMessage.includes("付款") || userMessage.includes("付錢") || userMessage.includes("送回")) {
+      return "稍後跟您說，謝謝您！💖";
     } else {
-      return false; // 达到限制，拒绝使用
+      return "您可以參考我們的 **服務價目** 🏷️。\n📌 **如是其他衣物，這邊再跟您回覆喔，謝謝您！** 😊";
     }
-  } catch (error) {
-    console.error("Map 存储限流错误:", error);
-    return true;
   }
+
+  // **模糊匹配 FAQ**
+  for (const item of FAQ_KEYWORDS) {
+    if (item.keywords.some(keyword => userMessage.includes(keyword))) {
+      return item.reply;
+    }
+  }
+
+  return null;
 }
 
-const startup_store = new Map();
-
-// ============== 中間件 ==============
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+async function getAIResponse(userMessage) {
+  const response = await openaiClient.chat.completions.create({
+    model: "gpt-4",
+    messages: [
+      { role: "system", content: "你是一個溫暖、親切的洗衣店客服機器人，只回答洗衣相關問題。" },
+      { role: "user", content: userMessage }
+    ]
+  });
+  return response.choices[0].message.content;
+}
 
 // ============== 核心邏輯 ==============
 app.post('/webhook', async (req, res) => {
@@ -86,102 +87,23 @@ app.post('/webhook', async (req, res) => {
 
   try {
     const events = req.body.events;
-    console.log(JSON.stringify(events, null, 2));
     for (const event of events) {
       if (event.type !== 'message' || !event.source.userId) continue;
 
       const userId = event.source.userId;
 
-      // 文字訊息
       if (event.message.type === 'text') {
         const text = event.message.text.trim().toLowerCase();
 
-        if (text === process.env.STARTUP_MESSAGE) {
-          startup_store.set(userId, Date.now() + 180e3);
-          console.log(`用戶 ${userId} 開始使用`);
-          await client.pushMessage(userId, { type: 'text', text: '請上傳圖片' });
-          continue
+        // **先檢查 FAQ**
+        let responseMessage = getFAQResponse(text);
+
+        // **如果 FAQ 沒有匹配，就讓 OpenAI 處理**
+        if (!responseMessage) {
+          responseMessage = await getAIResponse(text);
         }
-      }
 
-      // 圖片訊息
-      if (event.message.type === 'image') {
-        try {
-          if (!startup_store.get(userId) || startup_store.get(userId) < Date.now()){
-            console.log(`用戶 ${userId} 上传了图片，但是未开始使用`);
-            startup_store.delete(userId);
-            continue
-          }
-
-          console.log(`收到來自 ${userId} 的圖片訊息, 正在處理...`)
-
-          startup_store.delete(userId);
-
-          if (!(await isUserAllowed(userId)) && (process.env.ADMIN && !process.env.ADMIN.includes(userId))) {
-            console.log(`用戶 ${userId} 使用次數到達上限`);
-            await client.pushMessage(userId, { type: 'text', text: '您已經達到每週兩次使用次數上限，請稍後再試。' });
-            continue;
-          }
-
-          console.log(`正在下載來自 ${userId} 的圖片...`)
-          // 從 LINE 獲取圖片內容
-          const stream = await client.getMessageContent(event.message.id);
-          const chunks = [];
-
-          // 下載圖片並拼接為一個Buffer
-          for await (const chunk of stream) {
-            chunks.push(chunk);
-          }
-
-          const buffer = Buffer.concat(chunks);
-          const base64Image = buffer.toString('base64');
-          const imageHash = createHash('sha256').update(buffer).digest('hex');
-
-          console.log('圖片已接收，hash值:', imageHash, `消息ID: ${event.message.id}`);
-
-          // 調用 OpenAI API 進行圖片分析 (這裡假設圖片已經轉為適當的格式)
-          const openaiResponse = await openaiClient.chat.completions.create({
-            model: 'gpt-4o', // 可選擇適當的模型
-            messages: [
-              {
-                role: 'system',
-                content: [
-                  '你是專業的洗衣助手，你的任務是分析使用者提供的衣物污漬圖片，提供清洗成功的機率，同時機率輸出必須是百分比（例如50%），和具体的污渍类型信息，但是不要提供清洗建议，每句话结尾加上 “我們會以不傷害材質盡量做清潔處理。”。',
-                  '你的回复内容可以参考这段文本：“這張圖片顯示白色衣物上有大片咖啡色污漬。這類污漬通常是由於咖啡、茶或醬汁等液體造成的，清潔成功的機率大約在70-80%。由於顏色較深，實際清潔效果會依污漬的滲透程度、沾染時間與鞋材特性而定。某些污漬可能會變淡但無法完全去除，我們會以不傷害材質盡量做清潔處理。”'
-                ].join("\n")
-              },
-              {
-                role: 'user',
-                content: [
-                  {
-                    type: 'text',
-                    text: '請分析這張衣物污漬圖片，並給予清潔建議。'
-                  },
-                  {
-                    type: "image_url",
-                    image_url: {
-                      url: `data:image/png;base64,${base64Image}`
-                    }
-                  }
-                ]
-              }
-            ]
-          })
-
-          console.log('OpenAI 回應:', openaiResponse.choices[0].message.content);
-          // 回覆用戶
-          await client.pushMessage(userId, [
-            { type: 'text', text: openaiResponse.choices[0].message.content }
-          ]);
-        } catch (err) {
-          console.log("OpenAI 服務出現錯誤: ")
-          console.error(err);
-          console.log(`用戶ID: ${userId}`);
-
-          await client.pushMessage(userId, [
-            { type: 'text', text: '服務暫時不可用，請稍後再試。' }
-          ]);
-        }
+        await client.pushMessage(userId, { type: 'text', text: responseMessage });
       }
     }
   } catch (err) {
@@ -190,7 +112,7 @@ app.post('/webhook', async (req, res) => {
 });
 
 // ============== 服務啟動 ==============
-const port = process.env.PORT || 3000; // 設置運行端口，默認為3000
+const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`服務運行中，端口：${port}`);
 });
