@@ -113,6 +113,16 @@ const keywordResponses = {
   "醬油": "醬油污漬我們有專門的處理方式，大部分都可以變淡，請放心！🍶"
 };
 
+// ============== 動態表情符號 ==============
+const dynamicEmojis = {
+  "洗鞋": "👟",
+  "窗簾": "🪟",
+  "衣服": "👕",
+  "包包": "👜",
+  "沙發": "🛋️",
+  "地毯": "🧹"
+};
+
 // ============== 中間件 ==============
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -132,6 +142,11 @@ app.post('/webhook', async (req, res) => {
       // 文字訊息
       if (event.message.type === 'text') {
         const text = event.message.text.trim();
+
+        // 強制不回應「智能污漬分析」
+        if (text === '智能污漬分析') {
+          continue; // 不回應
+        }
 
         // 啟動指令
         if (text === '1') {
@@ -163,9 +178,13 @@ app.post('/webhook', async (req, res) => {
           }]
         });
 
+        // 動態表情符號
+        const matchedEmojiKey = Object.keys(dynamicEmojis).find(k => text.includes(k));
+        const emoji = matchedEmojiKey ? dynamicEmojis[matchedEmojiKey] : '✨';
+
         await client.pushMessage(userId, {
           type: 'text',
-          text: `${aiResponse.choices[0].message.content} ✨`
+          text: `${aiResponse.choices[0].message.content} ${emoji}`
         });
       }
 
@@ -205,19 +224,30 @@ app.post('/webhook', async (req, res) => {
           // 調用 OpenAI API 進行圖片分析
           const openaiResponse = await openaiClient.chat.completions.create({
             model: 'gpt-4o', // 使用正確的模型名稱
-            messages: [{
-              role: 'system',
-              content: '嚴格按格式回應：\n1. 污漬類型\n2. 清潔成功率 (百分比)\n3. "我們會以不傷害材質的方式處理"'
-            }, {
-              role: 'user',
-              content: [{
-                type: 'text',
-                text: '請分析這張污漬圖片。'
-              }, {
-                type: 'image_url',
-                image_url: { url: `data:image/png;base64,${base64Image}` }
-              }]
-            }]
+            messages: [
+              {
+                role: 'system',
+                content: [
+                  '你是專業的洗衣助手，你的任務是分析使用者提供的衣物污漬圖片，提供清洗成功的機率，同時機率輸出必須是百分比（例如50%），和具體的污漬類型信息，但是不要提供清洗建議，每句話結尾加上 “我們會以不傷害材質盡量做清潔處理。”。',
+                  '你的回覆內容可以參考這段文本：“這張圖片顯示白色衣物上有大片咖啡色污漬。這類污漬通常是由於咖啡、茶或醬汁等液體造成的，清潔成功的機率大約在70-80%。由於顏色較深，實際清潔效果會依污漬的滲透程度、沾染時間與鞋材特性而定。某些污漬可能會變淡但無法完全去除，我們會以不傷害材質盡量做清潔處理。”'
+                ].join("\n")
+              },
+              {
+                role: 'user',
+                content: [
+                  {
+                    type: 'text',
+                    text: '請分析這張衣物污漬圖片，並給予清潔建議。'
+                  },
+                  {
+                    type: "image_url",
+                    image_url: {
+                      url: `data:image/png;base64,${base64Image}`
+                    }
+                  }
+                ]
+              }
+            ]
           });
 
           console.log('OpenAI 回應:', openaiResponse.choices[0].message.content);
