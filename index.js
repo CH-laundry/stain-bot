@@ -133,11 +133,6 @@ app.post('/webhook', async (req, res) => {
       if (event.message.type === 'text') {
         const text = event.message.text.trim();
 
-        // 強制不回應「智能污漬分析」
-        if (text === '智能污漬分析') {
-          continue; // 不回應
-        }
-
         // 啟動指令
         if (text === '1') {
           startup_store.set(userId, Date.now() + 180e3);
@@ -209,7 +204,7 @@ app.post('/webhook', async (req, res) => {
 
           // 調用 OpenAI API 進行圖片分析
           const openaiResponse = await openaiClient.chat.completions.create({
-            model: 'gpt-4-vision-preview',
+            model: 'gpt-4o', // 使用正確的模型名稱
             messages: [{
               role: 'system',
               content: '嚴格按格式回應：\n1. 污漬類型\n2. 清潔成功率 (百分比)\n3. "我們會以不傷害材質的方式處理"'
@@ -231,10 +226,7 @@ app.post('/webhook', async (req, res) => {
             text: `${openaiResponse.choices[0].message.content}\n\n✨ 智能分析完成 👕`
           });
         } catch (err) {
-          console.log("OpenAI 服務出現錯誤: ");
-          console.error(err);
-          console.log(`用戶ID: ${userId}`);
-
+          console.error("OpenAI 服務出現錯誤:", err);
           await client.pushMessage(userId, {
             type: 'text',
             text: '服務暫時不可用，請稍後再試。'
