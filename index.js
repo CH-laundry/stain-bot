@@ -4,7 +4,7 @@ const { createHash } = require('crypto');
 const { OpenAI } = require('openai');
 require('dotenv').config();
 
-// ============== 环境变量检查 ==============
+// ============== 環境變數檢查 ==============
 const requiredEnvVars = [
   'LINE_CHANNEL_ACCESS_TOKEN',
   'LINE_CHANNEL_SECRET',
@@ -13,17 +13,17 @@ const requiredEnvVars = [
 
 requiredEnvVars.forEach(varName => {
   if (!process.env[varName]) {
-    console.error(`错误：缺少环境变量 ${varName}`);
+    console.error(`錯誤：缺少環境變數 ${varName}`);
     process.exit(1);
   }
 });
 
-// ============== 每周使用限制 ==============
+// ============== 每週使用限制 ==============
 const MAX_WEEKLY_USES = 2;
 const WEEK_IN_MS = 7 * 24 * 60 * 60 * 1000;
 const usageStore = new Map(); // { userId: timestamp[] }
 
-// ============== LINE 客户端配置 ==============
+// ============== LINE 客戶端配置 ==============
 const client = new Client({
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN.trim(),
   channelSecret: process.env.LINE_CHANNEL_SECRET.trim()
@@ -37,7 +37,7 @@ const openaiClient = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY.trim()
 });
 
-// ============== 模糊关键词回应 ==============
+// ============== 模糊關鍵字回應 ==============
 const keywordResponses = {
   "營業": "今日有營業的💖我們的營業時間為 10:30 - 20:00，除週六固定公休喔！😊",
   "開門": "今日有營業的💖我們的營業時間為 10:30 - 20:00，除週六固定公休喔！😊",
@@ -68,7 +68,7 @@ const keywordResponses = {
   "醬油": "醬油污漬我們有專門的處理方式，大部分都可以變淡，請放心！🍶"
 };
 
-// ============== 使用次数检查 ==============
+// ============== 使用次數檢查 ==============
 function checkWeeklyLimit(userId) {
   const now = Date.now();
   const userUsages = usageStore.get(userId) || [];
@@ -79,35 +79,35 @@ function checkWeeklyLimit(userId) {
   return true;
 }
 
-// ============== 图片分析处理 ==============
+// ============== 圖片分析處理 ==============
 async function handleImage(userId, event) {
   try {
-    // 检查使用次数
+    // 檢查使用次數
     if (!checkWeeklyLimit(userId)) {
       await client.pushMessage(userId, {
         type: 'text',
-        text: '您已達本週使用上限，請稍後再試。⏳'
+        text: '您已達本週2次使用上限，請稍後再試。⏳'
       });
       return;
     }
 
-    // 下载图片
+    // 下載圖片
     const stream = await client.getMessageContent(event.message.id);
     const chunks = [];
     for await (const chunk of stream) chunks.push(chunk);
     const buffer = Buffer.concat(chunks);
 
-    // 调用 OpenAI API
+    // 調用 OpenAI API
     const response = await openaiClient.chat.completions.create({
       model: 'gpt-4-vision-preview',
       messages: [{
         role: 'system',
-        content: '严格按格式回应：\n1. 污渍类型\n2. 清洁成功率 (百分比)\n3. "我们会以不伤害材质的方式处理"'
+        content: '嚴格按格式回應：\n1. 污漬類型\n2. 清潔成功率 (百分比)\n3. "我們會以不傷害材質的方式處理"'
       }, {
         role: 'user',
         content: [{
           type: 'text',
-          text: '分析此污渍'
+          text: '分析此污漬'
         }, {
           type: 'image_url',
           image_url: { url: `data:image/png;base64,${buffer.toString('base64')}` }
@@ -115,22 +115,31 @@ async function handleImage(userId, event) {
       }]
     });
 
-    // 发送分析结果
+    // 發送分析結果
     await client.pushMessage(userId, {
       type: 'text',
       text: `${response.choices[0].message.content}\n\n✨ 智能分析完成 👕`
     });
 
   } catch (error) {
-    console.error('分析失败:', error);
+    console.error('分析失敗:', error);
     await client.pushMessage(userId, {
       type: 'text',
-      text: '分析服务暂时不可用，请稍后再试！🛠️'
+      text: '分析服務暫時不可用，請稍後再試！🛠️'
     });
   }
 }
 
-// ============== Webhook 主逻辑 ==============
+// ============== 動態表情符號 ==============
+function getEmojiForKeyword(text) {
+  if (text.includes('鞋')) return '👟';
+  if (text.includes('窗簾')) return '🪟';
+  if (text.includes('衣服')) return '👕';
+  if (text.includes('包包')) return '👜';
+  return '✨'; // 預設表情
+}
+
+// ============== Webhook 主邏輯 ==============
 app.post('/webhook', async (req, res) => {
   res.status(200).end();
   
@@ -141,20 +150,25 @@ app.post('/webhook', async (req, res) => {
       const userId = event.source.userId;
       const message = event.message;
 
-      // 文字消息处理
+      // 文字消息處理
       if (message.type === 'text') {
-        const text = message.text.trim().toLowerCase();
+        const text = message.text.trim();
 
-        // 启动指令
+        // 強制不回應「智能污漬分析」
+        if (text === '智能污漬分析') {
+          continue; // 不回應
+        }
+
+        // 啟動指令
         if (text === '1') {
           await client.pushMessage(userId, {
             type: 'text',
-            text: '请上传污渍照片进行智能分析 📸'
+            text: '請上傳污漬照片進行智能分析 📸'
           });
           continue;
         }
 
-        // 关键词匹配
+        // 關鍵字匹配
         const matchedKey = Object.keys(keywordResponses).find(k => text.includes(k));
         if (matchedKey) {
           await client.pushMessage(userId, {
@@ -164,25 +178,37 @@ app.post('/webhook', async (req, res) => {
           continue;
         }
 
-        // 默认回应
+        // 其他問題由 AI 回應
+        const emoji = getEmojiForKeyword(text);
+        const aiResponse = await openaiClient.chat.completions.create({
+          model: 'gpt-4',
+          messages: [{
+            role: 'system',
+            content: '你是一個洗衣店客服機器人，請用簡潔明確的方式回答客戶的問題，並在結尾加上對應的表情符號。'
+          }, {
+            role: 'user',
+            content: text
+          }]
+        });
+
         await client.pushMessage(userId, {
           type: 'text',
-          text: '您好！请问有什么可以帮您？😊'
+          text: `${aiResponse.choices[0].message.content} ${emoji}`
         });
       }
 
-      // 图片消息处理
+      // 圖片消息處理
       if (message.type === 'image') {
         await handleImage(userId, event);
       }
     }
   } catch (err) {
-    console.error('全局错误:', err);
+    console.error('全局錯誤:', err);
   }
 });
 
-// ============== 启动服务器 ==============
+// ============== 啟動伺服器 ==============
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`服务运行中，端口：${PORT}`);
+  console.log(`服務運行中，端口：${PORT}`);
 });
