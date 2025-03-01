@@ -123,13 +123,19 @@ const dynamicEmojis = {
   "地毯": "🧹"
 };
 
-// ============== 價格詢問判斷 ==============
-function isPriceInquiry(text) {
-  const priceKeywords = [
-    "價格", "价錢", "收費", "費用", "多少錢", "價位", "算錢", "清洗費", "價目表",
-    "這件多少", "這個價格", "鞋子費用", "洗鞋錢", "要多少", "怎麼算"
-  ];
-  return priceKeywords.some(keyword => text.includes(keyword));
+// ============== 強制不回應的關鍵字 ==============
+const ignoredKeywords = [
+  "常見問題",
+  "服務價目&儲值優惠",
+  "到府收送",
+  "店面地址&營業時間",
+  "付款方式",
+  "寶寶汽座&手推車"
+];
+
+// ============== 判斷是否為強制不回應的關鍵字 ==============
+function shouldIgnoreMessage(text) {
+  return ignoredKeywords.some(keyword => text.includes(keyword));
 }
 
 // ============== 中間件 ==============
@@ -152,6 +158,11 @@ app.post('/webhook', async (req, res) => {
       if (event.message.type === 'text') {
         const text = event.message.text.trim();
 
+        // 強制不回應特定關鍵字
+        if (shouldIgnoreMessage(text)) {
+          continue; // 直接跳過，不回應
+        }
+
         // 強制不回應「智能污漬分析」
         if (text === '智能污漬分析') {
           continue; // 不回應
@@ -162,15 +173,6 @@ app.post('/webhook', async (req, res) => {
           startup_store.set(userId, Date.now() + 180e3);
           console.log(`用戶 ${userId} 開始使用`);
           await client.pushMessage(userId, { type: 'text', text: '請上傳圖片' });
-          continue;
-        }
-
-        // 判斷是否為價格詢問
-        if (isPriceInquiry(text)) {
-          await client.pushMessage(userId, {
-            type: 'text',
-            text: '您好 可以參考我們的服務價目，包包類或其它衣物可以線上跟我們詢問 我們會跟您回覆的 謝謝您 🌟👕'
-          });
           continue;
         }
 
