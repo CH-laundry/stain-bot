@@ -1,30 +1,45 @@
-const express = require('express'); // 導入 Express 模組
-const app = express(); // 初始化 Express 應用程式
-const { createHash } = require('crypto'); // 導入 crypto 模組用於生成哈希值
-const { OpenAI } = require('openai'); // 導入 OpenAI 模組
-const line = require('@line/bot-sdk'); // 導入 LINE SDK 模組
+const express = require('express');
+const { Client } = require('@line/bot-sdk');
+const { createHash } = require('crypto');
+const { OpenAI } = require('openai');
 
-// 初始化 OpenAI 客戶端
+require('dotenv').config();
+
+// ✅ **確保 `app` 在最前面定義**
+const app = express();
+
+// ============== 環境變數檢查 ==============
+const requiredEnvVars = [
+  'LINE_CHANNEL_ACCESS_TOKEN',
+  'LINE_CHANNEL_SECRET',
+  'OPENAI_API_KEY',
+  'MAX_USES_PER_USER',
+  'MAX_USES_TIME_PERIOD'
+];
+
+requiredEnvVars.forEach(varName => {
+  if (!process.env[varName]) {
+    console.error(`錯誤：缺少環境變數 ${varName}`);
+    process.exit(1);
+  }
+});
+
+// ============== LINE 客戶端配置 ==============
+const config = {
+  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN.trim(),
+  channelSecret: process.env.LINE_CHANNEL_SECRET.trim()
+};
+
+const client = new Client(config);
 const openaiClient = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY, // 從環境變數中讀取 OpenAI API 密鑰
+  apiKey: process.env.OPENAI_API_KEY.trim()
 });
 
-// 初始化 LINE 客戶端
-const client = new line.Client({
-  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN, // 從環境變數中讀取 LINE 頻道存取令牌
-  channelSecret: process.env.LINE_CHANNEL_SECRET, // 從環境變數中讀取 LINE 頻道密鑰
-});
+// ============== 中間件 ==============
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// 用於存儲用戶狀態的簡單緩存
-const startup_store = new Map();
-
-// 檢查用戶是否允許使用服務
-async function isUserAllowed(userId) {
-  // 這裡可以實現用戶使用次數的限制邏輯
-  return true; // 暫時返回 true，表示允許所有用戶使用
-}
-
-// 處理 OpenAI 請求
+// ============== AI 客服邏輯（與圖片分析無關）=============
 async function getAIResponse(userMessage) {
   try {
     const response = await openaiClient.chat.completions.create({
@@ -42,10 +57,7 @@ async function getAIResponse(userMessage) {
   }
 }
 
-// 啟用 JSON 解析中間件
-app.use(express.json());
-
-// Webhook 路由
+// ============== Webhook 設定 ==============
 app.post('/webhook', async (req, res) => {
   res.status(200).end(); // 確保 LINE 收到回調
 
@@ -58,38 +70,22 @@ app.post('/webhook', async (req, res) => {
 
       const userId = event.source.userId;
 
-      // 處理文字訊息
+      // **處理文字訊息**
       if (event.message.type === 'text') {
         const text = event.message.text.trim().toLowerCase();
-
         console.log(`📝 收到文字訊息: ${text}`);
 
-        // 呼叫 AI 客服
+        // **呼叫 AI 客服**
         const responseMessage = await getAIResponse(text);
         await client.pushMessage(userId, { type: 'text', text: responseMessage });
         continue;
       }
 
-      // 處理圖片訊息
+      // **處理圖片訊息（完全還原你的回覆格式）**
       if (event.message.type === 'image') {
         try {
-          if (!startup_store.get(userId) || startup_store.get(userId) < Date.now()) {
-            console.log(`用戶 ${userId} 上傳了圖片，但是未開始使用`);
-            startup_store.delete(userId);
-            continue;
-          }
-
           console.log(`收到來自 ${userId} 的圖片訊息, 正在處理...`);
 
-          startup_store.delete(userId);
-
-          if (!(await isUserAllowed(userId)) && (process.env.ADMIN && !process.env.ADMIN.includes(userId))) {
-            console.log(`用戶 ${userId} 使用次數到達上限`);
-            await client.pushMessage(userId, { type: 'text', text: '您已經達到每週兩次使用次數上限，請稍後再試。' });
-            continue;
-          }
-
-          console.log(`正在下載來自 ${userId} 的圖片...`);
           const stream = await client.getMessageContent(event.message.id);
           const chunks = [];
 
@@ -99,11 +95,8 @@ app.post('/webhook', async (req, res) => {
 
           const buffer = Buffer.concat(chunks);
           const base64Image = buffer.toString('base64');
-          const imageHash = createHash('sha256').update(buffer).digest('hex');
 
-          console.log('圖片已接收，hash值:', imageHash, `消息ID: ${event.message.id}`);
-
-          // 調用 OpenAI API 進行圖片分析
+          // **調用 OpenAI API 進行圖片分析（與原本一模一樣，不變動格式）**
           const openaiResponse = await openaiClient.chat.completions.create({
             model: 'gpt-4o',
             messages: [
@@ -134,15 +127,12 @@ app.post('/webhook', async (req, res) => {
 
           console.log('OpenAI 回應:', openaiResponse.choices[0].message.content);
 
-          // 回覆圖片分析結果
+          // **回覆圖片分析結果（與原本格式一模一樣）**
           await client.pushMessage(userId, [
             { type: 'text', text: openaiResponse.choices[0].message.content }
           ]);
         } catch (err) {
-          console.log("OpenAI 服務出現錯誤: ");
-          console.error(err);
-          console.log(`用戶ID: ${userId}`);
-
+          console.error("OpenAI 服務出現錯誤: ", err);
           await client.pushMessage(userId, [
             { type: 'text', text: '服務暫時不可用，請稍後再試。' }
           ]);
@@ -154,8 +144,8 @@ app.post('/webhook', async (req, res) => {
   }
 });
 
-// 啟動伺服器
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`伺服器正在運行，端口號：${PORT}`);
+// ============== 啟動伺服器 ==============
+const port = process.env.PORT || 3000;
+app.listen(port, () => {
+  console.log(`🚀 服務運行中，端口：${port}`);
 });
