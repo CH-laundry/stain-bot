@@ -1,15 +1,21 @@
 async function getAIResponse(userMessage) {
-  const response = await openaiClient.chat.completions.create({
-    model: "gpt-4o",
-    messages: [
-      { role: "system", content: "你是一個洗衣店客服機器人，請用簡潔明確的方式回答客戶的問題，不要提供額外的清洗建議。例如：\n客戶：可以洗窗簾嗎？\n回應：可以的，我們有窗簾清潔服務喔！\n\n客戶：這件衣服洗得掉嗎？\n回應：我們會盡力處理，但成功率視污漬與材質而定。\n\n請以這種簡潔格式回答問題。" },
-      { role: "user", content: userMessage }
-    ]
-  });
-  return response.choices[0].message.content;
+  try {
+    const response = await openaiClient.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        { role: "system", content: "你是一個洗衣店客服機器人，請用簡潔明確的方式回答客戶的問題，不要提供額外的清洗建議。例如：\n客戶：可以洗窗簾嗎？\n回應：可以的，我們有窗簾清潔服務喔！\n\n客戶：這件衣服洗得掉嗎？\n回應：我們會盡力處理，但成功率視污漬與材質而定。\n\n請以這種簡潔格式回答問題。" },
+        { role: "user", content: userMessage }
+      ]
+    });
+
+    return response.choices[0].message.content;
+  } catch (error) {
+    console.error("❌ OpenAI API 失敗: ", error);
+    return "目前客服系統繁忙，請稍後再試 🙏";
+  }
 }
 
-// **修改 Webhook，新增 AI 客服，但圖片分析完全不變**
+// **WebHook，確保圖片分析功能完全不變**
 app.post('/webhook', async (req, res) => {
   res.status(200).end(); // 確保 LINE 收到回調
 
@@ -28,13 +34,13 @@ app.post('/webhook', async (req, res) => {
 
         console.log(`📝 收到文字訊息: ${text}`);
 
-        // **呼叫 AI 客服**
+        // **呼叫 AI 客服（確保 API 錯誤時不影響整體運行）**
         const responseMessage = await getAIResponse(text);
         await client.pushMessage(userId, { type: 'text', text: responseMessage });
         continue;
       }
 
-      // **圖片分析部分完全不變，確保回應與原本一模一樣**
+      // **圖片分析部分完全不變**
       if (event.message.type === 'image') {
         try {
           if (!startup_store.get(userId) || startup_store.get(userId) < Date.now()) {
