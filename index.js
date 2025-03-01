@@ -123,6 +123,15 @@ const dynamicEmojis = {
   "地毯": "🧹"
 };
 
+// ============== 價格詢問判斷 ==============
+function isPriceInquiry(text) {
+  const priceKeywords = [
+    "價格", "价錢", "收費", "費用", "多少錢", "價位", "算錢", "清洗費", "價目表",
+    "這件多少", "這個價格", "鞋子費用", "洗鞋錢", "要多少", "怎麼算"
+  ];
+  return priceKeywords.some(keyword => text.includes(keyword));
+}
+
 // ============== 中間件 ==============
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -153,6 +162,15 @@ app.post('/webhook', async (req, res) => {
           startup_store.set(userId, Date.now() + 180e3);
           console.log(`用戶 ${userId} 開始使用`);
           await client.pushMessage(userId, { type: 'text', text: '請上傳圖片' });
+          continue;
+        }
+
+        // 判斷是否為價格詢問
+        if (isPriceInquiry(text)) {
+          await client.pushMessage(userId, {
+            type: 'text',
+            text: '您好 可以參考我們的服務價目，包包類或其它衣物可以線上跟我們詢問 我們會跟您回覆的 謝謝您 🌟👕'
+          });
           continue;
         }
 
