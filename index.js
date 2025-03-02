@@ -73,7 +73,13 @@ const keywordResponses = {
   "血漬": "血漬我們會盡力處理，但成功率視沾染時間和材質而定喔！💉",
   "醬油": "醬油污漬我們有專門的處理方式，大部分都可以變淡，請放心！🍶",
   "多少錢|費用|洗這個多少|怎麼收費|怎麼算": "可以參考我們的服務價目表，包包類或其他衣物可以跟我們說，另外跟您回覆，謝謝您！",
-  "寶寶汽座|汽座|兒童座椅|兒童安全座椅|手推車|單人推車|單人手推車|雙人推車|寶寶手推車": "寶寶汽座&手推車"
+  "寶寶汽座": "寶寶汽座的清潔費用是 900 元。🍼",
+  "兒童座椅": "兒童座椅的清潔費用是 900 元。👶",
+  "安全兒童座椅": "安全兒童座椅的清潔費用是 900 元。🚗",
+  "手推車": "單人手推車的清潔費用是 1200 元，雙人手推車為 1800 元。🚙",
+  "寶寶手推車": "寶寶手推車的清潔費用是 1200 元。🚼",
+  "單人手推車": "單人手推車的清潔費用是 1200 元。🛒",
+  "書包": "書包的清潔費用是 550 元。🎒"
 };
 
 // ============== 急件模糊關鍵字檢查 ==============
@@ -129,7 +135,7 @@ app.post('/webhook', async (req, res) => {
       console.error("没有收到有效的事件数据");
       return;
     }
-    
+
     console.log(JSON.stringify(events, null, 2)); // 调试输出事件
 
     for (const event of events) {
@@ -171,26 +177,7 @@ app.post('/webhook', async (req, res) => {
           continue;
         }
 
-        // 3. 送洗進度特殊處理
-        if (["洗好", "洗好了嗎", "可以拿了嗎", "進度", "好了嗎", "完成了嗎"].some(k => text.includes(k))) {
-          await client.pushMessage(userId, {
-            type: 'text',
-            text: '營業時間會馬上查詢您的清洗進度😊，並回覆您！或是您可以這邊線上查詢 C.H精緻洗衣 謝謝您🔍',
-            quickReply: {
-              items: [{
-                type: "action",
-                action: {
-                  type: "uri",
-                  label: "C.H精緻洗衣",
-                  uri: "https://liff.line.me/2004612704-JnzA1qN6#/"
-                }
-              }]
-            }
-          });
-          continue;
-        }
-
-        // 4. 關鍵字優先匹配
+        // 3. 關鍵字優先匹配
         let matched = false;
         for (const [keys, response] of Object.entries(keywordResponses)) {
           if (keys.split('|').some(k => text.includes(k))) {
@@ -201,7 +188,7 @@ app.post('/webhook', async (req, res) => {
         }
         if (matched) continue;
 
-        // 5. 未觸發關鍵字的 AI 客服一律不回應
+        // 4. 未觸發關鍵字的 AI 客服一律不回應
         continue;
       }
 
