@@ -1,81 +1,3 @@
-const express = require('express');
-const { Client } = require('@line/bot-sdk');
-const { OpenAI } = require('openai');
-const { createHash } = require('crypto');
-require('dotenv').config();
-
-// ============== LINE 配置 ==============
-const client = new Client({
-  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN.trim(),
-  channelSecret: process.env.LINE_CHANNEL_SECRET.trim()
-});
-
-const app = express();
-app.use(express.json()); // 解析 JSON 請求體
-
-const openaiClient = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY.trim()
-});
-
-// ============== 關鍵字回應系統 ==============
-const keywordResponses = {
-  // 營業時間相關
-  "營業|開門|休息|開店|有開": "今日有營業的💖我們的營業時間為 10:30 - 20:00，除週六固定公休喔！😊",
-  
-  // 收送服務相關（強化模糊匹配）
-  "收送|免費收送|到府收送|有收送嗎|有到府收送嗎|送回|送回來|來收|來拿|收衣|收件|送衣": "我們有免費到府收送服務📦，可以 LINE 或官網預約喔！🚚 江翠北芳鄰一件就可以免費收送，板橋、新莊、三重、中和、永和滿三件或 500 元，放置管理室跟我們說就可以了！👕",
-  
-  // 清洗時間相關（嚴格匹配7-10天）
-  "清洗|清潔|洗多久|多久|會好|送洗時間|可以拿|可以領|清洗時間": "我們的清潔時間一般約 7-10 個工作天⏰，完成後會自動通知您喔！謝謝您⏳",
-  
-  // 特殊物品清洗費用
-  "書包|書包清洗|書包費用": "我們書包清洗的費用是550元💼。",
-  "汽座|寶寶汽座|嬰兒汽座|兒童安全座椅": "我們有清洗寶寶汽座（兒童安全座椅），費用是900元🚼。",
-  "手推車|寶寶手推車|單人手推車": "我們有清洗寶寶手推車，費用是1200元👶。",
-  "寶寶汽座&手推車": "寶寶汽座清洗900元🚼 / 手推車清洗1200元👶",
-
-  // 新增模糊關鍵字：收回相關
-  "收回了嗎|來收了嗎|收走了嗎|收走|拿了嗎|收了嗎|收件了嗎|拿走": "今日會收回，收回也會跟您通知的🚚。",
-
-  // 新增模糊關鍵字：付款相關
-  "如何付款|儲值|付費|付款|支付|給錢|收款|收錢": "我們可以現金💵、轉帳🏦、線上Line Pay📱、信用卡💳。"
-};
-
-// ============== 強制不回應列表 ==============
-const ignoredKeywords = ["常見問題", "服務價目&儲值優惠", "到府收送", "店面地址&營業時間", "付款方式", "寶寶汽座&手推車", "顧客須知", "智能污漬分析"];
-
-// ============== 智能污漬分析啟動狀態 ==============
-const startup_store = new Map();
-
-// ============== 使用次數檢查（改用內存存儲） ==============
-const usageStore = new Map(); // 用於存儲用戶使用次數
-
-async function checkUsage(userId) {
-  // 如果是 ADMIN 用戶，直接返回 true（無限制）
-  if (process.env.ADMIN && process.env.ADMIN.includes(userId)) {
-    return true;
-  }
-
-  const currentTime = Math.floor(Date.now() / 1000);
-  const userUsage = usageStore.get(userId) || [];
-
-  // 過濾出在時間週期內的記錄
-  const validRecords = userUsage.filter(record => {
-    return currentTime - record <= process.env.MAX_USES_TIME_PERIOD;
-  });
-
-  // 如果超過限制，返回 false
-  if (validRecords.length >= process.env.MAX_USES_PER_USER) {
-    return false;
-  }
-
-  // 添加新的使用記錄
-  userUsage.push(currentTime);
-  usageStore.set(userId, userUsage);
-
-  return true;
-}
-
 // ============== 核心邏輯 ==============
 app.post('/webhook', async (req, res) => {
   res.status(200).end(); // 確保 LINE 收到回調
@@ -92,7 +14,14 @@ app.post('/webhook', async (req, res) => {
       if (event.message.type === 'text') {
         const text = event.message.text.trim().toLowerCase();
 
-        // 1. 啟動智能污漬分析
+        // 1. 檢查是否為寶寶汽座或手推車相關問題
+        const babyKeywords = ["寶寶汽座", "汽座", "兒童座椅", "兒童安全座椅", "手推車", "單人推車", "單人手推車", "雙人推車", "寶寶手推車"];
+        if (babyKeywords.some(keyword => text.includes(keyword))) {
+          await client.pushMessage(userId, { type: 'text', text: '寶寶汽座&手推車' });
+          continue;
+        }
+
+        // 2. 啟動智能污漬分析
         if (text === '1') {
           startup_store.set(userId, Date.now() + 180e3); // 設置 3 分鐘的有效期
           console.log(`用戶 ${userId} 開始使用`);
@@ -100,7 +29,7 @@ app.post('/webhook', async (req, res) => {
           continue;
         }
 
-        // 2. 關鍵字優先匹配
+        // 3. 關鍵字優先匹配
         let matched = false;
         for (const [keys, response] of Object.entries(keywordResponses)) {
           if (keys.split('|').some(k => text.includes(k))) {
@@ -111,7 +40,7 @@ app.post('/webhook', async (req, res) => {
         }
         if (matched) continue;
 
-        // 3. 送洗進度特殊處理
+        // 4. 送洗進度特殊處理
         if (["洗好", "洗好了嗎", "可以拿了嗎", "進度", "好了嗎", "完成了嗎"].some(k => text.includes(k))) {
           await client.pushMessage(userId, {
             type: 'text',
@@ -130,7 +59,7 @@ app.post('/webhook', async (req, res) => {
           continue;
         }
 
-        // 4. 其他問題交由AI（嚴格限制回答格式）
+        // 5. 其他問題交由AI（嚴格限制回答格式）
         const aiResponse = await openaiClient.chat.completions.create({
           model: 'gpt-4',
           messages: [{
@@ -142,7 +71,7 @@ app.post('/webhook', async (req, res) => {
           }]
         });
 
-        // 5. 嚴格過濾AI回答
+        // 6. 嚴格過濾AI回答
         const aiText = aiResponse.choices[0].message.content;
         if (!aiText || aiText.includes('無法回答')) continue;
 
@@ -216,7 +145,3 @@ app.post('/webhook', async (req, res) => {
     console.error('全局錯誤:', err);
   }
 });
-
-// ============== 啟動服務 ==============
-const port = process.env.PORT || 3000;
-app.listen(port, () => console.log(`服務運行中，端口：${port}`));
