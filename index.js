@@ -175,7 +175,7 @@ function isWashMethodInquiry(text) {
 // ============== 判斷是否為急件詢問 ==============
 function isUrgentInquiry(text) {
   const urgentKeywords = [
-    "急件", "趕件", "快一點", "加急", "趕時間"
+    "急件", "趕件", "快一點", "加急", "趕時間", "1天", "2天", "3天", "一天", "兩天", "三天"
   ];
   return urgentKeywords.some(keyword => text.includes(keyword));
 }
@@ -183,7 +183,7 @@ function isUrgentInquiry(text) {
 // ============== 判斷是否為寶寶汽座或手推車費用詢問 ==============
 function isBabyGearInquiry(text) {
   const babyGearKeywords = [
-    "寶寶汽座", "手推車", "寶寶手推車", "書包"
+    "寶寶汽座", "兒童安全座椅", "手推車", "寶寶手推車", "書包"
   ];
   return babyGearKeywords.some(keyword => text.includes(keyword));
 }
@@ -227,12 +227,12 @@ app.post('/webhook', async (req, res) => {
           if (text.includes("書包")) {
             await client.pushMessage(userId, {
               type: 'text',
-              text: '我們書包清洗的費用是500元💼。'
+              text: '我們書包清洗的費用是550元💼。'
             });
-          } else if (text.includes("寶寶汽座")) {
+          } else if (text.includes("寶寶汽座") || text.includes("兒童安全座椅")) {
             await client.pushMessage(userId, {
               type: 'text',
-              text: '我們寶寶汽座清洗的費用是900元🚼。'
+              text: '我們寶寶汽座（兒童安全座椅）清洗的費用是900元🚼。'
             });
           } else if (text.includes("手推車") || text.includes("寶寶手推車")) {
             await client.pushMessage(userId, {
@@ -245,17 +245,10 @@ app.post('/webhook', async (req, res) => {
 
         // 判斷是否為急件詢問
         if (isUrgentInquiry(text)) {
-          if (text.includes("3天") || text.includes("三天")) {
-            await client.pushMessage(userId, {
-              type: 'text',
-              text: '不好意思，清潔需要一定的工作日，可能會來不及😢。'
-            });
-          } else {
-            await client.pushMessage(userId, {
-              type: 'text',
-              text: '不好意思，清潔是需要一定的工作日，這邊客服會再跟您確認⏳。'
-            });
-          }
+          await client.pushMessage(userId, {
+            type: 'text',
+            text: '不好意思，清潔需要一定的工作日，可能會來不及😢。'
+          });
           continue;
         }
 
