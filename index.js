@@ -192,6 +192,13 @@ app.post('/webhook', async (req, res) => {
       if (event.message.type === 'text') {
         const text = event.message.text.trim().toLowerCase();
 
+        // 檢查是否包含強制不回應的關鍵字
+        const shouldIgnore = ignoredKeywords.some(keyword => text.includes(keyword.toLowerCase()));
+        if (shouldIgnore) {
+          console.log(`用戶 ${userId} 的訊息包含強制不回應關鍵字，已忽略。`);
+          continue; // 跳過回應
+        }
+
         // 1. 按「1」啟動智能污漬分析
         if (text === '1') {
           await client.pushMessage(userId, {
