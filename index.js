@@ -5,13 +5,26 @@ const { OpenAI } = require('openai');
 require('dotenv').config();
 
 // ============== 環境變數檢查 ==============
-const requiredEnvVars = ['LINE_CHANNEL_ACCESS_TOKEN','LINE_CHANNEL_SECRET','OPENAI_API_KEY','MAX_USES_PER_USER','MAX_USES_TIME_PERIOD','ADMIN'];
-requiredEnvVars.forEach(varName => {if (!process.env[varName]) {console.error(`錯誤：缺少環境變數 ${varName}`);process.exit(1);}});
+const requiredEnvVars = ['LINE_CHANNEL_ACCESS_TOKEN', 'LINE_CHANNEL_SECRET', 'OPENAI_API_KEY', 'MAX_USES_PER_USER', 'MAX_USES_TIME_PERIOD', 'ADMIN'];
+requiredEnvVars.forEach(varName => {
+  if (!process.env[varName]) {
+    console.error(`錯誤：缺少環境變數 ${varName}`);
+    process.exit(1);
+  }
+});
 
 // ============== LINE配置 ==============
-const client = new Client({channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN.trim(),channelSecret: process.env.LINE_CHANNEL_SECRET.trim()});
+const client = new Client({
+  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN.trim(),
+  channelSecret: process.env.LINE_CHANNEL_SECRET.trim()
+});
 const app = express();
-const openaiClient = new OpenAI({apiKey: process.env.OPENAI_API_KEY.trim()});
+const openaiClient = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY.trim()
+});
+
+// ============== 使用 express.json() 來解析請求 ==============
+app.use(express.json());  // 確保能正確處理 JSON 請求
 
 // ============== 關鍵字回應系統 ==============
 const keywordResponses = {
@@ -36,7 +49,14 @@ const ignoredKeywords = ["常見問題","服務價目&儲值優惠","到府收�
 
 // ============== 核心邏輯 ==============
 app.post('/webhook', async (req, res) => {
+  // 確保請求中有 body 和 events
+  if (!req.body || !req.body.events) {
+    console.error('請求格式錯誤:', req.body);
+    return res.status(400).send('Bad Request'); // 返回錯誤
+  }
+
   res.status(200).end();
+
   try {
     for (const event of req.body.events.filter(e => e.type === 'message' && e.source.userId)) {
       const userId = event.source.userId;
@@ -61,7 +81,7 @@ app.post('/webhook', async (req, res) => {
         await client.pushMessage(userId, {
           type: 'text',
           text: '營業時間會馬上查詢您的清洗進度😊，並回覆您！或是您可以這邊線上查詢 C.H精緻洗衣 謝謝您🔍',
-          quickReply: {items: [{type: "action",action: {type: "uri",label: "C.H精緻洗衣",uri: "https://liff.line.me/2004612704-JnzA1qN6#/"}}]}
+          quickReply: {items: [{type: "action", action: {type: "uri", label: "C.H精緻洗衣", uri: "https://liff.line.me/2004612704-JnzA1qN6#/"}}]}
         });
         continue;
       }
@@ -76,13 +96,16 @@ app.post('/webhook', async (req, res) => {
         messages: [{
           role: 'system',
           content: '你是一個洗衣店客服，回答需滿足：1.用口語化中文 2.結尾加1個表情 3.禁用專業術語 4.不提及時間長短 5.無法回答時不回應'
-        },{role: 'user',content: text}]
+        }, {
+          role: 'user',
+          content: text
+        }]
       });
 
       // 6. 嚴格過濾AI回答
       const aiText = aiResponse.choices[0].message.content;
       if (!aiText || aiText.includes('無法回答') || timeKeywords.some(k => aiText.includes(k))) continue;
-      
+
       await client.pushMessage(userId, {type: 'text', text: aiText});
     }
   } catch (err) {
