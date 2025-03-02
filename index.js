@@ -1,37 +1,21 @@
-// ============== 使用次數檢查 ==============
-async function checkUsage(userId) {
-  // 如果是 ADMIN 用戶，直接返回 true（無限制）
-  if (process.env.ADMIN && process.env.ADMIN.includes(userId)) {
-    return true;
-  }
+const express = require('express');
+const { Client } = require('@line/bot-sdk');
+const { OpenAI } = require('openai');
+const { createHash } = require('crypto');
+require('dotenv').config();
 
-  const currentTime = Math.floor(Date.now() / 1000);
-  const key = `usage:${userId}`;
+// ============== LINE 配置 ==============
+const client = new Client({
+  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN.trim(),
+  channelSecret: process.env.LINE_CHANNEL_SECRET.trim()
+});
 
-  try {
-    // 獲取用戶的使用記錄
-    const usageRecords = await redisClient.lRange(key, 0, -1);
+const app = express();
+app.use(express.json()); // 解析 JSON 請求體
 
-    // 過濾出在時間週期內的記錄
-    const validRecords = usageRecords.filter(record => {
-      const recordTime = parseInt(record);
-      return currentTime - recordTime <= process.env.MAX_USES_TIME_PERIOD;
-    });
-
-    // 如果超過限制，返回 false
-    if (validRecords.length >= process.env.MAX_USES_PER_USER) {
-      return false;
-    }
-
-    // 添加新的使用記錄
-    await redisClient.rPush(key, currentTime.toString());
-
-    return true;
-  } catch (err) {
-    console.error("檢查使用次數時出錯:", err);
-    return false;
-  }
-}
+const openaiClient = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY.trim()
+});
 
 // ============== 動態表情符號 ==============
 const dynamicEmojis = {
@@ -76,9 +60,9 @@ const keywordResponses = {
   "寶寶汽座|汽座|兒童座椅|兒童安全座椅|手推車|單人推車|單人手推車|雙人推車|寶寶手推車": "寶寶汽座&手推車"
 };
 
-// ============== 急件模糊關鍵字檢查 ==============
+// 判斷是否為急件詢問
 function isUrgentInquiry(text) {
-  const urgentKeywords = ["急件", "加急", "趕時間", "快一點", "盡快", "緊急"];
+  const urgentKeywords = ['急件', '加急', '快', '急', '三天', '3天'];
   return urgentKeywords.some(keyword => text.includes(keyword));
 }
 
@@ -98,7 +82,7 @@ app.post('/webhook', async (req, res) => {
       if (event.message.type === 'text') {
         const text = event.message.text.trim().toLowerCase();
 
-        // 1. 急件模糊關鍵字檢查
+        // 1. 急件判斷
         if (isUrgentInquiry(text)) {
           if (text.includes("3天") || text.includes("三天")) {
             await client.pushMessage(userId, {
@@ -111,7 +95,7 @@ app.post('/webhook', async (req, res) => {
               text: '不好意思，清潔是需要一定的工作日，這邊客服會再跟您確認⏳。'
             });
           }
-          continue;
+          return true;
         }
 
         // 2. 關鍵字優先匹配
