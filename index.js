@@ -1,8 +1,8 @@
-// ============== 引入依賴 ==============
 const express = require('express');
 const { createHash } = require('crypto');
 const { Client } = require('@line/bot-sdk');
 const { OpenAI } = require('openai');
+require('dotenv').config();
 
 // 初始化 Express 應用程式
 const app = express();
@@ -19,31 +19,13 @@ const openaiClient = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
-// 用於存儲用戶狀態的臨時對象
+// 用戶狀態存儲
 const userState = {};
-const usageStore = new Map(); // 用來存儲用戶的使用次數
+const store = new Map();
 
-// ============== 使用次數檢查 ==============
-async function checkUsage(userId) {
-  const now = Date.now();
-  const timePeriodMs = process.env.MAX_USES_TIME_PERIOD * 1000;
-
-  // 如果是 ADMIN 用戶，直接返回 true（無限制）
-  if (process.env.ADMIN && process.env.ADMIN.includes(userId)) {
-    return true;
-  }
-
-  const userUsage = usageStore.get(userId) || [];
-  const recentUsage = userUsage.filter(timestamp => timestamp > now - timePeriodMs); // 去除過期的使用記錄
-
-  if (recentUsage.length < process.env.MAX_USES_PER_USER) {
-    recentUsage.push(now); // 記錄當前使用時間
-    usageStore.set(userId, recentUsage);
-    return true; // 允許使用
-  } else {
-    return false; // 超過最大使用次數
-  }
-}
+// 設置最大使用次數和時間週期
+const MAX_USES_PER_USER = process.env.MAX_USES_PER_USER || 2;
+const MAX_USES_TIME_PERIOD = process.env.MAX_USES_TIME_PERIOD || 604800; // 604800秒為一周
 
 // ============== 關鍵字回應系統 ==============
 const keywordResponses = {
@@ -69,39 +51,42 @@ const keywordResponses = {
   "寶寶汽座": "寶寶汽座 $900 👶",
   "單人手推車": "寶寶單人手推車 $1200 🛒",
   "雙人手推車": "雙人手推車 $1800 🛒",
-  "書包": "書包 $550 🎒"
+  "書包": "書包 $550 🎒",
+  "洗的掉": "我們會針對污漬做專門處理，大部分污漬都可以變淡，但成功率視污漬種類與衣物材質而定喔！✨",
+  "洗掉": "我們會盡力處理污漬，但滲透到纖維或時間較久的污漬可能無法完全去除，請見諒！😊",
+  "染色": "染色問題我們會盡量處理，但如果滲透到衣物纖維或面積較大，不能保證完全處理喔！🌈",
+  "退色": "已經退色的衣物是無法恢復的，請見諒！🎨",
+  "清洗地毯": "我們提供地毯清洗服務，請告知我們您需要清洗的地毯狀況，我們會根據情況安排清洗。🧹",
+  "清洗窗簾": "我們提供窗簾清洗服務，請提供您的窗簾尺寸和材質，以便我們安排清洗。🪟",
+  "是否能清洗衣物": "我們提供各式衣物清洗服務，無論是衣服、外套、襯衫等都可以清洗。👕"
 };
 
-// ============== 送洗進度特殊處理 ==============
-function isProgressInquiry(text) {
-  const progressKeywords = [
-    "洗好", "洗好了嗎", "可以拿了嗎", "進度", "好了嗎", "完成了嗎"
-  ];
-  return progressKeywords.some(keyword => text.includes(keyword));
-}
+// ============== 使用次數檢查 ==============
+async function checkUsage(userId) {
+  const key = `rate_limit:user:${userId}`;
+  const now = Date.now();
+  const timePeriodMs = MAX_USES_TIME_PERIOD * 1000;
 
-// ============== 判斷是否為付款方式詢問 ==============
-function isPaymentInquiry(text) {
-  const paymentKeywords = [
-    "付款", "付費", "支付", "怎麼付", "如何付", "付錢"
-  ];
-  return paymentKeywords.some(keyword => text.includes(keyword));
-}
+  try {
+    let userActions = store.get(key);
+    if (!userActions) {
+      userActions = [];
+    }
 
-// ============== 判斷是否為清洗方式詢問 ==============
-function isWashMethodInquiry(text) {
-  const washMethodKeywords = [
-    "水洗", "乾洗", "如何清洗", "怎麼洗", "清潔方式"
-  ];
-  return washMethodKeywords.some(keyword => text.includes(keyword));
-}
+    // 移除過期的 action 时间戳
+    userActions = userActions.filter(timestamp => timestamp > now - timePeriodMs);
 
-// ============== 濾掉無關詢問 ==============
-function isIrrelevantInquiry(text) {
-  const irrelevantKeywords = [
-    "今天天氣好嗎", "在嗎", "請問", "你好"
-  ];
-  return irrelevantKeywords.some(keyword => text.includes(keyword));
+    if (userActions.length < MAX_USES_PER_USER) {
+      userActions.push(now); // 添加新的 action 时间戳
+      store.set(key, userActions); // 更新 store
+      return true; // 允许使用
+    } else {
+      return false; // 达到限制，拒绝使用
+    }
+  } catch (error) {
+    console.error("Map 存储限流错误:", error);
+    return true;
+  }
 }
 
 // ============== 智能污漬分析 ==============
@@ -114,7 +99,7 @@ async function analyzeStain(userId, imageBuffer) {
 
     // 調用 OpenAI API 進行圖片分析（使用 GPT-4o 模型）
     const openaiResponse = await openaiClient.chat.completions.create({
-      model: 'gpt-4o', // 使用 GPT-4o 模型
+      model: 'gpt-4o',
       messages: [{
         role: 'system',
         content: '你是專業的洗衣助手，你的任務是分析使用者提供的衣物污漬圖片，提供清洗成功的機率，同時機率輸出必須是百分比（例如50%），和具體的污漬類型信息，但是不要提供清洗建議，每句話結尾加上 “我們會以不傷害材質盡量做清潔處理。”。'
@@ -127,7 +112,6 @@ async function analyzeStain(userId, imageBuffer) {
       }]
     });
 
-    // 回覆分析結果
     const analysisResult = openaiResponse.choices[0].message.content;
     await client.pushMessage(userId, {
       type: 'text',
@@ -139,24 +123,37 @@ async function analyzeStain(userId, imageBuffer) {
   }
 }
 
+// ============== 判斷是否為急件詢問 ==============
+function isUrgentInquiry(text) {
+  const urgentKeywords = [
+    "急件", "趕件", "快一點", "加急", "趕時間"
+  ];
+  return urgentKeywords.some(keyword => text.includes(keyword));
+}
+
+// ============== 判斷價格詢問 ==============
+function isPriceInquiry(text) {
+  const priceKeywords = [
+    "價格", "价錢", "收費", "費用", "多少錢", "價位", "算錢", "清洗費", "價目表",
+    "這件多少", "這個價格", "鞋子費用", "洗鞋錢", "要多少", "怎麼算", "窗簾費用"
+  ];
+  return priceKeywords.some(keyword => text.includes(keyword));
+}
+
 // ============== 核心邏輯 ==============
 app.post('/webhook', async (req, res) => {
-  res.status(200).end(); // 確保 LINE 收到回調
+  res.status(200).end();
 
   try {
     const events = req.body.events;
+
     for (const event of events) {
       if (event.type !== 'message' || !event.source.userId) continue;
 
       const userId = event.source.userId;
       const text = event.message.text.trim().toLowerCase();
 
-      // 1. 濾掉無關詢問
-      if (isIrrelevantInquiry(text)) {
-        continue; // 不回應無關問題
-      }
-
-      // 2. 判斷是否為付款方式詢問
+      // 1. 判斷付款方式詢問
       if (isPaymentInquiry(text)) {
         await client.pushMessage(userId, {
           type: 'text',
@@ -165,7 +162,7 @@ app.post('/webhook', async (req, res) => {
         continue;
       }
 
-      // 3. 判斷是否為清洗方式詢問
+      // 2. 判斷清洗方式詢問
       if (isWashMethodInquiry(text)) {
         await client.pushMessage(userId, {
           type: 'text',
@@ -174,7 +171,7 @@ app.post('/webhook', async (req, res) => {
         continue;
       }
 
-      // 4. 判斷是否為送洗進度詢問
+      // 3. 判斷清洗進度詢問
       if (isProgressInquiry(text)) {
         await client.pushMessage(userId, {
           type: 'text',
@@ -193,45 +190,19 @@ app.post('/webhook', async (req, res) => {
         continue;
       }
 
-      // 5. 處理圖片並啟動智能污漬分析
-      if (event.message.type === 'image') {
-        try {
-          const stream = await client.getMessageContent(event.message.id);
-          const chunks = [];
-          for await (const chunk of stream) {
-            chunks.push(chunk);
-          }
-
-          const buffer = Buffer.concat(chunks);
-          userState[userId] = { imageBuffer: buffer }; // 存儲圖片 buffer
-          await client.pushMessage(userId, {
-            type: 'text',
-            text: '已收到您的圖片，請回覆「1」開始智能污漬分析。'
-          });
-        } catch (err) {
-          console.error("處理圖片時出錯:", err);
-          await client.pushMessage(userId, { type: 'text', text: '服務暫時不可用，請稍後再試。' });
-        }
-      }
-
-      // 6. 按「1」啟動智能污漬分析
-      if (text === '1') {
-        if (userState[userId] && userState[userId].imageBuffer) {
-          await analyzeStain(userId, userState[userId].imageBuffer);
-          delete userState[userId]; // 清除用戶狀態
-        } else {
-          await client.pushMessage(userId, {
-            type: 'text',
-            text: '請先上傳圖片以進行智能污漬分析。'
-          });
-        }
+      // 4. 判斷“能洗掉”的問題
+      if (["洗的掉", "洗掉", "會洗壞"].some(k => text.includes(k))) {
+        await client.pushMessage(userId, {
+          type: 'text',
+          text: '我們會針對污漬做專門處理，大部分污漬都可以變淡，但成功率視污漬種類與衣物材質而定喔！✨'
+        });
         continue;
       }
 
-      // 7. 關鍵字回應
+      // 5. 關鍵字匹配回應
       let matched = false;
-      for (const [keys, response] of Object.entries(keywordResponses)) {
-        if (keys.split('|').some(k => text.includes(k))) {
+      for (const [key, response] of Object.entries(keywordResponses)) {
+        if (text.includes(key)) {
           await client.pushMessage(userId, { type: 'text', text: response });
           matched = true;
           break;
@@ -239,15 +210,15 @@ app.post('/webhook', async (req, res) => {
       }
       if (matched) continue;
 
-      // 8. 不回應不懂的問題
-      continue;
+      // 6. AI 客服不回應無關問題
+      continue; // 無回應
     }
   } catch (err) {
     console.error('全局錯誤:', err);
   }
 });
 
-// ============== 啟動伺服器 ==============
+// 啟動伺服器
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`伺服器正在運行，端口：${PORT}`);
