@@ -100,8 +100,8 @@ const keywordResponses = {
   "多久": "我們的清潔時間一般約 7-10 個工作天⏰，完成後會自動通知您喔！謝謝您⏳",
   "會好": "我們的清潔時間一般約 7-10 個工作天⏰，完成後會自動通知您喔！謝謝您⏳",
   "送洗時間": "我們的清潔時間一般約 7-10 個工作天⏰，完成後會自動通知您喔！謝謝您⏳",
-  "洗好了嗎": "營業時間會馬上查詢您的清洗進度😊，並回覆您！謝謝您🔍",
-  "洗好": "營業時間會馬上查詢您的清洗進度😊，並回覆您！謝謝您🔍",
+  "洗好了嗎": "營業時間會馬上查詢您的清洗進度😊，並回覆您！或是您可以這邊線上查詢 [C.H精緻洗衣](https://chlaundryshop.com/?state=G7sdT6frgAjU&liffClientId=2004612704&liffRedirectUri=https%3A%2F%2Fchlaundryshop.com&code=ZIKSQeK5qjFAjwr2VTKB&lineAppVersion=15.1.4#/home) 謝謝您🔍",
+  "洗好": "營業時間會馬上查詢您的清洗進度😊，並回覆您！或是您可以這邊線上查詢 [C.H精緻洗衣](https://chlaundryshop.com/?state=G7sdT6frgAjU&liffClientId=2004612704&liffRedirectUri=https%3A%2F%2Fchlaundryshop.com&code=ZIKSQeK5qjFAjwr2VTKB&lineAppVersion=15.1.4#/home) 謝謝您🔍",
   "送回": "清洗完成後會送回給您，送達時也會通知您喔！🚚",
   "拿回": "衣物清洗完成後會送回，請放心！😄",
   "洗的掉": "我們會針對污漬做專門處理，大部分污漬都可以變淡，但成功率視污漬種類與衣物材質而定喔！✨",
@@ -147,6 +147,46 @@ function isPriceInquiry(text) {
   return priceKeywords.some(keyword => text.includes(keyword));
 }
 
+// ============== 判斷是否為送洗進度詢問 ==============
+function isWashProgressInquiry(text) {
+  const progressKeywords = [
+    "洗好", "洗好了嗎", "可以拿了嗎", "進度", "好了嗎", "完成了嗎"
+  ];
+  return progressKeywords.some(keyword => text.includes(keyword));
+}
+
+// ============== 判斷是否為付款方式詢問 ==============
+function isPaymentInquiry(text) {
+  const paymentKeywords = [
+    "付款", "付費", "支付", "怎麼付", "如何付", "付錢"
+  ];
+  return paymentKeywords.some(keyword => text.includes(keyword));
+}
+
+// ============== 判斷是否為清洗方式詢問 ==============
+function isWashMethodInquiry(text) {
+  const washMethodKeywords = [
+    "水洗", "乾洗", "如何清洗", "怎麼洗", "清潔方式"
+  ];
+  return washMethodKeywords.some(keyword => text.includes(keyword));
+}
+
+// ============== 判斷是否為急件詢問 ==============
+function isUrgentInquiry(text) {
+  const urgentKeywords = [
+    "急件", "趕件", "快一點", "加急", "趕時間"
+  ];
+  return urgentKeywords.some(keyword => text.includes(keyword));
+}
+
+// ============== 判斷是否為寶寶汽座或手推車費用詢問 ==============
+function isBabyGearInquiry(text) {
+  const babyGearKeywords = [
+    "寶寶汽座", "手推車", "寶寶手推車", "書包"
+  ];
+  return babyGearKeywords.some(keyword => text.includes(keyword));
+}
+
 // ============== 中間件 ==============
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -177,12 +217,67 @@ app.post('/webhook', async (req, res) => {
           continue; // 不回應
         }
 
-        // 判斷是否為價格詢問
-        if (isPriceInquiry(text)) {
+        // 判斷是否為送洗進度詢問
+        if (isWashProgressInquiry(text)) {
           await client.pushMessage(userId, {
             type: 'text',
-            text: '您好 可以參考我們的服務價目，包包類或其它衣物可以線上跟我們詢問 我們會跟您回覆的 謝謝您 🌟👕'
+            text: '營業時間會馬上查詢您的清洗進度😊，並回覆您！或是您可以這邊線上查詢 [C.H精緻洗衣](https://chlaundryshop.com/?state=G7sdT6frgAjU&liffClientId=2004612704&liffRedirectUri=https%3A%2F%2Fchlaundryshop.com&code=ZIKSQeK5qjFAjwr2VTKB&lineAppVersion=15.1.4#/home) 謝謝您🔍'
           });
+          continue;
+        }
+
+        // 判斷是否為付款方式詢問
+        if (isPaymentInquiry(text)) {
+          await client.pushMessage(userId, {
+            type: 'text',
+            text: '我們可以現金💵、線上Line Pay📱、信用卡💳、轉帳🏦。'
+          });
+          continue;
+        }
+
+        // 判斷是否為清洗方式詢問
+        if (isWashMethodInquiry(text)) {
+          await client.pushMessage(userId, {
+            type: 'text',
+            text: '我們會依照衣物上的洗標來做清潔，也會判斷如何清潔，會以不傷害材質來清潔的✨👕。'
+          });
+          continue;
+        }
+
+        // 判斷是否為急件詢問
+        if (isUrgentInquiry(text)) {
+          if (text.includes("3天") || text.includes("三天")) {
+            await client.pushMessage(userId, {
+              type: 'text',
+              text: '不好意思，清潔需要一定的工作日，可能會來不及😢。'
+            });
+          } else {
+            await client.pushMessage(userId, {
+              type: 'text',
+              text: '不好意思，清潔是需要一定的工作日，這邊客服會再跟您確認⏳。'
+            });
+          }
+          continue;
+        }
+
+        // 判斷是否為寶寶汽座或手推車費用詢問
+        if (isBabyGearInquiry(text)) {
+          if (text.includes("書包")) {
+            await client.pushMessage(userId, {
+              type: 'text',
+              text: '我們書包清洗的費用是550元💼。'
+            });
+          } else if (text.includes("寶寶汽座")) {
+            await client.pushMessage(userId, {
+              type: 'text',
+              text: '我們寶寶汽座清洗的費用是900元🚼。'
+            });
+          } else if (text.includes("手推車") || text.includes("寶寶手推車")) {
+            await client.pushMessage(userId, {
+              type: 'text',
+              text: '我們寶寶手推車清洗的費用是1200元👶。'
+            });
+          }
           continue;
         }
 
