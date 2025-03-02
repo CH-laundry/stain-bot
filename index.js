@@ -1,19 +1,12 @@
 // ============== 引入依賴 ==============
 const express = require('express');
 const { createHash } = require('crypto');
-const redis = require('redis');
 const { Client } = require('@line/bot-sdk');
 const { OpenAI } = require('openai');
 
 // 初始化 Express 應用程式
 const app = express();
 app.use(express.json()); // 解析 JSON 請求體
-
-// 初始化 Redis 客戶端
-const redisClient = redis.createClient({
-  url: process.env.REDIS_URL // 從環境變數中讀取 Redis 連接 URL
-});
-redisClient.connect().catch(console.error);
 
 // 初始化 LINE 客戶端
 const client = new Client({
@@ -33,32 +26,9 @@ async function checkUsage(userId) {
     return true;
   }
 
-  const currentTime = Math.floor(Date.now() / 1000);
-  const key = `usage:${userId}`;
-
-  try {
-    // 獲取用戶的使用記錄
-    const usageRecords = await redisClient.lRange(key, 0, -1);
-
-    // 過濾出在時間週期內的記錄
-    const validRecords = usageRecords.filter(record => {
-      const recordTime = parseInt(record);
-      return currentTime - recordTime <= process.env.MAX_USES_TIME_PERIOD;
-    });
-
-    // 如果超過限制，返回 false
-    if (validRecords.length >= process.env.MAX_USES_PER_USER) {
-      return false;
-    }
-
-    // 添加新的使用記錄
-    await redisClient.rPush(key, currentTime.toString());
-
-    return true;
-  } catch (err) {
-    console.error("檢查使用次數時出錯:", err);
-    return false;
-  }
+  // 這裡可以根據需求實現其他使用次數檢查邏輯
+  // 例如：使用內存中的對象來記錄使用次數
+  return true; // 暫時返回 true，表示無限制
 }
 
 // ============== 動態表情符號 ==============
