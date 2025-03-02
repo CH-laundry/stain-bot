@@ -33,6 +33,46 @@ async function checkUsage(userId) {
   return true; // 暫時返回 true，表示無限制
 }
 
+// ============== 判斷是否為付款方式詢問 ==============
+function isPaymentInquiry(text) {
+  const paymentKeywords = [
+    "付款", "付費", "支付", "怎麼付", "如何付", "付錢"
+  ];
+  return paymentKeywords.some(keyword => text.includes(keyword));
+}
+
+// ============== 判斷是否為清洗方式詢問 ==============
+function isWashMethodInquiry(text) {
+  const washMethodKeywords = [
+    "水洗", "乾洗", "如何清洗", "怎麼洗", "清潔方式"
+  ];
+  return washMethodKeywords.some(keyword => text.includes(keyword));
+}
+
+// ============== 判斷是否為洗壞衣服的詢問 ==============
+function isDamageInquiry(text) {
+  const damageKeywords = [
+    "會洗壞", "洗壞", "會損壞"
+  ];
+  return damageKeywords.some(keyword => text.includes(keyword));
+}
+
+// ============== 判斷是否為窗簾相關詢問 ==============
+function isCurtainInquiry(text) {
+  const curtainKeywords = [
+    "洗窗簾", "窗簾"
+  ];
+  return curtainKeywords.some(keyword => text.includes(keyword));
+}
+
+// ============== 判斷是否為衣物清洗類型詢問 ==============
+function isClothingInquiry(text) {
+  const clothingKeywords = [
+    "洗什麼衣物", "清洗什麼衣物"
+  ];
+  return clothingKeywords.some(keyword => text.includes(keyword));
+}
+
 // ============== 動態表情符號 ==============
 const dynamicEmojis = {
   "洗鞋": "👟",
@@ -82,12 +122,6 @@ const keywordResponses = {
   "書包": "書包的清潔費用是 550 元。🎒"
 };
 
-// ============== 急件模糊關鍵字檢查 ==============
-function isUrgentInquiry(text) {
-  const urgentKeywords = ["急件", "加急", "趕時間", "快一點", "盡快", "緊急"];
-  return urgentKeywords.some(keyword => text.includes(keyword));
-}
-
 // ============== 智能污漬分析 ==============
 async function analyzeStain(userId, imageBuffer) {
   try {
@@ -125,18 +159,16 @@ async function analyzeStain(userId, imageBuffer) {
 
 // ============== 核心邏輯 ==============
 app.post('/webhook', async (req, res) => {
-  console.log(req.body); // 添加调试日志，查看请求体
-
-  res.status(200).end(); // 確保 LINE 收到回調
+  res.status(200).end(); // 确保 LINE 收到回调
 
   try {
-    const events = req.body.events; // 确保 req.body.events 正确
+    const events = req.body.events; 
     if (!events) {
       console.error("没有收到有效的事件数据");
       return;
     }
 
-    console.log(JSON.stringify(events, null, 2)); // 调试输出事件
+    console.log(JSON.stringify(events, null, 2)); 
 
     for (const event of events) {
       if (event.type !== 'message' || !event.source.userId) continue;
@@ -167,7 +199,7 @@ app.post('/webhook', async (req, res) => {
         if (text === '1') {
           if (userState[userId] && userState[userId].imageBuffer) {
             await analyzeStain(userId, userState[userId].imageBuffer);
-            delete userState[userId]; // 清除用戶狀態
+            delete userState[userId]; // 清除用户状态
           } else {
             await client.pushMessage(userId, {
               type: 'text',
@@ -177,7 +209,52 @@ app.post('/webhook', async (req, res) => {
           continue;
         }
 
-        // 3. 關鍵字優先匹配
+        // 3. 判斷付款方式詢問
+        if (isPaymentInquiry(text)) {
+          await client.pushMessage(userId, {
+            type: 'text',
+            text: '我們可以現金💵、線上Line Pay📱、信用卡💳、轉帳🏦。'
+          });
+          continue;
+        }
+
+        // 4. 判斷清洗方式詢問
+        if (isWashMethodInquiry(text)) {
+          await client.pushMessage(userId, {
+            type: 'text',
+            text: '我們會依照衣物上的洗標來做清潔，也會判斷如何清潔，會以不傷害材質來清潔的✨👕。'
+          });
+          continue;
+        }
+
+        // 5. 判斷洗壞衣服的詢問
+        if (isDamageInquiry(text)) {
+          await client.pushMessage(userId, {
+            type: 'text',
+            text: '我們會盡量避免洗壞衣物，請放心。我們會針對每種材質採用適合的方法進行處理。'
+          });
+          continue;
+        }
+
+        // 6. 判斷窗簾相關詢問
+        if (isCurtainInquiry(text)) {
+          await client.pushMessage(userId, {
+            type: 'text',
+            text: '我們可以清洗窗簾，請提供窗簾的材質與尺寸以便給您更準確的報價。'
+          });
+          continue;
+        }
+
+        // 7. 判斷衣物清洗類型詢問
+        if (isClothingInquiry(text)) {
+          await client.pushMessage(userId, {
+            type: 'text',
+            text: '我們提供多種衣物清洗服務，請告訴我們您的衣物種類，我們會提供相應的服務詳情。'
+          });
+          continue;
+        }
+
+        // 8. 關鍵字優先匹配
         let matched = false;
         for (const [keys, response] of Object.entries(keywordResponses)) {
           if (keys.split('|').some(k => text.includes(k))) {
@@ -188,7 +265,7 @@ app.post('/webhook', async (req, res) => {
         }
         if (matched) continue;
 
-        // 4. 未觸發關鍵字的 AI 客服一律不回應
+        // 9. 不懂的問題不回應
         continue;
       }
 
