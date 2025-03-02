@@ -180,6 +180,16 @@ function isCleaningTimeInquiry(text) {
   return cleaningTimeKeywords.some(keyword => text.includes(keyword));
 }
 
+// ============== 判斷是否與洗衣店相關 ==============
+function isLaundryRelated(text) {
+  const laundryKeywords = [
+    "洗衣", "清洗", "污漬", "油漬", "血漬", "醬油", "染色", "退色", "地毯", "窗簾",
+    "寶寶汽座", "汽座", "兒童座椅", "安全兒童座椅", "手推車", "單人手推車", "寶寶手推車", "書包",
+    "營業", "開門", "休息", "開店", "有開", "收送", "到府", "上門", "收衣", "預約", "洗多久", "洗好", "洗好了嗎", "送回", "拿回"
+  ];
+  return laundryKeywords.some(keyword => text.includes(keyword));
+}
+
 // ============== 核心邏輯 ==============
 app.post('/webhook', async (req, res) => {
   res.status(200).end();
@@ -200,6 +210,13 @@ app.post('/webhook', async (req, res) => {
         const shouldIgnore = ignoredKeywords.some(keyword => text.includes(keyword.toLowerCase()));
         if (shouldIgnore) {
           console.log(`用戶 ${userId} 的訊息包含強制不回應關鍵字，已忽略。`);
+          continue; // 跳過回應
+        }
+
+        // 檢查是否與洗衣店相關
+        const isRelated = isLaundryRelated(text);
+        if (!isRelated) {
+          console.log(`用戶 ${userId} 的訊息與洗衣店無關，已忽略。`);
           continue; // 跳過回應
         }
 
