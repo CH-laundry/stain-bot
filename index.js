@@ -73,6 +73,12 @@ function isClothingInquiry(text) {
   return clothingKeywords.some(keyword => text.includes(keyword));
 }
 
+// ============== 判斷是否為急件模糊關鍵字檢查 ==============
+function isUrgentInquiry(text) {
+  const urgentKeywords = ["急件", "加急", "趕時間", "快一點", "盡快", "緊急"];
+  return urgentKeywords.some(keyword => text.includes(keyword));
+}
+
 // ============== 動態表情符號 ==============
 const dynamicEmojis = {
   "洗鞋": "👟",
@@ -162,13 +168,13 @@ app.post('/webhook', async (req, res) => {
   res.status(200).end(); // 确保 LINE 收到回调
 
   try {
-    const events = req.body.events; 
+    const events = req.body.events;
     if (!events) {
       console.error("没有收到有效的事件数据");
       return;
     }
 
-    console.log(JSON.stringify(events, null, 2)); 
+    console.log(JSON.stringify(events, null, 2));
 
     for (const event of events) {
       if (event.type !== 'message' || !event.source.userId) continue;
