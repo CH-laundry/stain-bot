@@ -1,6 +1,7 @@
 const express = require('express');
 const { Client } = require('@line/bot-sdk');
 const { OpenAI } = require('openai');
+const { createHash } = require('crypto');
 const redis = require('redis');
 require('dotenv').config();
 
@@ -71,6 +72,11 @@ const startup_store = new Map();
 
 // ============== 使用次數檢查 ==============
 async function checkUsage(userId) {
+  // 如果是 ADMIN 用戶，直接返回 true（無限制）
+  if (process.env.ADMIN && process.env.ADMIN.includes(userId)) {
+    return true;
+  }
+
   const currentTime = Math.floor(Date.now() / 1000);
   const key = `usage:${userId}`;
 
@@ -104,41 +110,29 @@ async function checkUsage(userId) {
 
 // ============== 核心邏輯 ==============
 app.post('/webhook', async (req, res) => {
-  try {
-    // 確保請求包含 events
-    if (!req.body || !req.body.events) {
-      console.error('錯誤：請求中缺少 events');
-      return res.status(400).end();
-    }
+  res.status(200).end(); // 確保 LINE 收到回調
 
+  try {
     const events = req.body.events;
+    console.log(JSON.stringify(events, null, 2));
     for (const event of events) {
       if (event.type !== 'message' || !event.source.userId) continue;
 
       const userId = event.source.userId;
 
-      // 檢查使用次數
-      const isAllowed = await checkUsage(userId);
-      if (!isAllowed) {
-        await client.pushMessage(userId, { type: 'text', text: '超過每週兩次使用上限 請稍後再試' });
-        continue;
-      }
-
       // 文字訊息
       if (event.message.type === 'text') {
-        const text = event.message.text.trim();
+        const text = event.message.text.trim().toLowerCase();
 
-        // 1. 強制不回應檢查
-        if (ignoredKeywords.some(k => text.includes(k))) continue;
-
-        // 2. 啟動智能污漬分析
+        // 1. 啟動智能污漬分析
         if (text === '1') {
-          startup_store.set(userId, true);
+          startup_store.set(userId, Date.now() + 180e3); // 設置 3 分鐘的有效期
+          console.log(`用戶 ${userId} 開始使用`);
           await client.pushMessage(userId, { type: 'text', text: '請上傳圖片以進行智能污漬分析📸' });
           continue;
         }
 
-        // 3. 關鍵字優先匹配
+        // 2. 關鍵字優先匹配
         let matched = false;
         for (const [keys, response] of Object.entries(keywordResponses)) {
           if (keys.split('|').some(k => text.includes(k))) {
@@ -149,7 +143,7 @@ app.post('/webhook', async (req, res) => {
         }
         if (matched) continue;
 
-        // 4. 送洗進度特殊處理
+        // 3. 送洗進度特殊處理
         if (["洗好", "洗好了嗎", "可以拿了嗎", "進度", "好了嗎", "完成了嗎"].some(k => text.includes(k))) {
           await client.pushMessage(userId, {
             type: 'text',
@@ -168,11 +162,7 @@ app.post('/webhook', async (req, res) => {
           continue;
         }
 
-        // 5. 嚴格禁止AI回答時間相關問題
-        const timeKeywords = ["天數", "工作日", "工作天", "工作日期限", "需要幾天", "幾天", "何時完成"];
-        if (timeKeywords.some(k => text.includes(k))) continue;
-
-        // 6. 其他問題交由AI（嚴格限制回答格式）
+        // 4. 其他問題交由AI（嚴格限制回答格式）
         const aiResponse = await openaiClient.chat.completions.create({
           model: 'gpt-4',
           messages: [{
@@ -184,26 +174,48 @@ app.post('/webhook', async (req, res) => {
           }]
         });
 
-        // 7. 嚴格過濾AI回答
+        // 5. 嚴格過濾AI回答
         const aiText = aiResponse.choices[0].message.content;
-        if (!aiText || aiText.includes('無法回答') || timeKeywords.some(k => aiText.includes(k))) continue;
+        if (!aiText || aiText.includes('無法回答')) continue;
 
         await client.pushMessage(userId, { type: 'text', text: aiText });
       }
 
       // 圖片訊息（智能污漬分析）
-      if (event.message.type === 'image' && startup_store.get(userId)) {
+      if (event.message.type === 'image') {
         try {
+          if (!startup_store.get(userId) || startup_store.get(userId) < Date.now()) {
+            console.log(`用戶 ${userId} 上傳了圖片，但是未開始使用`);
+            startup_store.delete(userId);
+            continue;
+          }
+
           console.log(`收到來自 ${userId} 的圖片訊息, 正在處理...`);
 
-          // 下載圖片
+          startup_store.delete(userId);
+
+          // 檢查使用次數
+          if (!(await checkUsage(userId))) {
+            console.log(`用戶 ${userId} 使用次數到達上限`);
+            await client.pushMessage(userId, { type: 'text', text: '您已經達到每週兩次使用次數上限，請稍後再試。' });
+            continue;
+          }
+
+          console.log(`正在下載來自 ${userId} 的圖片...`);
+          // 從 LINE 獲取圖片內容
           const stream = await client.getMessageContent(event.message.id);
           const chunks = [];
+
+          // 下載圖片並拼接為一個Buffer
           for await (const chunk of stream) {
             chunks.push(chunk);
           }
+
           const buffer = Buffer.concat(chunks);
           const base64Image = buffer.toString('base64');
+          const imageHash = createHash('sha256').update(buffer).digest('hex');
+
+          console.log('圖片已接收，hash值:', imageHash, `消息ID: ${event.message.id}`);
 
           // 調用 OpenAI API 進行圖片分析
           const openaiResponse = await openaiClient.chat.completions.create({
@@ -215,7 +227,7 @@ app.post('/webhook', async (req, res) => {
               role: 'user',
               content: [
                 { type: 'text', text: '請分析這張衣物污漬圖片，並給予清潔建議。' },
-                { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64Image}` } }
+                { type: 'image_url', image_url: { url: `data:image/png;base64,${base64Image}` } }
               ]
             }]
           });
@@ -226,20 +238,14 @@ app.post('/webhook', async (req, res) => {
             type: 'text',
             text: `${analysisResult}\n\n✨ 智能分析完成 👕`
           });
-
-          // 清除啟動狀態
-          startup_store.delete(userId);
         } catch (err) {
           console.error("OpenAI 服務出現錯誤:", err);
           await client.pushMessage(userId, { type: 'text', text: '服務暫時不可用，請稍後再試。' });
         }
       }
     }
-
-    res.status(200).end();
   } catch (err) {
     console.error('全局錯誤:', err);
-    res.status(500).end();
   }
 });
 
