@@ -2,23 +2,7 @@ const express = require('express');
 const { Client } = require('@line/bot-sdk');
 const { OpenAI } = require('openai');
 const { createHash } = require('crypto');
-const redis = require('redis');
 require('dotenv').config();
-
-// ============== Redis 連接 ==============
-const redisClient = redis.createClient({
-  url: process.env.REDIS_URL
-});
-
-redisClient.on('error', (err) => {
-  console.error('Redis 錯誤:', err);
-});
-
-redisClient.connect().then(() => {
-  console.log('Redis 連接成功');
-}).catch((err) => {
-  console.error('Redis 連接失敗:', err);
-});
 
 // ============== LINE 配置 ==============
 const client = new Client({
@@ -63,7 +47,9 @@ const ignoredKeywords = ["常見問題", "服務價目&儲值優惠", "到府收
 // ============== 智能污漬分析啟動狀態 ==============
 const startup_store = new Map();
 
-// ============== 使用次數檢查 ==============
+// ============== 使用次數檢查（改用內存存儲） ==============
+const usageStore = new Map(); // 用於存儲用戶使用次數
+
 async function checkUsage(userId) {
   // 如果是 ADMIN 用戶，直接返回 true（無限制）
   if (process.env.ADMIN && process.env.ADMIN.includes(userId)) {
@@ -71,34 +57,23 @@ async function checkUsage(userId) {
   }
 
   const currentTime = Math.floor(Date.now() / 1000);
-  const key = `usage:${userId}`;
+  const userUsage = usageStore.get(userId) || [];
 
-  try {
-    // 獲取用戶的使用記錄
-    const usageRecords = await redisClient.lRange(key, 0, -1);
+  // 過濾出在時間週期內的記錄
+  const validRecords = userUsage.filter(record => {
+    return currentTime - record <= process.env.MAX_USES_TIME_PERIOD;
+  });
 
-    // 過濾出在時間週期內的記錄
-    const validRecords = usageRecords.filter(record => {
-      const recordTime = parseInt(record);
-      return currentTime - recordTime <= process.env.MAX_USES_TIME_PERIOD;
-    });
-
-    // 如果超過限制，返回 false
-    if (validRecords.length >= process.env.MAX_USES_PER_USER) {
-      return false;
-    }
-
-    // 添加新的使用記錄
-    await redisClient.rPush(key, currentTime.toString());
-
-    // 設置過期時間
-    await redisClient.expire(key, process.env.MAX_USES_TIME_PERIOD);
-
-    return true;
-  } catch (err) {
-    console.error('Redis 操作錯誤:', err);
+  // 如果超過限制，返回 false
+  if (validRecords.length >= process.env.MAX_USES_PER_USER) {
     return false;
   }
+
+  // 添加新的使用記錄
+  userUsage.push(currentTime);
+  usageStore.set(userId, userUsage);
+
+  return true;
 }
 
 // ============== 核心邏輯 ==============
