@@ -1,38 +1,84 @@
-// ============== 引入依賴 ==============
 const express = require('express');
 const { createHash } = require('crypto');
 const { Client } = require('@line/bot-sdk');
 const { OpenAI } = require('openai');
 
-// 初始化 Express 應用程式
+require('dotenv').config();
+
+// ============== 環境變數強制檢查 ==============
+const requiredEnvVars = [
+  'LINE_CHANNEL_ACCESS_TOKEN',
+  'LINE_CHANNEL_SECRET',
+  'OPENAI_API_KEY',
+  'MAX_USES_PER_USER',
+  'MAX_USES_TIME_PERIOD'
+];
+
+const MAX_USES_PER_USER = parseInt(process.env.MAX_USES_PER_USER, 10) || 2;
+const MAX_USES_TIME_PERIOD = parseInt(process.env.MAX_USES_TIME_PERIOD, 10) || 604800;
+
+requiredEnvVars.forEach(varName => {
+  if (!process.env[varName]) {
+    console.error(`錯誤：缺少環境變數 ${varName}`);
+    process.exit(1);
+  }
+});
+
+// ============== LINE 客戶端配置 ==============
+const config = {
+  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN.trim(),
+  channelSecret: process.env.LINE_CHANNEL_SECRET.trim()
+};
+
+const client = new Client(config);
 const app = express();
-app.use(express.json()); // 解析 JSON 請求體
 
-// 初始化 LINE 客戶端
-const client = new Client({
-  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
-  channelSecret: process.env.LINE_CHANNEL_SECRET
-});
-
-// 初始化 OpenAI 客戶端
 const openaiClient = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
+  apiKey: process.env.OPENAI_API_KEY.trim(),
+  organization: process.env.OPENAI_ORG_ID.trim(),
+  project: process.env.OPENAI_PROJECT_ID.trim()
 });
-
-// 用於存儲用戶狀態的臨時對象
-const userState = {};
 
 // ============== 使用次數檢查 ==============
+const store = new Map();
+
+/**
+ * 檢查用戶是否可以繼續使用，並且計算是否達到每週的使用次數上限
+ * @param {string} userId 用戶ID
+ * @returns {Promise<boolean>} true: 可以使用, false: 達到限制
+ */
 async function checkUsage(userId) {
-  // 如果是 ADMIN 用戶，直接返回 true（無限制）
   if (process.env.ADMIN && process.env.ADMIN.includes(userId)) {
-    return true;
+    return true; // ADMIN 用戶無限制
   }
 
-  // 這裡可以根據需求實現其他使用次數檢查邏輯
-  // 例如：使用內存中的對象來記錄使用次數
-  return true; // 暫時返回 true，表示無限制
+  const key = `rate_limit:user:${userId}`;
+  const now = Date.now();
+  const timePeriodMs = MAX_USES_TIME_PERIOD * 1000;
+
+  try {
+    let userActions = store.get(key);
+    if (!userActions) {
+      userActions = [];
+    }
+
+    // 移除過期的 action 時間戳
+    userActions = userActions.filter(timestamp => timestamp > now - timePeriodMs);
+
+    if (userActions.length < MAX_USES_PER_USER) {
+      userActions.push(now); // 添加新的 action 時間戳
+      store.set(key, userActions); // 更新 store
+      return true; // 允許使用
+    } else {
+      return false; // 達到限制，拒絕使用
+    }
+  } catch (error) {
+    console.error("Map 存儲限流錯誤:", error);
+    return true;
+  }
 }
+
+const userState = {};
 
 // ============== 動態表情符號 ==============
 const dynamicEmojis = {
@@ -93,7 +139,7 @@ async function analyzeStain(userId, imageBuffer) {
 
     // 調用 OpenAI API 進行圖片分析（使用 GPT-4o 模型）
     const openaiResponse = await openaiClient.chat.completions.create({
-      model: 'gpt-4o', // 使用 GPT-4o 模型
+      model: 'gpt-4', // 使用 GPT-4o 模型
       messages: [{
         role: 'system',
         content: '你是專業的洗衣助手，你的任務是分析使用者提供的衣物污漬圖片，提供清洗成功的機率，同時機率輸出必須是百分比（例如50%），和具體的污漬類型信息，但是不要提供清洗建議，每句話結尾加上 “我們會以不傷害材質盡量做清潔處理。”。'
@@ -129,11 +175,10 @@ app.post('/webhook', async (req, res) => {
       if (event.type !== 'message' || !event.source.userId) continue;
 
       const userId = event.source.userId;
+      const text = event.message.text.trim().toLowerCase();
 
-      // 文字訊息
+      // 文字訊息處理
       if (event.message.type === 'text') {
-        const text = event.message.text.trim().toLowerCase();
-
         // 1. 急件模糊關鍵字檢查
         if (isUrgentInquiry(text)) {
           if (text.includes("3天") || text.includes("三天")) {
@@ -150,7 +195,26 @@ app.post('/webhook', async (req, res) => {
           continue;
         }
 
-        // 2. 按「1」啟動智能污漬分析
+        // 2. 送洗進度特殊處理
+        if (["洗好", "洗好了嗎", "可以拿了嗎", "進度", "好了嗎", "完成了嗎"].some(k => text.includes(k))) {
+          await client.pushMessage(userId, {
+            type: 'text',
+            text: '營業時間會馬上查詢您的清洗進度😊，並回覆您！謝謝您🔍',
+            quickReply: {
+              items: [{
+                type: "action",
+                action: {
+                  type: "uri",
+                  label: "C.H精緻洗衣",
+                  uri: "https://liff.line.me/2004612704-JnzA1qN6#/"
+                }
+              }]
+            }
+          });
+          continue;
+        }
+
+        // 3. 按「1」啟動智能污漬分析
         if (text === '1') {
           if (userState[userId] && userState[userId].imageBuffer) {
             await analyzeStain(userId, userState[userId].imageBuffer);
@@ -164,7 +228,7 @@ app.post('/webhook', async (req, res) => {
           continue;
         }
 
-        // 3. 關鍵字優先匹配
+        // 4. 關鍵字優先匹配
         let matched = false;
         for (const [keys, response] of Object.entries(keywordResponses)) {
           if (keys.split('|').some(k => text.includes(k))) {
@@ -175,7 +239,7 @@ app.post('/webhook', async (req, res) => {
         }
         if (matched) continue;
 
-        // 4. 未觸發關鍵字的 AI 客服一律不回應
+        // 5. 未觸發關鍵字的 AI 客服一律不回應
         continue;
       }
 
@@ -198,11 +262,17 @@ app.post('/webhook', async (req, res) => {
           // 存儲圖片 Buffer 到用戶狀態
           userState[userId] = { imageBuffer: buffer };
 
-          // 提示用戶按「1」啟動分析
-          await client.pushMessage(userId, {
-            type: 'text',
-            text: '已收到您的圖片，請回覆「1」開始智能污漬分析。'
-          });
+          // 如果用戶已經回覆「1」，則直接進行分析
+          if (userState[userId] && userState[userId].imageBuffer) {
+            await analyzeStain(userId, userState[userId].imageBuffer);
+            delete userState[userId]; // 清除用戶狀態
+          } else {
+            // 提示用戶按「1」啟動分析
+            await client.pushMessage(userId, {
+              type: 'text',
+              text: '已收到您的圖片，請回覆「1」開始智能污漬分析。'
+            });
+          }
         } catch (err) {
           console.error("處理圖片時出錯:", err);
           await client.pushMessage(userId, { type: 'text', text: '服務暫時不可用，請稍後再試。' });
