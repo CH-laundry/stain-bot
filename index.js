@@ -130,7 +130,8 @@ const ignoredKeywords = [
   "到府收送",
   "店面地址&營業時間",
   "付款方式",
-  "寶寶汽座&手推車"
+  "寶寶汽座&手推車",
+  "顧客須知" // 新增「顧客須知」為不回應的關鍵字
 ];
 
 // ============== 判斷是否為強制不回應的關鍵字 ==============
@@ -221,7 +222,19 @@ app.post('/webhook', async (req, res) => {
         if (isWashProgressInquiry(text)) {
           await client.pushMessage(userId, {
             type: 'text',
-            text: '營業時間會馬上查詢您的清洗進度😊，並回覆您！或是您可以這邊線上查詢 [C.H精緻洗衣](https://chlaundryshop.com/?state=G7sdT6frgAjU&liffClientId=2004612704&liffRedirectUri=https%3A%2F%2Fchlaundryshop.com&code=ZIKSQeK5qjFAjwr2VTKB&lineAppVersion=15.1.4#/home) 謝謝您🔍'
+            text: '營業時間會馬上查詢您的清洗進度😊，並回覆您！或是您可以這邊線上查詢 C.H精緻洗衣 謝謝您🔍',
+            "quickReply": {
+              "items": [
+                {
+                  "type": "action",
+                  "action": {
+                    "type": "uri",
+                    "label": "C.H精緻洗衣",
+                    "uri": "https://liff.line.me/2004612704-JnzA1qN6#/"
+                  }
+                }
+              ]
+            }
           });
           continue;
         }
@@ -265,7 +278,7 @@ app.post('/webhook', async (req, res) => {
           if (text.includes("書包")) {
             await client.pushMessage(userId, {
               type: 'text',
-              text: '我們書包清洗的費用是550元💼。'
+              text: '我們書包清洗的費用是500元💼。'
             });
           } else if (text.includes("寶寶汽座")) {
             await client.pushMessage(userId, {
