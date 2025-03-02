@@ -237,7 +237,32 @@ app.post('/webhook', async (req, res) => {
           continue;
         }
 
-        // 6. 關鍵字匹配回應
+        // 6. 判斷價格詢問
+        if (isPriceInquiry(text)) {
+          await client.pushMessage(userId, {
+            type: 'text',
+            text: '可以參考我們的服務價目表或由客服跟您回覆📋。'
+          });
+          continue;
+        }
+
+        // 7. 判斷是否為急件詢問
+        if (isUrgentInquiry(text)) {
+          if (text.includes("3天") || text.includes("三天")) {
+            await client.pushMessage(userId, {
+              type: 'text',
+              text: '不好意思，清潔需要一定的工作日，可能會來不及😢。'
+            });
+          } else {
+            await client.pushMessage(userId, {
+              type: 'text',
+              text: '不好意思，清潔是需要一定的工作日，這邊客服會再跟您確認⏳。'
+            });
+          }
+          continue;
+        }
+
+        // 8. 關鍵字匹配回應
         let matched = false;
         for (const [key, response] of Object.entries(keywordResponses)) {
           if (text.includes(key)) {
@@ -248,8 +273,22 @@ app.post('/webhook', async (req, res) => {
         }
         if (matched) continue;
 
-        // 7. AI 客服不回應無關問題
-        continue; // 無回應
+        // 9. AI 客服回應洗衣店相關問題
+        const aiResponse = await openaiClient.chat.completions.create({
+          model: 'gpt-4',
+          messages: [{
+            role: 'system',
+            content: '你是一個洗衣店客服，回答需滿足：1.用口語化中文 2.結尾加1個表情 3.禁用專業術語 4.不提及時間長短 5.無法回答時不回應'
+          }, {
+            role: 'user',
+            content: text
+          }]
+        });
+
+        const aiText = aiResponse.choices[0].message.content;
+        if (!aiText || aiText.includes('無法回答')) continue;
+
+        await client.pushMessage(userId, { type: 'text', text: aiText });
       }
 
       // 圖片訊息（智能污漬分析）
