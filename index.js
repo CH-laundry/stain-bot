@@ -1,21 +1,65 @@
+// ============== 引入依賴 ==============
 const express = require('express');
+const { createHash } = require('crypto');
+const redis = require('redis');
 const { Client } = require('@line/bot-sdk');
 const { OpenAI } = require('openai');
-const { createHash } = require('crypto');
-require('dotenv').config();
 
-// ============== LINE 配置 ==============
-const client = new Client({
-  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN.trim(),
-  channelSecret: process.env.LINE_CHANNEL_SECRET.trim()
-});
-
+// 初始化 Express 應用程式
 const app = express();
 app.use(express.json()); // 解析 JSON 請求體
 
-const openaiClient = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY.trim()
+// 初始化 Redis 客戶端
+const redisClient = redis.createClient({
+  url: process.env.REDIS_URL // 從環境變數中讀取 Redis 連接 URL
 });
+redisClient.connect().catch(console.error);
+
+// 初始化 LINE 客戶端
+const client = new Client({
+  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
+  channelSecret: process.env.LINE_CHANNEL_SECRET
+});
+
+// 初始化 OpenAI 客戶端
+const openaiClient = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
+
+// ============== 使用次數檢查 ==============
+async function checkUsage(userId) {
+  // 如果是 ADMIN 用戶，直接返回 true（無限制）
+  if (process.env.ADMIN && process.env.ADMIN.includes(userId)) {
+    return true;
+  }
+
+  const currentTime = Math.floor(Date.now() / 1000);
+  const key = `usage:${userId}`;
+
+  try {
+    // 獲取用戶的使用記錄
+    const usageRecords = await redisClient.lRange(key, 0, -1);
+
+    // 過濾出在時間週期內的記錄
+    const validRecords = usageRecords.filter(record => {
+      const recordTime = parseInt(record);
+      return currentTime - recordTime <= process.env.MAX_USES_TIME_PERIOD;
+    });
+
+    // 如果超過限制，返回 false
+    if (validRecords.length >= process.env.MAX_USES_PER_USER) {
+      return false;
+    }
+
+    // 添加新的使用記錄
+    await redisClient.rPush(key, currentTime.toString());
+
+    return true;
+  } catch (err) {
+    console.error("檢查使用次數時出錯:", err);
+    return false;
+  }
+}
 
 // ============== 動態表情符號 ==============
 const dynamicEmojis = {
@@ -60,9 +104,9 @@ const keywordResponses = {
   "寶寶汽座|汽座|兒童座椅|兒童安全座椅|手推車|單人推車|單人手推車|雙人推車|寶寶手推車": "寶寶汽座&手推車"
 };
 
-// 判斷是否為急件詢問
+// ============== 急件模糊關鍵字檢查 ==============
 function isUrgentInquiry(text) {
-  const urgentKeywords = ['急件', '加急', '快', '急', '三天', '3天'];
+  const urgentKeywords = ["急件", "加急", "趕時間", "快一點", "盡快", "緊急"];
   return urgentKeywords.some(keyword => text.includes(keyword));
 }
 
@@ -82,7 +126,7 @@ app.post('/webhook', async (req, res) => {
       if (event.message.type === 'text') {
         const text = event.message.text.trim().toLowerCase();
 
-        // 1. 急件判斷
+        // 1. 急件模糊關鍵字檢查
         if (isUrgentInquiry(text)) {
           if (text.includes("3天") || text.includes("三天")) {
             await client.pushMessage(userId, {
@@ -95,7 +139,7 @@ app.post('/webhook', async (req, res) => {
               text: '不好意思，清潔是需要一定的工作日，這邊客服會再跟您確認⏳。'
             });
           }
-          return true;
+          continue;
         }
 
         // 2. 關鍵字優先匹配
@@ -194,4 +238,10 @@ app.post('/webhook', async (req, res) => {
   } catch (err) {
     console.error('全局錯誤:', err);
   }
+});
+
+// ============== 啟動伺服器 ==============
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`伺服器正在運行，端口：${PORT}`);
 });
