@@ -213,13 +213,6 @@ app.post('/webhook', async (req, res) => {
           continue; // 跳過回應
         }
 
-        // 檢查是否與洗衣店相關
-        const isRelated = isLaundryRelated(text);
-        if (!isRelated) {
-          console.log(`用戶 ${userId} 的訊息與洗衣店無關，已忽略。`);
-          continue; // 跳過回應
-        }
-
         // 1. 按「1」啟動智能污漬分析
         if (text === '1') {
           await client.pushMessage(userId, {
@@ -228,6 +221,13 @@ app.post('/webhook', async (req, res) => {
           });
           userState[userId] = { waitingForImage: true }; // 標記用戶正在等待圖片
           continue;
+        }
+
+        // 檢查是否與洗衣店相關
+        const isRelated = isLaundryRelated(text);
+        if (!isRelated) {
+          console.log(`用戶 ${userId} 的訊息與洗衣店無關，已忽略。`);
+          continue; // 跳過回應
         }
 
         // 2. 判斷付款方式詢問
