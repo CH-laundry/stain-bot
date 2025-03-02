@@ -1,19 +1,23 @@
 const express = require('express');
 const { Client } = require('@line/bot-sdk');
-const { createHash } = require('crypto');
 const { OpenAI } = require('openai');
+const redis = require('redis');
 require('dotenv').config();
 
-// ============== 環境變數檢查 ==============
-const requiredEnvVars = ['LINE_CHANNEL_ACCESS_TOKEN', 'LINE_CHANNEL_SECRET', 'OPENAI_API_KEY'];
-requiredEnvVars.forEach(varName => {
-  if (!process.env[varName]) {
-    console.error(`錯誤：缺少環境變數 ${varName}`);
-    process.exit(1);
-  }
+// ============== Redis 連接 ==============
+const redisClient = redis.createClient({
+  url: process.env.REDIS_URL
 });
 
-// ============== LINE配置 ==============
+redisClient.on('error', (err) => {
+  console.error('Redis 錯誤:', err);
+});
+
+redisClient.connect().then(() => {
+  console.log('Redis 連接成功');
+});
+
+// ============== LINE 配置 ==============
 const client = new Client({
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN.trim(),
   channelSecret: process.env.LINE_CHANNEL_SECRET.trim()
@@ -56,8 +60,33 @@ const ignoredKeywords = ["常見問題", "服務價目&儲值優惠", "到府收
 // ============== 智能污漬分析啟動狀態 ==============
 const startup_store = new Map();
 
-// ============== 用戶使用次數限制 ==============
-const usageStore = new Map(); // 用於儲存每個用戶的使用次數和時間戳
+// ============== 使用次數檢查 ==============
+async function checkUsage(userId) {
+  const currentTime = Math.floor(Date.now() / 1000);
+  const key = `usage:${userId}`;
+  
+  // 獲取用戶的使用記錄
+  const usageRecords = await redisClient.lRange(key, 0, -1);
+  
+  // 過濾出在時間週期內的記錄
+  const validRecords = usageRecords.filter(record => {
+    const recordTime = parseInt(record);
+    return currentTime - recordTime <= process.env.MAX_USES_TIME_PERIOD;
+  });
+  
+  // 如果超過限制，返回 false
+  if (validRecords.length >= process.env.MAX_USES_PER_USER) {
+    return false;
+  }
+  
+  // 添加新的使用記錄
+  await redisClient.rPush(key, currentTime.toString());
+  
+  // 設置過期時間
+  await redisClient.expire(key, process.env.MAX_USES_TIME_PERIOD);
+  
+  return true;
+}
 
 // ============== 核心邏輯 ==============
 app.post('/webhook', async (req, res) => {
@@ -74,9 +103,10 @@ app.post('/webhook', async (req, res) => {
 
       const userId = event.source.userId;
 
-      // 檢查用戶的使用次數
-      if (!await isUserAllowed(userId)) {
-        await client.pushMessage(userId, { type: 'text', text: '超過每週兩次使用上限，請稍後再試。' });
+      // 檢查使用次數
+      const isAllowed = await checkUsage(userId);
+      if (!isAllowed) {
+        await client.pushMessage(userId, { type: 'text', text: '超過每週兩次使用上限 請稍後再試' });
         continue;
       }
 
@@ -163,25 +193,42 @@ app.post('/webhook', async (req, res) => {
 
           // 調用 OpenAI API 進行圖片分析
           const openaiResponse = await openaiClient.chat.completions.create({
-            model: 'gpt-4o', // 使用適當的模型
-            messages: [
-              {
-                role: 'system',
-                content: [
-                  '你是專業的洗衣助手，你的任務是分析使用者提供的衣物污漬圖片，提供清洗成功的機率，同時機率輸出必須是百分比（例如50%），和具體的污漬類型信息，但是不要提供清洗建議，每句話結尾加上 “我們會以不傷害材質盡量做清潔處理。”。',
-                  '你的回應內容可以參考這段文本：“這張圖片顯示白色衣物上有大片咖啡色污漬。這類污漬通常是由於咖啡、茶或醬汁等液體造成的，清潔成功的機率大約在70-80%。由於顏色較深，實際清潔效果會依污漬的滲透程度、沾染時間與鞋材特性而定。某些污漬可能會變淡但無法完全去除，我們會以不傷害材質盡量做清潔處理。”'
-                ].join("\n")
-              },
-              {
-                role: 'user',
-                content: [
-                  { type: 'text', text: '請分析這張衣物污漬圖片，並給予清潔建議。' },
-                  { type: 'image_url', image_url: { url: `data:image/png;base64,${base64Image}` } }
-                ]
-              }
-            ]
+            model: 'gpt-4-vision-preview',
+            messages: [{
+              role: 'system',
+              content: '你是專業的洗衣助手，你的任務是分析使用者提供的衣物污漬圖片，提供清洗成功的機率，同時機率輸出必須是百分比（例如50%），和具體的污漬類型信息，但是不要提供清洗建議，每句話結尾加上 “我們會以不傷害材質盡量做清潔處理。”。'
+            }, {
+              role: 'user',
+              content: [
+                { type: 'text', text: '請分析這張衣物污漬圖片，並給予清潔建議。' },
+                { type: 'image_url', image_url: { url: `data:image/png;base64,${base64Image}` } }
+              ]
+            }]
           });
 
           // 回覆分析結果
           const analysisResult = openaiResponse.choices[0].message.content;
-          await client.pushMessage(userId,
+          await client.pushMessage(userId, {
+            type: 'text',
+            text: `${analysisResult}\n\n✨ 智能分析完成 👕`
+          });
+
+          // 清除啟動狀態
+          startup_store.delete(userId);
+        } catch (err) {
+          console.error("OpenAI 服務出現錯誤:", err);
+          await client.pushMessage(userId, { type: 'text', text: '服務暫時不可用，請稍後再試。' });
+        }
+      }
+    }
+
+    res.status(200).end();
+  } catch (err) {
+    console.error('全局錯誤:', err);
+    res.status(500).end();
+  }
+});
+
+// ============== 啟動服務 ==============
+const port = process.env.PORT || 3000;
+app.listen(port, () => console.log(`服務運行中，端口：${port}`));
