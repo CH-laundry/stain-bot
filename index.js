@@ -1,3 +1,4 @@
+// ============== 引入依賴 ==============
 const express = require('express');
 const { createHash } = require('crypto');
 const { Client } = require('@line/bot-sdk');
@@ -123,6 +124,30 @@ async function analyzeStain(userId, imageBuffer) {
   }
 }
 
+// ============== 判斷是否為付款方式詢問 ==============
+function isPaymentInquiry(text) {
+  const paymentKeywords = [
+    "付款", "付費", "支付", "怎麼付", "如何付", "付錢"
+  ];
+  return paymentKeywords.some(keyword => text.includes(keyword));
+}
+
+// ============== 判斷是否為清洗方式詢問 ==============
+function isWashMethodInquiry(text) {
+  const washMethodKeywords = [
+    "水洗", "乾洗", "如何清洗", "怎麼洗", "清潔方式"
+  ];
+  return washMethodKeywords.some(keyword => text.includes(keyword));
+}
+
+// ============== 判斷是否為清洗進度詢問 ==============
+function isProgressInquiry(text) {
+  const progressKeywords = [
+    "洗好", "洗好了嗎", "進度", "好了嗎", "完成了嗎"
+  ];
+  return progressKeywords.some(keyword => text.includes(keyword));
+}
+
 // ============== 判斷是否為急件詢問 ==============
 function isUrgentInquiry(text) {
   const urgentKeywords = [
@@ -151,67 +176,114 @@ app.post('/webhook', async (req, res) => {
       if (event.type !== 'message' || !event.source.userId) continue;
 
       const userId = event.source.userId;
-      const text = event.message.text.trim().toLowerCase();
 
-      // 1. 判斷付款方式詢問
-      if (isPaymentInquiry(text)) {
-        await client.pushMessage(userId, {
-          type: 'text',
-          text: '我們可以現金💵、線上Line Pay📱、信用卡💳、轉帳🏦。'
-        });
-        continue;
-      }
+      // 文字訊息
+      if (event.message.type === 'text') {
+        const text = event.message.text.trim().toLowerCase();
 
-      // 2. 判斷清洗方式詢問
-      if (isWashMethodInquiry(text)) {
-        await client.pushMessage(userId, {
-          type: 'text',
-          text: '我們會依照衣物上的洗標來做清潔，也會判斷如何清潔，會以不傷害材質來清潔的✨👕。'
-        });
-        continue;
-      }
+        // 1. 按「1」啟動智能污漬分析
+        if (text === '1') {
+          await client.pushMessage(userId, {
+            type: 'text',
+            text: '請上傳照片，以進行智能污漬分析✨📷'
+          });
+          userState[userId] = { waitingForImage: true }; // 標記用戶正在等待圖片
+          continue;
+        }
 
-      // 3. 判斷清洗進度詢問
-      if (isProgressInquiry(text)) {
-        await client.pushMessage(userId, {
-          type: 'text',
-          text: '營業時間會馬上查詢您的清洗進度😊，並回覆您！或是您可以這邊線上查詢 C.H精緻洗衣 謝謝您🔍',
-          quickReply: {
-            items: [{
-              type: "action",
-              action: {
-                type: "uri",
-                label: "C.H精緻洗衣",
-                uri: "https://liff.line.me/2004612704-JnzA1qN6#/"
-              }
-            }]
+        // 2. 判斷付款方式詢問
+        if (isPaymentInquiry(text)) {
+          await client.pushMessage(userId, {
+            type: 'text',
+            text: '我們可以現金💵、線上Line Pay📱、信用卡💳、轉帳🏦。'
+          });
+          continue;
+        }
+
+        // 3. 判斷清洗方式詢問
+        if (isWashMethodInquiry(text)) {
+          await client.pushMessage(userId, {
+            type: 'text',
+            text: '我們會依照衣物上的洗標來做清潔，也會判斷如何清潔，會以不傷害材質來清潔的✨👕。'
+          });
+          continue;
+        }
+
+        // 4. 判斷清洗進度詢問
+        if (isProgressInquiry(text)) {
+          await client.pushMessage(userId, {
+            type: 'text',
+            text: '營業時間會馬上查詢您的清洗進度😊，並回覆您！或是您可以這邊線上查詢 C.H精緻洗衣 謝謝您🔍',
+            quickReply: {
+              items: [{
+                type: "action",
+                action: {
+                  type: "uri",
+                  label: "C.H精緻洗衣",
+                  uri: "https://liff.line.me/2004612704-JnzA1qN6#/"
+                }
+              }]
+            }
+          });
+          continue;
+        }
+
+        // 5. 判斷“能洗掉”的問題
+        if (["洗的掉", "洗掉", "會洗壞"].some(k => text.includes(k))) {
+          await client.pushMessage(userId, {
+            type: 'text',
+            text: '我們會針對污漬做專門處理，大部分污漬都可以變淡，但成功率視污漬種類與衣物材質而定喔！✨'
+          });
+          continue;
+        }
+
+        // 6. 關鍵字匹配回應
+        let matched = false;
+        for (const [key, response] of Object.entries(keywordResponses)) {
+          if (text.includes(key)) {
+            await client.pushMessage(userId, { type: 'text', text: response });
+            matched = true;
+            break;
           }
-        });
-        continue;
+        }
+        if (matched) continue;
+
+        // 7. AI 客服不回應無關問題
+        continue; // 無回應
       }
 
-      // 4. 判斷“能洗掉”的問題
-      if (["洗的掉", "洗掉", "會洗壞"].some(k => text.includes(k))) {
-        await client.pushMessage(userId, {
-          type: 'text',
-          text: '我們會針對污漬做專門處理，大部分污漬都可以變淡，但成功率視污漬種類與衣物材質而定喔！✨'
-        });
-        continue;
-      }
+      // 圖片訊息（智能污漬分析）
+      if (event.message.type === 'image') {
+        try {
+          console.log(`收到來自 ${userId} 的圖片訊息, 正在處理...`);
 
-      // 5. 關鍵字匹配回應
-      let matched = false;
-      for (const [key, response] of Object.entries(keywordResponses)) {
-        if (text.includes(key)) {
-          await client.pushMessage(userId, { type: 'text', text: response });
-          matched = true;
-          break;
+          // 從 LINE 獲取圖片內容
+          const stream = await client.getMessageContent(event.message.id);
+          const chunks = [];
+
+          // 下載圖片並拼接為一個Buffer
+          for await (const chunk of stream) {
+            chunks.push(chunk);
+          }
+
+          const buffer = Buffer.concat(chunks);
+
+          // 如果用戶正在等待圖片，則直接進行分析
+          if (userState[userId] && userState[userId].waitingForImage) {
+            await analyzeStain(userId, buffer);
+            delete userState[userId]; // 清除用戶狀態
+          } else {
+            // 提示用戶按「1」啟動分析
+            await client.pushMessage(userId, {
+              type: 'text',
+              text: '已收到您的圖片，請回覆「1」開始智能污漬分析。'
+            });
+          }
+        } catch (err) {
+          console.error("處理圖片時出錯:", err);
+          await client.pushMessage(userId, { type: 'text', text: '服務暫時不可用，請稍後再試。' });
         }
       }
-      if (matched) continue;
-
-      // 6. AI 客服不回應無關問題
-      continue; // 無回應
     }
   } catch (err) {
     console.error('全局錯誤:', err);
