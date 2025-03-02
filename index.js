@@ -165,6 +165,14 @@ function isPriceInquiry(text) {
   return priceKeywords.some(keyword => text.includes(keyword));
 }
 
+// ============== 判斷是否為清洗時間詢問 ==============
+function isCleaningTimeInquiry(text) {
+  const cleaningTimeKeywords = [
+    "清潔時間", "拿到", "洗要多久", "多久", "會好", "送洗時間"
+  ];
+  return cleaningTimeKeywords.some(keyword => text.includes(keyword));
+}
+
 // ============== 核心邏輯 ==============
 app.post('/webhook', async (req, res) => {
   res.status(200).end();
@@ -262,7 +270,16 @@ app.post('/webhook', async (req, res) => {
           continue;
         }
 
-        // 8. 關鍵字匹配回應
+        // 8. 判斷是否為清洗時間詢問
+        if (isCleaningTimeInquiry(text)) {
+          await client.pushMessage(userId, {
+            type: 'text',
+            text: '我們的清潔時間一般約 7-10 個工作天⏰，完成後會自動通知您喔！謝謝您⏳'
+          });
+          continue;
+        }
+
+        // 9. 關鍵字匹配回應
         let matched = false;
         for (const [key, response] of Object.entries(keywordResponses)) {
           if (text.includes(key)) {
@@ -273,7 +290,7 @@ app.post('/webhook', async (req, res) => {
         }
         if (matched) continue;
 
-        // 9. AI 客服回應洗衣店相關問題
+        // 10. AI 客服回應洗衣店相關問題
         const aiResponse = await openaiClient.chat.completions.create({
           model: 'gpt-4',
           messages: [{
