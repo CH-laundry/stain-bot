@@ -5,15 +5,6 @@ const { createHash } = require('crypto');
 const redis = require('redis');
 require('dotenv').config();
 
-// ============== 環境變數檢查 ==============
-const requiredEnvVars = ['LINE_CHANNEL_ACCESS_TOKEN', 'LINE_CHANNEL_SECRET', 'OPENAI_API_KEY', 'REDIS_URL'];
-requiredEnvVars.forEach(varName => {
-  if (!process.env[varName]) {
-    console.error(`錯誤：缺少環境變數 ${varName}`);
-    process.exit(1);
-  }
-});
-
 // ============== Redis 連接 ==============
 const redisClient = redis.createClient({
   url: process.env.REDIS_URL
@@ -25,6 +16,8 @@ redisClient.on('error', (err) => {
 
 redisClient.connect().then(() => {
   console.log('Redis 連接成功');
+}).catch((err) => {
+  console.error('Redis 連接失敗:', err);
 });
 
 // ============== LINE 配置 ==============
@@ -217,9 +210,9 @@ app.post('/webhook', async (req, res) => {
 
           console.log('圖片已接收，hash值:', imageHash, `消息ID: ${event.message.id}`);
 
-          // 調用 OpenAI API 進行圖片分析
+          // 調用 OpenAI API 進行圖片分析（使用 GPT-4o 模型）
           const openaiResponse = await openaiClient.chat.completions.create({
-            model: 'gpt-4-vision-preview',
+            model: 'gpt-4o', // 使用 GPT-4o 模型
             messages: [{
               role: 'system',
               content: '你是專業的洗衣助手，你的任務是分析使用者提供的衣物污漬圖片，提供清洗成功的機率，同時機率輸出必須是百分比（例如50%），和具體的污漬類型信息，但是不要提供清洗建議，每句話結尾加上 “我們會以不傷害材質盡量做清潔處理。”。'
