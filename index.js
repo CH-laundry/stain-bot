@@ -6,6 +6,7 @@ const express = require('express');
 const { createHash } = require('crypto');
 const { Client } = require('@line/bot-sdk');
 const { OpenAI } = require('openai');
+const fs = require('fs'); // 引入 fs 模組來操作文件
 require('dotenv').config();
 
 // 初始化 Express 應用程式
@@ -343,6 +344,11 @@ app.post('/webhook', async (req, res) => {
             // 記錄無法回答的問題
             unansweredQuestions.add(text);
             console.log(`無法回答的問題: ${text}`);
+
+            // 寫入無法回答的問題到文件
+            const logMessage = `${new Date().toISOString()} - ${text}\n`;
+            fs.appendFileSync('unanswered_questions.log', logMessage); // 寫入到文件
+
             continue;
           }
 
