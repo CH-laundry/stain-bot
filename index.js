@@ -1,5 +1,5 @@
 // ============== 強制不回應列表 ==============
-const ignoredKeywords = ["常見問題", "服務價目&儲值優惠", "到府收送", "店面地址&營業時間", "付款方式", "寶寶汽座&手推車", "顧客須知", "智能污漬分析"];
+const ignoredKeywords = ["常見問題", "服務價目&儲值優惠", "到府收送", "店面地址&營業時間", "付款方式", "寶寶汽座&手推車", "顧客須知", "智能污漬分析", "謝謝", "您好", "按錯"];
 
 // ============== 引入依賴 ==============
 const express = require('express');
@@ -131,7 +131,7 @@ async function analyzeStain(userId, imageBuffer) {
   }
 }
 
-// ============== 判斷是否為付款方式詢問 ==============
+// ============== 判斷付款方式詢問 ==============
 function isPaymentInquiry(text) {
   const paymentKeywords = [
     "付款", "付費", "支付", "怎麼付", "如何付", "付錢"
@@ -139,29 +139,21 @@ function isPaymentInquiry(text) {
   return paymentKeywords.some(keyword => text.includes(keyword));
 }
 
-// ============== 判斷是否為清洗方式詢問 ==============
+// ============== 判斷清洗方式詢問 ==============
 function isWashMethodInquiry(text) {
   const washMethodKeywords = [
-    "水洗", "乾洗", "如何清洗", "怎麼洗", "清潔方式"
+    "水洗", "乾洗", "如何清洗", "怎麼洗", "清潔方式", 
+    "會洗壞嗎", "洗壞怎麼辦", "洗不乾淨怎麼辦"
   ];
   return washMethodKeywords.some(keyword => text.includes(keyword));
 }
 
-// ============== 判斷是否為清洗進度詢問 ==============
+// ============== 判斷清洗進度詢問 ==============
 function isProgressInquiry(text) {
   const progressKeywords = [
     "洗好", "洗好了嗎", "進度", "好了嗎", "完成了嗎"
   ];
   return progressKeywords.some(keyword => text.includes(keyword));
-}
-
-// ============== 判斷是否為急件詢問 ==============
-function isUrgentInquiry(text) {
-  const urgentKeywords = [
-    "急件", "趕件", "快一點", "加急", "趕時間", 
-    "1天", "2天", "3天", "一天", "兩天", "三天"
-  ];
-  return urgentKeywords.some(keyword => text.includes(keyword));
 }
 
 // ============== 判斷價格詢問 ==============
@@ -173,6 +165,15 @@ function isPriceInquiry(text) {
   return priceKeywords.some(keyword => text.includes(keyword));
 }
 
+// ============== 判斷是否為急件詢問 ==============
+function isUrgentInquiry(text) {
+  const urgentKeywords = [
+    "急件", "趕件", "快一點", "加急", "趕時間", 
+    "1天", "2天", "3天", "一天", "兩天", "三天"
+  ];
+  return urgentKeywords.some(keyword => text.includes(keyword));
+}
+
 // ============== 判斷是否為清洗時間詢問 ==============
 function isCleaningTimeInquiry(text) {
   const cleaningTimeKeywords = [
@@ -181,12 +182,12 @@ function isCleaningTimeInquiry(text) {
   return cleaningTimeKeywords.some(keyword => text.includes(keyword));
 }
 
-// ============== 判斷是否與洗衣店相關 ==============
+// ============== 判斷是否為洗衣店相關問題 ==============
 function isLaundryRelated(text) {
   const laundryKeywords = [
     "洗衣", "清洗", "污漬", "油漬", "血漬", "醬油", "染色", "退色", "地毯", "窗簾",
     "寶寶汽座", "汽座", "兒童座椅", "安全兒童座椅", "手推車", "單人手推車", "寶寶手推車", "書包",
-    "營業", "開門", "休息", "開店", "有開", "收送", "到府", "上門", "收衣", "預約", "洗多久", "洗好", "洗好了嗎", "送回", "拿回"
+    "營業", "開門", "休息", "開店", "有開", "收送", "到府", "上門", "收衣", "預約", "洗多久", "洗好", "洗好了嗎", "送回", "拿回", "會洗壞嗎", "洗不乾淨怎麼辦", "儲值優惠"
   ];
   return laundryKeywords.some(keyword => text.includes(keyword));
 }
@@ -210,7 +211,7 @@ app.post('/webhook', async (req, res) => {
         // 檢查是否包含強制不回應的關鍵字
         const shouldIgnore = ignoredKeywords.some(keyword => text.includes(keyword.toLowerCase()));
         if (shouldIgnore) {
-          console.log(`用戶 ${userId} 的訊息包含強制不回應關鍵字，已忽略。`);
+          console.log(`用戶 ${userId} 的訊息與洗衣店無關，已忽略。`);
           continue; // 跳過回應
         }
 
@@ -222,13 +223,6 @@ app.post('/webhook', async (req, res) => {
           });
           userState[userId] = { waitingForImage: true }; // 標記用戶正在等待圖片
           continue;
-        }
-
-        // 檢查是否與洗衣店相關
-        const isRelated = isLaundryRelated(text);
-        if (!isRelated) {
-          console.log(`用戶 ${userId} 的訊息與洗衣店無關，已忽略。`);
-          continue; // 跳過回應
         }
 
         // 2. 判斷付款方式詢問
@@ -253,7 +247,7 @@ app.post('/webhook', async (req, res) => {
         if (isProgressInquiry(text)) {
           await client.pushMessage(userId, {
             type: 'text',
-            text: '營業時間會馬上查詢您的清洗進度😊，並回覆您！或是您可以這邊線上查詢 C.H精緻洗衣 謝謝您🔍',
+            text: '營業時間會馬上查詢您的清洗進度😊，並回覆您！謝謝您🔍',
             quickReply: {
               items: [{
                 type: "action",
@@ -321,23 +315,6 @@ app.post('/webhook', async (req, res) => {
           }
         }
         if (matched) continue;
-
-        // 10. AI 客服回應洗衣店相關問題
-        const aiResponse = await openaiClient.chat.completions.create({
-          model: 'gpt-4',
-          messages: [{
-            role: 'system',
-            content: '你是一個洗衣店客服，回答需滿足：1.用口語化中文 2.結尾加1個表情 3.禁用專業術語 4.不提及時間長短 5.無法回答時不回應'
-          }, {
-            role: 'user',
-            content: text
-          }]
-        });
-
-        const aiText = aiResponse.choices[0].message.content;
-        if (!aiText || aiText.includes('無法回答')) continue;
-
-        await client.pushMessage(userId, { type: 'text', text: aiText });
       }
 
       // 圖片訊息（智能污漬分析）
@@ -361,7 +338,6 @@ app.post('/webhook', async (req, res) => {
             await analyzeStain(userId, buffer);
             delete userState[userId]; // 清除用戶狀態
           }
-          // 否則完全不做任何回應
         } catch (err) {
           console.error("處理圖片時出錯:", err);
           await client.pushMessage(userId, { type: 'text', text: '服務暫時不可用，請稍後再試。' });
