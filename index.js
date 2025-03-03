@@ -158,7 +158,8 @@ function isProgressInquiry(text) {
 // ============== 判斷是否為急件詢問 ==============
 function isUrgentInquiry(text) {
   const urgentKeywords = [
-    "急件", "趕件", "快一點", "加急", "趕時間"
+    "急件", "趕件", "快一點", "加急", "趕時間", 
+    "1天", "2天", "3天", "一天", "兩天", "三天"
   ];
   return urgentKeywords.some(keyword => text.includes(keyword));
 }
@@ -355,17 +356,12 @@ app.post('/webhook', async (req, res) => {
 
           const buffer = Buffer.concat(chunks);
 
-          // 如果用戶正在等待圖片，則直接進行分析
+          // 如果用戶正在等待圖片，則直接進行分析（不再主動提示）
           if (userState[userId] && userState[userId].waitingForImage) {
             await analyzeStain(userId, buffer);
             delete userState[userId]; // 清除用戶狀態
-          } else {
-            // 提示用戶按「1」啟動分析
-            await client.pushMessage(userId, {
-              type: 'text',
-              text: '已收到您的圖片，請回覆「1」開始智能污漬分析。'
-            });
           }
+          // 否則完全不做任何回應
         } catch (err) {
           console.error("處理圖片時出錯:", err);
           await client.pushMessage(userId, { type: 'text', text: '服務暫時不可用，請稍後再試。' });
