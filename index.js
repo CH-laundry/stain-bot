@@ -69,6 +69,10 @@ const keywordResponses = {
   "是否能清洗衣物": "我們提供各式衣物清洗服務，無論是衣服、外套、襯衫等都可以清洗。👕"
 };
 
+// ============== 學習系統 ==============
+const learnedResponses = new Map(); // 存儲學習到的回應
+const unansweredQuestions = new Set(); // 存儲無法回答的問題
+
 // ============== 使用次數檢查 ==============
 async function checkUsage(userId) {
   const key = `rate_limit:user:${userId}`;
@@ -131,6 +135,66 @@ async function analyzeStain(userId, imageBuffer) {
   }
 }
 
+// ============== 判斷是否為付款方式詢問 ==============
+function isPaymentInquiry(text) {
+  const paymentKeywords = [
+    "付款", "付費", "支付", "怎麼付", "如何付", "付錢"
+  ];
+  return paymentKeywords.some(keyword => text.includes(keyword));
+}
+
+// ============== 判斷是否為清洗方式詢問 ==============
+function isWashMethodInquiry(text) {
+  const washMethodKeywords = [
+    "水洗", "乾洗", "如何清洗", "怎麼洗", "清潔方式"
+  ];
+  return washMethodKeywords.some(keyword => text.includes(keyword));
+}
+
+// ============== 判斷是否為清洗進度詢問 ==============
+function isProgressInquiry(text) {
+  const progressKeywords = [
+    "洗好", "洗好了嗎", "進度", "好了嗎", "完成了嗎"
+  ];
+  return progressKeywords.some(keyword => text.includes(keyword));
+}
+
+// ============== 判斷是否為急件詢問 ==============
+function isUrgentInquiry(text) {
+  const urgentKeywords = [
+    "急件", "趕件", "快一點", "加急", "趕時間", 
+    "1天", "2天", "3天", "一天", "兩天", "三天"
+  ];
+  return urgentKeywords.some(keyword => text.includes(keyword));
+}
+
+// ============== 判斷價格詢問 ==============
+function isPriceInquiry(text) {
+  const priceKeywords = [
+    "價格", "价錢", "收費", "費用", "多少錢", "價位", "算錢", "清洗費", "價目表",
+    "這件多少", "這個價格", "鞋子費用", "洗鞋錢", "要多少", "怎麼算", "窗簾費用"
+  ];
+  return priceKeywords.some(keyword => text.includes(keyword));
+}
+
+// ============== 判斷是否為清洗時間詢問 ==============
+function isCleaningTimeInquiry(text) {
+  const cleaningTimeKeywords = [
+    "清潔時間", "拿到", "洗要多久", "多久", "會好", "送洗時間"
+  ];
+  return cleaningTimeKeywords.some(keyword => text.includes(keyword));
+}
+
+// ============== 判斷是否與洗衣店相關 ==============
+function isLaundryRelated(text) {
+  const laundryKeywords = [
+    "洗衣", "清洗", "污漬", "油漬", "血漬", "醬油", "染色", "退色", "地毯", "窗簾",
+    "寶寶汽座", "汽座", "兒童座椅", "安全兒童座椅", "手推車", "單人手推車", "寶寶手推車", "書包",
+    "營業", "開門", "休息", "開店", "有開", "收送", "到府", "上門", "收衣", "預約", "洗多久", "洗好", "洗好了嗎", "送回", "拿回"
+  ];
+  return laundryKeywords.some(keyword => text.includes(keyword));
+}
+
 // ============== 核心邏輯 ==============
 app.post('/webhook', async (req, res) => {
   res.status(200).end();
@@ -139,148 +203,182 @@ app.post('/webhook', async (req, res) => {
     const events = req.body.events;
 
     for (const event of events) {
-      if (event.type !== 'message' || !event.source.userId) continue;
+      try {
+        if (event.type !== 'message' || !event.source.userId) continue;
 
-      const userId = event.source.userId;
+        const userId = event.source.userId;
 
-      // 文字訊息
-      if (event.message.type === 'text') {
-        const text = event.message.text.trim().toLowerCase();
+        // 文字訊息
+        if (event.message.type === 'text') {
+          const text = event.message.text.trim().toLowerCase();
 
-        // 檢查是否包含強制不回應的關鍵字
-        const shouldIgnore = ignoredKeywords.some(keyword => text.includes(keyword.toLowerCase()));
-        if (shouldIgnore) {
-          console.log(`用戶 ${userId} 的訊息與洗衣店無關，已忽略。`);
-          continue; // 跳過回應
-        }
+          // 檢查是否包含強制不回應的關鍵字
+          const shouldIgnore = ignoredKeywords.some(keyword => text.includes(keyword.toLowerCase()));
+          if (shouldIgnore) {
+            console.log(`用戶 ${userId} 的訊息與洗衣店無關，已忽略。`);
+            continue; // 跳過回應
+          }
 
-        // 1. 按「1」啟動智能污漬分析
-        if (text === '1') {
-          await client.pushMessage(userId, {
-            type: 'text',
-            text: '請上傳照片，以進行智能污漬分析✨📷'
-          });
-          userState[userId] = { waitingForImage: true }; // 標記用戶正在等待圖片
-          continue;
-        }
+          // 1. 按「1」啟動智能污漬分析
+          if (text === '1') {
+            await client.pushMessage(userId, {
+              type: 'text',
+              text: '請上傳照片，以進行智能污漬分析✨📷'
+            });
+            userState[userId] = { waitingForImage: true }; // 標記用戶正在等待圖片
+            continue;
+          }
 
-        // 2. 判斷付款方式詢問
-        if (isPaymentInquiry(text)) {
-          await client.pushMessage(userId, {
-            type: 'text',
-            text: '我們可以現金💵、線上Line Pay📱、信用卡💳、轉帳🏦。'
-          });
-          continue;
-        }
+          // 2. 判斷付款方式詢問
+          if (isPaymentInquiry(text)) {
+            await client.pushMessage(userId, {
+              type: 'text',
+              text: '我們可以現金💵、線上Line Pay📱、信用卡💳、轉帳🏦。'
+            });
+            continue;
+          }
 
-        // 3. 判斷清洗方式詢問
-        if (isWashMethodInquiry(text)) {
-          await client.pushMessage(userId, {
-            type: 'text',
-            text: '我們會依照衣物上的洗標來做清潔，也會判斷如何清潔，會以不傷害材質來清潔的✨👕。'
-          });
-          continue;
-        }
+          // 3. 判斷清洗方式詢問
+          if (isWashMethodInquiry(text)) {
+            await client.pushMessage(userId, {
+              type: 'text',
+              text: '我們會依照衣物上的洗標來做清潔，也會判斷如何清潔，會以不傷害材質來清潔的✨👕。'
+            });
+            continue;
+          }
 
-        // 4. 判斷清洗進度詢問
-        if (isProgressInquiry(text)) {
-          await client.pushMessage(userId, {
-            type: 'text',
-            text: '營業時間會馬上查詢您的清洗進度😊，並回覆您！謝謝您🔍',
-            quickReply: {
-              items: [{
-                type: "action",
-                action: {
-                  type: "uri",
-                  label: "C.H精緻洗衣",
-                  uri: "https://liff.line.me/2004612704-JnzA1qN6#/"
-                }
-              }]
+          // 4. 判斷清洗進度詢問
+          if (isProgressInquiry(text)) {
+            await client.pushMessage(userId, {
+              type: 'text',
+              text: '營業時間會馬上查詢您的清洗進度😊，並回覆您！謝謝您🔍',
+              quickReply: {
+                items: [{
+                  type: "action",
+                  action: {
+                    type: "uri",
+                    label: "C.H精緻洗衣",
+                    uri: "https://liff.line.me/2004612704-JnzA1qN6#/"
+                  }
+                }]
+              }
+            });
+            continue;
+          }
+
+          // 5. 判斷“能洗掉”的問題
+          if (["洗的掉", "洗掉", "會洗壞"].some(k => text.includes(k))) {
+            await client.pushMessage(userId, {
+              type: 'text',
+              text: '我們會針對污漬做專門處理，大部分污漬都可以變淡，但成功率視污漬種類與衣物材質而定喔！✨'
+            });
+            continue;
+          }
+
+          // 6. 判斷價格詢問
+          if (isPriceInquiry(text)) {
+            await client.pushMessage(userId, {
+              type: 'text',
+              text: '可以參考我們的服務價目表或由客服跟您回覆📋。'
+            });
+            continue;
+          }
+
+          // 7. 判斷是否為急件詢問
+          if (isUrgentInquiry(text)) {
+            if (text.includes("3天") || text.includes("三天")) {
+              await client.pushMessage(userId, {
+                type: 'text',
+                text: '不好意思，清潔需要一定的工作日，可能會來不及😢。'
+              });
+            } else {
+              await client.pushMessage(userId, {
+                type: 'text',
+                text: '不好意思，清潔是需要一定的工作日，這邊客服會再跟您確認⏳。'
+              });
             }
-          });
-          continue;
-        }
+            continue;
+          }
 
-        // 5. 判斷“能洗掉”的問題
-        if (["洗的掉", "洗掉", "會洗壞"].some(k => text.includes(k))) {
-          await client.pushMessage(userId, {
-            type: 'text',
-            text: '我們會針對污漬做專門處理，大部分污漬都可以變淡，但成功率視污漬種類與衣物材質而定喔！✨'
-          });
-          continue;
-        }
-
-        // 6. 判斷價格詢問
-        if (isPriceInquiry(text)) {
-          await client.pushMessage(userId, {
-            type: 'text',
-            text: '可以參考我們的服務價目表或由客服跟您回覆📋。'
-          });
-          continue;
-        }
-
-        // 7. 判斷是否為急件詢問
-        if (isUrgentInquiry(text)) {
-          if (text.includes("3天") || text.includes("三天")) {
+          // 8. 判斷是否為清洗時間詢問
+          if (isCleaningTimeInquiry(text)) {
             await client.pushMessage(userId, {
               type: 'text',
-              text: '不好意思，清潔需要一定的工作日，可能會來不及😢。'
+              text: '我們的清潔時間一般約 7-10 個工作天⏰，完成後會自動通知您喔！謝謝您⏳'
             });
-          } else {
-            await client.pushMessage(userId, {
-              type: 'text',
-              text: '不好意思，清潔是需要一定的工作日，這邊客服會再跟您確認⏳。'
-            });
+            continue;
           }
-          continue;
-        }
 
-        // 8. 判斷是否為清洗時間詢問
-        if (isCleaningTimeInquiry(text)) {
-          await client.pushMessage(userId, {
-            type: 'text',
-            text: '我們的清潔時間一般約 7-10 個工作天⏰，完成後會自動通知您喔！謝謝您⏳'
+          // 9. 關鍵字匹配回應
+          let matched = false;
+          for (const [key, response] of Object.entries(keywordResponses)) {
+            if (text.includes(key)) {
+              await client.pushMessage(userId, { type: 'text', text: response });
+              matched = true;
+              break;
+            }
+          }
+          if (matched) continue;
+
+          // 10. 檢查學習到的回應
+          if (learnedResponses.has(text)) {
+            await client.pushMessage(userId, { type: 'text', text: learnedResponses.get(text) });
+            continue;
+          }
+
+          // 11. AI 客服回應洗衣店相關問題
+          const aiResponse = await openaiClient.chat.completions.create({
+            model: 'gpt-4',
+            messages: [{
+              role: 'system',
+              content: '你是一個洗衣店客服，回答需滿足：1.用口語化中文 2.結尾加1個表情 3.禁用專業術語 4.不提及時間長短 5.無法回答時不回應。如果訊息與洗衣店無關（如「謝謝」、「您好」、「按錯」等），請不要回應。'
+            }, {
+              role: 'user',
+              content: text
+            }]
           });
-          continue;
-        }
 
-        // 9. 關鍵字匹配回應
-        let matched = false;
-        for (const [key, response] of Object.entries(keywordResponses)) {
-          if (text.includes(key)) {
-            await client.pushMessage(userId, { type: 'text', text: response });
-            matched = true;
-            break;
-          }
-        }
-        if (matched) continue;
-      }
-
-      // 圖片訊息（智能污漬分析）
-      if (event.message.type === 'image') {
-        try {
-          console.log(`收到來自 ${userId} 的圖片訊息, 正在處理...`);
-
-          // 從 LINE 獲取圖片內容
-          const stream = await client.getMessageContent(event.message.id);
-          const chunks = [];
-
-          // 下載圖片並拼接為一個Buffer
-          for await (const chunk of stream) {
-            chunks.push(chunk);
+          const aiText = aiResponse.choices[0].message.content;
+          if (!aiText || aiText.includes('無法回答')) {
+            // 記錄無法回答的問題
+            unansweredQuestions.add(text);
+            console.log(`無法回答的問題: ${text}`);
+            continue;
           }
 
-          const buffer = Buffer.concat(chunks);
-
-          // 如果用戶正在等待圖片，則直接進行分析（不再主動提示）
-          if (userState[userId] && userState[userId].waitingForImage) {
-            await analyzeStain(userId, buffer);
-            delete userState[userId]; // 清除用戶狀態
-          }
-        } catch (err) {
-          console.error("處理圖片時出錯:", err);
-          await client.pushMessage(userId, { type: 'text', text: '服務暫時不可用，請稍後再試。' });
+          // 將 AI 生成的回答存入學習系統
+          learnedResponses.set(text, aiText);
+          await client.pushMessage(userId, { type: 'text', text: aiText });
         }
+
+        // 圖片訊息（智能污漬分析）
+        if (event.message.type === 'image') {
+          try {
+            console.log(`收到來自 ${userId} 的圖片訊息, 正在處理...`);
+
+            // 從 LINE 獲取圖片內容
+            const stream = await client.getMessageContent(event.message.id);
+            const chunks = [];
+
+            // 下載圖片並拼接為一個Buffer
+            for await (const chunk of stream) {
+              chunks.push(chunk);
+            }
+
+            const buffer = Buffer.concat(chunks);
+
+            // 如果用戶正在等待圖片，則直接進行分析（不再主動提示）
+            if (userState[userId] && userState[userId].waitingForImage) {
+              await analyzeStain(userId, buffer);
+              delete userState[userId]; // 清除用戶狀態
+            }
+          } catch (err) {
+            console.error("處理圖片時出錯:", err);
+            await client.pushMessage(userId, { type: 'text', text: '服務暫時不可用，請稍後再試。' });
+          }
+        }
+      } catch (err) {
+        console.error('處理事件時出錯:', err);
       }
     }
   } catch (err) {
