@@ -7,6 +7,7 @@ const { createHash } = require('crypto');
 const { Client } = require('@line/bot-sdk');
 const { OpenAI } = require('openai');
 const fs = require('fs'); // 引入 fs 模組來操作文件
+const path = require('path'); // 引入 path 模組來處理文件路徑
 require('dotenv').config();
 
 // 初始化 Express 應用程式
@@ -115,17 +116,25 @@ async function analyzeStain(userId, imageBuffer) {
       model: 'gpt-4o',
       messages: [{
         role: 'system',
-        content: '你是專業的洗衣助手，你的任務是分析使用者提供的衣物污漬圖片，提供清洗成功的機率，同時機率輸出必須是百分比（例如50%），和具體的污漬類型信息，但是不要提供清洗建議，每句話結尾加上 “我們會以不傷害材質盡量做清潔處理。”。'
+        content: `你是專業的洗衣助手，你的任務是分析使用者提供的衣物污漬圖片，提供以下信息：
+1. 清洗成功的機率（必須是百分比，例如50%）。
+2. 具體的污漬類型信息。
+3. 衣物的品牌（如果可辨識）。
+4. 衣物的材質（如果可辨識）。
+如果無法辨識品牌或材質，請不要提供相關信息。
+每句話結尾加上 “我們會以不傷害材質盡量做清潔處理。”`
       }, {
         role: 'user',
         content: [
-          { type: 'text', text: '請分析這張衣物污漬圖片，並給予清潔建議。' },
+          { type: 'text', text: '請分析這張衣物污漬圖片，並提供清洗建議、品牌和材質信息。' },
           { type: 'image_url', image_url: { url: `data:image/png;base64,${base64Image}` } }
         ]
       }]
     });
 
     const analysisResult = openaiResponse.choices[0].message.content;
+
+    // 回覆用戶
     await client.pushMessage(userId, {
       type: 'text',
       text: `${analysisResult}\n\n✨ 智能分析完成 👕`
@@ -347,7 +356,7 @@ app.post('/webhook', async (req, res) => {
 
             // 寫入無法回答的問題到文件
             const logMessage = `${new Date().toISOString()} - ${text}\n`;
-            fs.appendFileSync('unanswered_questions.log', logMessage); // 寫入到文件
+            fs.appendFileSync(path.join(__dirname, 'unanswered_questions.log'), logMessage); // 寫入到文件
 
             continue;
           }
