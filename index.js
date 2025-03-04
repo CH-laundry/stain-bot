@@ -259,17 +259,6 @@ app.post('/webhook', async (req, res) => {
         const userId = event.source.userId;
         const userMessage = event.message.type === 'text' ? event.message.text.trim() : (event.message.type === 'image' ? '上傳了一張圖片' : '發送了其他類型的訊息'); // 處理文字和圖片訊息
 
-        // 檢查使用次數
-        const canUse = await checkUsage(userId);
-        if (!canUse) {
-          await client.pushMessage(userId, { type: 'text', text: '您本週的使用次數已達上限，請下周再試。' });
-          console.log(`\n--------------------------------------------------------`);
-          console.log(`|  用戶 ${userId} 訊息: ${userMessage}`);
-          console.log(`|  Bot 回覆用戶 ${userId}: 您本週的使用次數已達上限，請下周再試。`);
-          console.log(`--------------------------------------------------------\n`);
-          continue;
-        }
-
         // 記錄用戶ID和訊息內容
         console.log(`用戶 ${userId} 發送了訊息: ${userMessage}`);
         fs.appendFileSync(path.join(__dirname, 'user_messages.log'), `${new Date().toISOString()} - 用戶 ${userId} 發送了訊息: ${userMessage}\n`);
@@ -287,6 +276,17 @@ app.post('/webhook', async (req, res) => {
 
           // 1. 按「1」啟動智能污漬分析
           if (text === '1') {
+            // 檢查使用次數
+            const canUse = await checkUsage(userId);
+            if (!canUse) {
+              await client.pushMessage(userId, { type: 'text', text: '您本週的使用次數已達上限，請下周再試。' });
+              console.log(`\n--------------------------------------------------------`);
+              console.log(`|  用戶 ${userId} 訊息: ${userMessage}`);
+              console.log(`|  Bot 回覆用戶 ${userId}: 您本週的使用次數已達上限，請下周再試。`);
+              console.log(`--------------------------------------------------------\n`);
+              continue;
+            }
+
             await client.pushMessage(userId, {
               type: 'text',
               text: '請上傳照片，以進行智能污漬分析✨📷'
