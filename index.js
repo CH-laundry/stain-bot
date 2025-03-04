@@ -6,8 +6,8 @@ const express = require('express');
 const { createHash } = require('crypto');
 const { Client } = require('@line/bot-sdk');
 const { OpenAI } = require('openai');
-const fs = require('fs'); // 引入 fs 模組來操作文件
-const path = require('path'); // 引入 path 模組來處理文件路徑
+// const fs = require('fs'); // 引入 fs 模組來操作文件  // Removed fs
+// const path = require('path'); // 引入 path 模組來處理文件路徑  // Removed path
 require('dotenv').config();
 
 // 初始化 Express 應用程式
@@ -72,21 +72,21 @@ const keywordResponses = {
 };
 
 // ============== 學習系統 ==============
-const learnedResponses = new Map(); // 存儲學習到的回應
-const unansweredQuestions = new Set(); // 存儲無法回答的問題
+// const learnedResponses = new Map(); // 存儲學習到的回應  // Removed learning
+// const unansweredQuestions = new Set(); // 存儲無法回答的問題  // Removed learning
 
 // 加載學習到的回應
-if (fs.existsSync(path.join(__dirname, 'learned_responses.json'))) {
-  const data = fs.readFileSync(path.join(__dirname, 'learned_responses.json'), 'utf8');
-  const loadedResponses = JSON.parse(data);
-  loadedResponses.forEach(([key, value]) => learnedResponses.set(key, value));
-}
+// if (fs.existsSync(path.join(__dirname, 'learned_responses.json'))) {  // Removed learning
+//   const data = fs.readFileSync(path.join(__dirname, 'learned_responses.json'), 'utf8');
+//   const loadedResponses = JSON.parse(data);
+//   loadedResponses.forEach(([key, value]) => learnedResponses.set(key, value));
+// }
 
 // 保存學習到的回應到文件
-function saveLearnedResponses() {
-  const data = JSON.stringify([...learnedResponses]);
-  fs.writeFileSync(path.join(__dirname, 'learned_responses.json'), data);
-}
+// function saveLearnedResponses() {  // Removed learning
+//   const data = JSON.stringify([...learnedResponses]);
+//   fs.writeFileSync(path.join(__dirname, 'learned_responses.json'), data);
+// }
 
 // ============== 使用次數檢查 ==============
 async function checkUsage(userId) {
@@ -261,7 +261,7 @@ app.post('/webhook', async (req, res) => {
 
         // 記錄用戶ID和訊息內容
         console.log(`用戶 ${userId} 發送了訊息: ${userMessage}`);
-        fs.appendFileSync(path.join(__dirname, 'user_messages.log'), `${new Date().toISOString()} - 用戶 ${userId} 發送了訊息: ${userMessage}\n`);
+        // fs.appendFileSync(path.join(__dirname, 'user_messages.log'), `${new Date().toISOString()} - 用戶 ${userId} 發送了訊息: ${userMessage}\n`); // Removed fs
 
         // 文字訊息
         if (event.message.type === 'text') {
@@ -422,15 +422,15 @@ app.post('/webhook', async (req, res) => {
           }
           if (matched) continue;
 
-          // 10. 檢查學習到的回應
-          if (learnedResponses.has(text)) {
-            await client.pushMessage(userId, { type: 'text', text: learnedResponses.get(text) });
-            console.log(`\n--------------------------------------------------------`);
-            console.log(`|  用戶 ${userId} 訊息: ${userMessage}`);
-            console.log(`|  Bot 回覆用戶 ${userId} (學習回應): ${learnedResponses.get(text)}`);
-            console.log(`--------------------------------------------------------\n`);
-            continue;
-          }
+          // 10. 檢查學習到的回應  // Removed learning
+          // if (learnedResponses.has(text)) {
+          //   await client.pushMessage(userId, { type: 'text', text: learnedResponses.get(text) });
+          //   console.log(`\n--------------------------------------------------------`);
+          //   console.log(`|  用戶 ${userId} 訊息: ${userMessage}`);
+          //   console.log(`|  Bot 回覆用戶 ${userId} (學習回應): ${learnedResponses.get(text)}`);
+          //   console.log(`--------------------------------------------------------\n`);
+          //   continue;
+          // }
 
           // 11. AI 客服回應洗衣店相關問題
           const aiResponse = await openaiClient.chat.completions.create({
@@ -447,19 +447,19 @@ app.post('/webhook', async (req, res) => {
           const aiText = aiResponse.choices[0].message.content;
           if (!aiText || aiText.includes('無法回答')) {
             // 記錄無法回答的問題
-            unansweredQuestions.add(text);
+            // unansweredQuestions.add(text);  // Removed learning
             console.log(`無法回答的問題: ${text}`);
 
             // 寫入無法回答的問題到文件
-            const logMessage = `${new Date().toISOString()} - ${text}\n`;
-            fs.appendFileSync(path.join(__dirname, 'unanswered_questions.log'), logMessage); // 寫入到文件
+            // const logMessage = `${new Date().toISOString()} - ${text}\n`;  // Removed learning
+            // fs.appendFileSync(path.join(__dirname, 'unanswered_questions.log'), logMessage); // 寫入到文件  // Removed learning
 
             continue;
           }
 
-          // 將 AI 生成的回答存入學習系統
-          learnedResponses.set(text, aiText);
-          saveLearnedResponses(); // 保存學習到的回應
+          // 將 AI 生成的回答存入學習系統  // Removed learning
+          // learnedResponses.set(text, aiText);
+          // saveLearnedResponses(); // 保存學習到的回應
           await client.pushMessage(userId, { type: 'text', text: aiText });
           console.log(`\n--------------------------------------------------------`);
           console.log(`|  用戶 ${userId} 訊息: ${userMessage}`);
