@@ -128,25 +128,10 @@ const KEY_VALUE_RESPONSES = {
 
 // ============== 詢問類型關鍵字列表 (包含語言信息) ==============
 const INQUIRY_KEYWORDS = [
-    { type: "paymentInquiry", lang: "zh-TW", keywords: ["付款", "付費", "支付", "怎麼付", "如何付", "付錢", "付款方式", "如何付款", "支付方式"] },
-    { type: "paymentInquiry", lang: "zh-CN", keywords: ["付款", "付费", "支付", "怎么付", "如何付", "付钱", "付款方式", "如何付款", "支付方式"] },
-    { type: "paymentInquiry", lang: "en", keywords: ["payment", "pay", "how to pay", "pay money", "payment method", "how to payment", "payment options"] },
-    { type: "paymentInquiry", lang: "ja", keywords: ["支払い", "支払う", "支払い方法", "支払", "どうやって払う", "支払いオプション", "決済方法"] },
-
-    { type: "washMethodInquiry", lang: "zh-TW", keywords: ["水洗", "乾洗", "如何清洗", "怎麼洗", "清潔方式", "清洗方式", "洗滌方式", "怎麼清潔", "如何清潔"] },
-    { type: "washMethodInquiry", lang: "zh-CN", keywords: ["水洗", "干洗", "如何清洗", "怎么洗", "清洁方式", "清洗方式", "洗涤方式", "怎么清洁", "如何清洁"] },
-    { type: "washMethodInquiry", lang: "en", keywords: ["wash method", "washing method", "how to wash", "water wash", "dry clean", "cleaning method", "how to clean", "wash type"] },
-    { type: "washMethodInquiry", lang: "ja", keywords: ["水洗い", "ドライクリーニング", "洗濯方法", "洗い方", "クリーニング方法", "洗濯の種類", "洗い方教えて"] },
-
     { type: "progressInquiry", lang: "zh-TW", keywords: ["洗好", "洗好了嗎", "進度", "好了嗎", "完成了嗎", "洗到哪", "洗到哪了", "進度查詢", "查詢進度", "洗完沒", "洗好了没"] },
     { type: "progressInquiry", lang: "zh-CN", keywords: ["洗好", "洗好了吗", "进度", "好了吗", "完成了吗", "洗到哪", "洗到哪了", "进度查询", "查询进度", "洗完没", "洗好了没"] },
     { type: "progressInquiry", lang: "en", keywords: ["done", "ready", "progress", "is it done", "is it ready", "status", "check progress", "how's the progress", "where is my laundry", "finished yet"] },
     { type: "progressInquiry", lang: "ja", keywords: ["洗い上がり", "終わった", "進捗", "終わりましたか", "完了しましたか", "ステータス", "進捗確認", "どうなってる", "仕上がり", "洗濯物どこ"] },
-
-    { type: "urgentInquiry", lang: "zh-TW", keywords: ["急件", "趕件", "快一點", "加急", "趕時間", "1天", "2天", "3天", "一天", "兩天", "三天", "快速", "盡快", "趕"] },
-    { type: "urgentInquiry", lang: "zh-CN", keywords: ["急件", "赶件", "快一点", "加急", "赶时间", "1天", "2天", "3天", "一天", "两天", "三天", "快速", "尽快", "赶"] },
-    { type: "urgentInquiry", lang: "en", keywords: ["urgent", "rush", "hurry", "fast", "quickly", "asap", "1 day", "2 days", "3 days", "express", "speed up"] },
-    { type: "urgentInquiry", lang: "ja", keywords: ["急ぎ", "特急", "早く", "至急", "1日", "2日", "3日", "早めに", "急いで", "特急料金"] },
 
     { type: "priceInquiry", lang: "zh-TW", keywords: ["價格", "价錢", "收費", "費用", "多少錢", "價位", "算錢", "清洗費", "價目表", "這件多少", "這個價格", "鞋子費用", "洗鞋錢", "要多少", "怎麼算", "費用怎麼算", "價錢怎麼算", "價格如何", "收費標準"] },
     { type: "priceInquiry", lang: "zh-CN", keywords: ["价格", "价钱", "收费", "费用", "多少钱", "价位", "算钱", "清洗费", "价目表", "这件多少", "这个价格", "鞋子费用", "洗鞋钱", "要多少", "怎么算", "费用怎么算", "价钱怎么算", "价格如何", "收费标准"] },
@@ -157,11 +142,6 @@ const INQUIRY_KEYWORDS = [
     { type: "cleaningTimeInquiry", lang: "zh-CN", keywords: ["清洁时间", "拿到", "洗要多久", "多久", "会好", "送洗时间", "清洗要多久", "洗多久", "何时好", "何时可以拿", "多久洗好"] },
     { type: "cleaningTimeInquiry", lang: "en", keywords: ["cleaning time", "get back", "how long to clean", "how long", "when will be ready", "delivery time", "how long does it take", "when can I get it", "turnaround time"] },
     { type: "cleaningTimeInquiry", lang: "ja", keywords: ["クリーニング時間", "受け取り", "洗濯時間", "どのくらい", "いつできる", "配達時間", "何日かかる", "いつ受け取れる", "仕上がり時間"] },
-
-    { type: "stainWashInquiry", lang: "zh-TW", keywords: ["洗的掉", "洗掉", "會洗壞", "洗的掉嗎", "洗掉嗎", "能否洗掉", "洗不掉", "可以洗掉嗎", "洗得掉", "洗不掉嗎"] },
-    { type: "stainWashInquiry", lang: "zh-CN", keywords: ["洗的掉", "洗掉", "会洗坏", "洗的掉吗", "洗掉吗", "能否洗掉", "洗不掉", "可以洗掉吗", "洗得掉", "洗不掉吗"] },
-    { type: "stainWashInquiry", lang: "en", keywords: ["can be removed", "remove stain", "stain removal", "get rid of stain", "can it be cleaned", "removable stain", "stain can remove"] },
-    { type: "stainWashInquiry", lang: "ja", keywords: ["取れますか", "落とせますか", "シミ抜きできますか", "シミ取れる", "シミ落ちる", "落とせるか", "除去できますか"] },
 
     { type: "businessHoursInquiry", lang: "zh-TW", keywords: ["營業時間", "營業", "開門時間", "開門", "幾點開門", "營業到幾點", "開到幾點", "今天營業", "今天開門"] },
     { type: "businessHoursInquiry", lang: "zh-CN", keywords: ["营业时间", "营业", "开门时间", "开门", "几点开门", "营业到几点", "开到几点", "今天营业", "今天开门"] },
@@ -177,31 +157,6 @@ const INQUIRY_KEYWORDS = [
     { type: "cleaningServiceInquiry", lang: "zh-CN", keywords: ["清洗服务", "清洁服务", "洗衣服务", "洗什么", "可以洗什么", "服务项目", "清洗项目", "清洁项目", "洗衣项目"] },
     { type: "cleaningServiceInquiry", lang: "en", keywords: ["cleaning service", "laundry service", "wash service", "what do you wash", "services", "cleaning items", "laundry items"] },
     { type: "cleaningServiceInquiry", lang: "ja", keywords: ["クリーニングサービス", "洗濯サービス", "洗濯", "何を洗える", "サービス内容", "クリーニング品目", "洗濯品目"] },
-
-    { type: "carpetCleaningPriceInquiry", lang: "zh-TW", keywords: ["地毯清洗", "地毯清潔", "地毯費用", "地毯價錢", "地毯清洗價格", "洗地毯多少錢"] },
-    { type: "carpetCleaningPriceInquiry", lang: "zh-CN", keywords: ["地毯清洗", "地毯清洁", "地毯费用", "地毯价钱", "地毯清洗价格", "洗地毯多少钱"] },
-    { type: "carpetCleaningPriceInquiry", lang: "en", keywords: ["carpet cleaning", "carpet clean", "carpet fee", "carpet price", "carpet cleaning price", "clean carpet price"] },
-    { type: "carpetCleaningPriceInquiry", lang: "ja", keywords: ["カーペットクリーニング", "カーペット洗濯", "カーペット料金", "カーペットの値段", "カーペットクリーニング料金", "カーペット洗濯料金"] },
-
-    { type: "curtainCleaningPriceInquiry", lang: "zh-TW", keywords: ["窗簾清洗", "窗簾清潔", "窗簾費用", "窗簾價錢", "窗簾清洗價格", "洗窗簾多少錢"] },
-    { type: "curtainCleaningPriceInquiry", lang: "zh-CN", keywords: ["窗帘清洗", "窗帘清洁", "窗帘费用", "窗帘价钱", "窗帘清洗价格", "洗窗帘多少钱"] },
-    { type: "curtainCleaningPriceInquiry", lang: "en", keywords: ["curtain cleaning", "curtain clean", "curtain fee", "curtain price", "curtain cleaning price", "clean curtain price"] },
-    { type: "curtainCleaningPriceInquiry", lang: "ja", keywords: ["カーテンクリーニング", "カーテン洗濯", "カーテン料金", "カーテンの値段", "カーテンクリーニング料金", "カーテン洗濯料金"] },
-
-    { type: "carSeatCleaningPriceInquiry", lang: "zh-TW", keywords: ["汽座清洗", "汽座清潔", "汽座費用", "汽座價錢", "汽座清洗價格", "洗汽座多少錢", "寶寶汽座清洗", "兒童座椅清洗", "安全座椅清洗"] },
-    { type: "carSeatCleaningPriceInquiry", lang: "zh-CN", keywords: ["汽座清洗", "汽座清洁", "汽座费用", "汽座价钱", "汽座清洗价格", "洗汽座多少钱", "宝宝汽座清洗", "儿童座椅清洗", "安全座椅清洗"] },
-    { type: "carSeatCleaningPriceInquiry", lang: "en", keywords: ["car seat cleaning", "car seat clean", "car seat fee", "car seat price", "car seat cleaning price", "clean car seat price", "baby car seat cleaning", "child seat cleaning", "safety seat cleaning"] },
-    { type: "carSeatCleaningPriceInquiry", lang: "ja", keywords: ["チャイルドシートクリーニング", "チャイルドシート洗濯", "チャイルドシート料金", "チャイルドシートの値段", "チャイルドシートクリーニング料金", "チャイルドシート洗濯料金", "ベビーシートクリーニング", "子供用椅子クリーニング", "安全シートクリーニング"] },
-
-    { type: "strollerCleaningPriceInquiry", lang: "zh-TW", keywords: ["手推車清洗", "手推車清潔", "手推車費用", "手推車價錢", "手推車清洗價格", "洗手推車多少錢", "嬰兒車清洗", "寶寶手推車清洗"] },
-    { type: "strollerCleaningPriceInquiry", lang: "zh-CN", keywords: ["手推车清洗", "手推车清洁", "手推车费用", "手推车价钱", "手推车清洗价格", "洗手推车多少钱", "婴儿车清洗", "宝宝手推车清洗"] },
-    { type: "strollerCleaningPriceInquiry", lang: "en", keywords: ["stroller cleaning", "stroller clean", "stroller fee", "stroller price", "stroller cleaning price", "clean stroller price", "baby stroller cleaning", "pram cleaning"] },
-    { type: "strollerCleaningPriceInquiry", lang: "ja", keywords: ["ベビーカークリーニング", "ベビーカー洗濯", "ベビーカー料金", "ベビーカーの値段", "ベビーカークリーニング料金", "ベビーカー洗濯料金", "乳母車クリーニング", "ベビーバギー クリーニング"] },
-
-    { type: "backpackCleaningPriceInquiry", lang: "zh-TW", keywords: ["書包清洗", "書包清潔", "書包費用", "書包價錢", "書包清洗價格", "洗書包多少錢", "背包清洗"] },
-    { type: "backpackCleaningPriceInquiry", lang: "zh-CN", keywords: ["书包清洗", "书包清洁", "书包费用", "书包价钱", "书包清洗价格", "洗书包多少钱", "背包清洗"] },
-    { type: "backpackCleaningPriceInquiry", lang: "en", keywords: ["backpack cleaning", "backpack clean", "backpack fee", "backpack price", "backpack cleaning price", "clean backpack price", "洗書包多少錢"] }, // keep "洗書包多少錢" for direct copy paste test
-    { type: "backpackCleaningPriceInquiry", lang: "ja", keywords: ["ランドセルクリーニング", "ランドセル洗濯", "ランドセル料金", "ランドセルの値段", "ランドセルクリーニング料金", "ランドセル洗濯料金", "リュックサック クリーニング"] },
 
     { type: "stainTreatmentInquiry_oil", lang: "zh-TW", keywords: ["油漬", "油污", "油垢", "油斑", "油漬處理", "油污處理"] },
     { type: "stainTreatmentInquiry_oil", lang: "zh-CN", keywords: ["油渍", "油污", "油垢", "油斑", "油渍处理", "油污处理"] },
