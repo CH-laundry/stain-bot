@@ -840,23 +840,6 @@ app.post('/webhook', async (req, res) => {
                         continue;
                     }
 
-                    // 2. 檢測詢問類型和語言
-                    const inquiryResult = detectInquiryType(text);
-
-                    if (inquiryResult) {
-                        await client.pushMessage(userId, {
-                            type: 'text',
-                            text: inquiryResult
-                        });
-
-                        console.log(`\n--------------------------------------------------------`);
-                        console.log(`|  用戶 ${userId} 訊息: ${userMessage}`);
-                        console.log(`|  Bot 回覆用戶 ${userId}: ${inquiryResult}`);
-                        console.log(`--------------------------------------------------------\n`);
-                        logToFile(`Bot 回覆用戶 ${userId}: ${inquiryResult}(User ID: ${userId})`);
-                        continue;
-                    }
-
                     if (["洗好", "洗好了嗎", "可以拿了嗎", "進度", "好了嗎", "完成了嗎"].some(k => text.includes(k))) {
                         await client.pushMessage(userId, {
                             type: 'text',
@@ -873,6 +856,23 @@ app.post('/webhook', async (req, res) => {
                             }
                         });
 
+                        continue;
+                    }
+
+                    // 2. 檢測詢問類型和語言
+                    const inquiryResult = detectInquiryType(text);
+
+                    if (inquiryResult) {
+                        await client.pushMessage(userId, {
+                            type: 'text',
+                            text: inquiryResult
+                        });
+
+                        console.log(`\n--------------------------------------------------------`);
+                        console.log(`|  用戶 ${userId} 訊息: ${userMessage}`);
+                        console.log(`|  Bot 回覆用戶 ${userId}: ${inquiryResult}`);
+                        console.log(`--------------------------------------------------------\n`);
+                        logToFile(`Bot 回覆用戶 ${userId}: ${inquiryResult}(User ID: ${userId})`);
                         continue;
                     }
 
