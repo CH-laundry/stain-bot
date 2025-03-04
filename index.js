@@ -417,9 +417,9 @@ app.post('/webhook', async (req, res) => {
 
                         console.log(`\n--------------------------------------------------------`);
                         console.log(`|  用戶 ${userId} 訊息: ${userMessage}`);
-                        console.log(`|  Bot 回覆用戶 ${userId} (類型: ${inquiryType}, 語言: ${detectedLang}): ${responseText}`);
+                        console.log(`|  Bot 回覆用戶 ${userId}: ${inquiryResult}`);
                         console.log(`--------------------------------------------------------\n`);
-                        logToFile(`Bot 回覆用戶 ${userId} (類型: ${inquiryType}, 語言: ${detectedLang}): ${responseText}(User ID: ${userId})`);
+                        logToFile(`Bot 回覆用戶 ${userId}: ${inquiryResult}(User ID: ${userId})`);
                         continue;
                     }
 
