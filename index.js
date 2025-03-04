@@ -210,6 +210,8 @@ function detectInquiryType(text) {
                 const type = inquiry.type;
                 const lang = inquiry.lang;
 
+                console.log(type, lang)
+
                 if (!type || !lang) {
                     return null;
                 }
@@ -390,20 +392,7 @@ app.post('/webhook', async (req, res) => {
                     }
 
                     // 1. 按「1」啟動智能污漬分析
-                    if (text === '1' || text === 'one' || text === 'いち') { // Added English and Japanese for '1'
-                        // 檢查使用次數
-                        const canUse = await checkUsage(userId);
-                        if (!canUse) {
-                            const responseText = KEY_VALUE_RESPONSES["查詢清洗進度"]["zh-TW"]; // Fallback to zh-TW, language detection is now integrated
-                            await client.pushMessage(userId, { type: 'text', text: '您本週的使用次數已達上限，請下周再試。' });
-                            console.log(`\n--------------------------------------------------------`);
-                            console.log(`|  用戶 ${userId} 訊息: ${userMessage}`);
-                            console.log(`|  Bot 回覆用戶 ${userId}: 您本週的使用次數已達上限，請下周再試。`);
-                            console.log(`--------------------------------------------------------\n`);
-                            logToFile(`Bot 回覆用戶 ${userId}: 您本週的使用次數已達上限，請下周再試。(User ID: ${userId})`);
-                            continue;
-                        }
-
+                    if (text === '1') {
                         await client.pushMessage(userId, {
                             type: 'text',
                             text: '請上傳照片，以進行智能污漬分析✨📷'
@@ -421,37 +410,17 @@ app.post('/webhook', async (req, res) => {
                     const inquiryResult = detectInquiryType(text);
 
                     if (inquiryResult) {
-                        const { responseText, inquiryType, detectedLang } = inquiryResult;
+                        await client.pushMessage(userId, {
+                            type: 'text',
+                            text: inquiryResult
+                        });
 
-                        if (responseText) {
-                            if (inquiryType === "progressInquiry") { // 特殊處理清洗進度，添加快速回覆
-                                await client.pushMessage(userId, {
-                                    type: 'text',
-                                    text: responseText,
-                                    quickReply: {
-                                        items: [{
-                                            type: "action",
-                                            action: {
-                                                type: "uri",
-                                                label: "C.H精緻洗衣",
-                                                uri: "https://liff.line.me/2004612704-JnzA1qN6#/"
-                                            }
-                                        }]
-                                    }
-                                });
-                            } else {
-                                await client.pushMessage(userId, {
-                                    type: 'text',
-                                    text: responseText
-                                });
-                            }
-                            console.log(`\n--------------------------------------------------------`);
-                            console.log(`|  用戶 ${userId} 訊息: ${userMessage}`);
-                            console.log(`|  Bot 回覆用戶 ${userId} (類型: ${inquiryType}, 語言: ${detectedLang}): ${responseText}`);
-                            console.log(`--------------------------------------------------------\n`);
-                            logToFile(`Bot 回覆用戶 ${userId} (類型: ${inquiryType}, 語言: ${detectedLang}): ${responseText}(User ID: ${userId})`);
-                            continue;
-                        }
+                        console.log(`\n--------------------------------------------------------`);
+                        console.log(`|  用戶 ${userId} 訊息: ${userMessage}`);
+                        console.log(`|  Bot 回覆用戶 ${userId} (類型: ${inquiryType}, 語言: ${detectedLang}): ${responseText}`);
+                        console.log(`--------------------------------------------------------\n`);
+                        logToFile(`Bot 回覆用戶 ${userId} (類型: ${inquiryType}, 語言: ${detectedLang}): ${responseText}(User ID: ${userId})`);
+                        continue;
                     }
 
                     // 3. AI 客服回應洗衣店相關問題 (如果沒有匹配到預設的詢問類型)
