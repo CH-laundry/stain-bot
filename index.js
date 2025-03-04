@@ -860,14 +860,14 @@ app.post('/webhook', async (req, res) => {
                     if (["洗好", "洗好了嗎", "可以拿了嗎", "進度", "好了嗎", "完成了嗎"].some(k => text.includes(k))) {
                         await client.pushMessage(userId, {
                             type: 'text',
-                            text: '營業時間會馬上查詢您的清洗進度😊，並回覆您！謝謝您🔍',
+                            text: '營業時間會馬上查詢您的清洗進度😊，並回覆您！謝謝您的耐心等候！',
                             quickReply: {
                                 items: [{
                                     type: "action",
                                     action: {
                                         type: "uri",
                                         label: "C.H精緻洗衣",
-                                        uri: "https://liff.line.me/2004612704-JnzA1qN6#/"
+                                        uri: "https://liff.line.me/2004612704-JnzA1qN6"
                                     }
                                 }]
                             }
