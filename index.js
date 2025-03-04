@@ -75,14 +75,18 @@ const keywordResponses = {
 const learnedResponses = new Map(); // 存儲學習到的回應
 const unansweredQuestions = new Set(); // 存儲無法回答的問題
 
-// ============== 精品包包品牌列表 ==============
-const luxuryBrands = [
-  "Louis Vuitton", "Chanel", "Hermès", "Goyard", "Celine", "Dior", "Saint Laurent", "Givenchy", "Moynat", "Delvaux",
-  "Gucci", "Prada", "Fendi", "Bottega Veneta", "Valentino", "Ferragamo", "Bulgari",
-  "Burberry", "Mulberry", "Alexander McQueen",
-  "Coach", "Michael Kors", "Tory Burch", "Marc Jacobs",
-  "MCM"
-];
+// 加載學習到的回應
+if (fs.existsSync(path.join(__dirname, 'learned_responses.json'))) {
+  const data = fs.readFileSync(path.join(__dirname, 'learned_responses.json'), 'utf8');
+  const loadedResponses = JSON.parse(data);
+  loadedResponses.forEach(([key, value]) => learnedResponses.set(key, value));
+}
+
+// 保存學習到的回應到文件
+function saveLearnedResponses() {
+  const data = JSON.stringify([...learnedResponses]);
+  fs.writeFileSync(path.join(__dirname, 'learned_responses.json'), data);
+}
 
 // ============== 使用次數檢查 ==============
 async function checkUsage(userId) {
@@ -246,6 +250,17 @@ app.post('/webhook', async (req, res) => {
 
         const userId = event.source.userId;
 
+        // 檢查使用次數
+        const canUse = await checkUsage(userId);
+        if (!canUse) {
+          await client.pushMessage(userId, { type: 'text', text: '您本週的使用次數已達上限，請下周再試。' });
+          continue; // 跳過後續處理
+        }
+
+        // 記錄用戶ID和訊息內容
+        console.log(`用戶 ${userId} 發送了訊息: ${event.message.text}`);
+        fs.appendFileSync(path.join(__dirname, 'user_messages.log'), `${new Date().toISOString()} - 用戶 ${userId} 發送了訊息: ${event.message.text}\n`);
+
         // 文字訊息
         if (event.message.type === 'text') {
           const text = event.message.text.trim().toLowerCase();
@@ -391,6 +406,7 @@ app.post('/webhook', async (req, res) => {
 
           // 將 AI 生成的回答存入學習系統
           learnedResponses.set(text, aiText);
+          saveLearnedResponses(); // 保存學習到的回應
           await client.pushMessage(userId, { type: 'text', text: aiText });
         }
 
