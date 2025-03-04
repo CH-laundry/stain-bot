@@ -75,6 +75,15 @@ const keywordResponses = {
 const learnedResponses = new Map(); // 存儲學習到的回應
 const unansweredQuestions = new Set(); // 存儲無法回答的問題
 
+// ============== 精品包包品牌列表 ==============
+const luxuryBrands = [
+  "Louis Vuitton", "Chanel", "Hermès", "Goyard", "Celine", "Dior", "Saint Laurent", "Givenchy", "Moynat", "Delvaux",
+  "Gucci", "Prada", "Fendi", "Bottega Veneta", "Valentino", "Ferragamo", "Bulgari",
+  "Burberry", "Mulberry", "Alexander McQueen",
+  "Coach", "Michael Kors", "Tory Burch", "Marc Jacobs",
+  "MCM"
+];
+
 // ============== 使用次數檢查 ==============
 async function checkUsage(userId) {
   const key = `rate_limit:user:${userId}`;
@@ -116,29 +125,42 @@ async function analyzeStain(userId, imageBuffer) {
       model: 'gpt-4o',
       messages: [{
         role: 'system',
-        content: `你是專業的洗衣助手，你的任務是分析使用者提供的衣物污漬圖片，提供以下信息：
-1. 清洗成功的機率（必須是百分比，例如50%）。
-2. 具體的污漬類型信息。
-3. 如果圖片是包包或鞋子，請推測以下資訊：
-   - **可能的品牌**（例如 Chanel、Gucci、Louis Vuitton、Prada）。
-   - **材質**（例如小羊皮、帆布、塗層帆布、防潑水材質）。
-   - **可能的款式**（例如 Classic Flap Bag、GG Supreme Camera Bag）。
-   - **有無明顯品牌標誌**（例如雙C Logo、GG 圖案）。
-   - **是否有經典的鏈條、金屬裝飾、縫線特徵**。
-   - **如果無法辨識品牌，請提供可能的風格描述**（例如「這款包款使用經典菱格紋，可能屬於 Chanel 或 YSL」）。
-4. 請以推測的方式回答，不要直接說無法辨識。
-5. 如果圖片不是包包或鞋子，則只回覆污漬類型和清洗機率。
-每句話結尾加上 “我們會以不傷害材質盡量做清潔處理。”`
+        content: `你是專業的精品清潔顧問，請按照以下格式分析圖片：
+1. 以流暢口語化中文描述物品與污漬狀況
+2. 清洗成功機率（精確百分比）
+3. 品牌辨識（使用「可能為」、「推測為」等專業用語）
+4. 材質分析（說明材質特性與清潔注意點）
+5. 款式特徵（專業術語描述設計元素）
+6. 若為精品包（如 Louis Vuitton、Chanel、Hermès 等），請提供年份與稀有性資訊（若可辨識）
+7. 結尾統一使用：「我們會根據材質特性進行適當清潔，確保最佳效果。」
+
+要求：
+- 完全不用 ** 符號或任何標記
+- 品牌/材質/款式資訊需明確且專業
+- 若為精品包，需包含以下細節：
+  - 品牌辨識依據（標誌/經典元素）
+  - 材質組合（例：塗層帆布+皮革滾邊）
+  - 特殊工藝（例：馬鞍縫線/金屬配件）
+  - 年份與稀有性（若可辨識）
+- 非精品包或無法辨識品牌時，不提年份與稀有性`
       }, {
         role: 'user',
         content: [
-          { type: 'text', text: '請分析這張衣物污漬圖片，並提供清洗建議、品牌和材質信息。' },
+          { type: 'text', text: '請分析此物品並提供專業清潔建議。' },
           { type: 'image_url', image_url: { url: `data:image/png;base64,${base64Image}` } }
         ]
       }]
     });
 
-    const analysisResult = openaiResponse.choices[0].message.content;
+    // 取得分析結果並移除多餘符號
+    let analysisResult = openaiResponse.choices[0].message.content
+      .replace(/\*\*/g, '') // 移除所有 **
+      .replace(/我們會以不傷害材質盡量做清潔處理。/g, ''); // 移除舊版結尾
+
+    // 確保結尾格式統一
+    if (!analysisResult.endsWith('確保最佳效果。')) {
+      analysisResult += '\n我們會根據材質特性進行適當清潔，確保最佳效果。';
+    }
 
     // 回覆用戶
     await client.pushMessage(userId, {
