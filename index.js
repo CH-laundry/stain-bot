@@ -843,7 +843,7 @@ app.post('/webhook', async (req, res) => {
                     if (["洗好", "洗好了嗎", "可以拿了嗎", "進度", "好了嗎", "完成了嗎"].some(k => text.includes(k))) {
                         await client.pushMessage(userId, {
                             type: 'text',
-                            text: '營業時間會馬上查詢您的清洗進度😊，並回覆您！謝謝您的耐心等候！',
+                            text: '營業時間會馬上查詢您的清洗進度😊，並回覆您！或是您可以這邊線上查詢 C.H精緻洗衣 謝謝您🔍',
                             quickReply: {
                                 items: [{
                                     type: "action",
