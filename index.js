@@ -200,20 +200,14 @@ const INQUIRY_KEYWORDS = [
     { type: "laundryRelated", lang: "ja", keywords: ["洗濯", "クリーニング", "汚れ", "油汚れ", "血", "醤油", "染色", "色落ち", "カーペット", "カーテン", "ベビーシート", "チャイルドシート", "ベビーカー", "ランドセル", "営業", "開店", "休憩", "オープン", "集荷", "配達", "予約"] },
 ];
 
-
-// ============== 語言檢測 (不再需要獨立的語言檢測函數，由詢問類型檢測函數一併處理) ==============
-// function detectLanguage(text) { ... }  // 已移除
-
-// ============== 關鍵字回覆函數 (不再需要獨立的關鍵字回覆函數，由詢問類型檢測函數一併處理) ==============
-// async function getKeywordResponse(text, detectedLang) { ... } // 已移除
-
 // ============== 檢測詢問類型 (合併語言檢測與類型檢測) ==============
 function detectInquiryType(text) {
     const lowerText = text.toLowerCase();
     for (const inquiry of INQUIRY_KEYWORDS) {
         for (const keyword of inquiry.keywords) {
             if (lowerText.includes(keyword.toLowerCase())) {
-                return { inquiryType: inquiry.type, detectedLang: inquiry.lang };
+                const responseText = KEY_VALUE_RESPONSES[inquiry.type] ? (KEY_VALUE_RESPONSES[inquiry.type][inquiry.lang] || KEY_VALUE_RESPONSES[inquiry.type]["zh-TW"]) : null;
+                return responseText ? { responseText, inquiryType: inquiry.type, detectedLang: inquiry.lang } : null;
             }
         }
     }
@@ -410,8 +404,7 @@ app.post('/webhook', async (req, res) => {
                     const inquiryResult = detectInquiryType(text);
 
                     if (inquiryResult) {
-                        const { inquiryType, detectedLang } = inquiryResult;
-                        let responseText = KEY_VALUE_RESPONSES[inquiryType] ? (KEY_VALUE_RESPONSES[inquiryType][detectedLang] || KEY_VALUE_RESPONSES[inquiryType]["zh-TW"]) : null;
+                        const { responseText, inquiryType, detectedLang } = inquiryResult;
 
                         if (responseText) {
                             if (inquiryType === "progressInquiry") { // 特殊處理清洗進度，添加快速回覆
@@ -443,7 +436,6 @@ app.post('/webhook', async (req, res) => {
                             continue;
                         }
                     }
-
 
                     // 3. AI 客服回應洗衣店相關問題 (如果沒有匹配到預設的詢問類型)
                     if (isLaundryRelatedText(text)) { // 仍然需要判斷是否與洗衣相關，再调用AI
