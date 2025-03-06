@@ -60,8 +60,6 @@ function getGoogleSheetsResponse(userText) {
     return null; // 沒有找到匹配
 }
 
-const { google } = require('googleapis');
-
 async function testGoogleSheets() {
     try {
         const auth = new google.auth.GoogleAuth({
