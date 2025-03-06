@@ -60,6 +60,25 @@ function getGoogleSheetsResponse(userText) {
     return null; // 沒有找到匹配
 }
 
+const { google } = require('googleapis');
+
+async function testGoogleSheets() {
+    try {
+        const auth = new google.auth.GoogleAuth({
+            keyFile: 'google-sheets-key.json',
+            scopes: ['https://www.googleapis.com/auth/spreadsheets']
+        });
+
+        const sheets = google.sheets({ version: 'v4', auth });
+
+        console.log("✅ Google Sheets API 連線成功！");
+    } catch (error) {
+        console.error("❌ Google Sheets API 連線失敗！", error);
+    }
+}
+
+testGoogleSheets();
+
 // ============== 強制不回應列表 ==============
 const ignoredKeywords = ["常見問題", "服務價目&儲值優惠", "到府收送", "店面地址&營業時間", "付款方式", "寶寶汽座&手推車", "顧客須知", "智能污漬分析", "謝謝", "您好", "按錯"];
 
