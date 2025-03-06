@@ -1,81 +1,3 @@
-// ============== 讀取 Google Sheets 數據 ==============
-// 引入 Google Sheets API 相關模組
-const { google } = require('googleapis');
-const sheets = google.sheets('v4');
-
-// 設置 Google Sheets API 認證
-const auth = new google.auth.GoogleAuth({
-    keyFile: 'google-sheets-key.json', // 你的 Google Sheets API 憑證
-    scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
-});
-
-// Google Sheets 設定
-const SPREADSHEET_ID = '你的 Google Sheets ID';
-const RANGE = '你的表單名稱!A:B'; // 假設 A 欄是關鍵字，B 欄是回覆內容
-
-// 緩存 Google Sheets 數據（避免每次請求都讀取，影響效能）
-let sheetsDataCache = new Map();
-async function fetchGoogleSheetsData() {
-    try {
-        const client = await auth.getClient();
-        const response = await sheets.spreadsheets.values.get({
-            auth: client,
-            spreadsheetId: SPREADSHEET_ID,
-            range: RANGE,
-        });
-
-        // 解析數據
-        const rows = response.data.values;
-        if (!rows || rows.length === 0) {
-            console.log('🔴 Google Sheets 沒有找到數據');
-            return;
-        }
-
-        sheetsDataCache.clear(); // 清空舊數據
-        for (const row of rows) {
-            if (row.length < 2) continue; // 確保有關鍵字和對應回覆
-            const keyword = row[0].trim().toLowerCase();
-            const responseText = row[1].trim();
-            sheetsDataCache.set(keyword, responseText);
-        }
-        console.log('✅ 成功更新 Google Sheets 數據');
-    } catch (error) {
-        console.error('🔴 無法讀取 Google Sheets:', error);
-    }
-}
-
-// 啟動時先讀取一次 Google Sheets
-fetchGoogleSheetsData();
-// 設定定期更新（每 30 分鐘更新一次）
-setInterval(fetchGoogleSheetsData, 30 * 60 * 1000);
-
-// ============== Google Sheets 查詢功能 ==============
-function getGoogleSheetsResponse(userText) {
-    const lowerText = userText.toLowerCase();
-    for (const [keyword, response] of sheetsDataCache.entries()) {
-        if (lowerText.includes(keyword)) {
-            return response;
-        }
-    }
-    return null; // 沒有找到匹配
-}
-
-async function testGoogleSheets() {
-    try {
-        const auth = new google.auth.GoogleAuth({
-            keyFile: 'google-sheets-key.json',
-            scopes: ['https://www.googleapis.com/auth/spreadsheets']
-        });
-
-        const sheets = google.sheets({ version: 'v4', auth });
-
-        console.log("✅ Google Sheets API 連線成功！");
-    } catch (error) {
-        console.error("❌ Google Sheets API 連線失敗！", error);
-    }
-}
-
-testGoogleSheets();
 
 // ============== 強制不回應列表 ==============
 const ignoredKeywords = ["常見問題", "服務價目&儲值優惠", "到府收送", "店面地址&營業時間", "付款方式", "寶寶汽座&手推車", "顧客須知", "智能污漬分析", "謝謝", "您好", "按錯"];
@@ -115,7 +37,7 @@ const MAX_USES_TIME_PERIOD = process.env.MAX_USES_TIME_PERIOD || 604800; // 6048
 const COMBINED_INQUIRY_DATA = [
     {
         "zh-TW": {
-            keywords: ["價格", "價錢", "收費", "費用", "多少錢", "價位", "算錢", "清洗費", "價目表", "這件多少", "這個價格", "鞋子費用", "洗鞋錢", "要多少", "怎麼算", "窗簾費用"],
+            keywords: ["價格", "价錢", "收費", "費用", "多少錢", "價位", "算錢", "清洗費", "價目表", "這件多少", "這個價格", "鞋子費用", "洗鞋錢", "要多少", "怎麼算", "窗簾費用"],
             response: "可以參考我們的服務價目表或由客服跟您回覆📋"
         },
         "zh-CN": {
