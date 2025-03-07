@@ -1,3 +1,53 @@
+// 引入需要的功能
+const { syncGoogleSheets } = require('./feature/sheetsSync');
+const { getSheetsData, generateResponse } = require('./feature/sheetsReply');
+const { trainOpenAIWithNewData } = require('./feature/openAIlearning');
+const { adjustSheetStructure, optimizeResponse } = require('./feature/sheetsAdjust');
+const { getSheet } = require('./getSheet'); // 引入 getSheet 函數
+const { add_new_data } = require('./feature/add_new_data'); // 引入 add_new_data 函數
+
+// 定義主程式的異步函數
+async function main() {
+    try {
+        // 獲取 Google Sheets 資料
+        const sheet = await getSheet();
+        console.log("成功獲取 Google Sheets 資料");
+
+        // 定期同步 Google Sheets
+        setInterval(() => {
+            syncGoogleSheets(sheet); // 每 30 分鐘同步一次
+        }, 30 * 60 * 1000);
+
+        // 定期讀取資料並生成回應
+        setInterval(() => {
+            const data = getSheetsData(sheet);
+            const response = generateResponse(data);
+            console.log(response);
+        }, 60 * 60 * 1000); // 每小時讀取一次資料並生成回應
+
+        // 定期讓 OpenAI 學習新資料
+        setInterval(() => {
+            const data = getSheetsData(sheet);
+            trainOpenAIWithNewData(data); // 每週學習一次新資料
+        }, 7 * 24 * 60 * 60 * 1000); // 每 7 天
+
+        // 定期調整 Sheets 結構並優化回應
+        setInterval(() => {
+            const data = getSheetsData(sheet);
+            const optimizedData = optimizeResponse(data);
+            adjustSheetStructure(sheet); // 每月調整一次結構
+            console.log("優化資料:", optimizedData);
+        }, 30 * 24 * 60 * 60 * 1000); // 每月一次
+
+        console.log("主程式開始運行...");
+        add_new_data();  // 調用來自 feature 資料夾的功能
+    } catch (error) {
+        console.error("錯誤:", error);
+    }
+}
+
+// 啟動主程式
+main();
 
 // ============== 強制不回應列表 ==============
 const ignoredKeywords = ["常見問題", "服務價目&儲值優惠", "到府收送", "店面地址&營業時間", "付款方式", "寶寶汽座&手推車", "顧客須知", "智能污漬分析", "謝謝", "您好", "按錯"];
