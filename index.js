@@ -1,8 +1,9 @@
-const { syncGoogleSheets } = require('./feature/sheetsSync');
+// 引入需要的功能
+const { syncGoogleSheets } = require('./feature/sheetsSync');  // 確保相對路徑正確
 const { getSheetsData, generateResponse } = require('./feature/sheetsReply');
-const { trainOpenAIWithNewData } = require('./feature/openAIlearning');
+const { trainOpenAIWithNewData } = require('./feature/openAIlearning');  // 根據需要
 const { adjustSheetStructure, optimizeResponse } = require('./feature/sheetsAdjust');
-const { getSheet } = require('./getSheet'); // 引入 getSheet 函數
+const { getSheet } = require('./feature/getSheet');  // 確保引入 getSheet 函數
 
 // 定義主程式的異步函數
 async function main() {
@@ -36,6 +37,8 @@ async function main() {
     }, 30 * 24 * 60 * 60 * 1000); // 每月一次
 
     console.log("主程式開始運行...");
+    // 假設你已經定義了這個函數，並處理新數據
+    add_new_data();  // 調用來自 feature 資料夾的功能
 }
 
 // 啟動主程式
