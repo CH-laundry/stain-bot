@@ -1,8 +1,8 @@
-// 引入需要的功能
-const { syncGoogleSheets } = require('./feature/sheetsSync.js');  // 確保這行在 index.js 中
+const { syncGoogleSheets } = require('./feature/sheetsSync');
 const { getSheetsData, generateResponse } = require('./feature/sheetsReply');
 const { trainOpenAIWithNewData } = require('./feature/openAIlearning');
 const { adjustSheetStructure, optimizeResponse } = require('./feature/sheetsAdjust');
+const { getSheet } = require('./getSheet'); // 引入 getSheet 函數
 
 // 定義主程式的異步函數
 async function main() {
