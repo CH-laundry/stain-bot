@@ -10,8 +10,6 @@ const config = {
   channelSecret: process.env.LINE_CHANNEL_SECRET
 };
 
-const client = new line.Client(config);
-
 async function fetchSheetsData() {
   const res = await axios.get(process.env.SHEETS_API_URL);
   return res.data;
