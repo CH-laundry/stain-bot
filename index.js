@@ -1,96 +1,19 @@
-require('dotenv').config();
-const express = require('express');
-const line = require('@line/bot-sdk');
-const axios = require('axios');
-const keywordRules = require('./feature/keywordRules');
-const app = express();
-
-const config = {
-  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
-  channelSecret: process.env.LINE_CHANNEL_SECRET
-};
-
-async function fetchSheetsData() {
-  const res = await axios.get(process.env.SHEETS_API_URL);
-  return res.data;
-}
-
-async function getSheetsReply(text) {
-  const data = await fetchSheetsData();
-  for (let row of data) {
-    if (new RegExp(row.keyword).test(text)) {
-      return row.response;
-    }
-  }
-  return null;
-}
-
-async function fetchSheetsData() {
-  const res = await axios.get(process.env.SHEETS_URL);
-  return res.data;
-}
-
-function checkAddress(name) {
-  return name.length > 8 || /路|巷|號|樓/.test(name);
-}
-
-function handleAddressResponse(name) {
-  const addressMatch = name.replace(/^\d+\s+.*?\s+/, '');
-  return `可以的😊我們會到 ${addressMatch} 收送，送達會再通知您🚚💨`;
-}
-
-async function handleMessage(event) {
-  const userProfile = await client.getProfile(event.source.userId);
-  const userName = userProfile.displayName;
-  const text = event.message.text;
-
-  if (userName.length > 8 || /(路|巷|號|樓)/.test(userName)) {
-    if (/送|收|取件/.test(text)) {
-      const replyMsg = handleAddress(userName);
-      return client.replyMessage(event.replyToken, { type: 'text', text: replyMsg });
-    }
-  }
-
-  // Sheets自動回應
-  const sheetsReply = await getSheetsReply(text);
-  if (sheetsReply) {
-    return client.replyMessage(event.replyToken, { type: 'text', text: sheetsReply });
-  }
-
-  // 本地關鍵字回覆
-  for (let rule of keywordRules) {
-    if (rule.keywords.some(keyword => text.includes(keyword))) {
-      const response = rule.response;
-      return client.replyMessage(event.replyToken, { type: 'text', text: response });
-    }
-  }
-
-  // 跟洗衣店相關，但未匹配
-  if (/洗衣|清洗|送洗/.test(text)) {
-    return client.replyMessage(event.replyToken, { type: 'text', text: '您可以參考我們的常見問題或按『3』😊，詳細問題營業時間內線上客服會跟您回覆，謝謝您！🙏😊' });
-  }
-}
-
-app.post('/webhook', line.middleware(config), async (req, res) => {
-  const events = req.body.events;
-  await Promise.all(events.map(event => {
-    if (event.type !== 'message' || event.message.type !== 'text') return;
-    return handleMessage(event);
-  }));
-
-  res.status(200).end();
-});
 
 // ============== 強制不回應列表 ==============
 const ignoredKeywords = ["常見問題", "服務價目&儲值優惠", "到府收送", "店面地址&營業時間", "付款方式", "寶寶汽座&手推車", "顧客須知", "智能污漬分析", "謝謝", "您好", "按錯"];
 
 // ============== 引入依賴 ==============
+const express = require('express');
 const { createHash } = require('crypto');
 const { Client } = require('@line/bot-sdk');
 const { OpenAI } = require('openai');
 const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
+
+// 初始化 Express 應用程式
+const app = express();
+app.use(express.json());
 
 // 初始化 LINE 客戶端
 const client = new Client({
@@ -1048,6 +971,3 @@ app.listen(PORT, () => {
     console.log(`伺服器正在運行，端口：${PORT}`);
     logToFile(`伺服器正在運行，端口：${PORT}`);
 });
-
-module.exports = { getReply };
-
