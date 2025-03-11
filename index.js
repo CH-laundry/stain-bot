@@ -2,11 +2,11 @@ require('dotenv').config();
 const express = require('express');
 const line = require('@line/bot-sdk');
 const axios = require('axios');
-
 const keywordRules = require('./feature/keywordRules');
 
 const app = express();
 
+// ✅ 確保環境變數存在
 const config = {
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
   channelSecret: process.env.LINE_CHANNEL_SECRET
@@ -14,15 +14,13 @@ const config = {
 
 const client = new line.Client(config);
 
-/**
- * 📌 從 Google Sheets 讀取數據（使用 API Key）
- */
+// ✅ 從 Google Sheets 讀取關鍵字回應
 async function fetchSheetsData() {
   try {
     const SHEET_ID = process.env.GOOGLE_SHEETS_ID;
     const API_KEY = process.env.SHEETS_API_KEY;
     
-    // Google Sheets API URL
+    // Google Sheets API 讀取網址
     const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/回應表!A:B?key=${API_KEY}`;
     
     const res = await axios.get(url);
@@ -33,7 +31,6 @@ async function fetchSheetsData() {
       return [];
     }
 
-    // 轉換 Sheets 資料格式
     return rows.map(row => ({ keyword: row[0], response: row[1] }));
   } catch (error) {
     console.error('❌ Google Sheets 讀取失敗:', error);
@@ -41,76 +38,62 @@ async function fetchSheetsData() {
   }
 }
 
-/**
- * 📌 嘗試從 Google Sheets 取得回應
- */
-async function getSheetsReply(text) {
-  const data = await fetchSheetsData();
-  for (let row of data) {
-    if (new RegExp(row.keyword).test(text)) {
-      return row.response;
-    }
-  }
-  return null;
-}
-
-/**
- * 📌 辨識是否為地址（客戶名稱超過8個字 或 包含 路/巷/號/樓）
- */
+// ✅ 檢查客戶名稱是否包含地址
 function checkAddress(name) {
   return name.length > 8 || /路|巷|號|樓/.test(name);
 }
 
-/**
- * 📌 產生地址回覆
- */
+// ✅ 處理地址回應
 function handleAddressResponse(name) {
   const addressMatch = name.replace(/^\d+\s+.*?\s+/, '');
   return `可以的😊我們會到 ${addressMatch} 收送，送達會再通知您🚚💨`;
 }
 
-/**
- * 📌 處理訊息回應
- */
+// ✅ 處理 LINE 訊息
 async function handleMessage(event) {
   const userProfile = await client.getProfile(event.source.userId);
   const userName = userProfile.displayName;
   const text = event.message.text;
 
-  // 檢查客戶名稱是否包含地址資訊
-  if (checkAddress(userName)) {
-    if (/送回|送還|拿回來/.test(text)) {
-      const replyMsg = handleAddressResponse(userName);
-      return client.replyMessage(event.replyToken, { type: 'text', text: replyMsg });
+  // 🔍 若使用者名稱包含地址，並且內容有「送回」「送還」「拿回來」，則回應地址
+  if (checkAddress(userName) && /(送回|送還|拿回來)/.test(text)) {
+    const replyMsg = handleAddressResponse(userName);
+    return client.replyMessage(event.replyToken, { type: 'text', text: replyMsg });
+  }
+
+  // 📝 從 Google Sheets 取得回應
+  const sheetsData = await fetchSheetsData();
+  for (let rule of sheetsData) {
+    if (new RegExp(rule.keyword).test(text)) {
+      return client.replyMessage(event.replyToken, { type: 'text', text: rule.response });
     }
   }
 
-  // 先透過 Google Sheets 自動回應
-  const sheetsReply = await getSheetsReply(text);
-  if (sheetsReply) {
-    return client.replyMessage(event.replyToken, { type: 'text', text: sheetsReply });
-  }
-
-  // 使用本地關鍵字回應
+  // 🔍 關鍵字回應
   for (let rule of keywordRules) {
     if (rule.keywords.some(keyword => text.includes(keyword))) {
-      const response = typeof rule.response === 'function' ? rule.response(text) : rule.response;
-      return client.replyMessage(event.replyToken, { type: 'text', text: response });
+      return client.replyMessage(event.replyToken, { type: 'text', text: rule.response });
     }
   }
 
-  // 如果是洗衣相關但沒有匹配到關鍵字
-  if (/洗衣|清洗|送洗/.test(text)) {
-    return client.replyMessage(event.replyToken, { type: 'text', text: '您可以參考我們的常見問題或按『3』😊，詳細問題營業時間內線上客服會跟您回覆，謝謝您！🙏😊' });
+  // 🎯 **智能污漬分析**
+  if (text === '1') {
+    return client.replyMessage(event.replyToken, { type: 'text', text: '請上傳污漬照片，我們會為您分析清潔可能性！🧐🧼' });
   }
 
-  // 不相關的問題不回應
-  return;
+  // 🛑 若是與洗衣無關的問題，完全不回應
+  if (!/洗衣|清洗|送洗/.test(text)) {
+    return;
+  }
+
+  // 🔍 若與洗衣相關但沒有匹配到關鍵字，提供建議
+  return client.replyMessage(event.replyToken, { 
+    type: 'text', 
+    text: '您可以參考我們的常見問題或按『3』😊，詳細問題營業時間內線上客服會跟您回覆，謝謝您！🙏😊'
+  });
 }
 
-/**
- * 📌 LINE Webhook 設置
- */
+// ✅ 設置 Webhook
 app.post('/webhook', line.middleware(config), async (req, res) => {
   const events = req.body.events;
   await Promise.all(events.map(event => {
