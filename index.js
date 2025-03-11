@@ -1084,5 +1084,4 @@ app.listen(PORT, () => {
     logToFile(`伺服器正在運行，端口：${PORT}`);
 });
 
-module.exports = { getReply };
 
