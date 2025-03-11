@@ -3,12 +3,15 @@ const express = require('express');
 const line = require('@line/bot-sdk');
 const axios = require('axios');
 const keywordRules = require('./feature/keywordRules');
+
 const app = express();
 
 const config = {
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
   channelSecret: process.env.LINE_CHANNEL_SECRET
 };
+
+const client = new line.Client(config);
 
 async function fetchSheetsData() {
   const res = await axios.get(process.env.SHEETS_API_URL);
@@ -25,11 +28,6 @@ async function getSheetsReply(text) {
   return null;
 }
 
-async function fetchSheetsData() {
-  const res = await axios.get(process.env.SHEETS_URL);
-  return res.data;
-}
-
 function checkAddress(name) {
   return name.length > 8 || /路|巷|號|樓/.test(name);
 }
@@ -44,14 +42,13 @@ async function handleMessage(event) {
   const userName = userProfile.displayName;
   const text = event.message.text;
 
-  if (userName.length > 8 || /(路|巷|號|樓)/.test(userName)) {
-    if (/送|收|取件/.test(text)) {
-      const replyMsg = handleAddress(userName);
-      return client.replyMessage(event.replyToken, { type: 'text', text: replyMsg });
-    }
+  // 地址自動回覆判斷
+  if (checkAddress(userName) && /(送回|送還|拿回來)/.test(text)) {
+    const replyMsg = handleAddressResponse(userName);
+    return client.replyMessage(event.replyToken, { type: 'text', text: replyMsg });
   }
 
-  // Sheets自動回應
+  // 優先 Sheets 自動回應
   const sheetsReply = await getSheetsReply(text);
   if (sheetsReply) {
     return client.replyMessage(event.replyToken, { type: 'text', text: sheetsReply });
@@ -60,21 +57,28 @@ async function handleMessage(event) {
   // 本地關鍵字回覆
   for (let rule of keywordRules) {
     if (rule.keywords.some(keyword => text.includes(keyword))) {
-      const response = rule.response;
+      const response = typeof rule.response === 'function' ? rule.response(text) : rule.response;
       return client.replyMessage(event.replyToken, { type: 'text', text: response });
     }
   }
 
-  // 跟洗衣店相關，但未匹配
+  // 與洗衣相關但未匹配任何規則
   if (/洗衣|清洗|送洗/.test(text)) {
-    return client.replyMessage(event.replyToken, { type: 'text', text: '您可以參考我們的常見問題或按『3』😊，詳細問題營業時間內線上客服會跟您回覆，謝謝您！🙏😊' });
+    return client.replyMessage(event.replyToken, {
+      type: 'text',
+      text: '您可以參考我們的常見問題或按『3』😊，詳細問題營業時間內線上客服會跟您回覆，謝謝您！🙏😊'
+    });
   }
+
+  // 不相關內容不回覆
+  return Promise.resolve(null);
 }
 
 app.post('/webhook', line.middleware(config), async (req, res) => {
   const events = req.body.events;
+
   await Promise.all(events.map(event => {
-    if (event.type !== 'message' || event.message.type !== 'text') return;
+    if (event.type !== 'message' || event.message.type !== 'text') return null;
     return handleMessage(event);
   }));
 
