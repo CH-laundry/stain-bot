@@ -1,113 +1,9 @@
-require('dotenv').config();
-const express = require('express');
-const line = require('@line/bot-sdk');
-const axios = require('axios');
-const keywordRules = require('./feature/keywordRules');
-
-const app = express();
-
-// ✅ 確保環境變數存在
-const config = {
-  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
-  channelSecret: process.env.LINE_CHANNEL_SECRET
-};
-
-const client = new line.Client(config);
-
-// ✅ 從 Google Sheets 讀取關鍵字回應
-async function fetchSheetsData() {
-  try {
-    const SHEET_ID = process.env.GOOGLE_SHEETS_ID;
-    const API_KEY = process.env.SHEETS_API_KEY;
-    
-    // Google Sheets API 讀取網址
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/回應表!A:B?key=${API_KEY}`;
-    
-    const res = await axios.get(url);
-    const rows = res.data.values;
-
-    if (!rows || rows.length === 0) {
-      console.error('❌ 沒有讀取到 Google Sheets 數據');
-      return [];
-    }
-
-    return rows.map(row => ({ keyword: row[0], response: row[1] }));
-  } catch (error) {
-    console.error('❌ Google Sheets 讀取失敗:', error);
-    return [];
-  }
-}
-
-// ✅ 檢查客戶名稱是否包含地址
-function checkAddress(name) {
-  return name.length > 8 || /路|巷|號|樓/.test(name);
-}
-
-// ✅ 處理地址回應
-function handleAddressResponse(name) {
-  const addressMatch = name.replace(/^\d+\s+.*?\s+/, '');
-  return `可以的😊我們會到 ${addressMatch} 收送，送達會再通知您🚚💨`;
-}
-
-// ✅ 處理 LINE 訊息
-async function handleMessage(event) {
-  const userProfile = await client.getProfile(event.source.userId);
-  const userName = userProfile.displayName;
-  const text = event.message.text;
-
-  // 🔍 若使用者名稱包含地址，並且內容有「送回」「送還」「拿回來」，則回應地址
-  if (checkAddress(userName) && /(送回|送還|拿回來)/.test(text)) {
-    const replyMsg = handleAddressResponse(userName);
-    return client.replyMessage(event.replyToken, { type: 'text', text: replyMsg });
-  }
-
-  // 📝 從 Google Sheets 取得回應
-  const sheetsData = await fetchSheetsData();
-  for (let rule of sheetsData) {
-    if (new RegExp(rule.keyword).test(text)) {
-      return client.replyMessage(event.replyToken, { type: 'text', text: rule.response });
-    }
-  }
-
-  // 🔍 關鍵字回應
-  for (let rule of keywordRules) {
-    if (rule.keywords.some(keyword => text.includes(keyword))) {
-      return client.replyMessage(event.replyToken, { type: 'text', text: rule.response });
-    }
-  }
-
-  // 🎯 **智能污漬分析**
-  if (text === '1') {
-    return client.replyMessage(event.replyToken, { type: 'text', text: '請上傳污漬照片，我們會為您分析清潔可能性！🧐🧼' });
-  }
-
-  // 🛑 若是與洗衣無關的問題，完全不回應
-  if (!/洗衣|清洗|送洗/.test(text)) {
-    return;
-  }
-
-  // 🔍 若與洗衣相關但沒有匹配到關鍵字，提供建議
-  return client.replyMessage(event.replyToken, { 
-    type: 'text', 
-    text: '您可以參考我們的常見問題或按『3』😊，詳細問題營業時間內線上客服會跟您回覆，謝謝您！🙏😊'
-  });
-}
-
-// ✅ 設置 Webhook
-app.post('/webhook', line.middleware(config), async (req, res) => {
-  const events = req.body.events;
-  await Promise.all(events.map(event => {
-    if (event.type !== 'message' || event.message.type !== 'text') return;
-    return handleMessage(event);
-  }));
-
-  res.status(200).end();
-});
 
 // ============== 強制不回應列表 ==============
 const ignoredKeywords = ["常見問題", "服務價目&儲值優惠", "到府收送", "店面地址&營業時間", "付款方式", "寶寶汽座&手推車", "顧客須知", "智能污漬分析", "謝謝", "您好", "按錯"];
 
 // ============== 引入依賴 ==============
+const express = require('express');
 const { createHash } = require('crypto');
 const { Client } = require('@line/bot-sdk');
 const { OpenAI } = require('openai');
@@ -115,6 +11,15 @@ const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
 
+// 初始化 Express 應用程式
+const app = express();
+app.use(express.json());
+
+// 初始化 LINE 客戶端
+const client = new Client({
+    channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
+    channelSecret: process.env.LINE_CHANNEL_SECRET
+});
 
 // 初始化 OpenAI 客戶端
 const openaiClient = new OpenAI({
@@ -1066,5 +971,3 @@ app.listen(PORT, () => {
     console.log(`伺服器正在運行，端口：${PORT}`);
     logToFile(`伺服器正在運行，端口：${PORT}`);
 });
-
-
