@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const line = require('@line/bot-sdk');
 const axios = require('axios');
+
 const keywordRules = require('./feature/keywordRules');
 
 const app = express();
@@ -11,20 +12,38 @@ const config = {
   channelSecret: process.env.LINE_CHANNEL_SECRET
 };
 
-const client = new line.Client(config); // 確保 `client` 只初始化一次
+const client = new line.Client(config);
 
-// 從 Google Sheets 讀取數據
+/**
+ * 📌 從 Google Sheets 讀取數據（使用 API Key）
+ */
 async function fetchSheetsData() {
   try {
-    const res = await axios.get(process.env.SHEETS_API_URL);
-    return res.data;
+    const SHEET_ID = process.env.GOOGLE_SHEETS_ID;
+    const API_KEY = process.env.SHEETS_API_KEY;
+    
+    // Google Sheets API URL
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/回應表!A:B?key=${API_KEY}`;
+    
+    const res = await axios.get(url);
+    const rows = res.data.values;
+
+    if (!rows || rows.length === 0) {
+      console.error('❌ 沒有讀取到 Google Sheets 數據');
+      return [];
+    }
+
+    // 轉換 Sheets 資料格式
+    return rows.map(row => ({ keyword: row[0], response: row[1] }));
   } catch (error) {
-    console.error("❌ 無法從 Google Sheets 取得數據：", error);
+    console.error('❌ Google Sheets 讀取失敗:', error);
     return [];
   }
 }
 
-// 透過 Sheets 回應
+/**
+ * 📌 嘗試從 Google Sheets 取得回應
+ */
 async function getSheetsReply(text) {
   const data = await fetchSheetsData();
   for (let row of data) {
@@ -35,40 +54,44 @@ async function getSheetsReply(text) {
   return null;
 }
 
-// 判斷名稱是否為地址
+/**
+ * 📌 辨識是否為地址（客戶名稱超過8個字 或 包含 路/巷/號/樓）
+ */
 function checkAddress(name) {
   return name.length > 8 || /路|巷|號|樓/.test(name);
 }
 
-// 清理會員編號與姓名，僅保留社區名稱與地址
-function extractAddress(name) {
-  return name.replace(/^\d+\s*\S+\s*/, ''); // 移除會員編號與姓名
+/**
+ * 📌 產生地址回覆
+ */
+function handleAddressResponse(name) {
+  const addressMatch = name.replace(/^\d+\s+.*?\s+/, '');
+  return `可以的😊我們會到 ${addressMatch} 收送，送達會再通知您🚚💨`;
 }
 
-// 客戶要求送回時的回應
-function handleAddressReply(userName) {
-  const address = extractAddress(userName);
-  return `可以的😊我們會送回您的 ${address}，送達後會通知您 🚚💨`;
-}
-
-// 訊息處理邏輯
+/**
+ * 📌 處理訊息回應
+ */
 async function handleMessage(event) {
   const userProfile = await client.getProfile(event.source.userId);
   const userName = userProfile.displayName;
   const text = event.message.text;
 
-  // 檢查是否為地址並符合條件
-  if (checkAddress(userName) && /(送回|送還|拿回來)/.test(text)) {
-    return client.replyMessage(event.replyToken, { type: 'text', text: handleAddressReply(userName) });
+  // 檢查客戶名稱是否包含地址資訊
+  if (checkAddress(userName)) {
+    if (/送回|送還|拿回來/.test(text)) {
+      const replyMsg = handleAddressResponse(userName);
+      return client.replyMessage(event.replyToken, { type: 'text', text: replyMsg });
+    }
   }
 
-  // 先透過 Google Sheets 自動學習的數據回應
+  // 先透過 Google Sheets 自動回應
   const sheetsReply = await getSheetsReply(text);
   if (sheetsReply) {
     return client.replyMessage(event.replyToken, { type: 'text', text: sheetsReply });
   }
 
-  // 使用本地關鍵字匹配
+  // 使用本地關鍵字回應
   for (let rule of keywordRules) {
     if (rule.keywords.some(keyword => text.includes(keyword))) {
       const response = typeof rule.response === 'function' ? rule.response(text) : rule.response;
@@ -76,16 +99,18 @@ async function handleMessage(event) {
     }
   }
 
-  // 如果是洗衣相關問題但沒有匹配關鍵字
+  // 如果是洗衣相關但沒有匹配到關鍵字
   if (/洗衣|清洗|送洗/.test(text)) {
-    return client.replyMessage(event.replyToken, { type: 'text', text: '您可以參考我們的常見問題或按『3』😊，詳細問題營業時間內線上客服會跟您回覆，謝謝您！🙏✨' });
+    return client.replyMessage(event.replyToken, { type: 'text', text: '您可以參考我們的常見問題或按『3』😊，詳細問題營業時間內線上客服會跟您回覆，謝謝您！🙏😊' });
   }
 
-  // 其他非洗衣店相關的問題不回應
+  // 不相關的問題不回應
   return;
 }
 
-// Webhook 設定
+/**
+ * 📌 LINE Webhook 設置
+ */
 app.post('/webhook', line.middleware(config), async (req, res) => {
   const events = req.body.events;
   await Promise.all(events.map(event => {
