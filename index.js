@@ -11,13 +11,20 @@ const config = {
   channelSecret: process.env.LINE_CHANNEL_SECRET
 };
 
-const client = new line.Client(config);
+const client = new line.Client(config); // 確保 `client` 只初始化一次
 
+// 從 Google Sheets 讀取數據
 async function fetchSheetsData() {
-  const res = await axios.get(process.env.SHEETS_API_URL);
-  return res.data;
+  try {
+    const res = await axios.get(process.env.SHEETS_API_URL);
+    return res.data;
+  } catch (error) {
+    console.error("❌ 無法從 Google Sheets 取得數據：", error);
+    return [];
+  }
 }
 
+// 嘗試用 Sheets 回應
 async function getSheetsReply(text) {
   const data = await fetchSheetsData();
   for (let row of data) {
@@ -28,61 +35,74 @@ async function getSheetsReply(text) {
   return null;
 }
 
+// 檢查 BOT 名稱是否包含地址
 function checkAddress(name) {
   return name.length > 8 || /路|巷|號|樓/.test(name);
 }
 
+// 生成地址回覆
 function handleAddressResponse(name) {
-  const addressMatch = name.replace(/^\d+\s+.*?\s+/, '');
-  return `可以的😊我們會到 ${addressMatch} 收送，送達會再通知您🚚💨`;
+  const address = name.replace(/^\d+\s+\S+\s*/, '');
+  return `可以的😊我們會到 ${address} 收送，送達會再通知您🚚💨`;
 }
 
+// 處理 LINE 訊息
 async function handleMessage(event) {
-  const userProfile = await client.getProfile(event.source.userId);
-  const userName = userProfile.displayName;
-  const text = event.message.text;
+  try {
+    const userProfile = await client.getProfile(event.source.userId);
+    const userName = userProfile.displayName;
+    const text = event.message.text;
 
-  // 地址自動回覆判斷
-  if (checkAddress(userName) && /(送回|送還|拿回來)/.test(text)) {
-    const replyMsg = handleAddressResponse(userName);
-    return client.replyMessage(event.replyToken, { type: 'text', text: replyMsg });
-  }
-
-  // 優先 Sheets 自動回應
-  const sheetsReply = await getSheetsReply(text);
-  if (sheetsReply) {
-    return client.replyMessage(event.replyToken, { type: 'text', text: sheetsReply });
-  }
-
-  // 本地關鍵字回覆
-  for (let rule of keywordRules) {
-    if (rule.keywords.some(keyword => text.includes(keyword))) {
-      const response = typeof rule.response === 'function' ? rule.response(text) : rule.response;
-      return client.replyMessage(event.replyToken, { type: 'text', text: response });
+    // 偵測是否為地址並觸發回應
+    if (checkAddress(userName) && /送回|送還|拿回來/.test(text)) {
+      const replyMsg = handleAddressResponse(userName);
+      return client.replyMessage(event.replyToken, { type: 'text', text: replyMsg });
     }
-  }
 
-  // 與洗衣相關但未匹配任何規則
-  if (/洗衣|清洗|送洗/.test(text)) {
-    return client.replyMessage(event.replyToken, {
-      type: 'text',
-      text: '您可以參考我們的常見問題或按『3』😊，詳細問題營業時間內線上客服會跟您回覆，謝謝您！🙏😊'
-    });
-  }
+    // 先透過 Google Sheets 回覆
+    const sheetsReply = await getSheetsReply(text);
+    if (sheetsReply) {
+      return client.replyMessage(event.replyToken, { type: 'text', text: sheetsReply });
+    }
 
-  // 不相關內容不回覆
-  return Promise.resolve(null);
+    // 內建關鍵字回應
+    for (let rule of keywordRules) {
+      if (rule.keywords.some(keyword => text.includes(keyword))) {
+        const response = typeof rule.response === 'function' ? rule.response(text) : rule.response;
+        return client.replyMessage(event.replyToken, { type: 'text', text: response });
+      }
+    }
+
+    // 如果與洗衣相關但沒有匹配關鍵字
+    if (/洗衣|清洗|送洗/.test(text)) {
+      return client.replyMessage(event.replyToken, {
+        type: 'text',
+        text: '您可以參考我們的常見問題或按『3』😊，詳細問題營業時間內線上客服會跟您回覆，謝謝您！🙏✨'
+      });
+    }
+
+    // 無關的問題不回應
+    return;
+
+  } catch (error) {
+    console.error("❌ 處理訊息時發生錯誤：", error);
+  }
 }
 
+// 設置 LINE Webhook 端點
 app.post('/webhook', line.middleware(config), async (req, res) => {
-  const events = req.body.events;
+  try {
+    const events = req.body.events;
+    await Promise.all(events.map(event => {
+      if (event.type !== 'message' || event.message.type !== 'text') return;
+      return handleMessage(event);
+    }));
 
-  await Promise.all(events.map(event => {
-    if (event.type !== 'message' || event.message.type !== 'text') return null;
-    return handleMessage(event);
-  }));
-
-  res.status(200).end();
+    res.status(200).end();
+  } catch (error) {
+    console.error("❌ Webhook 錯誤：", error);
+    res.status(500).send("Webhook 錯誤");
+  }
 });
 
 // ============== 強制不回應列表 ==============
