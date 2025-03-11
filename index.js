@@ -24,7 +24,7 @@ async function fetchSheetsData() {
   }
 }
 
-// 嘗試用 Sheets 回應
+// 透過 Sheets 回應
 async function getSheetsReply(text) {
   const data = await fetchSheetsData();
   for (let row of data) {
@@ -35,74 +35,65 @@ async function getSheetsReply(text) {
   return null;
 }
 
-// 檢查 BOT 名稱是否包含地址
+// 判斷名稱是否為地址
 function checkAddress(name) {
   return name.length > 8 || /路|巷|號|樓/.test(name);
 }
 
-// 生成地址回覆
-function handleAddressResponse(name) {
-  const address = name.replace(/^\d+\s+\S+\s*/, '');
-  return `可以的😊我們會到 ${address} 收送，送達會再通知您🚚💨`;
+// 清理會員編號與姓名，僅保留社區名稱與地址
+function extractAddress(name) {
+  return name.replace(/^\d+\s*\S+\s*/, ''); // 移除會員編號與姓名
 }
 
-// 處理 LINE 訊息
+// 客戶要求送回時的回應
+function handleAddressReply(userName) {
+  const address = extractAddress(userName);
+  return `可以的😊我們會送回您的 ${address}，送達後會通知您 🚚💨`;
+}
+
+// 訊息處理邏輯
 async function handleMessage(event) {
-  try {
-    const userProfile = await client.getProfile(event.source.userId);
-    const userName = userProfile.displayName;
-    const text = event.message.text;
+  const userProfile = await client.getProfile(event.source.userId);
+  const userName = userProfile.displayName;
+  const text = event.message.text;
 
-    // 偵測是否為地址並觸發回應
-    if (checkAddress(userName) && /送回|送還|拿回來/.test(text)) {
-      const replyMsg = handleAddressResponse(userName);
-      return client.replyMessage(event.replyToken, { type: 'text', text: replyMsg });
-    }
-
-    // 先透過 Google Sheets 回覆
-    const sheetsReply = await getSheetsReply(text);
-    if (sheetsReply) {
-      return client.replyMessage(event.replyToken, { type: 'text', text: sheetsReply });
-    }
-
-    // 內建關鍵字回應
-    for (let rule of keywordRules) {
-      if (rule.keywords.some(keyword => text.includes(keyword))) {
-        const response = typeof rule.response === 'function' ? rule.response(text) : rule.response;
-        return client.replyMessage(event.replyToken, { type: 'text', text: response });
-      }
-    }
-
-    // 如果與洗衣相關但沒有匹配關鍵字
-    if (/洗衣|清洗|送洗/.test(text)) {
-      return client.replyMessage(event.replyToken, {
-        type: 'text',
-        text: '您可以參考我們的常見問題或按『3』😊，詳細問題營業時間內線上客服會跟您回覆，謝謝您！🙏✨'
-      });
-    }
-
-    // 無關的問題不回應
-    return;
-
-  } catch (error) {
-    console.error("❌ 處理訊息時發生錯誤：", error);
+  // 檢查是否為地址並符合條件
+  if (checkAddress(userName) && /(送回|送還|拿回來)/.test(text)) {
+    return client.replyMessage(event.replyToken, { type: 'text', text: handleAddressReply(userName) });
   }
+
+  // 先透過 Google Sheets 自動學習的數據回應
+  const sheetsReply = await getSheetsReply(text);
+  if (sheetsReply) {
+    return client.replyMessage(event.replyToken, { type: 'text', text: sheetsReply });
+  }
+
+  // 使用本地關鍵字匹配
+  for (let rule of keywordRules) {
+    if (rule.keywords.some(keyword => text.includes(keyword))) {
+      const response = typeof rule.response === 'function' ? rule.response(text) : rule.response;
+      return client.replyMessage(event.replyToken, { type: 'text', text: response });
+    }
+  }
+
+  // 如果是洗衣相關問題但沒有匹配關鍵字
+  if (/洗衣|清洗|送洗/.test(text)) {
+    return client.replyMessage(event.replyToken, { type: 'text', text: '您可以參考我們的常見問題或按『3』😊，詳細問題營業時間內線上客服會跟您回覆，謝謝您！🙏✨' });
+  }
+
+  // 其他非洗衣店相關的問題不回應
+  return;
 }
 
-// 設置 LINE Webhook 端點
+// Webhook 設定
 app.post('/webhook', line.middleware(config), async (req, res) => {
-  try {
-    const events = req.body.events;
-    await Promise.all(events.map(event => {
-      if (event.type !== 'message' || event.message.type !== 'text') return;
-      return handleMessage(event);
-    }));
+  const events = req.body.events;
+  await Promise.all(events.map(event => {
+    if (event.type !== 'message' || event.message.type !== 'text') return;
+    return handleMessage(event);
+  }));
 
-    res.status(200).end();
-  } catch (error) {
-    console.error("❌ Webhook 錯誤：", error);
-    res.status(500).send("Webhook 錯誤");
-  }
+  res.status(200).end();
 });
 
 // ============== 強制不回應列表 ==============
@@ -116,11 +107,6 @@ const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
 
-// 初始化 LINE 客戶端
-const client = new Client({
-    channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
-    channelSecret: process.env.LINE_CHANNEL_SECRET
-});
 
 // 初始化 OpenAI 客戶端
 const openaiClient = new OpenAI({
