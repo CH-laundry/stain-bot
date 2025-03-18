@@ -79,11 +79,18 @@ async function handleMessage(event) {
     const text = event.message.text;
     console.log('收到的消息内容:', text);
 
-    // 检查消息模式
+// 如果处于待机模式，跳过
 // if (event.mode === 'standby') {
 //   console.log('⚠️ 机器人处于待机模式，无法回复消息');
 //   return;
 // }
+
+// 检查收到的事件对象
+console.log('收到的事件:', JSON.stringify(event, null, 2));  // 打印整个事件对象
+console.log('Reply Token:', event.replyToken);  // 确保打印 replyToken
+
+// 打印 Webhook 请求中的数据
+console.log('Raw Body:', req.body);  // 打印接收到的请求体
 
 
     // 验证replyToken
