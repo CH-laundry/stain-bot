@@ -80,10 +80,11 @@ async function handleMessage(event) {
     console.log('收到的消息内容:', text);
 
     // 检查消息模式
-    if (event.mode === 'standby') {
-      console.log('⚠️ 机器人处于待机模式，无法回复消息');
-      return;
-    }
+// if (event.mode === 'standby') {
+//   console.log('⚠️ 机器人处于待机模式，无法回复消息');
+//   return;
+// }
+
 
     // 验证replyToken
     if (!event.replyToken || event.replyToken === '00000000000000000000000000000000') {
