@@ -15,6 +15,36 @@ require('dotenv').config();
 const app = express();
 app.use(express.json());
 
+const axios = require('axios');  // 使用 axios 發送 HTTP 請求
+
+// 定義 fetchSheetsData 函數
+async function fetchSheetsData() {
+  try {
+    const SHEET_ID = process.env.GOOGLE_SHEETS_ID;  // Google Sheets 的 ID
+    const API_KEY = process.env.SHEETS_API_KEY;    // Google Sheets API 金鑰
+
+    // 發送請求到 Google Sheets API
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/回應表!A:B?key=${API_KEY}`;
+    const res = await axios.get(url);  // 使用 axios 發送 GET 請求
+    const rows = res.data.values;  // 取得所有資料行數據
+
+    if (!rows || rows.length === 0) {
+      console.error('❌ 沒有讀取到 Google Sheets 資料');
+      return [];  // 沒有資料則返回空陣列
+    }
+
+    // 返回每行的關鍵字和回應
+    return rows.map(row => ({
+      keyword: row[0],  // 第一列是關鍵字
+      response: row[1]  // 第二列是回應
+    }));
+  } catch (error) {
+    console.error('❌ Google Sheets讀取失敗:', error);
+    return [];  // 如果發生錯誤，返回空陣列
+  }
+}
+
+
 // 初始化 LINE 客戶端
 const client = new Client({
     channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
