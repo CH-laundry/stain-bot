@@ -1,12 +1,16 @@
-
 // ============== 強制不回應列表 ==============
-const ignoredKeywords = ["常見問題", "服務價目&儲值優惠", "到府收送", "店面地址&營業時間", "付款方式", "寶寶汽座&手推車", "顧客須知", "智能污漬分析", "謝謝", "您好", "按錯"];
+const ignoredKeywords = [
+  "常見問題", "服務價目&儲值優惠", "到府收送", "店面地址&營業時間", 
+  "付款方式", "寶寶汽座&手推車", "顧客須知", "智能污漬分析", "謝謝", 
+  "您好", "按錯"
+];
 
 // ============== 引入依賴 ==============
 const express = require('express');
 const { createHash } = require('crypto');
 const { Client } = require('@line/bot-sdk');
 const { OpenAI } = require('openai');
+const axios = require('axios');  // 使用 axios 發送 HTTP 請求
 const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
@@ -14,36 +18,6 @@ require('dotenv').config();
 // 初始化 Express 應用程式
 const app = express();
 app.use(express.json());
-
-const axios = require('axios');  // 使用 axios 發送 HTTP 請求
-
-// 定義 fetchSheetsData 函數
-async function fetchSheetsData() {
-  try {
-    const SHEET_ID = process.env.GOOGLE_SHEETS_ID;  // Google Sheets 的 ID
-    const API_KEY = process.env.SHEETS_API_KEY;    // Google Sheets API 金鑰
-
-    // 發送請求到 Google Sheets API
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/回應表!A:B?key=${API_KEY}`;
-    const res = await axios.get(url);  // 使用 axios 發送 GET 請求
-    const rows = res.data.values;  // 取得所有資料行數據
-
-    if (!rows || rows.length === 0) {
-      console.error('❌ 沒有讀取到 Google Sheets 資料');
-      return [];  // 沒有資料則返回空陣列
-    }
-
-    // 返回每行的關鍵字和回應
-    return rows.map(row => ({
-      keyword: row[0],  // 第一列是關鍵字
-      response: row[1]  // 第二列是回應
-    }));
-  } catch (error) {
-    console.error('❌ Google Sheets讀取失敗:', error);
-    return [];  // 如果發生錯誤，返回空陣列
-  }
-}
-
 
 // 初始化 LINE 客戶端
 const client = new Client({
@@ -64,8 +38,39 @@ const store = new Map();
 const MAX_USES_PER_USER = process.env.MAX_USES_PER_USER || 2;
 const MAX_USES_TIME_PERIOD = process.env.MAX_USES_TIME_PERIOD || 604800; // 604800秒為一周
 
-const COMBINED_INQUIRY_DATA = [
-    {
+// ============== Google Sheets 資料處理 ==============
+// 定義 fetchSheetsData 函數
+async function fetchSheetsData() {
+  try {
+    const SHEET_ID = process.env.GOOGLE_SHEETS_ID;  // Google Sheets 的 ID
+    const API_KEY = process.env.SHEETS_API_KEY;    // Google Sheets API 金鑰
+
+    // 發送請求到 Google Sheets API
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/回應表!A:B?key=${API_KEY}`;
+    const res = await axios.get(url);  // 使用 axios 發送 GET 請求
+    const rows = res.data.values;  // 取得所有資料行數據
+
+    if (!rows || rows.length === 0) {
+      console.error('❌ 沒有讀取到 Google Sheets 資料');
+      return [];  // 沒有資料則返回空陣列
+    }
+
+    // 過濾掉不需要回應的關鍵字
+    return rows.filter(row => {
+      const keyword = row[0];  // 假設第一列是關鍵字
+      return !ignoredKeywords.includes(keyword);  // 只保留不在 ignoredKeywords 裡的關鍵字
+    }).map(row => ({
+      keyword: row[0],  // 第一列是關鍵字
+      response: row[1]  // 第二列是回應
+    }));
+  } catch (error) {
+    console.error('❌ Google Sheets讀取失敗:', error);
+    return [];  // 如果發生錯誤，返回空陣列
+  }
+}
+
+// 這裡繼續處理其他訊息回應邏輯，例如用戶的訊息與回應等...
+
         "zh-TW": {
             keywords: ["價格", "价錢", "收費", "費用", "多少錢", "價位", "算錢", "清洗費", "價目表", "這件多少", "這個價格", "鞋子費用", "洗鞋錢", "要多少", "怎麼算", "窗簾費用"],
             response: "可以參考我們的服務價目表或由客服跟您回覆📋"
