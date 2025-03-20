@@ -651,211 +651,48 @@ function detectInquiryType(text) {
     return null; // No match found
 }
 
-// 初始化Sheets数据
+// 定義 sheetsReply 物件，包含資料和兩個主要方法
+let sheetsReply = {
+  data: [],  // 儲存從 Google Sheets 讀取的資料
+
+  // 用來加載資料的函數
+  async loadData() {
+    try {
+      // 從 Google Sheets 讀取資料
+      this.data = await fetchSheetsData(); // fetchSheetsData 是你之前定義的函數
+      console.log('✅ Google Sheets資料加載成功');
+    } catch (error) {
+      console.error('❌ Google Sheets資料加載失敗:', error);
+    }
+  },
+
+  // 根據輸入的文字來找回應
+  getReply(text) {
+    // 在已加載的資料中查找是否有匹配的關鍵字
+    const matchedRow = this.data.find(row => text.includes(row.keyword)); // 假設每行有一個 'keyword' 和 'response'
+    return matchedRow ? matchedRow.response : null;  // 若找到匹配的回應則返回，否則返回 null
+  }
+};
+
+// 初始化 Google Sheets 資料
 (async () => {
   try {
-    await sheetsReply.loadData();
-    console.log('✅ Google Sheets数据加载成功');
+    await sheetsReply.loadData();  // 加載資料
+    console.log('✅ Google Sheets資料初始化成功');
     
-    // 设置定期更新
+    // 設置定期更新資料
     setInterval(async () => {
       try {
-        await sheetsReply.loadData();
-        console.log('✅ Google Sheets数据已更新');
+        await sheetsReply.loadData();  // 每30分鐘重新加載資料
+        console.log('✅ Google Sheets資料已更新');
       } catch (error) {
-        console.error('❌ Google Sheets数据更新失败:', error);
+        console.error('❌ Google Sheets資料更新失敗:', error);
       }
-    }, 30 * 60 * 1000); // 每30分钟更新一次
+    }, 30 * 60 * 1000); // 每30分鐘更新一次資料
   } catch (error) {
-    console.error('❌ 初始化Google Sheets数据失败:', error);
+    console.error('❌ 初始化Google Sheets資料失敗:', error);
   }
 })();
-
-// ✅ 從 Google Sheets 讀取關鍵字回應
-async function fetchSheetsData() {
-  try {
-    const SHEET_ID = process.env.GOOGLE_SHEETS_ID;
-    const API_KEY = process.env.SHEETS_API_KEY;
-    
-    // Google Sheets API 讀取網址
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/回應表!A:B?key=${API_KEY}`;
-    
-    const res = await axios.get(url);
-    const rows = res.data.values;
-
-    if (!rows || rows.length === 0) {
-      console.error('❌ 沒有讀取到 Google Sheets 數據');
-      return [];
-    }
-
-    return rows.map(row => ({ keyword: row[0], response: row[1] }));
-  } catch (error) {
-    console.error('❌ Google Sheets 讀取失敗:', error);
-    return [];
-  }
-}
-
-// ✅ 處理 LINE 訊息
-async function handleMessage(event) {
-  try {
-    console.log('\n=== 开始处理消息 ===');
-    console.log('收到的事件:', JSON.stringify(event, null, 2));
-    console.log('Reply Token:', event.replyToken);
-    console.log('消息模式:', event.mode);
-    
-    const text = event.message.text;
-    console.log('收到的消息内容:', text);
-
-    // 检查消息模式
-    if (event.mode === 'standby') {
-      console.log('⚠️ 机器人处于待机模式，无法回复消息');
-      return;
-    }
-
-    // 验证replyToken
-    if (!event.replyToken || event.replyToken === '00000000000000000000000000000000') {
-      console.log('收到无效的replyToken，跳过处理');
-      return;
-    }
-
-    let replyMessage = null;
-
-    // 🔍 若使用者名稱包含地址，並且內容有「送回」「送還」「拿回來」，則回應地址
-    if (AddressDetector.isAddress(event.source.userId) && /(送回|送還|拿回來)/.test(text)) {
-      console.log('检测到地址和送回请求');
-      replyMessage = AddressDetector.formatResponse(event.source.userId);
-    }
-
-    // 1. 首先检查是否在Sheets中有匹配的回复
-    if (!replyMessage) {
-      console.log('检查Sheets回复...');
-      const sheetsResponse = sheetsReply.getReply(text);
-      if (sheetsResponse && sheetsResponse !== '📥 已记录问题将转交客服处理') {
-        console.log('找到Sheets回复:', sheetsResponse);
-        replyMessage = sheetsResponse;
-      }
-    }
-
-    // 2. 如果Sheets没有匹配，检查动态收送回复
-    if (!replyMessage && /(收件|取件|來拿|幫忙收|幫忙拿|預約|送來|送出|要洗|來收|來取|送洗)/.test(text)) {
-      console.log('检测到收送请求');
-      replyMessage = handleDynamicReceiving(text);
-      console.log('动态回复:', replyMessage);
-    }
-
-    // 3. 检查关键字规则
-    if (!replyMessage) {
-      console.log('检查关键字规则...');
-      for (let rule of keywordRules) {
-        if (rule.keywords.some(keyword => text.includes(keyword))) {
-          console.log('匹配到关键字规则:', rule.keywords);
-          replyMessage = typeof rule.response === 'function' 
-            ? rule.response(text) 
-            : rule.response;
-          console.log('规则回复:', replyMessage);
-          break;
-        }
-      }
-    }
-
-    // 4. 检查是否与洗衣相关
-    if (!replyMessage && isLaundryRelatedText(text)) {
-      console.log('检测到洗衣相关文本');
-      replyMessage = '您可以參考我們的常見問題或按『3』😊，詳細問題營業時間內線上客服會跟您回覆，謝謝您！🙏😊';
-    }
-
-    // 如果有回复消息，发送回复
-    if (replyMessage) {
-      console.log('准备发送回复:', replyMessage);
-      const response = await client.replyMessage(event.replyToken, {
-        type: 'text',
-        text: replyMessage
-      });
-      console.log('回复发送成功:', response);
-    } else {
-      console.log('没有匹配的回复规则，不发送回复');
-    }
-
-  } catch (error) {
-    console.error('\n=== 处理消息时出错 ===');
-    console.error('错误类型:', error.constructor.name);
-    console.error('错误信息:', error.message);
-    if (error.response) {
-      console.error('LINE API响应:', {
-        status: error.response.status,
-        headers: error.response.headers,
-        data: error.response.data
-      });
-    }
-    // 出错时不重试，避免重复发送
-    return;
-  }
-}
-
-// 添加body-parser中间件
-app.use(express.json());
-
-// ✅ 設置 Webhook
-app.post('/webhook', (req, res, next) => {
-  try {
-    console.log('\n=== Webhook Request Debug ===');
-    console.log('Headers:', JSON.stringify(req.headers, null, 2));
-    console.log('Raw Body:', req.body);
-    
-    // 手动验证签名
-    const signature = req.headers['x-line-signature'];
-    const channelSecret = process.env.LINE_CHANNEL_SECRET;
-    const body = JSON.stringify(req.body);
-    
-    if (!signature) {
-      throw new Error('No signature provided');
-    }
-    
-    if (!channelSecret) {
-      throw new Error('No channel secret configured');
-    }
-    
-    const expectedSignature = crypto
-      .createHmac('SHA256', channelSecret)
-      .update(Buffer.from(body))
-      .digest('base64');
-      
-    console.log('\n=== Signature Verification ===');
-    console.log('Channel Secret:', channelSecret);
-    console.log('Request Body:', body);
-    console.log('Expected Signature:', expectedSignature);
-    console.log('Received Signature:', signature);
-    console.log('Signatures Match:', expectedSignature === signature);
-    
-    if (expectedSignature !== signature) {
-      throw new Error('Signature validation failed');
-    }
-    
-    next();
-  } catch (error) {
-    console.error('\n=== Error in Webhook Middleware ===');
-    console.error('Error:', error);
-    res.status(400).json({ error: error.message });
-  }
-}, async (req, res) => {
-  try {
-  const events = req.body.events;
-    if (!events || !Array.isArray(events)) {
-      throw new Error('Invalid events format');
-    }
-    
-  await Promise.all(events.map(event => {
-    if (event.type !== 'message' || event.message.type !== 'text') return;
-    return handleMessage(event);
-  }));
-
-  res.status(200).end();
-  } catch (error) {
-    console.error('\n=== Error in Message Handler ===');
-    console.error('Error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
 
 
 // ============== 判斷是否與洗衣店相關 (使用關鍵字列表) ============== // Keep this function, used before calling AI
