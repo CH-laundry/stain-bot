@@ -651,50 +651,6 @@ function detectInquiryType(text) {
     return null; // No match found
 }
 
-// 定義 sheetsReply 物件，包含資料和兩個主要方法
-let sheetsReply = {
-  data: [],  // 儲存從 Google Sheets 讀取的資料
-
-  // 用來加載資料的函數
-  async loadData() {
-    try {
-      // 從 Google Sheets 讀取資料
-      this.data = await fetchSheetsData(); // fetchSheetsData 是你之前定義的函數
-      console.log('✅ Google Sheets資料加載成功');
-    } catch (error) {
-      console.error('❌ Google Sheets資料加載失敗:', error);
-    }
-  },
-
-  // 根據輸入的文字來找回應
-  getReply(text) {
-    // 在已加載的資料中查找是否有匹配的關鍵字
-    const matchedRow = this.data.find(row => text.includes(row.keyword)); // 假設每行有一個 'keyword' 和 'response'
-    return matchedRow ? matchedRow.response : null;  // 若找到匹配的回應則返回，否則返回 null
-  }
-};
-
-// 初始化 Google Sheets 資料
-(async () => {
-  try {
-    await sheetsReply.loadData();  // 加載資料
-    console.log('✅ Google Sheets資料初始化成功');
-    
-    // 設置定期更新資料
-    setInterval(async () => {
-      try {
-        await sheetsReply.loadData();  // 每30分鐘重新加載資料
-        console.log('✅ Google Sheets資料已更新');
-      } catch (error) {
-        console.error('❌ Google Sheets資料更新失敗:', error);
-      }
-    }, 30 * 60 * 1000); // 每30分鐘更新一次資料
-  } catch (error) {
-    console.error('❌ 初始化Google Sheets資料失敗:', error);
-  }
-})();
-
-
 // ============== 判斷是否與洗衣店相關 (使用關鍵字列表) ============== // Keep this function, used before calling AI
 function isLaundryRelatedText(text) {
     const lowerText = text.toLowerCase();
@@ -998,8 +954,6 @@ app.post('/webhook', async (req, res) => {
         logToFile(`全局錯誤: ${err}(User ID: ${userId})`);
     }
 });
-
-
 
 // ============== 下載日誌文件 ==============
 app.get('/log', (req, res) => {
