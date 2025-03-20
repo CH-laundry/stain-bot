@@ -1,54 +1,25 @@
 
-// ============== 強制不回應列表 ==============
-const ignoredKeywords = [
-  "常見問題", "服務價目&儲值優惠", "到府收送", "店面地址&營業時間", 
-  "付款方式", "寶寶汽座&手推車", "顧客須知", "智能污漬分析", "謝謝", 
-  "您好", "按錯"
-];
-
-// ============== 引入依賴 ==============
-const express = require('express');
-const { createHash } = require('crypto');
-const { Client } = require('@line/bot-sdk');
-const { OpenAI } = require('openai');
 const axios = require('axios');  // 使用 axios 發送 HTTP 請求
-const fs = require('fs');
-const path = require('path');
-require('dotenv').config();
 
-// 初始化 Express 應用程式
-const app = express();
-app.use(express.json());
-
-// 初始化 LINE 客戶端
-const client = new Client({
-    channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
-    channelSecret: process.env.LINE_CHANNEL_SECRET
-});
-
-// 初始化 OpenAI 客戶端
-const openaiClient = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY
-});
-
-// 用戶狀態存儲
-const userState = {};
-const store = new Map();
-
-// 設置最大使用次數和時間週期
-const MAX_USES_PER_USER = process.env.MAX_USES_PER_USER || 2;
-const MAX_USES_TIME_PERIOD = process.env.MAX_USES_TIME_PERIOD || 604800; // 604800秒為一周
-
-// ============== Google Sheets 資料處理 ==============
 // 定義 fetchSheetsData 函數
 async function fetchSheetsData() {
   try {
     const SHEET_ID = process.env.GOOGLE_SHEETS_ID;  // Google Sheets 的 ID
     const API_KEY = process.env.SHEETS_API_KEY;    // Google Sheets API 金鑰
 
+    // 檢查環境變數是否正確加載
+    console.log('SHEET_ID:', SHEET_ID);
+    console.log('API_KEY:', API_KEY);
+
     // 發送請求到 Google Sheets API
     const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/回應表!A:B?key=${API_KEY}`;
     const res = await axios.get(url);  // 使用 axios 發送 GET 請求
+
+    if (res.status !== 200) {
+      console.error(`❌ API 請求失敗，狀態碼: ${res.status}`);
+      return [];
+    }
+
     const rows = res.data.values;  // 取得所有資料行數據
 
     if (!rows || rows.length === 0) {
@@ -69,8 +40,6 @@ async function fetchSheetsData() {
     return [];  // 如果發生錯誤，返回空陣列
   }
 }
-
-// 這裡繼續處理其他訊息回應邏輯，例如用戶的訊息與回應等...
 
 
 const COMBINED_INQUIRY_DATA = [
