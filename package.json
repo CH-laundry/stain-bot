@@ -18,6 +18,5 @@
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
-    "googleapis": "^108.0.0"
   }
 } 
