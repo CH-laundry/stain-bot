@@ -3,10 +3,18 @@ const path = require('path');
 
 // 创建授权客户端
 function getAuthClient() {
+    console.log(`========== 获取授权客户端 ==========`);
+    console.log(`客户端时间: ${new Date().toISOString()}`);
+    console.log(`当前工作目录: ${process.cwd()}`);
+    console.log(`keyFile: ${path.join(process.cwd(), 'sheet.json')}`);
+    console.log(`scopes: ${['https://www.googleapis.com/auth/spreadsheets']}`);
+    console.log(`========== 获取授权客户端结束 ==========`);
+
     const auth = new google.auth.GoogleAuth({
-        keyFile: process.env.GOOGLE_CREDENTIALS_PATH,
+        keyFile: path.join(process.cwd(), 'sheet.json'),
         scopes: ['https://www.googleapis.com/auth/spreadsheets']
     });
+
     return auth;
 }
 
