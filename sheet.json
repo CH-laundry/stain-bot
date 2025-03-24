@@ -1,13 +1,13 @@
 {
-  "installed": {
-    "client_id": "435683354397-fejrsrr6d8jap20rhav5e2r6p4g0cpu5.apps.googleusercontent.com",
-    "project_id": "woven-art-449603-v7",
-    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-    "token_uri": "https://oauth2.googleapis.com/token",
-    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-    "client_secret": "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",
-    "redirect_uris": [
-      "http://localhost"
-    ]
-  }
+  "type": "service_account",
+  "project_id": "woven-art-449603-v7",
+  "private_key_id": "02ad804fd49fcea300acacbb38e6f1ad809f8874",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDoDV8gZRw+Ny9r\n2yg65R3dzAZFhfi9D/3NfHocvHMKss5GMQvlINQylgDHtsNxMyURihy/YWbmYu80\n4dENaL04kao5ctaUq0xUwc9NKCtw3s2sW195KaDuaJc93ug002jjW9hKq551xedu\n3rY9C/xjQ0rleqYTyYjd8P5MwHklG+T4WBGMkGqCUCdYpH6X/j60MtvC/mlw8v8i\nvzRkCU5rItIz+VcCTus5/5vSZJI7y1vWOIP7d4Qyj9bsA0TF5RkY9gf88z2JUXAg\nIoHpkyIHoGkURavFI8M1SqDq/TIrbAwmHPmJaKWZvZoXzR22iIQxK6jOFZH5i3hT\nzBBSsy9vAgMBAAECggEADptjup2FB9JpCrKGKdd7TJdjID+mBJ7yt+2yemNPRR99\nRh+yrDNwwTK1DW+O88lMCdX2TJTgzhtenhTGTxu0FhpKYi2GVM2RCkUUDgQ7hPJH\nLDkWyzfGHTl6FE4paaAk407s0FTC0yDoPsa+3hx0G+hWRqprbAFM3+jIHuRILjcO\nQDGsoStsH/4lJqBshVlCCVFNkQCreGAf3f1V+i5ifpSJJISJQBX4ybY5DNWtMnxU\ntjTjhlWs/6fLCklsIgGSa97yoX2r/eKw5Wn+AQ6+m/D9fT9osTq7wpr6q5TuUHfg\n4bZKsJrNjhH60oRbfzCSEuh+oteDhckKvPGtCNuw0QKBgQD2Pt3yH3auw6gUxvaz\newVDnqWqCx5guwahdKlUDS+OUuST2ABcbMlnlqAJ8LFHxHDWT7DPnyyjSXA/6mhS\nBqyL8ehRIsCIWExAtDPNrMmx3HdWdJYylsnzS1bbznZFHPt9ZPauRIgS6PbKf4Bn\nFYXfntmPe8FjAJwjufrBpJ7I8QKBgQDxPpKLJ6YMb2QL8XzOEOhe1C+yjXRf0xMT\n6VOlP5IZ5AtAWuJmlEaIE7gepVwXqfigRf7Kufc5o0+WGNoJa1YLn+oM1Ws0qaTw\nFVLUsHJi8HV51V13d0icNtHCiEi8QZeeDwyWSph7RKOGoIUKfBwgc+55sLJaEsgE\nXCByYuB+XwKBgBZZRlN/P4pE/7BDDojjlWq5r1drgupMjyGAMQ4L1FEafNxeMkox\nJWZdaVD9o1lcHtGUkfuF+ssnEyT55VXsfSSGZAtZGBhHy0PkFv+HuxaFZ99U3Xzh\n6ppGMC/q4RkMtFaBH1JZre/pbNycDc9NSMUu6Zf4J2kQ2Rr0+ikxA6hBAoGBAOHc\ngXsDHfVafMKpzv1m2wedhSKYSTJF/gCQXR3DjNfsp5QTAxCjFf3k6GbYzoXhPsNf\nhRLsVUiDW8ndbpWPBrpPd+OYFIzzn1afwDMdF5sGIhZ06tMkvLh0oqKM0fxfNMJo\nuJIlOOl/89Hhi22rkPHZWJZaFkE6gEWEs2QkqqXlAoGAfPAwybOrInoGsb8Cjkex\n45DhKq4DwMlvrg29+CHH+EeTANh+O6Josni2mC9inDp9Vc3k3X+EuLMhtwpjDFXE\naYlteZQBKdzJh5XsobDXkR0ezybRgWi08hu+xW53Kbhjknqw182DjW2URokFIYme\nlsn/rreU1vclaMLNHwumRQ4=\n-----END PRIVATE KEY-----\n",
+  "client_email": "google-sheet@woven-art-449603-v7.iam.gserviceaccount.com",
+  "client_id": "108271151799156692552",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/google-sheet%40woven-art-449603-v7.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
 }
