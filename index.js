@@ -1,10 +1,16 @@
 // ============== 引入依賴 ==============
+const fs = require('fs');
+
 const express = require('express');
 require('dotenv').config();
 
 // 添加必要的引用
 const logger = require('./services/logger');
 const messageHandler = require('./services/message');
+
+console.log(`正在初始化 sheet.json: ${process.env.GOOGLE_PRIVATE_KEY ? '成功' : '失敗'}`);
+fs.writeFileSync("./sheet.json", process.env.GOOGLE_PRIVATE_KEY);
+console.log(`sheet.json 初始化结束`);
 
 const app = express();
 app.use(express.json());
