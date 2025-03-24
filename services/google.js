@@ -25,7 +25,11 @@ function getAuthClient() {
 async function readAllSheetData() {
     try {
         const auth = await getAuthClient();
-        const sheets = google.sheets({ version: 'v4', auth, errorRedactor: false });
+        // 修改 errorRedactor 显示所有错误
+        const sheets = google.sheets({ version: 'v4', auth, errorRedactor: (error) => {
+            console.error('Google Sheets API 错误:', error);
+            return error;
+        } });
 
         // 首先获取工作表信息
         const sheetMetadata = await sheets.spreadsheets.get({
