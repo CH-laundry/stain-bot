@@ -25,11 +25,11 @@ function getAuthClient() {
 async function readAllSheetData() {
     try {
         const auth = await getAuthClient();
-        const sheets = google.sheets({ version: 'v4', auth });
+        const sheets = google.sheets({ version: 'v4', auth, errorRedactor: false });
 
         // 首先获取工作表信息
         const sheetMetadata = await sheets.spreadsheets.get({
-            spreadsheetId: process.env.GOOGLE_SHEETS_ID
+            spreadsheetId: process.env.GOOGLE_SHEETS_ID,
         });
 
         // 获取第一个工作表的标题
