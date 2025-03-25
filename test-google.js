@@ -1,13 +1,5 @@
 require('dotenv').config();
 
-const { addCustomerInfo } = require('./services/google');
+const addressDetector = require('./utils/address');
 
-async function test() {
-  await addCustomerInfo({
-    userId: 'U4af49806ea6bd7bd117223c51785d483',
-    userName: 'test',
-    address: '台北市中山區'
-  })
-}
-
-test();
+console.log(addressDetector.extractAddress('吳芷薇 0988245855 新北市板橋區華江一路37號11樓 一件單人被'));
