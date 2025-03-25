@@ -201,16 +201,16 @@ class MessageHandler {
         await client.pushMessage(userId, {
             type: 'text',
             text: '營業時間會馬上查詢您的清洗進度😊，並回覆您！或是您可以這邊線上查詢 C.H精緻洗衣 謝謝您🔍',
-            // quickReply: {
-            //     items: [{
-            //         type: "action",
-            //         action: {
-            //             type: "uri",
-            //             label: "C.H精緻洗衣",
-            //             uri: "https://liff.line.me/2004612704-JnzA1qN6"
-            //         }
-            //     }]
-            // }
+            quickReply: {
+                items: [{
+                    type: "action",
+                    action: {
+                        type: "uri",
+                        label: "C.H精緻洗衣",
+                        uri: "https://liff.line.me/2004612704-JnzA1qN6"
+                    }
+                }]
+            }
         });
     }
 
