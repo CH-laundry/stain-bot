@@ -1,14 +1,34 @@
+const fs = require("fs");
+const path = require("path");
+const csv = require("csv-parser");
 const { getEmbedding } = require("./openai");
-const { fetchFAQFromSheet } = require("./faqFetcher");
 
-let faqList = [];
+let replyData = [];
 let embeddings = [];
 
-async function loadFAQs() {
-  faqList = await fetchFAQFromSheet();
-  embeddings = await Promise.all(
-    faqList.map(item => getEmbedding(item.keywords + " " + item.answer))
-  );
+async function loadReplyCSV() {
+  const filePath = path.join(__dirname, "..", "reply.csv");
+  replyData = [];
+
+  return new Promise((resolve, reject) => {
+    fs.createReadStream(filePath)
+      .pipe(csv())
+      .on("data", (row) => {
+        if (row["回應內容"] && row["負責詞列表（更多寫法）"]) {
+          replyData.push({
+            keywords: row["負責詞列表（更多寫法）"],
+            answer: row["回應內容"]
+          });
+        }
+      })
+      .on("end", async () => {
+        embeddings = await Promise.all(
+          replyData.map((item) => getEmbedding(item.keywords + " " + item.answer))
+        );
+        resolve();
+      })
+      .on("error", reject);
+  });
 }
 
 function cosineSimilarity(vec1, vec2) {
@@ -18,24 +38,39 @@ function cosineSimilarity(vec1, vec2) {
   return dot / (norm1 * norm2);
 }
 
-async function findSimilarAnswer(userInput, threshold = 0.85) {
-  if (faqList.length === 0 || embeddings.length === 0) {
-    await loadFAQs();
+/**
+ * 傳入 userInput，找語意相近的表格回答（若分數不夠高，回 null → 交給 GPT）
+ * @param {string} userInput
+ * @returns {Promise<{answer: string, source: string} | null>}
+ */
+async function findSimilarAnswer(userInput) {
+  if (replyData.length === 0 || embeddings.length === 0) {
+    await loadReplyCSV();
   }
 
-  const inputVec = await getEmbedding(userInput);
+  const userVec = await getEmbedding(userInput);
+  let bestIndex = 0;
   let bestScore = -1;
-  let bestAnswer = null;
 
-  embeddings.forEach((vec, i) => {
-    const score = cosineSimilarity(inputVec, vec);
+  embeddings.forEach((vec, index) => {
+    const score = cosineSimilarity(userVec, vec);
     if (score > bestScore) {
       bestScore = score;
-      bestAnswer = faqList[i].answer;
+      bestIndex = index;
     }
   });
 
-  return bestScore >= threshold ? bestAnswer : null;
+  const threshold = 0.9;
+  if (bestScore >= threshold) {
+    return {
+      answer: replyData[bestIndex].answer,
+      source: "semantic"
+    };
+  }
+
+  return null; // 語意分數不夠高，交給 GPT 回答
 }
 
-module.exports = { findSimilarAnswer };
+module.exports = {
+  findSimilarAnswer
+};
