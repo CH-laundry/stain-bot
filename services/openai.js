@@ -1,34 +1,15 @@
 const { OpenAI } = require('openai');
-const { google } = require("googleapis");
-const path = require("path");
 
-// 初始化 OpenAI 客戶端
+// 初始化 OpenAI 客户端
 const openaiClient = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY
 });
 
-// ✅ GPT AI 客服回覆（自然語氣 + 表情符號）
-async function getAIResponse(text) {
-    const aiResponse = await openaiClient.chat.completions.create({
-        model: 'gpt-4',
-        messages: [{
-            role: 'system',
-            content: '你是一個洗衣店客服，回答需滿足：1.用口語化中文 2.結尾加1個表情 3.禁用專業術語 4.不提及時間長短 5.無法回答時不回應。如果訊息與洗衣店無關（如「謝謝」、「您好」、「按錯」等），請不要回應。'
-        }, {
-            role: 'user',
-            content: text
-        }]
-    });
-
-    const reply = aiResponse.choices[0].message.content;
-    if (reply) {
-        await logLearningEntry(text, reply);
-    }
-
-    return reply;
-}
-
-// ✅ 污漬圖片分析功能（回傳完整分析內容）
+/**
+ * 智能污渍分析服务
+ * @param {Buffer} imageBuffer - 图片buffer
+ * @returns {Promise<string>} 分析结果
+ */
 async function analyzeStainWithAI(imageBuffer) {
     const base64Image = imageBuffer.toString('base64');
 
@@ -63,46 +44,40 @@ async function analyzeStainWithAI(imageBuffer) {
         }]
     });
 
-    let result = openaiResponse.choices[0].message.content;
-    if (!result.endsWith('確保最佳效果。')) {
-        result += '\n我們會根據材質特性進行適當清潔，確保最佳效果。';
+    // 处理分析结果
+    let analysisResult = openaiResponse.choices[0].message.content
+        .replace(/\*\*/g, '')
+        .replace(/我們會以不傷害材質盡量做清潔處理。/g, '');
+
+    // 确保结尾格式统一
+    if (!analysisResult.endsWith('確保最佳效果。')) {
+        analysisResult += '\n我們會根據材質特性進行適當清潔，確保最佳效果。';
     }
 
-    return result;
+    return analysisResult;
 }
 
-// ✅ 回答成功 → 自動記錄學習資料到 Google Sheets
-const auth = new google.auth.GoogleAuth({
-    keyFile: path.join(__dirname, "../applied-pager-449804-c6-a6aa3340d8da.json"),
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"]
-});
+/**
+ * AI客服回应服务
+ * @param {string} text - 用户输入文本
+ * @returns {Promise<string>} AI回应内容
+ */
+async function getAIResponse(text) {
+    const aiResponse = await openaiClient.chat.completions.create({
+        model: 'gpt-4',
+        messages: [{
+            role: 'system',
+            content: '你是一個洗衣店客服，回答需滿足：1.用口語化中文 2.結尾加1個表情 3.禁用專業術語 4.不提及時間長短 5.無法回答時不回應。如果訊息與洗衣店無關（如「謝謝」、「您好」、「按錯」等），請不要回應。'
+        }, {
+            role: 'user',
+            content: text
+        }]
+    });
 
-const SPREADSHEET_ID = "1Cfavtl8HGpQDeibPi-qeUOqbfuFKTM68kUAjR6uQYVI";
-const SHEET_NAME = "工作表1";
-
-async function logLearningEntry(question, answer) {
-    try {
-        const client = await auth.getClient();
-        const sheets = google.sheets({ version: "v4", auth: client });
-
-        const timestamp = new Date().toISOString().replace("T", " ").substring(0, 19);
-        const row = [question, answer, "AI生成", timestamp];
-
-        await sheets.spreadsheets.values.append({
-            spreadsheetId: SPREADSHEET_ID,
-            range: `${SHEET_NAME}!A:D`,
-            valueInputOption: "USER_ENTERED",
-            requestBody: { values: [row] }
-        });
-
-        console.log("✅ 已寫入學習表：", question);
-    } catch (error) {
-        console.error("❌ 學習記錄寫入失敗：", error.message);
-    }
+    return aiResponse.choices[0].message.content;
 }
 
 module.exports = {
-    getAIResponse,
     analyzeStainWithAI,
-    logLearningEntry
+    getAIResponse
 };
