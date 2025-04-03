@@ -65,8 +65,7 @@ async function analyzeStainWithAI(imageBuffer) {
 
     let result = openaiResponse.choices[0].message.content;
     if (!result.endsWith('確保最佳效果。')) {
-        result += '
-我們會根據材質特性進行適當清潔，確保最佳效果。';
+        result += '\n我們會根據材質特性進行適當清潔，確保最佳效果。';
     }
 
     return result;
