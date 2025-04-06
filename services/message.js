@@ -5,6 +5,7 @@ const logger = require('./logger');
 const { createHash } = require('crypto');
 const AddressDetector = require('../utils/address');
 const { addCustomerInfo } = require('./google');
+const { recordUnansweredQuestion } = require('../googleSheets');
 
 // 初始化 LINE 客户端
 const client = new Client({
@@ -220,10 +221,20 @@ class MessageHandler {
     async handleAIResponse(userId, text, originalMessage) {
         try {
             const aiText = await getAIResponse(text);
-            if (!aiText || aiText.includes('無法回答')) {
-                logger.logToFile(`無法回答的問題: ${text}(User ID: ${userId})`);
-                return;
-            }
+           if (!aiText || aiText.includes('無法回答')) {
+    logger.logToFile(`無法回答的問題: ${text}(User ID: ${userId})`);
+
+    // ✅ 記錄到 Google Sheets
+    await recordUnansweredQuestion(text, userId);
+
+    // ✅ 回覆用戶
+    await client.pushMessage(userId, {
+        type: 'text',
+        text: '這個問題我還沒學會，小編會補上答案唷 😊'
+    });
+    return;
+}
+
 
             await client.pushMessage(userId, { 
                 type: 'text', 
