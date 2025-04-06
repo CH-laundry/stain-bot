@@ -18,6 +18,8 @@ async function getSheetsClient() {
 
 // 寫入「未學問題記錄」分頁
 async function recordUnansweredQuestion(question, userId) {
+  console.log("🟢 進入記錄新問題功能！");
+
   const sheets = await getSheetsClient();
   const now = new Date().toLocaleString("zh-TW", { timeZone: "Asia/Taipei" });
 
@@ -32,5 +34,6 @@ async function recordUnansweredQuestion(question, userId) {
 
   console.log(`✅ 已記錄新問題：「${question}」`);
 }
+
 
 module.exports = { recordUnansweredQuestion };
