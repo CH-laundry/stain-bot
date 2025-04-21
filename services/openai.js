@@ -56,15 +56,11 @@ async function getAIResponse(text) {
     });
 
     const reply = aiResponse.choices[0].message.content;
-
-    // 在回覆前加上「(智能回覆)」
-    const responseWithPrefix = `(智能回覆) ${reply}`;
-
     if (reply) {
-        await logLearningEntry(text, responseWithPrefix);
+        await logLearningEntry(text, reply);
     }
 
-    return responseWithPrefix;
+    return reply;
 }
 
 // ✅ 污漬圖片分析功能（回傳完整分析內容）
@@ -110,10 +106,7 @@ async function analyzeStainWithAI(imageBuffer) {
         result += '\n我們會根據材質特性進行適當清潔，確保最佳效果。';
     }
 
-    // 在回覆前加上「(智能回覆)」
-    const responseWithPrefix = `(智能回覆) ${result}`;
-
-    return responseWithPrefix;
+    return result;
 }
 
 // ✅ 回答成功 → 自動記錄學習資料到 Google Sheets
