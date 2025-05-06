@@ -137,7 +137,7 @@ async function logLearningEntry(question, answer) {
     } catch (error) {
         console.error("❌ 學習記錄寫入失敗：", error.message);
     }
-}
+});
 
 // ✅ 匯出模組
 module.exports = {
