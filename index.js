@@ -7,8 +7,6 @@ require('dotenv').config();
 // 添加必要的引用
 const logger = require('./services/logger');
 const messageHandler = require('./services/message');
-const { logUserMessage } = require('./openai'); // ✅ 新增這行
-
 
 console.log(`正在初始化 sheet.json: ${process.env.GOOGLE_PRIVATE_KEY ? '成功' : '失敗'}`);
 fs.writeFileSync("./sheet.json", process.env.GOOGLE_PRIVATE_KEY);
@@ -33,8 +31,6 @@ app.post('/webhook', async (req, res) => {
                 
                 if (event.message.type === 'text') {
                     userMessage = event.message.text.trim();
-                    // ✅ 加入自動記錄使用者提問到 Google Sheets
-                    await logUserMessage(userId, userMessage);
                     logger.logUserMessage(userId, userMessage);
                     await messageHandler.handleTextMessage(userId, userMessage, userMessage);
                 } else if (event.message.type === 'image') {
