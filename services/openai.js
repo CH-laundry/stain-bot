@@ -131,7 +131,7 @@ async function logLearningEntry(question, answer) {
             range: `${SHEET_NAME}!A:D`,
             valueInputOption: "USER_ENTERED",
             requestBody: { values: [row] }
-        };
+        });
 
         console.log("✅ 已寫入學習表：", question);
     } catch (error) {
