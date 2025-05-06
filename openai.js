@@ -1,12 +1,46 @@
 const { OpenAI } = require('openai');
+const { google } = require("googleapis");
+const path = require("path");
 
-// 初始化 OpenAI 客戶端
+// ✅ 初始化 OpenAI 客戶端
 const openaiClient = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY
 });
 
+// ✅ 初始化 Google Sheets 認證
+const auth = new google.auth.GoogleAuth({
+    keyFile: path.join(__dirname, "./applied-pager-449804-c6-a6aa3340d8da.json"), // 請確認這路徑正確
+    scopes: ["https://www.googleapis.com/auth/spreadsheets"]
+});
+const SPREADSHEET_ID = "1Cfavtl8HGpQDeibPi-qeUOqbfuFKTM68kUAjR6uQYVI"; // 你的表單 ID
+const USER_LOG_SHEET = "使用者提問紀錄"; // 要寫入的分頁名稱
+
 /**
- * 智能污漬分析
+ * ✅ 寫入每位客戶提問紀錄（用於自動學習與分析）
+ */
+async function logUserMessage(userId, message) {
+    try {
+        const client = await auth.getClient();
+        const sheets = google.sheets({ version: "v4", auth: client });
+
+        const timestamp = new Date().toISOString().replace("T", " ").substring(0, 19);
+        const row = [userId, message, timestamp];
+
+        await sheets.spreadsheets.values.append({
+            spreadsheetId: SPREADSHEET_ID,
+            range: `${USER_LOG_SHEET}!A:C`,
+            valueInputOption: "USER_ENTERED",
+            requestBody: { values: [row] }
+        });
+
+        console.log("📝 已記錄使用者提問：", userId);
+    } catch (error) {
+        console.error("❌ 使用者提問寫入失敗：", error.message);
+    }
+}
+
+/**
+ * ✅ 智能污漬分析
  */
 async function analyzeStainWithAI(imageBuffer) {
     const base64Image = imageBuffer.toString('base64');
@@ -47,7 +81,7 @@ async function analyzeStainWithAI(imageBuffer) {
 }
 
 /**
- * AI 客服回應（全面版，針對洗衣店所有相關問題）
+ * ✅ AI 客服回應（處理洗衣相關問題）
  */
 async function getAIResponse(text) {
     const aiResponse = await openaiClient.chat.completions.create({
@@ -84,7 +118,13 @@ async function getAIResponse(text) {
     return aiResponse.choices[0].message.content;
 }
 
+// ✅ 匯出所有功能
 module.exports = {
+    analyzeStainWithAI,
+    getAIResponse,
+    logUserMessage // ⬅️ 確保這一行存在
+};
+
     analyzeStainWithAI,
     getAIResponse
 };
