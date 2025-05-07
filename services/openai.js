@@ -1,112 +1,17 @@
 const { OpenAI } = require('openai');
-const { google } = require('googleapis');
-const path = require('path');
 
-// ✅ 初始化 OpenAI 客戶端
+// 初始化 OpenAI 客戶端
 const openaiClient = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY
 });
 
-// ✅ Google Sheets 驗證
-const auth = new google.auth.GoogleAuth({
-    keyFile: process.env.GOOGLE_SHEETS_CREDS || path.join(__dirname, '../sheet.json'),
-    scopes: ['https://www.googleapis.com/auth/spreadsheets']
-});
-
-const SPREADSHEET_ID = process.env.GOOGLE_SHEETS_ID;
-const LEARNING_SHEET_NAME = '使用者提問紀錄'; // 這部分你沒要求動，我先保留
-const LOG_SHEET_NAME = process.env.GOOGLE_SHEETS_LOG_SHEET_NAME; // ✅ 用於記錄提問的環境變數
-
-// ✅ 使用者提問記錄（這段是這次新增、修改的）
-async function logUserMessage(userId, question) {
-    try {
-        const client = await auth.getClient();
-        const sheets = google.sheets({ version: 'v4', auth: client });
-
-        const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
-        const row = [userId, question, timestamp];
-
-        await sheets.spreadsheets.values.append({
-            spreadsheetId: SPREADSHEET_ID,
-            range: `${LOG_SHEET_NAME}!A:C`, // ✅ 改為環境變數
-            valueInputOption: 'USER_ENTERED',
-            requestBody: { values: [row] }
-        });
-
-        console.log('✅ 已寫入使用者提問紀錄');
-    } catch (err) {
-        console.error('❌ 使用者提問紀錄失敗:', err.message);
-    }
-}
-
-// ✅ 學習資料記錄（保留原樣）
-async function logLearningEntry(question, answer) {
-    try {
-        const client = await auth.getClient();
-        const sheets = google.sheets({ version: 'v4', auth: client });
-
-        const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
-        const row = [question, answer, 'AI生成', timestamp];
-
-        await sheets.spreadsheets.values.append({
-            spreadsheetId: SPREADSHEET_ID,
-            range: `${LEARNING_SHEET_NAME}!A:D`,
-            valueInputOption: 'USER_ENTERED',
-            requestBody: { values: [row] }
-        });
-
-        console.log('✅ 已寫入學習表：', question);
-    } catch (err) {
-        console.error('❌ 寫入學習表失敗：', err.message);
-    }
-}
-
-// ✅ AI 客服回應
-async function getAIResponse(text, userId) {
-    const res = await openaiClient.chat.completions.create({
-        model: 'gpt-4',
-        messages: [
-            {
-                role: 'system',
-                content: `你是 C.H 精緻洗衣的客服人員，請使用自然、親切的口語化中文回應客戶提問，並遵守以下規則：
-
-1. 回覆時結尾請加一個合適的表情符號（如 😊、👍、🧺 等）
-2. 禁用過度專業術語，要讓一般人一聽就懂
-3. 不要主動提及確切天數，但可以用模糊說法如「通常當天或隔天會收回唷 😊」
-4. 請以 C.H 精緻洗衣的立場回答，避免胡亂推測
-5. 客戶的問題只要與以下主題相關，都請主動回應：
-   - 衣物、鞋子、包包的清洗、材質、是否會洗壞
-   - 收衣流程、送衣時間、洗完怎麼通知
-   - 上門收送、付款方式、價格詢問
-6. 客人若問「會洗壞嗎？」要回：「我們會依材質與狀況判斷並特別評估唷 😊」
-7. 如果無法明確回答，可以說：「這個部分我們會幫您再確認一下唷 😊」
-8. 如果客戶只是說「謝謝」、「你好」、「按錯了」，請不需要回覆`
-            },
-            {
-                role: 'user',
-                content: text
-            }
-        ]
-    });
-
-    const reply = res.choices[0].message.content;
-
-    if (reply) {
-        await logLearningEntry(text, reply);
-    }
-
-    if (userId) {
-        await logUserMessage(userId, text);
-    }
-
-    return reply;
-}
-
-// ✅ 污漬圖片分析功能
+/**
+ * 智能污漬分析
+ */
 async function analyzeStainWithAI(imageBuffer) {
     const base64Image = imageBuffer.toString('base64');
 
-    const res = await openaiClient.chat.completions.create({
+    const openaiResponse = await openaiClient.chat.completions.create({
         model: 'gpt-4o',
         messages: [
             {
@@ -123,22 +28,63 @@ async function analyzeStainWithAI(imageBuffer) {
             {
                 role: 'user',
                 content: [
-                    { type: 'text', text: '請分析此物品並提供專業建議。' },
+                    { type: 'text', text: '請分析此物品並提供專業清潔建議。' },
                     { type: 'image_url', image_url: { url: `data:image/png;base64,${base64Image}` } }
                 ]
             }
         ]
     });
 
-    let result = res.choices[0].message.content;
-    if (!result.endsWith('確保最佳效果。')) {
-        result += '\n我們會根據材質特性進行適當清潔，確保最佳效果。';
+    let analysisResult = openaiResponse.choices[0].message.content
+        .replace(/\*\*/g, '')
+        .replace(/我們會以不傷害材質盡量做清潔處理。/g, '');
+
+    if (!analysisResult.endsWith('確保最佳效果。')) {
+        analysisResult += '\n我們會根據材質特性進行適當清潔，確保最佳效果。';
     }
 
-    return result;
+    return analysisResult;
+}
+
+/**
+ * AI 客服回應（全面版，針對洗衣店所有相關問題）
+ */
+async function getAIResponse(text) {
+    const aiResponse = await openaiClient.chat.completions.create({
+        model: 'gpt-4',
+        messages: [
+            {
+                role: 'system',
+                content: `你是 C.H 精緻洗衣的客服人員，請使用自然、親切的口語化中文回應客戶提問，並遵守以下規則：
+
+1. 回覆時結尾請加一個合適的表情符號（如 😊、👍、🧺 等）
+2. 禁用過度專業術語，要讓一般人一聽就懂
+3. 不要主動提及確切天數，但可以用模糊說法如「通常當天或隔天會收回唷 😊」
+4. 請以 C.H 精緻洗衣的立場回答，避免胡亂推測
+5. 客戶的問題只要與以下主題相關，都請主動回應：
+   - 衣物、鞋子、包包的清洗、材質、是否會洗壞
+   - 收衣流程、送衣時間、洗完怎麼通知
+   - 上門收送（例如：你們會來收衣嗎？可以送來嗎？）
+   - 清洗過程、洗不洗得掉、怎麼處理汙漬
+   - 價格詢問、付款方式、儲值方案、會員優惠
+   - 有無乾洗服務、是否能處理特殊材質
+6. 當客戶問「會洗壞嗎？」等擔憂問題時，請溫和回應：
+   「我們都會根據材質與狀況判斷，清洗前也會特別評估風險唷 😊」
+7. 收衣服方面：可以說明我們有提供到府收送服務，通常當天或隔天會收，週六固定公休唷
+8. 若無法明確回答，可這樣回：「這個部分我們會幫您再確認一下唷 😊」
+9. 如果客戶只是打招呼或講與洗衣無關的話（如：你好、謝謝、按錯了），可以不回應`
+            },
+            {
+                role: 'user',
+                content: text
+            }
+        ]
+    });
+
+    return aiResponse.choices[0].message.content;
 }
 
 module.exports = {
-    getAIResponse,
-    analyzeStainWithAI
+    analyzeStainWithAI,
+    getAIResponse
 };
