@@ -190,7 +190,7 @@ class MessageHandler {
 
     async handleAIResponse(userId, text, originalMessage) {
         try {
-            const aiText = await getAIResponse(text);
+            const aiText = await getAIResponse(text, userId);
             if (!aiText || aiText.includes('無法回答')) {
                 logger.logToFile(`無法回答的問題: ${text}(User ID: ${userId})`);
                 await recordUnansweredQuestion(text, userId);
