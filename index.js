@@ -61,11 +61,6 @@ app.get('/log', (req, res) => {
     });
 });
 
-// ✅ 新增首頁顯示狀態用，讓 Railway/UptimeRobot 不會 404
-app.get('/', (req, res) => {
-    res.send('C.H 精緻洗衣的機器人正在運作中 ✅');
-});
-
 // 啟動伺服器
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
