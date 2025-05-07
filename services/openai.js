@@ -2,19 +2,22 @@ const { OpenAI } = require('openai');
 const { google } = require('googleapis');
 const path = require('path');
 
+// ✅ 初始化 OpenAI 客戶端
 const openaiClient = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY
 });
 
+// ✅ Google Sheets 驗證
 const auth = new google.auth.GoogleAuth({
     keyFile: process.env.GOOGLE_SHEETS_CREDS || path.join(__dirname, '../sheet.json'),
     scopes: ['https://www.googleapis.com/auth/spreadsheets']
 });
 
 const SPREADSHEET_ID = process.env.GOOGLE_SHEETS_ID;
-const SHEET_NAME = '使用者提問紀錄';
+const LEARNING_SHEET_NAME = '使用者提問紀錄'; // 這部分你沒要求動，我先保留
+const LOG_SHEET_NAME = process.env.GOOGLE_SHEETS_LOG_SHEET_NAME; // ✅ 用於記錄提問的環境變數
 
-// ✅ 新增：記錄使用者提問
+// ✅ 使用者提問記錄（這段是這次新增、修改的）
 async function logUserMessage(userId, question) {
     try {
         const client = await auth.getClient();
@@ -25,7 +28,7 @@ async function logUserMessage(userId, question) {
 
         await sheets.spreadsheets.values.append({
             spreadsheetId: SPREADSHEET_ID,
-            range: `${SHEET_NAME}!A:C`,
+            range: `${LOG_SHEET_NAME}!A:C`, // ✅ 改為環境變數
             valueInputOption: 'USER_ENTERED',
             requestBody: { values: [row] }
         });
@@ -36,7 +39,7 @@ async function logUserMessage(userId, question) {
     }
 }
 
-// ✅ 回應後自動記錄回覆
+// ✅ 學習資料記錄（保留原樣）
 async function logLearningEntry(question, answer) {
     try {
         const client = await auth.getClient();
@@ -47,7 +50,7 @@ async function logLearningEntry(question, answer) {
 
         await sheets.spreadsheets.values.append({
             spreadsheetId: SPREADSHEET_ID,
-            range: `${SHEET_NAME}!A:D`,
+            range: `${LEARNING_SHEET_NAME}!A:D`,
             valueInputOption: 'USER_ENTERED',
             requestBody: { values: [row] }
         });
@@ -99,7 +102,7 @@ async function getAIResponse(text, userId) {
     return reply;
 }
 
-// ✅ 污漬圖片分析
+// ✅ 污漬圖片分析功能
 async function analyzeStainWithAI(imageBuffer) {
     const base64Image = imageBuffer.toString('base64');
 
