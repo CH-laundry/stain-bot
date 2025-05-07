@@ -2,21 +2,41 @@ const { OpenAI } = require('openai');
 const { google } = require('googleapis');
 const path = require('path');
 
-// ✅ 初始化 OpenAI 客戶端
 const openaiClient = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY
 });
 
-// ✅ Google Sheets 記錄功能
 const auth = new google.auth.GoogleAuth({
     keyFile: process.env.GOOGLE_SHEETS_CREDS || path.join(__dirname, '../sheet.json'),
     scopes: ['https://www.googleapis.com/auth/spreadsheets']
 });
 
 const SPREADSHEET_ID = process.env.GOOGLE_SHEETS_ID;
-const SHEET_NAME = '使用者提問紀錄'; // ✅ 對應你給的 Google Sheets 工作表名稱
+const SHEET_NAME = '使用者提問紀錄';
 
-// ✅ 回應後自動記錄
+// ✅ 新增：記錄使用者提問
+async function logUserMessage(userId, question) {
+    try {
+        const client = await auth.getClient();
+        const sheets = google.sheets({ version: 'v4', auth: client });
+
+        const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
+        const row = [userId, question, timestamp];
+
+        await sheets.spreadsheets.values.append({
+            spreadsheetId: SPREADSHEET_ID,
+            range: `${SHEET_NAME}!A:C`,
+            valueInputOption: 'USER_ENTERED',
+            requestBody: { values: [row] }
+        });
+
+        console.log('✅ 已寫入使用者提問紀錄');
+    } catch (err) {
+        console.error('❌ 使用者提問紀錄失敗:', err.message);
+    }
+}
+
+// ✅ 回應後自動記錄回覆
 async function logLearningEntry(question, answer) {
     try {
         const client = await auth.getClient();
@@ -39,7 +59,7 @@ async function logLearningEntry(question, answer) {
 }
 
 // ✅ AI 客服回應
-async function getAIResponse(text) {
+async function getAIResponse(text, userId) {
     const res = await openaiClient.chat.completions.create({
         model: 'gpt-4',
         messages: [
@@ -67,14 +87,19 @@ async function getAIResponse(text) {
     });
 
     const reply = res.choices[0].message.content;
+
     if (reply) {
         await logLearningEntry(text, reply);
+    }
+
+    if (userId) {
+        await logUserMessage(userId, text);
     }
 
     return reply;
 }
 
-// ✅ 污漬圖片分析功能
+// ✅ 污漬圖片分析
 async function analyzeStainWithAI(imageBuffer) {
     const base64Image = imageBuffer.toString('base64');
 
