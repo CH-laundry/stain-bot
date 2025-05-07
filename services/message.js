@@ -5,7 +5,6 @@ const logger = require('./logger');
 const { createHash } = require('crypto');
 const AddressDetector = require('../utils/address');
 const { addCustomerInfo } = require('./google');
-const { recordUnansweredQuestion } = require('../googleSheets');
 
 // 初始化 LINE 客户端
 const client = new Client({
@@ -28,19 +27,24 @@ class MessageHandler {
         this.MAX_USES_TIME_PERIOD = process.env.MAX_USES_TIME_PERIOD || 604800;
     }
 
+    /**
+     * 判断是否与洗衣店相关
+     */
     isLaundryRelatedText(text) {
         const lowerText = text.toLowerCase();
         const keywords = [
-            "洗衣", "清洗", "污漬", "油漬", "血漬", "染色", "退色",
-            "衣服", "衣物", "褲子", "大衣", "羽絨", "西裝",
-            "鞋", "鞋子", "球鞋", "皮鞋", "靴子", "拖鞋", "運動鞋",
-            "包", "包包", "書包", "名牌包", "精品包",
-            "窗簾", "地毯", "寶寶汽座", "嬰兒汽座", "手推車",
-            "收送", "收衣", "到府", "預約", "開門", "休息", "營業", "送洗"
+            { lang: "zh-TW", keywords: ["洗衣", "清洗", "污漬", "油漬", "血漬", "醬油", "染色", "退色", "地毯", "窗簾", "寶寶汽座", "汽座", "兒童座椅", "安全兒童座椅", "手推車", "單人手推車", "寶寶手推車", "書包", "營業", "開門", "休息", "開店", "有開", "收送", "到府", "上門", "收衣", "預約"] },
+            { lang: "zh-CN", keywords: ["洗衣", "清洗", "污渍", "油渍", "血渍", "酱油", "染色", "退色", "地毯", "窗帘", "宝宝汽座", "汽座", "儿童座椅", "安全儿童座椅", "手推车", "单人手推车", "宝宝手推车", "书包", "营业", "开门", "休息", "开店", "有开", "收送", "到府", "上门", "收衣", "预约"] },
+            { lang: "en", keywords: ["laundry", "clean", "stain", "oil stain", "blood stain", "soy sauce", "dyeing", "fading", "carpet", "curtain", "baby car seat", "car seat", "child seat", "stroller", "baby stroller", "backpack", "open", "business hours", "pickup", "delivery", "collect clothes", "reservation"] },
+            { lang: "ja", keywords: ["洗濯", "クリーニング", "汚れ", "油汚れ", "血", "醤油", "染色", "色落ち", "カーペット", "カーテン", "ベビーシート", "チャイルドシート", "ベビーカー", "ランドセル", "営業", "開店", "休憩", "オープン", "集荷", "配達", "予約"] }
         ];
-        return keywords.some(keyword => lowerText.includes(keyword));
+
+        return keywords.some(inquiry => inquiry.keywords.some(keyword => lowerText.includes(keyword.toLowerCase())));
     }
 
+    /**
+     * 检查使用次数限制
+     */
     async checkUsage(userId) {
         const key = `rate_limit:user:${userId}`;
         const now = Date.now();
@@ -62,6 +66,9 @@ class MessageHandler {
         }
     }
 
+    /**
+     * 处理智能污渍分析
+     */
     async handleStainAnalysis(userId, imageBuffer) {
         try {
             const imageHash = createHash('sha256').update(imageBuffer).digest('hex');
@@ -83,27 +90,35 @@ class MessageHandler {
         }
     }
 
+    /**
+     * 处理文本消息
+     */
     async handleTextMessage(userId, text, originalMessage) {
         const lowerText = text.toLowerCase();
 
+        // 检查是否包含强制不回应的关键字
         if (ignoredKeywords.some(keyword => lowerText.includes(keyword.toLowerCase()))) {
             logger.logToFile(`用戶 ${userId} 的訊息與洗衣店無關，已忽略。(User ID: ${userId})`);
             return;
         }
 
+        // 检测是否是地址
         if (AddressDetector.isAddress(text)) {
             await this.handleAddressMessage(userId, text);
             return;
         }
 
+        // 处理"1"命令（启动智能污渍分析）
         if (text === '1') {
             return this.handleNumberOneCommand(userId);
         }
 
+        // 处理进度查询
         if (this.isProgressQuery(lowerText)) {
             return this.handleProgressQuery(userId);
         }
 
+        // 检测询问类型
         const inquiryResult = detectInquiryType(text);
         if (inquiryResult) {
             await client.pushMessage(userId, {
@@ -114,8 +129,7 @@ class MessageHandler {
             return;
         }
 
-        console.log(`[AI檢查] 是否進入 GPT 回答：${this.isLaundryRelatedText(text)} | 訊息：「${text}」`);
-
+        // AI 客服回应
         if (this.isLaundryRelatedText(text)) {
             await this.handleAIResponse(userId, text, originalMessage);
         } else {
@@ -123,6 +137,9 @@ class MessageHandler {
         }
     }
 
+    /**
+     * 处理图片消息
+     */
     async handleImageMessage(userId, messageId) {
         try {
             logger.logToFile(`收到來自 ${userId} 的圖片訊息, 正在處理...(User ID: ${userId})`);
@@ -147,6 +164,9 @@ class MessageHandler {
         }
     }
 
+    /**
+     * 处理"1"命令
+     */
     async handleNumberOneCommand(userId) {
         const usage = await this.checkUsage(userId);
         if (!usage) {
@@ -166,11 +186,17 @@ class MessageHandler {
         logger.logToFile(`Bot 回覆用戶 ${userId}: 請上傳照片，以進行智能污漬分析✨📷(User ID: ${userId})`);
     }
 
+    /**
+     * 判断是否为进度查询
+     */
     isProgressQuery(text) {
         const progressKeywords = ["洗好", "洗好了嗎", "可以拿了嗎", "進度", "好了嗎", "完成了嗎"];
         return progressKeywords.some(k => text.includes(k));
     }
 
+    /**
+     * 处理进度查询
+     */
     async handleProgressQuery(userId) {
         await client.pushMessage(userId, {
             type: 'text',
@@ -188,16 +214,14 @@ class MessageHandler {
         });
     }
 
+    /**
+     * 处理AI回应
+     */
     async handleAIResponse(userId, text, originalMessage) {
         try {
             const aiText = await getAIResponse(text);
             if (!aiText || aiText.includes('無法回答')) {
                 logger.logToFile(`無法回答的問題: ${text}(User ID: ${userId})`);
-                await recordUnansweredQuestion(text, userId);
-                await client.pushMessage(userId, {
-                    type: 'text',
-                    text: '這個問題我還沒學會，小編會補上答案唷 😊'
-                });
                 return;
             }
 
@@ -211,21 +235,35 @@ class MessageHandler {
         }
     }
 
+    /**
+     * 处理地址消息
+     */
     async handleAddressMessage(userId, address) {
         try {
+            // 获取用户资料
             const profile = await client.getProfile(userId);
+            
+            // 格式化地址并获取回复
             const { formattedAddress, response } = AddressDetector.formatResponse(address);
+
+            // 准备客户信息
             const customerInfo = {
                 userId: userId,
                 userName: profile.displayName,
                 address: formattedAddress
             };
+
+            // 添加到 Google Sheets
             await addCustomerInfo(customerInfo);
+
+            // 发送回复消息
             await client.pushMessage(userId, {
                 type: 'text',
                 text: response
             });
+
             logger.logBotResponse(userId, address, response, 'Bot (Address)');
+
         } catch (error) {
             logger.logError('處理地址訊息時出錯', error, userId);
             await client.pushMessage(userId, {
