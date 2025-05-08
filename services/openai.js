@@ -108,6 +108,11 @@ async function getAIResponse(text) {
         reply += '\n\n👉 請按2 詳情了解 👶✨';
     }
 
+    // ✅ 新增安全檢查，避免傳出空內容
+    if (!reply || reply.trim() === '') {
+        return null;
+    }
+
     return reply;
 }
 
