@@ -1,3 +1,4 @@
+// message.js
 const { Client } = require('@line/bot-sdk');
 const { detectInquiryType } = require('../inquiryType');
 const { analyzeStainWithAI, getAIResponse } = require('./openai');
@@ -6,13 +7,11 @@ const { createHash } = require('crypto');
 const AddressDetector = require('../utils/address');
 const { addCustomerInfo } = require('./google');
 
-// 初始化 LINE 客户端
 const client = new Client({
     channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
     channelSecret: process.env.LINE_CHANNEL_SECRET
 });
 
-// 强制不回应列表
 const ignoredKeywords = [
     "常見問題", "服務價目&儲值優惠", "到府收送", "店面地址&營業時間", 
     "付款方式", "寶寶汽座&手推車", "顧客須知", "智能污漬分析", 
@@ -27,9 +26,6 @@ class MessageHandler {
         this.MAX_USES_TIME_PERIOD = process.env.MAX_USES_TIME_PERIOD || 604800;
     }
 
-    /**
-     * 判断是否与洗衣店相关
-     */
     isLaundryRelatedText(text) {
         const lowerText = text.toLowerCase();
         const keywords = [
@@ -42,9 +38,6 @@ class MessageHandler {
         return keywords.some(inquiry => inquiry.keywords.some(keyword => lowerText.includes(keyword.toLowerCase())));
     }
 
-    /**
-     * 检查使用次数限制
-     */
     async checkUsage(userId) {
         const key = `rate_limit:user:${userId}`;
         const now = Date.now();
@@ -66,9 +59,6 @@ class MessageHandler {
         }
     }
 
-    /**
-     * 处理智能污渍分析
-     */
     async handleStainAnalysis(userId, imageBuffer) {
         try {
             const imageHash = createHash('sha256').update(imageBuffer).digest('hex');
@@ -90,35 +80,27 @@ class MessageHandler {
         }
     }
 
-    /**
-     * 处理文本消息
-     */
     async handleTextMessage(userId, text, originalMessage) {
         const lowerText = text.toLowerCase();
 
-        // 检查是否包含强制不回应的关键字
         if (ignoredKeywords.some(keyword => lowerText.includes(keyword.toLowerCase()))) {
             logger.logToFile(`用戶 ${userId} 的訊息與洗衣店無關，已忽略。(User ID: ${userId})`);
             return;
         }
 
-        // 检测是否是地址
         if (AddressDetector.isAddress(text)) {
             await this.handleAddressMessage(userId, text);
             return;
         }
 
-        // 处理"1"命令（启动智能污渍分析）
         if (text === '1') {
             return this.handleNumberOneCommand(userId);
         }
 
-        // 处理进度查询
         if (this.isProgressQuery(lowerText)) {
             return this.handleProgressQuery(userId);
         }
 
-        // 检测询问类型
         const inquiryResult = detectInquiryType(text);
         if (inquiryResult) {
             await client.pushMessage(userId, {
@@ -126,24 +108,26 @@ class MessageHandler {
                 text: inquiryResult
             });
             logger.logBotResponse(userId, originalMessage, inquiryResult);
-            return;
+            // 👇 保留 AI 補充機會
         }
 
-        // AI 客服回应
         if (this.isLaundryRelatedText(text)) {
-            await this.handleAIResponse(userId, text, originalMessage);
+            const aiText = await getAIResponse(text);
+            if (aiText && !aiText.includes('無法回答')) {
+                await client.pushMessage(userId, { 
+                    type: 'text', 
+                    text: aiText 
+                });
+                logger.logBotResponse(userId, originalMessage, aiText, 'Bot (AI)');
+            }
         } else {
             logger.logToFile(`用戶 ${userId} 的訊息與洗衣店無關，不使用AI回應。(User ID: ${userId})`);
         }
     }
 
-    /**
-     * 处理图片消息
-     */
     async handleImageMessage(userId, messageId) {
         try {
             logger.logToFile(`收到來自 ${userId} 的圖片訊息, 正在處理...(User ID: ${userId})`);
-
             const stream = await client.getMessageContent(messageId);
             const chunks = [];
             for await (const chunk of stream) {
@@ -164,9 +148,6 @@ class MessageHandler {
         }
     }
 
-    /**
-     * 处理"1"命令
-     */
     async handleNumberOneCommand(userId) {
         const usage = await this.checkUsage(userId);
         if (!usage) {
@@ -186,17 +167,11 @@ class MessageHandler {
         logger.logToFile(`Bot 回覆用戶 ${userId}: 請上傳照片，以進行智能污漬分析✨📷(User ID: ${userId})`);
     }
 
-    /**
-     * 判断是否为进度查询
-     */
     isProgressQuery(text) {
         const progressKeywords = ["洗好", "洗好了嗎", "可以拿了嗎", "進度", "好了嗎", "完成了嗎"];
         return progressKeywords.some(k => text.includes(k));
     }
 
-    /**
-     * 处理进度查询
-     */
     async handleProgressQuery(userId) {
         await client.pushMessage(userId, {
             type: 'text',
@@ -214,56 +189,21 @@ class MessageHandler {
         });
     }
 
-    /**
-     * 处理AI回应
-     */
-    async handleAIResponse(userId, text, originalMessage) {
-        try {
-            const aiText = await getAIResponse(text);
-            if (!aiText || aiText.includes('無法回答')) {
-                logger.logToFile(`無法回答的問題: ${text}(User ID: ${userId})`);
-                return;
-            }
-
-            await client.pushMessage(userId, { 
-                type: 'text', 
-                text: aiText 
-            });
-            logger.logBotResponse(userId, originalMessage, aiText, 'Bot (AI)');
-        } catch (error) {
-            logger.logError('AI 服務出現錯誤', error, userId);
-        }
-    }
-
-    /**
-     * 处理地址消息
-     */
     async handleAddressMessage(userId, address) {
         try {
-            // 获取用户资料
             const profile = await client.getProfile(userId);
-            
-            // 格式化地址并获取回复
             const { formattedAddress, response } = AddressDetector.formatResponse(address);
-
-            // 准备客户信息
             const customerInfo = {
                 userId: userId,
                 userName: profile.displayName,
                 address: formattedAddress
             };
-
-            // 添加到 Google Sheets
             await addCustomerInfo(customerInfo);
-
-            // 发送回复消息
             await client.pushMessage(userId, {
                 type: 'text',
                 text: response
             });
-
             logger.logBotResponse(userId, address, response, 'Bot (Address)');
-
         } catch (error) {
             logger.logError('處理地址訊息時出錯', error, userId);
             await client.pushMessage(userId, {
