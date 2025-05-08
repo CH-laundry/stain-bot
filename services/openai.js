@@ -114,7 +114,8 @@ async function getAIResponse(text) {
     if (!reply || reply.trim() === '') {
         return null;
     }
-
+    
+    console.log('[Bot回覆內容]', reply); // 實際發送給 LINE 的內容
     return reply;
 }
 
