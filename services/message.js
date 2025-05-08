@@ -96,11 +96,15 @@ class MessageHandler {
     async handleTextMessage(userId, text, originalMessage) {
         const lowerText = text.toLowerCase();
 
-        // 检查是否包含强制不回应的关键字
-        if (ignoredKeywords.some(keyword => lowerText.includes(keyword.toLowerCase()))) {
-            logger.logToFile(`用戶 ${userId} 的訊息與洗衣店無關，已忽略。(User ID: ${userId})`);
-            return;
-        }
+        // 僅當訊息「只有」寒暄詞、無清洗相關語意時才不回應
+     if (
+         ignoredKeywords.some(keyword => lowerText === keyword.toLowerCase()) &&
+    !this.isLaundryRelatedText(text)
+    ) {
+    logger.logToFile(`訊息僅為寒暄或與洗衣無關，略過。(User ID: ${userId})`);
+    return;
+    }
+
 
         // 检测是否是地址
         if (AddressDetector.isAddress(text)) {
