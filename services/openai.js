@@ -65,7 +65,7 @@ async function analyzeStainWithAI(imageBuffer) {
  */
 async function getAIResponse(text) {
     const aiResponse = await openaiClient.chat.completions.create({
-        model: 'gpt-4',
+        model: 'gpt-4o',
         messages: [{
             role: 'system',
             content: `你是「C.H 精緻洗衣」的專屬客服，請使用自然、親切、口語化的中文回答客戶問題，並根據下列內容進行判斷與回應：
