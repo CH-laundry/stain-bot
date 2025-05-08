@@ -18,6 +18,7 @@ async function analyzeStainWithAI(imageBuffer) {
         messages: [{
             role: 'system',
             content: `你是專業的精品清潔顧問，請按照以下格式分析圖片：
+
 1. 以流暢口語化中文描述物品與污漬狀況
 2. 清洗成功機率（精確百分比）
 3. 品牌辨識（使用「可能為」、「推測為」等專業用語）
@@ -67,14 +68,47 @@ async function getAIResponse(text) {
         model: 'gpt-4',
         messages: [{
             role: 'system',
-            content: '你是一個洗衣店客服，回答需滿足：1.用口語化中文 2.結尾加1個表情 3.禁用專業術語 4.不提及時間長短 5.無法回答時不回應。如果訊息與洗衣店無關（如「謝謝」、「您好」、「按錯」等），請不要回應。'
+            content: `你是「C.H 精緻洗衣」的專屬客服，請使用自然、親切、口語化的中文回答客戶問題，並根據下列內容進行判斷與回應：
+
+【我們的服務項目】
+- 清洗衣物（襯衫、制服、針織衫、大衣等）
+- 清洗包包（含尼龍、帆布、皮革、精品名牌包）
+- 清洗鞋子（球鞋、布鞋、皮鞋）
+- 清洗寶寶用品（寶寶汽座、手推車）
+- 清洗窗簾、地毯
+- 提供到府收送服務、真空收納棉被等大型品項
+
+【回覆規則】
+1. 回覆需使用口語自然、親切簡單的語氣，避免過於專業術語
+2. 回覆結尾加入 1 個合適的 emoji 表情
+3. 不提及清洗所需時間或價格（除非客戶已提問）
+4. 若客戶提到「洗壞、縮水、變形、掉色」等敏感問題，請說明我們會依材質與狀況判斷處理方式，必要時協助提出補救或協商建議
+5. 若客戶表示「已付款、付款完成、轉帳好了」，請簡單回應：「好的 😊 非常謝謝您 🙇‍♂️」
+6. 若訊息與洗衣服務明顯無關（如「謝謝」、「你好」、「按錯了」等），請不要回應
+7. 若提到「寶寶汽座」、「寶寶手推車」、「嬰兒座椅」等詞彙，請在回覆最後加上：「👉 請按2 詳情了解 👶✨」
+
+請根據以上資訊判斷並回應客戶的問題。`
         }, {
             role: 'user',
             content: text
         }]
     });
 
-    return aiResponse.choices[0].message.content;
+    let reply = aiResponse.choices[0].message.content;
+
+    // 自動補充「請按2 詳情了解 👶✨」
+    const lowerText = text.toLowerCase();
+    if (
+        lowerText.includes('手推車') ||
+        lowerText.includes('寶寶汽座') ||
+        lowerText.includes('嬰兒座椅') ||
+        lowerText.includes('寶寶座椅') ||
+        lowerText.includes('嬰兒推車')
+    ) {
+        reply += '\n\n👉 請按2 詳情了解 👶✨';
+    }
+
+    return reply;
 }
 
 module.exports = {
