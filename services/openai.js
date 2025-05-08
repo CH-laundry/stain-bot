@@ -95,6 +95,8 @@ async function getAIResponse(text) {
     });
 
     let reply = aiResponse.choices[0].message.content;
+    console.log('[GPT回覆內容]', reply); // ✅ 顯示 GPT 實際回的內容
+
 
     // 自動補充「請按2 詳情了解 👶✨」
     const lowerText = text.toLowerCase();
