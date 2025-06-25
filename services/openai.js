@@ -10,12 +10,6 @@ const openaiClient = new OpenAI({
  * @param {Buffer} imageBuffer - 图片buffer
  * @returns {Promise<string>} 分析结果
  */
-const { OpenAI } = require('openai');
-
-// 初始化 OpenAI 客户端
-const openaiClient = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY
-});
 
 /**
  * 智能污漬分析服務
