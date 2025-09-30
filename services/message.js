@@ -1,169 +1,178 @@
+// services/message.js
 const { Client } = require('@line/bot-sdk');
 const { analyzeStainWithAI, smartAutoReply } = require('./openai');
-const logger = require('./logger');
 const { createHash } = require('crypto');
-const AddressDetector = require('../utils/address');
-const { addCustomerInfo } = require('./google');
+const logger = require('./logger');
+const AddressDetector = require('../utils/address');       // 你原本的地址工具（isAddress/formatResponse）
+const { addCustomerInfo } = require('./google');           // 若你有接 Google Sheet，就會用到
 
-// 初始化 LINE 客戶端
 const client = new Client({
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
   channelSecret: process.env.LINE_CHANNEL_SECRET
 });
 
-// 強制不回應列表
+// 可視需要調整
+const CHECK_STATUS_URL = process.env.CHECK_STATUS_URL || "https://liff.line.me/2004612704-JnzA1qN6#/";
+
+// 強制不回應關鍵詞（保留你原本的）
 const ignoredKeywords = [
   "常見問題", "服務價目&儲值優惠", "到府收送", "店面地址&營業時間",
   "付款方式", "寶寶汽座&手推車", "顧客須知", "智能污漬分析",
   "謝謝", "您好", "按錯"
 ];
 
+// 將全形數字轉半形、去頭尾空白
+function normalizeText(input = '') {
+  const fw = '０１２３４５６７８９';
+  const hw = '0123456789';
+  let out = (input || '').trim();
+  out = out.replace(/[０-９]/g, ch => hw[fw.indexOf(ch)]);
+  return out;
+}
+
 class MessageHandler {
   constructor() {
     this.userState = {};
-    this.store = new Map();
-    this.MAX_USES_PER_USER = process.env.MAX_USES_PER_USER || 20; // 預設一週 20 次
-    this.MAX_USES_TIME_PERIOD = process.env.MAX_USES_TIME_PERIOD || 604800; // 預設 7 天
   }
 
-  /**
-   * 污漬智能分析
-   */
-  async handleStainAnalysis(userId, imageBuffer) {
-    try {
-      const imageHash = createHash('sha256').update(imageBuffer).digest('hex');
-      logger.logToFile(`收到圖片，hash=${imageHash}`);
+  // 文字訊息（務必從 webhook 呼叫時傳入 replyToken）
+  async handleTextMessage(userId, text, originalMessage, replyToken) {
+    const rawText = text || '';
+    const normText = normalizeText(rawText);
+    const lowerText = normText.toLowerCase();
 
-      const result = await analyzeStainWithAI(imageBuffer);
-      await client.pushMessage(userId, {
-        type: 'text',
-        text: `${result}\n\n✨ 智能分析完成 👕`
-      });
-
-      logger.logImageAnalysis(userId, result);
-    } catch (err) {
-      logger.logError('污漬分析錯誤', err, userId);
-      await client.pushMessage(userId, { type: 'text', text: '分析暫時不可用，請稍後再試 🙏' });
-    }
-  }
-
-  /**
-   * 處理文字訊息
-   */
-  async handleTextMessage(userId, text, originalMessage) {
-    const lowerText = text.toLowerCase();
-
-    // 忽略特定訊息
-    if (ignoredKeywords.some(keyword => lowerText.includes(keyword.toLowerCase()))) {
-      logger.logToFile(`訊息忽略: ${text} (User ID: ${userId})`);
+    // 忽略類訊息
+    if (ignoredKeywords.some(k => lowerText.includes(k.toLowerCase()))) {
+      logger.logToFile(`[Ignored] ${userId}: ${normText}`);
       return;
     }
 
-    // 地址偵測
-    if (AddressDetector.isAddress(text)) {
-      return this.handleAddressMessage(userId, text);
+    // 「1」→ 啟動污漬分析
+    if (/^[1]$/.test(normText)) {
+      return this.handleNumberOneCommand(userId, replyToken);
     }
 
-    // 按 "1" → 啟動智能污漬分析
-    if (text === '1') {
-      return this.handleNumberOneCommand(userId);
+    // 地址直接回覆（維持你原本的 AddressDetector 邏輯與寫入 Sheets）
+    if (AddressDetector?.isAddress && AddressDetector.isAddress(normText)) {
+      return this.handleAddressMessage(userId, normText, replyToken);
     }
 
-    // 查詢進度
-    if (this.isProgressQuery(lowerText)) {
-      return this.handleProgressQuery(userId);
+    // 進度查詢（保留本地判斷一次，能即時回）
+    if (/(洗好|洗好了嗎|可以拿了嗎|進度|完成了嗎|查進度|查詢進度)/.test(normText)) {
+      return this.handleProgressQuery(userId, replyToken);
     }
 
-    // AI 高度判斷回覆
-    const aiText = await smartAutoReply(text);
-    if (aiText) {
-      await client.pushMessage(userId, { type: 'text', text: aiText });
-      logger.logBotResponse(userId, originalMessage, aiText, 'Bot (AI)');
+    // 其他 → 交給 AI 高度判斷（內含規則覆蓋、付款/收件/時間/兒童用品等）
+    try {
+      const aiText = await smartAutoReply(normText);
+      if (aiText) {
+        await client.replyMessage(replyToken, { type: 'text', text: aiText });
+        logger.logBotResponse(userId, originalMessage, aiText, 'Bot (AI)');
+      } else {
+        logger.logToFile(`[AI empty] ${userId}: ${normText}`);
+      }
+    } catch (err) {
+      logger.logError('smartAutoReply 錯誤', err, userId);
     }
   }
 
-  /**
-   * 處理圖片訊息
-   */
+  // 圖片訊息
   async handleImageMessage(userId, messageId) {
     try {
-      logger.logToFile(`收到 ${userId} 的圖片，準備處理...`);
       const stream = await client.getMessageContent(messageId);
       const chunks = [];
       for await (const chunk of stream) chunks.push(chunk);
       const buffer = Buffer.concat(chunks);
 
       if (this.userState[userId]?.waitingForImage) {
-        await this.handleStainAnalysis(userId, buffer);
+        // 先記錄 hash
+        const imageHash = createHash('sha256').update(buffer).digest('hex');
+        logger.logToFile(`圖片已接收，hash: ${imageHash}`);
+
+        // 直接做 AI 污漬分析（分析結果較長，用 push）
+        const analysisResult = await analyzeStainWithAI(buffer);
+        await client.pushMessage(userId, {
+          type: 'text',
+          text: `${analysisResult}\n\n✨ 智能分析完成 👕`
+        });
+
         delete this.userState[userId];
+      } else {
+        logger.logToFile(`[Image ignored] user ${userId} 未在等待圖片`);
       }
     } catch (err) {
-      logger.logError('處理圖片錯誤', err, userId);
-      await client.pushMessage(userId, { type: 'text', text: '處理圖片時出現錯誤，請稍後再試 🙏' });
+      logger.logError('handleImageMessage 錯誤', err, userId);
+      await client.pushMessage(userId, { type: 'text', text: '服務暫時不可用，請稍後再試。' });
     }
   }
 
-  /**
-   * 按 "1" 的行為
-   */
-  async handleNumberOneCommand(userId) {
-    await client.pushMessage(userId, {
-      type: 'text',
-      text: '請上傳照片，以進行智能污漬分析 ✨📷'
-    });
-    this.userState[userId] = { waitingForImage: true };
-  }
-
-  /**
-   * 判斷是否為進度查詢
-   */
-  isProgressQuery(text) {
-    const keys = ["洗好", "洗好了嗎", "可以拿了嗎", "進度", "好了嗎", "完成了嗎"];
-    return keys.some(k => text.includes(k));
-  }
-
-  /**
-   * 回覆進度查詢
-   */
-  async handleProgressQuery(userId) {
-    await client.pushMessage(userId, {
-      type: 'text',
-      text: '您可以隨時線上查詢 C.H 精緻洗衣 🔍',
-      quickReply: {
-        items: [{
-          type: "action",
-          action: {
-            type: "uri",
-            label: "查詢進度",
-            uri: "https://liff.line.me/2004612704-JnzA1qN6"
-          }
-        }]
-      }
-    });
-  }
-
-  /**
-   * 地址訊息處理
-   */
-  async handleAddressMessage(userId, address) {
+  // 啟動污漬分析
+  async handleNumberOneCommand(userId, replyToken) {
     try {
-      const profile = await client.getProfile(userId);
-      const { formattedAddress, response } = AddressDetector.formatResponse(address);
-
-      const customerInfo = {
-        userId,
-        userName: profile.displayName,
-        address: formattedAddress
-      };
-      await addCustomerInfo(customerInfo);
-
-      await client.pushMessage(userId, { type: 'text', text: response });
-      logger.logBotResponse(userId, address, response, 'Bot (Address)');
-    } catch (error) {
-      logger.logError('處理地址訊息錯誤', error, userId);
+      await client.replyMessage(replyToken, {
+        type: 'text',
+        text: '請上傳照片，以進行智能污漬分析✨📷'
+      });
+      this.userState[userId] = { waitingForImage: true };
+      logger.logToFile(`[StainAnalysis] Ask upload → user ${userId}`);
+    } catch (err) {
+      // replyToken 若過期 → 改用 push
+      logger.logToFile(`[StainAnalysis] reply 失敗，改用 push。`);
       await client.pushMessage(userId, {
         type: 'text',
-        text: '抱歉，處理地址時出現錯誤，請稍後再試 🙏'
+        text: '請上傳照片，以進行智能污漬分析✨📷'
+      });
+      this.userState[userId] = { waitingForImage: true };
+    }
+  }
+
+  // 進度查詢（固定回連結）
+  async handleProgressQuery(userId, replyToken) {
+    try {
+      await client.replyMessage(replyToken, {
+        type: 'text',
+        text: '您可以這邊線上查詢 C.H 精緻洗衣 🔍',
+        quickReply: {
+          items: [{
+            type: "action",
+            action: { type: "uri", label: "查詢進度", uri: CHECK_STATUS_URL }
+          }]
+        }
+      });
+    } catch (err) {
+      // 退而求其次 push
+      await client.pushMessage(userId, {
+        type: 'text',
+        text: `您可以這邊線上查詢 C.H 精緻洗衣 🔍\n👉 ${CHECK_STATUS_URL}`
+      });
+    }
+  }
+
+  // 地址訊息（寫入 Google Sheet；回覆「會安排收件 + 地址」）
+  async handleAddressMessage(userId, addressText, replyToken) {
+    try {
+      const profile = await client.getProfile(userId);
+      const { formattedAddress, response } =
+        AddressDetector.formatResponse
+          ? AddressDetector.formatResponse(addressText)
+          : { formattedAddress: addressText, response: `好的 😊 我們會安排到府收件\n地址：${addressText}` };
+
+      // 寫入 Google Sheets（若你有配置）
+      try {
+        if (addCustomerInfo) {
+          await addCustomerInfo({ userId, userName: profile.displayName, address: formattedAddress });
+        }
+      } catch (sheetErr) {
+        logger.logError('寫入 Google Sheets 失敗（可忽略）', sheetErr, userId);
+      }
+
+      await client.replyMessage(replyToken, { type: 'text', text: response });
+      logger.logBotResponse(userId, addressText, response, 'Bot (Address)');
+    } catch (error) {
+      logger.logError('處理地址訊息時出錯', error, userId);
+      await client.pushMessage(userId, {
+        type: 'text',
+        text: '抱歉，處理您的地址時出現錯誤，請稍後再試。'
       });
     }
   }
