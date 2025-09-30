@@ -23,7 +23,7 @@ class MessageHandler {
     constructor() {
         this.userState = {};
         this.store = new Map();
-        this.MAX_USES_PER_USER = process.env.MAX_USES_PER_USER || 2;
+        this.MAX_USES_PER_USER = process.env.MAX_USES_PER_USER || 20;
         this.MAX_USES_TIME_PERIOD = process.env.MAX_USES_TIME_PERIOD || 604800;
     }
 
