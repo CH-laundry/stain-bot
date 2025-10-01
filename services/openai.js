@@ -119,6 +119,11 @@ async function smartAutoReply(inputText) {
   if (isEmojiOrPuncOnly(text)) return null;
   if (!maybeLaundryRelated(text)) return null;
 
+  // 想送洗（不問地址與時間，直接答應收回）
+if (/(送洗|想\s*送洗|想洗衣|要洗衣|我要送洗|我想送洗|我想洗衣服|想送洗衣服)/.test(text)) {
+  return "好的 😊 沒問題，我們會過去收回的";
+}
+
   // 收件 / 收衣（含地址複誦）
   if (/(收衣|收件|來收|到府|上門|取件)/.test(text)) {
     const addr = extractTWAddress(text);
