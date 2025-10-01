@@ -117,7 +117,7 @@ class MessageHandler {
     this.store = new Map();
 
     // 汙漬分析使用次數
-    this.MAX_USES_PER_USER = Number(process.env.MAX_USES_PER_USER || 20);
+    this.MAX_USES_PER_USER = Number(process.env.MAX_USES_PER_USER || 40);
     this.MAX_USES_TIME_PERIOD = Number(process.env.MAX_USES_TIME_PERIOD || 604800);
 
     // 按 1 視窗（避免重啟丟狀態）
