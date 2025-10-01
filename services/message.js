@@ -1,3 +1,4 @@
+// services/message.js
 const { Client } = require('@line/bot-sdk');
 const { analyzeStainWithAI, smartAutoReply } = require('./openai');
 const logger = require('./logger');
@@ -11,7 +12,7 @@ const client = new Client({
   channelSecret: process.env.LINE_CHANNEL_SECRET
 });
 
-// 固定忽略：選單標題
+// 固定忽略：選單標題（※ 智能污漬分析 會在前面優先判斷，不會真的被忽略）
 const ignoredKeywords = [
   '常見問題', '服務價目&儲值優惠', '到府收送', '店面地址&營業時間',
   '付款方式', '寶寶汽座&手推車', '顧客須知', '智能污漬分析'
@@ -54,10 +55,15 @@ function isUrlOnly(t = '') { return /^(https?:\/\/|www\.)\S+$/i.test(t.trim()); 
 // 明顯與洗衣無關的主題（天氣、聊天）
 function isClearlyUnrelatedTopic(t = '') {
   const s = t.toLowerCase();
-  // 天氣/日常感嘆/純聊天
   const weather = /(天氣|下雨|出太陽|晴天|颱風|好熱|很熱|好冷|很冷|溫度|涼|熱)/;
   const chitchat = /(在幹嘛|在忙嗎|聊聊|聊天|怎麼樣|最近如何|在不在)/;
   return weather.test(s) || chitchat.test(s);
+}
+
+// 支援全形/半形 1
+function isOneKey(t = '') {
+  const s = normalize(t);
+  return s === '1' || s === '１';
 }
 
 // ============== 主處理類 ==============
@@ -101,41 +107,48 @@ class MessageHandler {
 
   // 文字訊息
   async handleTextMessage(userId, text, originalMessage) {
-    const lower = (text || '').toLowerCase().trim();
+    const raw = text || '';
+    const lower = raw.toLowerCase().trim();
 
-    // 0) 選單標題 → 忽略
+    // ★ 0) 若使用者直接打「智能污漬分析」→ 主動引導按 1 上傳
+    if (/智能[污汙]漬分析/.test(raw)) {
+      await client.pushMessage(userId, { type: 'text', text: '「想知道污漬的清潔成功率？」\n按 1 並上傳照片，我們提供貼心的智能分析，即時回應 🧼' });
+      return;
+    }
+
+    // 1) 選單標題 → 忽略
     if (ignoredKeywords.some(k => lower.includes(k.toLowerCase()))) {
-      logger.logToFile(`忽略固定選單項：「${text}」(User ${userId})`);
+      logger.logToFile(`忽略固定選單項：「${raw}」(User ${userId})`);
       return;
     }
 
-    // 1) 前置過濾：emoji/標點、寒暄、純電話、純網址、與洗衣無關主題 → 不回
-    if (isEmojiOrPuncOnly(text) || isSmallTalk(text) || isPhoneNumberOnly(text) || isUrlOnly(text) || isClearlyUnrelatedTopic(text)) {
-      logger.logToFile(`前置過濾忽略：「${text}」(User ${userId})`);
+    // 2) 前置過濾：emoji/標點、寒暄、純電話、純網址、與洗衣無關主題 → 不回
+    if (isEmojiOrPuncOnly(raw) || isSmallTalk(raw) || isPhoneNumberOnly(raw) || isUrlOnly(raw) || isClearlyUnrelatedTopic(raw)) {
+      logger.logToFile(`前置過濾忽略：「${raw}」(User ${userId})`);
       return;
     }
 
-    // 2) 地址偵測（含樓層）
-    if (AddressDetector.isAddress(text)) {
-      await this.handleAddressMessage(userId, text);
+    // 3) 地址偵測（含樓層）
+    if (AddressDetector.isAddress(raw)) {
+      await this.handleAddressMessage(userId, raw);
       return;
     }
 
-    // 3) 「1」→ 污漬分析
-    if (text === '1') {
+    // 4) 「1」→ 污漬分析（支援全形）
+    if (isOneKey(raw)) {
       return this.handleNumberOneCommand(userId);
     }
 
-    // 4) 進度查詢
+    // 5) 進度查詢
     if (this.isProgressQuery(lower)) {
       return this.handleProgressQuery(userId);
     }
 
-    // 5) 交給 AI 高判斷（openai.js 嚴格門檻：非洗衣相關直接不回）
+    // 6) 交給 AI 高判斷（openai.js 嚴格門檻：非洗衣相關直接不回）
     try {
-      const aiText = await smartAutoReply(text);
+      const aiText = await smartAutoReply(raw);
       if (!aiText || !aiText.trim()) {
-        logger.logToFile(`AI 判斷非洗衣主題或無需回覆：「${text}」(User ${userId})`);
+        logger.logToFile(`AI 判斷非洗衣主題或無需回覆：「${raw}」(User ${userId})`);
         return;
       }
 
