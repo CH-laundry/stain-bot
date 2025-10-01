@@ -2,8 +2,9 @@
 const { OpenAI } = require("openai");
 const openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// ← 新增：可用環境變數切換模型，未設定就預設 gpt-5
-const MODEL = process.env.OPENAI_MODEL || "gpt-5";
+// === 模型設定（向下相容 OPENAI_MODEL） ===
+const VISION_MODEL = process.env.OPENAI_VISION_MODEL || process.env.OPENAI_MODEL || "gpt-5"; // 影像/多模態
+const TEXT_MODEL   = process.env.OPENAI_TEXT_MODEL   || process.env.OPENAI_MODEL || "gpt-5"; // 文字（要省成本可在 .env 設 gpt-5-mini）
 
 // 固定連結（可 .env 覆寫）
 const CHECK_STATUS_URL = process.env.CHECK_STATUS_URL || "https://liff.line.me/2004612704-JnzA1qN6#/";
@@ -60,7 +61,7 @@ function reducePercentages(s, delta = 5) {
   });
 }
 
-// ===== 污漬智能分析（改用 MODEL：gpt-5） =====
+// ===== 污漬智能分析（內建完成提示；成功與失敗只回一種） =====
 async function analyzeStainWithAI(imageBuffer, materialInfo = "", labelImageBuffer = null) {
   const base64Image = imageBuffer.toString("base64");
   const base64Label = labelImageBuffer ? labelImageBuffer.toString("base64") : "";
@@ -76,7 +77,7 @@ async function analyzeStainWithAI(imageBuffer, materialInfo = "", labelImageBuff
 
   try {
     const resp = await openaiClient.chat.completions.create({
-      model: MODEL, // ← 原本 gpt-4o 改成 MODEL（預設 gpt-5）
+      model: VISION_MODEL, // ✅ 使用可配置影像模型
       messages: [
         {
           role: "system",
@@ -108,14 +109,16 @@ async function analyzeStainWithAI(imageBuffer, materialInfo = "", labelImageBuff
     if (!/我們會根據材質特性進行適當清潔，確保最佳效果。/.test(out)) {
       out += `\n我們會根據材質特性進行適當清潔，確保最佳效果。`;
     }
-    return out;
+    // ✅ 成功 → 自動加上完成提示；外層不用再加
+    return `✨ 智能分析完成 👕\n${out}`;
   } catch (e) {
     console.error("[智能污漬分析錯誤]", e);
+    // ✅ 失敗 → 只回這一則
     return "抱歉，目前分析系統忙碌中，請稍後再試 🙏";
   }
 }
 
-// ===== 智能客服回覆（規則優先 → Fallback，模型改為 MODEL）=====
+// ===== 智能客服回覆（規則優先 → Fallback）=====
 async function smartAutoReply(inputText) {
   if (!inputText) return null;
   const text = normalize(inputText);
@@ -250,10 +253,10 @@ async function smartAutoReply(inputText) {
     ]);
   }
 
-  // —— Fallback ——（仍屬洗衣主題，用 MODEL：gpt-5）
+  // —— Fallback ——（仍屬洗衣主題）
   try {
     const resp = await openaiClient.chat.completions.create({
-      model: MODEL, // ← 原本 gpt-4 改成 MODEL（預設 gpt-5）
+      model: TEXT_MODEL, // ✅ 使用可配置文字模型
       messages: [
         { role: "system", content: "你是「C.H 精緻洗衣」客服。用自然口語繁中、禮貌專業、避免絕對保證；1～3 句即可，語氣多樣、別重複。" },
         { role: "user", content: text },
