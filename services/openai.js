@@ -2,6 +2,9 @@
 const { OpenAI } = require("openai");
 const openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
+// ← 新增：可用環境變數切換模型，未設定就預設 gpt-5
+const MODEL = process.env.OPENAI_MODEL || "gpt-5";
+
 // 固定連結（可 .env 覆寫）
 const CHECK_STATUS_URL = process.env.CHECK_STATUS_URL || "https://liff.line.me/2004612704-JnzA1qN6#/";
 const LINE_PAY_URL = process.env.LINE_PAY_URL || "https://qrcodepay.line.me/qr/payment/ad2fs7S%252BDxiUCtHDInEXe9tnWx7SgIlVX6Ip6PbtXOkp4tXjgCI28920qGq%252B4eIt";
@@ -57,7 +60,7 @@ function reducePercentages(s, delta = 5) {
   });
 }
 
-// ===== 污漬智能分析 =====
+// ===== 污漬智能分析（改用 MODEL：gpt-5） =====
 async function analyzeStainWithAI(imageBuffer, materialInfo = "", labelImageBuffer = null) {
   const base64Image = imageBuffer.toString("base64");
   const base64Label = labelImageBuffer ? labelImageBuffer.toString("base64") : "";
@@ -73,7 +76,7 @@ async function analyzeStainWithAI(imageBuffer, materialInfo = "", labelImageBuff
 
   try {
     const resp = await openaiClient.chat.completions.create({
-      model: "gpt-5",
+      model: MODEL, // ← 原本 gpt-4o 改成 MODEL（預設 gpt-5）
       messages: [
         {
           role: "system",
@@ -112,7 +115,7 @@ async function analyzeStainWithAI(imageBuffer, materialInfo = "", labelImageBuff
   }
 }
 
-// ===== 智能客服回覆（規則優先 → Fallback）=====
+// ===== 智能客服回覆（規則優先 → Fallback，模型改為 MODEL）=====
 async function smartAutoReply(inputText) {
   if (!inputText) return null;
   const text = normalize(inputText);
@@ -247,10 +250,10 @@ async function smartAutoReply(inputText) {
     ]);
   }
 
-  // —— Fallback ——（仍屬洗衣主題）
+  // —— Fallback ——（仍屬洗衣主題，用 MODEL：gpt-5）
   try {
     const resp = await openaiClient.chat.completions.create({
-      model: "gpt-5",
+      model: MODEL, // ← 原本 gpt-4 改成 MODEL（預設 gpt-5）
       messages: [
         { role: "system", content: "你是「C.H 精緻洗衣」客服。用自然口語繁中、禮貌專業、避免絕對保證；1～3 句即可，語氣多樣、別重複。" },
         { role: "user", content: text },
