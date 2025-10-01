@@ -72,6 +72,9 @@ class MessageHandler {
     this.userState = {};
     this.lastReply = new Map();                // 避免重複回覆
     this.store = new Map();
+    this.recentOneTs = new Map();              // ★ 新增：記錄「按 1」時間戳（毫秒）
+    this.ONE_WINDOW_MS = 5 * 60 * 1000;        // ★ 新增：5 分鐘內收到圖片皆可分析
+
     this.MAX_USES_PER_USER = Number(process.env.MAX_USES_PER_USER || 20);
     this.MAX_USES_TIME_PERIOD = Number(process.env.MAX_USES_TIME_PERIOD || 604800);
   }
@@ -134,8 +137,10 @@ class MessageHandler {
       return;
     }
 
-    // 4) 「1」→ 污漬分析（支援全形）
+    // 4) 「1」→ 污漬分析（支援全形），同時記錄時間戳
     if (isOneKey(raw)) {
+      this.recentOneTs.set(userId, Date.now());     // ★ 記錄 "1" 的時間
+      logger.logToFile(`收到「1」，標記 waiting 與時間戳 (User ${userId})`);
       return this.handleNumberOneCommand(userId);
     }
 
@@ -173,10 +178,25 @@ class MessageHandler {
       const stream = await client.getMessageContent(messageId);
       const chunks = []; for await (const c of stream) chunks.push(c);
       const buffer = Buffer.concat(chunks);
+      logger.logToFile(`收到圖片事件 (User ${userId})，buffer length=${buffer.length}`);
 
-      if (this.userState[userId]?.waitingForImage) {
+      // ★ 雙保險條件：
+      //  A) 仍有 waitingForImage
+      //  B) 或者 5 分鐘內剛按過「1」
+      const hasWaiting = this.userState[userId]?.waitingForImage === true;
+      const lastOneTs = this.recentOneTs.get(userId) || 0;
+      const withinWindow = Date.now() - lastOneTs <= this.ONE_WINDOW_MS;
+
+      logger.logToFile(`waiting=${hasWaiting}, withinWindow=${withinWindow}`);
+
+      if (hasWaiting || withinWindow) {
         await this.handleStainAnalysis(userId, buffer);
         delete this.userState[userId];
+        // 清掉 timestamp，避免之後任意圖片都觸發
+        this.recentOneTs.delete(userId);
+      } else {
+        // 沒有 waiting 且不在 5 分鐘內：不分析，以免誤觸
+        logger.logToFile(`未觸發分析（沒有 waiting，且不在 5 分鐘內）(User ${userId})`);
       }
     } catch (err) {
       logger.logError('處理圖片錯誤', err, userId);
