@@ -250,7 +250,7 @@ async function smartAutoReply(inputText) {
   // —— Fallback ——（仍屬洗衣主題）
   try {
     const resp = await openaiClient.chat.completions.create({
-      model: "gpt-5",
+      model: "gpt-4",
       messages: [
         { role: "system", content: "你是「C.H 精緻洗衣」客服。用自然口語繁中、禮貌專業、避免絕對保證；1～3 句即可，語氣多樣、別重複。" },
         { role: "user", content: text },
