@@ -1,45 +1,21 @@
-// services/openai.js
 const { OpenAI } = require("openai");
 
-// ========= OpenAI Client =========
-const openaiClient = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+const openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// ========= 固定連結（可 .env 覆蓋）=========
-const CHECK_STATUS_URL =
-  process.env.CHECK_STATUS_URL ||
-  "https://liff.line.me/2004612704-JnzA1qN6#/";
-const LINE_PAY_URL =
-  process.env.LINE_PAY_URL ||
-  "https://qrcodepay.line.me/qr/payment/ad2fs7S%252BDxiUCtHDInEXe9tnWx7SgIlVX6Ip6PbtXOkp4tXjgCI28920qGq%252B4eIt";
-const ECPAY_URL =
-  process.env.ECPAY_URL || "https://p.ecpay.com.tw/55FFE71";
+// 可 .env 覆寫
+const CHECK_STATUS_URL = process.env.CHECK_STATUS_URL || "https://liff.line.me/2004612704-JnzA1qN6#/";
+const LINE_PAY_URL     = process.env.LINE_PAY_URL     || "https://qrcodepay.line.me/qr/payment/ad2fs7S%252BDxiUCtHDInEXe9tnWx7SgIlVX6Ip6PbtXOkp4tXjgCI28920qGq%252B4eIt";
+const ECPAY_URL        = process.env.ECPAY_URL        || "https://p.ecpay.com.tw/55FFE71";
 
-// ========= 小工具 =========
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+function normalize(s=""){ const fw="０１２３４５６７８９", hw="0123456789"; return (s||"").replace(/[０-９]/g,c=>hw[fw.indexOf(c)]).trim(); }
+function isEmojiOrPuncOnly(s=""){ const t=(s||"").trim(); if(!t) return true; const stripped=t.replace(/[\p{Emoji_Presentation}\p{Emoji}\p{Extended_Pictographic}\s、，。．。！？!?.…~\-—_()*^%$#@＋+／/\\|:;"'<>【】\[\]{}]/gu,""); return stripped.length===0; }
 
-function normalize(s = "") {
-  const fw = "０１２３４５６７８９";
-  const hw = "0123456789";
-  return (s || "").replace(/[０-９]/g, (c) => hw[fw.indexOf(c)]).trim();
-}
-
-function isEmojiOrPuncOnly(s = "") {
-  const t = (s || "").trim();
-  if (!t) return true;
-  const stripped = t.replace(
-    /[\p{Emoji_Presentation}\p{Emoji}\p{Extended_Pictographic}\s、，。．。！？!?.…~\-—_()*^%$#@＋+／/\\|:;"'<>【】\[\]{}]/gu,
-    ""
-  );
-  return stripped.length === 0;
-}
-
-// 寬鬆主題偵測：盡量讓洗衣相關進來
-function maybeLaundryRelated(s = "") {
+// 僅允許「明顯與洗衣相關」才回應（嚴格門檻）
+function maybeLaundryRelated(s="") {
   const t = normalize(s).toLowerCase();
   const kw = [
-    // 服務主軸
+    // 核心服務
     "洗","清洗","乾洗","送洗","去污","污漬","汙漬","髒","變色","染色","退色","泛黃","發霉",
     "衣","衣服","外套","襯衫","褲","大衣","羽絨","毛衣","皮衣","針織","襯裡","拉鍊","鈕扣",
     "包","包包","名牌包","手提袋","背包","書包","皮革","帆布","麂皮",
@@ -47,7 +23,7 @@ function maybeLaundryRelated(s = "") {
     "窗簾","布簾","遮光簾","地毯","毯子","毛毯","被子","羽絨被",
     // 物流
     "收衣","收件","來收","到府","上門","取件","配送","自取","預約",
-    // 資訊
+    // 咨詢
     "時間","幾天","要多久","進度","洗好了嗎","可以拿了嗎","完成了嗎","查詢","查進度","查詢進度",
     "付款","結帳","信用卡","line pay","支付","匯款",
     "地址","住址","幾樓","樓層",
@@ -56,84 +32,35 @@ function maybeLaundryRelated(s = "") {
     // 英文備援
     "laundry","wash","dry clean","stain","pickup","delivery","address","payment","status"
   ];
-  return kw.some((k) => t.includes(k));
+  return kw.some(k => t.includes(k));
 }
 
-// 取台灣地址（訊息中有就可複誦）
-function extractTWAddress(text = "") {
-  const re =
-    /(台北市|新北市|桃園市|台中市|台南市|高雄市|基隆市|新竹市|嘉義市|新竹縣|苗栗縣|彰化縣|南投縣|雲林縣|嘉義縣|屏東縣|宜蘭縣|花蓮縣|台東縣|澎湖縣|金門縣|連江縣)[^，。\s]{0,30}?(?:區|市|鎮|鄉)[^，。\s]{0,30}?(?:路|街|大道|巷|弄)[0-9]{1,4}號(?:之[0-9]{1,2})?(?:[，,\s]*(?:[0-9]{1,2}樓(?:之[0-9]{1,2})?|[0-9]{1,2}F))?/i;
-  const m = text.match(re);
-  return m ? m[0].replace(/\s+/g, "") : "";
+function extractTWAddress(text=""){
+  const re=/(台北市|新北市|桃園市|台中市|台南市|高雄市|基隆市|新竹市|嘉義市|新竹縣|苗栗縣|彰化縣|南投縣|雲林縣|嘉義縣|屏東縣|宜蘭縣|花蓮縣|台東縣|澎湖縣|金門縣|連江縣)[^，。\s]{0,30}?(?:區|市|鎮|鄉)[^，。\s]{0,30}?(?:路|街|大道|巷|弄)[0-9]{1,4}號(?:之[0-9]{1,2})?(?:[，,\s]*(?:[0-9]{1,2}樓(?:之[0-9]{1,2})?|[0-9]{1,2}F))?/i;
+  const m=text.match(re); return m?m[0].replace(/\s+/g,""):"";
 }
+function reducePercentages(s,delta=5){ return s.replace(/(\d{1,3})\s*%/g,(m,p1)=>{ let n=parseInt(p1,10); if(!Number.isNaN(n)&&n>5) n=Math.max(n-delta,1); return `${n}%`; }); }
 
-// 把 AI 百分比保守化（-5%）
-function reducePercentages(s, delta = 5) {
-  return s.replace(/(\d{1,3})\s*%/g, (m, p1) => {
-    let n = parseInt(p1, 10);
-    if (!Number.isNaN(n) && n > 5) n = Math.max(n - delta, 1);
-    return `${n}%`;
-  });
-}
+// 1) 智能污漬分析
+async function analyzeStainWithAI(imageBuffer, materialInfo="", labelImageBuffer=null){
+  const base64Image=imageBuffer.toString('base64');
+  const base64Label=labelImageBuffer?labelImageBuffer.toString('base64'):"";
 
-// ========= 輕量 AI 分類器（不確定時判定是否洗衣相關）=========
-async function classifyLaundryIntent(text) {
-  try {
-    const r = await openaiClient.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content:
-            "判定訊息是否與『洗衣/清潔服務（衣物/包鞋/窗簾/毯子/收送/付款/進度/地址/時間）』相關。只回 related / unrelated / uncertain。",
-        },
-        { role: "user", content: text },
-      ],
-      max_tokens: 3,
-      temperature: 0,
-    });
-    const ans = (r.choices?.[0]?.message?.content || "")
-      .toLowerCase()
-      .trim();
-    if (ans.includes("related")) return "related";
-    if (ans.includes("unrelated")) return "unrelated";
-    return "uncertain";
-  } catch {
-    return "uncertain";
-  }
-}
-
-// ========= 1) 智能污漬分析（按 1 → 上傳圖片；建議簡短）=========
-async function analyzeStainWithAI(
-  imageBuffer,
-  materialInfo = "",
-  labelImageBuffer = null
-) {
-  const base64Image = imageBuffer.toString("base64");
-  const base64Label = labelImageBuffer
-    ? labelImageBuffer.toString("base64")
-    : "";
-
-  const userContent = [
-    { type: "text", text: "請盡可能詳細分析此物品與污漬，並提供簡短清潔建議。" },
-    ...(materialInfo ? [{ type: "text", text: `衣物材質：${materialInfo}` }] : []),
-    { type: "image_url", image_url: { url: `data:image/png;base64,${base64Image}` } },
+  const userContent=[
+    { type:'text', text:'請盡可能詳細分析此物品與污漬，並提供簡短清潔建議。' },
+    ...(materialInfo?[{ type:'text', text:`衣物材質：${materialInfo}` }]:[]),
+    { type:'image_url', image_url:{ url:`data:image/png;base64,${base64Image}` } }
   ];
-  if (base64Label) {
-    userContent.push({ type: "text", text: "以下是洗滌標籤，僅供參考：" });
-    userContent.push({
-      type: "image_url",
-      image_url: { url: `data:image/png;base64,${base64Label}` },
-    });
+  if(base64Label){
+    userContent.push({ type:'text', text:'以下是洗滌標籤，僅供參考：' });
+    userContent.push({ type:'image_url', image_url:{ url:`data:image/png;base64,${base64Label}` } });
   }
 
-  try {
-    const resp = await openaiClient.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        {
-          role: "system",
-          content: `
+  try{
+    const resp=await openaiClient.chat.completions.create({
+      model:'gpt-4o',
+      messages:[
+        { role:'system', content:`
 你是 C.H 精緻洗衣 的專業清潔顧問，請用口語化繁體中文，結構如下：
 
 【分析】
@@ -147,46 +74,35 @@ async function analyzeStainWithAI(
 【清潔建議】
 - 只給 1–2 句簡短建議（避免 DIY 步驟或藥劑比例）
 - 可說「若擔心，建議交給 C.H 精緻洗衣專業處理，避免自行操作造成二次損傷 💙」
-`,
-        },
-        { role: "user", content: userContent },
+` },
+        { role:'user', content:userContent }
       ],
-      temperature: 0.6,
-      max_tokens: 1000,
+      temperature:0.6, max_tokens:1000
     });
 
-    let out =
-      resp.choices?.[0]?.message?.content ||
-      "建議交給 C.H 精緻洗衣評估與處理喔 😊";
-    out = out.replace(/\*\*/g, "");
-    out = reducePercentages(out, 5);
-    if (!/我們會根據材質特性進行適當清潔，確保最佳效果。/.test(out)) {
-      out += `\n我們會根據材質特性進行適當清潔，確保最佳效果。`;
+    let out=resp.choices?.[0]?.message?.content || '建議交給 C.H 精緻洗衣評估與處理喔 😊';
+    out=out.replace(/\*\*/g,'');
+    out=reducePercentages(out,5);
+    if(!/我們會根據材質特性進行適當清潔，確保最佳效果。/.test(out)){
+      out+=`\n我們會根據材質特性進行適當清潔，確保最佳效果。`;
     }
     return out;
-  } catch (err) {
-    console.error("[智能污漬分析錯誤]", err);
-    return "抱歉，目前分析系統忙碌中，請稍後再試 🙏";
+  }catch(e){
+    console.error('[智能污漬分析錯誤]', e);
+    return '抱歉，目前分析系統忙碌中，請稍後再試 🙏';
   }
 }
 
-// ========= 2) 智能客服回覆（寬鬆守門 → 規則（多樣化）→ Fallback AI）=========
-async function smartAutoReply(inputText) {
-  if (!inputText) return null;
+// 2) 智能客服回覆（嚴格門檻 → 規則 → Fallback）
+async function smartAutoReply(inputText){
+  if(!inputText) return null;
   const text = normalize(inputText);
+  if(isEmojiOrPuncOnly(text)) return null;
 
-  // 0) 明顯無內容 → 不回
-  if (isEmojiOrPuncOnly(text)) return null;
+  // 嚴格門檻：只要不是明顯與洗衣相關 → 不回
+  if(!maybeLaundryRelated(text)) return null;
 
-  // 1) 寬鬆判斷：若不明顯，再丟輕量分類器
-  let intent = "related";
-  if (!maybeLaundryRelated(text)) {
-    intent = await classifyLaundryIntent(text);
-    if (intent === "unrelated") return null; // 明確不相關 → 不回
-  }
-
-  // 2) 規則優先（多樣化話術，避免制式）
-  // 付款（僅在意圖明確時提供）
+  // 規則：付款
   if (/(付款|結帳|支付|刷卡|line ?pay|信用卡|匯款)/i.test(text)) {
     return (
       "以下提供兩種付款方式，您可以依方便選擇：\n\n" +
@@ -196,34 +112,30 @@ async function smartAutoReply(inputText) {
     );
   }
 
-  // 到府收件（偵測到地址就複誦）
+  // 規則：到府收件（若訊息含地址就複誦）
   if (/(收衣|收件|來收|到府|上門|取件)/.test(text)) {
     const addr = extractTWAddress(text);
-    return addr
-      ? `好的 😊 我們會安排到府收件\n地址：${addr}`
-      : "好的 😊 我們會安排到府收件";
+    return addr ? `好的 😊 我們會安排到府收件\n地址：${addr}` : "好的 😊 我們會安排到府收件";
   }
 
-  // 問是否有地址
-  if (/有.*地址|地址有沒有|有地址嗎/.test(text)) {
-    return "有的，我們都有紀錄的 😊";
-  }
+  // 規則：是否有地址
+  if (/有.*地址|地址有沒有|有地址嗎/.test(text)) return "有的，我們都有紀錄的 😊";
 
-  // 清潔時間
+  // 規則：清潔時間
   if (/(多久|幾天|時間|要多久)/.test(text)) {
     return pick([
       "一般清潔作業時間約 7–10 天 ⏳",
       "通常 7–10 天可完成，如遇特殊材質會另行告知，謝謝您 🙏",
-      "作業期程多為 7–10 天，若需加速也可再跟我們說明需求 😊",
+      "作業期程多為 7–10 天，若需加速也可再跟我們說明需求 😊"
     ]);
   }
 
-  // 進度查詢
+  // 規則：進度查詢
   if (/(洗好了嗎|可以拿了嗎|進度|完成了嗎|查進度|查詢進度)/.test(text)) {
     return `您可以這邊線上查詢 C.H精緻洗衣 🔍\n👉 ${CHECK_STATUS_URL}\n或是營業時間會有專人回覆，謝謝您 🙏`;
   }
 
-  // 兒童用品（汽座 / 手推車 / 嬰兒車）→ 指引按 2
+  // 規則：兒童用品（汽座/手推車/嬰兒車）→ 指引按 2
   if (/(手推車|推車|嬰兒車|汽座|安全座椅)/.test(text)) {
     return pick([
       "嬰幼兒用品我們也可以清洗；若需要更詳細資訊與估價，請按 2 由專人協助您 😊",
@@ -232,7 +144,7 @@ async function smartAutoReply(inputText) {
     ]);
   }
 
-  // 洗壞怎麼辦（保守、不嚇人）
+  // 規則：洗壞怎麼辦（保守）
   if (/(洗壞|壞掉|損壞|賠偿|賠償|負責)/.test(text)) {
     return pick([
       "理解您在意的地方，我們會把關每一步；若有狀況會第一時間與您聯繫並妥善處理 🙏",
@@ -241,7 +153,7 @@ async function smartAutoReply(inputText) {
     ]);
   }
 
-  // 窗簾 / 布簾
+  // 規則：窗簾
   if (/(窗簾|布簾|遮光簾)/.test(text)) {
     return pick([
       "窗簾清潔沒問題，我們會依布料與織法調整流程，兼顧潔淨與版型 👌",
@@ -251,7 +163,7 @@ async function smartAutoReply(inputText) {
     ]);
   }
 
-  // 毯子 / 被毯
+  // 規則：毯子/被毯
   if (/(毯子|毛毯|被毯|被子|羽絨被)/.test(text)) {
     return pick([
       "毯被清潔 OK，我們會兼顧纖維蓬鬆度與縮水風險，觸感與潔淨度可望提升 😊",
@@ -261,7 +173,7 @@ async function smartAutoReply(inputText) {
     ]);
   }
 
-  // 鞋子
+  // 規則：鞋子
   if (/(鞋|球鞋|運動鞋|皮鞋|靴子|涼鞋)/.test(text)) {
     return pick([
       "鞋類可處理，我們會依材質（布面/皮革/麂皮）調整方式，盡量恢復外觀 👟",
@@ -271,7 +183,7 @@ async function smartAutoReply(inputText) {
     ]);
   }
 
-  // 包包
+  // 規則：包包
   if (/(包包|名牌包|手提袋|背包|書包)/.test(text)) {
     return pick([
       "包款我們熟悉，會注意皮革塗層與五金，做針對性清潔與養護 ✨",
@@ -281,7 +193,7 @@ async function smartAutoReply(inputText) {
     ]);
   }
 
-  // 衣物污漬/泛黃/縮水/染色（專業但保守）
+  // 規則：衣物污漬/泛黃/縮水/染色
   if (/(污漬|髒污|泛黃|黃斑|染色|掉色|縮水|變形)/.test(text)) {
     return pick([
       "會先評估材質與色牢度，再選擇溫和方式；可望提升外觀與清新度 😊",
@@ -291,11 +203,9 @@ async function smartAutoReply(inputText) {
     ]);
   }
 
-  // 一般「可不可以洗」（衣/外套/羽絨）
-  if (
-    /(可以洗|能不能洗|可不可以洗|能洗|可清洗|能處理|可處理)/.test(text) &&
-    /(衣|外套|羽絨|襯衫|大衣|褲)/.test(text)
-  ) {
+  // 一般「可不可以洗」
+  if (/(可以洗|能不能洗|可不可以洗|能洗|可清洗|能處理|可處理)/.test(text) &&
+      /(衣|外套|羽絨|襯衫|大衣|褲)/.test(text)) {
     return pick([
       "沒問題，多數衣物都可處理；會依材質調整流程並說明預期改善幅度 😊",
       "可清洗，細節會於現場再確認；過程會盡量保護纖維結構 💙",
@@ -303,33 +213,24 @@ async function smartAutoReply(inputText) {
     ]);
   }
 
-  // 3) Fallback：交給 GPT 生成（自然、不重複）
-  try {
-    const resp = await openaiClient.chat.completions.create({
-      model: "gpt-4",
-      messages: [
-        {
-          role: "system",
-          content:
-            "你是「C.H 精緻洗衣」客服。用自然口語繁中、禮貌專業、避免絕對保證；1～3 句即可，語氣多樣、別重複。",
-        },
-        { role: "user", content: text },
+  // Fallback：仍屬洗衣主題，但沒命中規則 → 由 GPT 生成
+  try{
+    const resp=await openaiClient.chat.completions.create({
+      model:'gpt-4',
+      messages:[
+        { role:'system', content:'你是「C.H 精緻洗衣」客服。用自然口語繁中、禮貌專業、避免絕對保證；1～3 句即可，語氣多樣、別重複。' },
+        { role:'user', content:text }
       ],
-      temperature: 0.9,
-      max_tokens: 220,
+      temperature:0.9, max_tokens:220
     });
     let out = resp.choices?.[0]?.message?.content?.trim();
-    if (!out) out = "我們已收到您的訊息，會再與您確認細節，謝謝您 😊";
-    // 避免過度口號化
-    out = out.replace(/請放心交給.*?精緻洗衣/g, "我們會妥善處理與說明，謝謝您");
+    if(!out) out = '我們已收到您的訊息，會再與您確認細節，謝謝您 😊';
+    out = out.replace(/請放心交給.*?精緻洗衣/g, '我們會妥善處理與說明，謝謝您');
     return out;
-  } catch (err) {
-    console.error("[AI 回覆錯誤]", err);
-    return "抱歉，目前系統忙碌中 🙏";
+  }catch(e){
+    console.error('[AI 回覆錯誤]', e);
+    return '抱歉，目前系統忙碌中 🙏';
   }
 }
 
-module.exports = {
-  analyzeStainWithAI,
-  smartAutoReply,
-};
+module.exports = { analyzeStainWithAI, smartAutoReply };
