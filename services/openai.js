@@ -302,4 +302,57 @@ if (/(送洗|想\s*送洗|想洗衣|要洗衣|我要送洗|我想送洗|我想�
   }
 }
 
-module.exports = { analyzeStainWithAI, smartAutoReply };
+  // === 新增：付款完成「感謝詞產生器」 ===
+
+  // 若專案已經有 MODEL / CHECK_STATUS_URL，就刪掉下面兩行；否則保留。
+    const MODEL = process.env.OPENAI_MODEL || "gpt-5";
+    const CHECK_STATUS_URL = process.env.CHECK_STATUS_URL || "https://liff.line.me/2004612704-JnzA1qN6#/";
+
+/**
+ * 產生個人化的付款完成感謝訊息
+ * @param {Object} p
+ * @param {string} p.userName - 顧客稱呼（例如 王先生）
+ * @param {string[]|string} p.items - 服務項目陣列或字串
+ * @param {string} p.nextUrl - 查詢清洗進度連結
+ */
+async function generateThankYouMessage({ userName, items, nextUrl }) {
+  try {
+    const itemsText = Array.isArray(items) ? items.join("、") : (items || "本次清潔項目");
+    const nextLink = nextUrl || CHECK_STATUS_URL;
+
+    const prompt = `
+你是C.H 精緻洗衣的客服，語氣要：專業、親切、簡短。
+原則：
+- 不過度承諾，不保證100%去漬
+- 鼓勵顧客有任何問題直接回覆
+- 末段自然地帶出「查詢清洗進度」連結（不要貼超長URL原文，像「點這裡查看進度」）
+
+已知資訊：
+顧客稱呼：${userName || "您好"}
+服務項目：${itemsText}
+查詢連結：${nextLink}
+請輸出一段適合在 LINE 傳送的純文字訊息。
+`;
+
+    // 這裡直接沿用你檔案前面已經建立好的 openaiClient
+    const rsp = await openaiClient.chat.completions.create({
+      model: MODEL,
+      messages: [
+        { role: "system", content: "你是C.H 精緻洗衣的專業客服助理。" },
+        { role: "user", content: prompt }
+      ],
+      temperature: 0.4
+    });
+
+    const text = rsp?.choices?.[0]?.message?.content?.trim();
+    if (text) return text;
+
+    return `✅ 付款成功，感謝您的支持！我們已收到您的訂單（${itemsText}）。有任何問題都可以直接回覆這則訊息～\n\n可隨時點此查看進度：${CHECK_STATUS_URL}`;
+  } catch (e) {
+    console.error("[generateThankYouMessage] error:", e);
+    return `✅ 付款成功，感謝您的支持！我們已收到您的訂單（${Array.isArray(items)? items.join("、"): (items||"清潔項目")}）。有任何問題都可以直接回覆這則訊息～\n\n可隨時點此查看進度：${CHECK_STATUS_URL}`;
+  }
+}
+
+module.exports = { analyzeStainWithAI, smartAutoReply, generateThankYouMessage };
+
