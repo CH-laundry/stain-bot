@@ -74,6 +74,13 @@ function maybeLaundryRelated(s='') {
   ];
   return kw.some(k => t.includes(k));
 }
+// 情緒型：擔心鞋子出意外 / 洗壞
+function isWorriedAboutShoes(text = '') {
+  const s = (text || '').trim();
+  const hasShoe  = /(鞋子|球鞋|運動鞋|皮鞋|靴子|涼鞋|拖鞋|雪靴)/.test(s);
+  const hasWorry = /(擔心|怕|不要再|再出意外|出意外|洗壞|壞掉|小心|上次|再發生)/.test(s);
+  return hasShoe && hasWorry;
+}
 
 /* ---------------- 固定模板（更專業更自然） ---------------- */
 // 包包
@@ -193,6 +200,13 @@ class MessageHandler {
     // 3) 進度查詢（固定回覆 + QuickReply）
     if (this.isProgressQuery(lower)) {
       return this.handleProgressQuery(userId);
+    }
+    // 3.1) 情緒安撫：鞋子＋擔心/怕/不要再出意外 → 直接溫和確認
+    if (isWorriedAboutShoes(raw)) {
+      const reply = '可以的 👟 我們會特別注意細節，請放心交給 C.H 精緻洗衣 💙';
+      await client.pushMessage(userId, { type: 'text', text: reply });
+      logger.logBotResponse(userId, originalMessage, reply, 'Bot (Rule: shoe-worry)');
+      return;
     }
 
     // 4) 特規：汽座/手推車/嬰兒車 → 固定回覆 +「按 2」
