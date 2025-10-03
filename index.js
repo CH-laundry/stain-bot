@@ -1,12 +1,12 @@
 // ============== 引入依賴 ==============
 const fs = require('fs');
-
 const express = require('express');
 require('dotenv').config();
 
 // 添加必要的引用
 const logger = require('./services/logger');
 const messageHandler = require('./services/message');
+const { Client } = require('@line/bot-sdk');   // ✅ 新增
 
 console.log(`正在初始化 sheet.json: ${process.env.GOOGLE_PRIVATE_KEY ? '成功' : '失敗'}`);
 fs.writeFileSync("./sheet.json", process.env.GOOGLE_PRIVATE_KEY);
@@ -14,6 +14,12 @@ console.log(`sheet.json 初始化结束`);
 
 const app = express();
 app.use(express.json());
+
+// ============== LINE Client（推播用）===============
+const client = new Client({
+    channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
+    channelSecret: process.env.LINE_CHANNEL_SECRET,
+});
 
 // ============== 核心邏輯 ==============
 app.post('/webhook', async (req, res) => {
@@ -62,10 +68,24 @@ app.get('/log', (req, res) => {
     });
 });
 
+// ============== 測試推播路由（新增） ==============
+app.get('/test-push', async (req, res) => {
+    const userId = "Uxxxxxxxxxxxxxxxxxxxx"; // 👈 換成你在 Deploy Logs 印到的 userId
+    try {
+        await client.pushMessage(userId, {
+            type: 'text',
+            text: '✅ 測試推播成功！這是一則主動訊息 🚀'
+        });
+        res.send("推播成功，請查看 LINE Bot 訊息");
+    } catch (err) {
+        console.error("推播錯誤", err);
+        res.status(500).send("推播失敗");
+    }
+});
+
 // 啟動伺服器
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`伺服器正在運行，端口：${PORT}`);
     logger.logToFile(`伺服器正在運行，端口：${PORT}`);
 });
-
