@@ -197,7 +197,7 @@ class MessageHandler {
       await client.pushMessage(userId, { type: 'text', text: reply });
       logger.logBotResponse(userId, originalMessage, reply, 'Bot (SmallTalk)');
       return;
-      
+     } 
     // 2) 地址偵測（含樓層）
     if (AddressDetector.isAddress(raw)) {
       await this.handleAddressMessage(userId, raw);
