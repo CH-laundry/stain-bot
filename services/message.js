@@ -190,7 +190,14 @@ class MessageHandler {
       logger.logToFile(`前置過濾忽略：「${raw}」(User ${userId})`);
       return;
     }
-
+    
+    // 小聊就回一句（方便你測試）
+    if (isSmallTalk(raw)) {
+      const reply = '您好～這裡是 C.H 精緻洗衣，有需要可直接說明品項或輸入「付款／查進度」喔 😊';
+      await client.pushMessage(userId, { type: 'text', text: reply });
+      logger.logBotResponse(userId, originalMessage, reply, 'Bot (SmallTalk)');
+      return;
+      
     // 2) 地址偵測（含樓層）
     if (AddressDetector.isAddress(raw)) {
       await this.handleAddressMessage(userId, raw);
