@@ -27,6 +27,7 @@ app.post('/webhook', async (req, res) => {
                 if (event.type !== 'message' || !event.source.userId) continue;
 
                 const userId = event.source.userId;
+                console.log("[DEBUG] userId =", userId);
                 let userMessage = '';
                 
                 if (event.message.type === 'text') {
@@ -67,3 +68,4 @@ app.listen(PORT, () => {
     console.log(`伺服器正在運行，端口：${PORT}`);
     logger.logToFile(`伺服器正在運行，端口：${PORT}`);
 });
+
