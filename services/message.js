@@ -185,11 +185,12 @@ class MessageHandler {
 
     // 1) 忽略固定選單/無關訊息
     if (ignoredKeywords.some(k => lower.includes(k.toLowerCase())) ||
-        isEmojiOrPuncOnly(raw) || isSmallTalk(raw) || isPhoneNumberOnly(raw) ||
+        isEmojiOrPuncOnly(raw) || /* isSmallTalk(raw) <- 移除這個 */ isPhoneNumberOnly(raw) ||
         isUrlOnly(raw) || isClearlyUnrelatedTopic(raw)) {
       logger.logToFile(`前置過濾忽略：「${raw}」(User ${userId})`);
       return;
-    }
+   }
+
     
     // 小聊就回一句（方便你測試）
     if (isSmallTalk(raw)) {
