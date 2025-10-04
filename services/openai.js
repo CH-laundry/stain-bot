@@ -9,10 +9,8 @@ if (!process.env.OPENAI_API_KEY) {
 
 const openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// 固定連結（可 .env 覆寫）
+// 固定連結（移除 LINE PAY 與 ECPAY 固定連結）
 const CHECK_STATUS_URL = process.env.CHECK_STATUS_URL || "https://liff.line.me/2004612704-JnzA1qN6#/";
-const LINE_PAY_URL = process.env.LINE_PAY_URL || "https://qrcodepay.line.me/qr/payment/ad2fs7S%252BDxiUCtHDInEXe9tnWx7SgIlVX6Ip6PbtXOkp4tXjgCI28920qGq%252B4eIt";
-const ECPAY_URL = process.env.ECPAY_URL || "https://p.ecpay.com.tw/55FFE71";
 const BUSINESS_HOURS_TEXT_ENV = process.env.BUSINESS_HOURS_TEXT || "";
 const IS_DEVELOPMENT = process.env.NODE_ENV === 'development';
 const USE_MOCK = process.env.USE_MOCK === 'true';
@@ -103,24 +101,101 @@ const BRAND_MAP = {
   "bottega veneta": "Bottega Veneta", "bv": "Bottega Veneta", "寶緹嘉": "Bottega Veneta", "bv包": "Bottega Veneta",
   "celine": "Celine", "思琳": "Celine", "賽琳": "Celine",
   "ysl": "Saint Laurent", "saint laurent": "Saint Laurent", "聖羅蘭": "Saint Laurent", "圣罗兰": "Saint Laurent",
-  "balenciaga": "Balenciaga", "巴黎世家": "Balenciaga",
-  "givenchy": "Givenchy", "紀梵希": "Givenchy",
-  "loewe": "Loewe", "羅意威": "Loewe",
-  "valentino": "Valentino", "華倫天奴": "Valentino",
-  "burberry": "Burberry", "巴寶莉": "Burberry",
+  "balenciaga": "Balenciaga", "巴黎世家": "Balenciaga", "巴黎士家": "Balenciaga",
+  "givenchy": "Givenchy", "紀梵希": "Givenchy", "纪梵希": "Givenchy",
+  "loewe": "Loewe", "羅意威": "Loewe", "罗意威": "Loewe",
+  "valentino": "Valentino", "華倫天奴": "Valentino", "华伦天奴": "Valentino",
+  "burberry": "Burberry", "巴寶莉": "Burberry", "博柏利": "Burberry",
   "goyard": "Goyard", "戈雅": "Goyard",
   "miu miu": "Miu Miu", "miumiu": "Miu Miu", "繆繆": "Miu Miu",
   "mcm": "MCM",
-  "coach": "Coach", "蔻馳": "Coach",
-  "michael kors": "Michael Kors", "mk": "Michael Kors",
-  "longchamp": "Longchamp", "瓏驤": "Longchamp",
+  "coach": "Coach", "蔻馳": "Coach", "寇茲": "Coach",
+  "michael kors": "Michael Kors", "mk": "Michael Kors", "麥可·寇斯": "Michael Kors",
+  "longchamp": "Longchamp", "瓏驤": "Longchamp", "珑骧": "Longchamp",
+  "kate spade": "Kate Spade", "凱特絲蓓": "Kate Spade",
+  "tory burch": "Tory Burch", "湯麗柏琦": "Tory Burch",
+  "furla": "Furla", "芙拉": "Furla",
+  "mulberry": "Mulberry", "瑪百莉": "Mulberry",
   "nike": "Nike", "耐吉": "Nike", "耐克": "Nike",
-  "adidas": "Adidas", "愛迪達": "Adidas",
-  "new balance": "New Balance", "nb": "New Balance",
+  "adidas": "Adidas", "愛迪達": "Adidas", "阿迪達斯": "Adidas",
+  "new balance": "New Balance", "nb": "New Balance", "紐巴倫": "New Balance", "新百倫": "New Balance",
   "puma": "Puma", "彪馬": "Puma",
-  "asics": "Asics", "亞瑟士": "Asics",
+  "asics": "Asics", "亞瑟士": "Asics", "亞瑟膠": "Asics",
   "converse": "Converse", "匡威": "Converse",
   "vans": "Vans", "范斯": "Vans",
+  "reebok": "Reebok", "銳跑": "Reebok",
+  "under armour": "Under Armour", "ua": "Under Armour", "安德瑪": "Under Armour",
+  "skechers": "Skechers", "斯凱奇": "Skechers",
+  "fila": "Fila", "斐樂": "Fila",
+  "mizuno": "Mizuno", "美津濃": "Mizuno",
+  "hoka": "Hoka", "hoka one one": "Hoka",
+  "on running": "On", "on": "On", "昂跑": "On",
+  "salomon": "Salomon", "薩洛蒙": "Salomon",
+  "brooks": "Brooks",
+  "jimmy choo": "Jimmy Choo", "周仰傑": "Jimmy Choo",
+  "manolo blahnik": "Manolo Blahnik", "馬諾洛": "Manolo Blahnik",
+  "christian louboutin": "Christian Louboutin", "cl": "Christian Louboutin", "紅底鞋": "Christian Louboutin", "羅布廷": "Christian Louboutin",
+  "salvatore ferragamo": "Salvatore Ferragamo", "ferragamo": "Salvatore Ferragamo", "菲拉格慕": "Salvatore Ferragamo",
+  "tod's": "Tod's", "tods": "Tod's", "托德斯": "Tod's",
+  "roger vivier": "Roger Vivier", "羅傑·維維亞": "Roger Vivier",
+  "giuseppe zanotti": "Giuseppe Zanotti", "朱塞佩·薩諾第": "Giuseppe Zanotti",
+  "sergio rossi": "Sergio Rossi", "塞喬·羅西": "Sergio Rossi",
+  "stuart weitzman": "Stuart Weitzman", "斯圖爾特·韋茨曼": "Stuart Weitzman",
+  "clarks": "Clarks", "其樂": "Clarks",
+  "timberland": "Timberland", "添柏嵐": "Timberland", "踢不爛": "Timberland",
+  "dr. martens": "Dr. Martens", "dr martens": "Dr. Martens", "馬汀大夫": "Dr. Martens", "馬丁鞋": "Dr. Martens",
+  "ugg": "UGG", "雪靴": "UGG",
+  "birkenstock": "Birkenstock", "勃肯": "Birkenstock",
+  "crocs": "Crocs", "卡駱馳": "Crocs", "布希鞋": "Crocs",
+  "uniqlo": "Uniqlo", "優衣庫": "Uniqlo",
+  "zara": "Zara", "颯拉": "Zara",
+  "h&m": "H&M", "hm": "H&M",
+  "gap": "Gap",
+  "muji": "Muji", "無印良品": "Muji",
+  "gu": "GU",
+  "mango": "Mango", "芒果": "Mango",
+  "massimo dutti": "Massimo Dutti", "麥絲瑪拉": "Massimo Dutti",
+  "cos": "COS",
+  "pull & bear": "Pull & Bear", "pull&bear": "Pull & Bear",
+  "bershka": "Bershka",
+  "armani": "Armani", "亞曼尼": "Armani", "阿瑪尼": "Armani",
+  "versace": "Versace", "凡賽斯": "Versace", "范思哲": "Versace",
+  "dolce & gabbana": "Dolce & Gabbana", "d&g": "Dolce & Gabbana", "杜嘉班納": "Dolce & Gabbana",
+  "ralph lauren": "Ralph Lauren", "polo": "Ralph Lauren", "拉夫勞倫": "Ralph Lauren",
+  "tommy hilfiger": "Tommy Hilfiger", "湯米": "Tommy Hilfiger",
+  "calvin klein": "Calvin Klein", "ck": "Calvin Klein", "卡爾文克雷恩": "Calvin Klein",
+  "hugo boss": "Hugo Boss", "boss": "Hugo Boss", "波士": "Hugo Boss",
+  "lacoste": "Lacoste", "鱷魚牌": "Lacoste",
+  "fred perry": "Fred Perry", "月桂葉": "Fred Perry",
+  "paul smith": "Paul Smith", "保羅史密斯": "Paul Smith",
+  "vivienne westwood": "Vivienne Westwood", "薇薇安魏斯伍德": "Vivienne Westwood", "土星": "Vivienne Westwood",
+  "lululemon": "Lululemon", "露露檸檬": "Lululemon",
+  "the north face": "The North Face", "tnf": "The North Face", "北臉": "The North Face", "北面": "The North Face",
+  "patagonia": "Patagonia", "巴塔哥尼亞": "Patagonia",
+  "columbia": "Columbia", "哥倫比亞": "Columbia",
+  "mammut": "Mammut", "長毛象": "Mammut",
+  "arc'teryx": "Arc'teryx", "arcteryx": "Arc'teryx", "始祖鳥": "Arc'teryx",
+  "marmot": "Marmot", "土撥鼠": "Marmot",
+  "mountain hardwear": "Mountain Hardwear", "山浩": "Mountain Hardwear",
+  "comme des garcons": "Comme des Garçons", "川久保玲": "Comme des Garçons", "cdg": "Comme des Garçons",
+  "issey miyake": "Issey Miyake", "三宅一生": "Issey Miyake",
+  "yohji yamamoto": "Yohji Yamamoto", "山本耀司": "Yohji Yamamoto",
+  "bape": "Bape", "a bathing ape": "Bape", "猿人頭": "Bape",
+  "neighborhood": "Neighborhood", "nbhd": "Neighborhood",
+  "visvim": "Visvim",
+  "porter": "Porter", "吉田包": "Porter",
+  "levis": "Levi's", "levi's": "Levi's", "李維斯": "Levi's",
+  "wrangler": "Wrangler", "牧馬人": "Wrangler",
+  "lee": "Lee",
+  "diesel": "Diesel", "迪賽": "Diesel",
+  "g-star": "G-Star", "gstar": "G-Star",
+  "superdry": "Superdry", "極度乾燥": "Superdry",
+  "stussy": "Stüssy", "stüssy": "Stüssy", "史圖西": "Stüssy",
+  "supreme": "Supreme",
+  "palace": "Palace",
+  "off-white": "Off-White", "offwhite": "Off-White",
+  "stone island": "Stone Island", "石頭島": "Stone Island",
+  "cp company": "C.P. Company", "c.p. company": "C.P. Company",
 };
 
 function standardizeBrandName(name = "") {
@@ -156,11 +231,11 @@ async function retryWithBackoff(fn, maxRetries = 3, delay = 1000) {
 /* ---------------- 圖片驗證 ---------------- */
 function validateImage(imageBuffer, maxSize = 20 * 1024 * 1024) {
   if (!imageBuffer || !Buffer.isBuffer(imageBuffer)) {
-    return { valid: false, error: "圖片格式有誤，請重新上傳" };
+    return { valid: false, error: "圖片格式有誤，請重新上傳 🙏" };
   }
   
   if (imageBuffer.length > maxSize) {
-    return { valid: false, error: "圖片檔案過大（超過20MB），請壓縮後再上傳" };
+    return { valid: false, error: "圖片檔案過大（超過20MB），請壓縮後再上傳 😊" };
   }
   
   return { valid: true };
@@ -194,7 +269,7 @@ function setCachedResult(key, data) {
   }, CACHE_EXPIRY);
 }
 
-/* ---------------- ✨ 增強版品牌辨識 ---------------- */
+/* ---------------- 品牌辨識 ---------------- */
 async function detectBrandFromImageB64(base64Image) {
   if (IS_DEVELOPMENT && USE_MOCK) {
     log('MOCK', 'Using mock brand detection from image');
@@ -208,30 +283,23 @@ async function detectBrandFromImageB64(base64Image) {
   try {
     const result = await retryWithBackoff(async () => {
       const resp = await openaiClient.chat.completions.create({
-        model: "gpt-4o",  // ✨ 使用最新視覺模型
+        model: "gpt-4o",
         messages: [
           {
             role: "system",
-            content: `你是專業的品牌辨識專家。請仔細觀察圖片中的以下特徵來辨識品牌：
-1. Logo 或商標（文字、圖案、符號）
-2. 品牌特有的設計元素（如 LV 花紋、Gucci 雙G、Nike 勾勾）
-3. 產品的整體風格和質感
-4. 顏色搭配和材質特徵
-5. 縫線、五金件、標籤等細節
-
-請只回傳 JSON 格式：{"brand":"品牌英文名或中文名","confidence":0-100,"reason":"辨識依據"}
-若無法確定，brand 填 "無"、confidence 給 0。`
+            content:
+              "你是精品品牌辨識助手。請只回傳 JSON，格式為 {\"brand\":\"品牌英文名或中文名\",\"confidence\":0-100}。若無把握，brand 填 \"無\"、confidence 給 0。"
           },
           {
             role: "user",
             content: [
-              { type: "text", text: "請仔細辨識這個物品的品牌，包含包包、鞋子、衣服、配件等。請說明你的辨識依據。" },
-              { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64Image}`, detail: "high" } }  // ✨ 使用高解析度分析
+              { type: "text", text: "請辨識圖片中的品牌（包包、鞋子、衣服都可以）。" },
+              { type: "image_url", image_url: { url: `data:image/png;base64,${base64Image}` } }
             ]
           }
         ],
-        temperature: 0.3,  // ✨ 降低溫度提高準確性
-        max_tokens: 200
+        temperature: 0,
+        max_tokens: 120
       });
       return resp;
     });
@@ -246,9 +314,9 @@ async function detectBrandFromImageB64(base64Image) {
       return null;
     }
 
-    const finalResult = { brand, confidence: conf, reason: data.reason || "" };
+    const finalResult = { brand, confidence: conf };
     setCachedResult(cacheKey, finalResult);
-    log('BRAND', `Detected brand from image: ${brand} (${conf}%) - ${data.reason || ""}`);
+    log('BRAND', `Detected brand from image: ${brand} (${conf}%)`);
     
     return finalResult;
   } catch (error) {
@@ -306,9 +374,9 @@ async function detectBrandFromText(text) {
   }
 }
 
-/* =================== ✨ 增強版污漬智能分析 =================== */
+/* =================== 污漬智能分析 =================== */
 async function analyzeStainWithAI(imageBuffer, materialInfo = "", labelImageBuffer = null) {
-  log('ANALYZE', 'Starting enhanced stain analysis', { 
+  log('ANALYZE', 'Starting stain analysis', { 
     hasImage: !!imageBuffer, 
     hasMaterial: !!materialInfo, 
     hasLabel: !!labelImageBuffer 
@@ -316,7 +384,7 @@ async function analyzeStainWithAI(imageBuffer, materialInfo = "", labelImageBuff
 
   if (IS_DEVELOPMENT && USE_MOCK) {
     log('MOCK', 'Using mock stain analysis');
-    return "【測試模式】這是模擬的污漬分析結果";
+    return "【測試模式】這是模擬的污漬分析結果\n\n【分析】\n物品為深色外套，右袖有明顯油性污漬。\n\n【清潔建議】\n建議交給 C.H 精緻洗衣專業處理 💙";
   }
 
   const validation = validateImage(imageBuffer);
@@ -338,94 +406,75 @@ async function analyzeStainWithAI(imageBuffer, materialInfo = "", labelImageBuff
     const base64Label = labelImageBuffer ? labelImageBuffer.toString("base64") : "";
     
     const userContent = [
-      { type: "text", text: "請非常仔細地分析這件物品與污漬狀況，提供專業詳細的評估。" },
-      ...(materialInfo ? [{ type: "text", text: `已知材質資訊：${materialInfo}` }] : []),
-      { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64Image}`, detail: "high" } },  // ✨ 高解析度分析
+      { type: "text", text: "請盡可能詳細分析此物品與污漬，並提供簡短清潔建議。" },
+      ...(materialInfo ? [{ type: "text", text: `衣物材質：${materialInfo}` }] : []),
+      { type: "image_url", image_url: { url: `data:image/png;base64,${base64Image}` } },
     ];
     
     if (base64Label) {
-      userContent.push({ type: "text", text: "洗滌標籤參考：" });
-      userContent.push({ type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64Label}`, detail: "high" } });
+      userContent.push({ type: "text", text: "以下是洗滌標籤，僅供參考：" });
+      userContent.push({ type: "image_url", image_url: { url: `data:image/png;base64,${base64Label}` } });
     }
 
-    const maxTokens = base64Label ? 1500 : 1200;  // ✨ 增加 token 數量
+    const maxTokens = base64Label ? 1200 : 1000;
 
     const resp = await retryWithBackoff(async () => {
       return await openaiClient.chat.completions.create({
-        model: "gpt-4o",  // ✨ 使用最新視覺模型
+        model: "gpt-4o",
         messages: [
           {
             role: "system",
-            content: `你是 C.H 精緻洗衣 的資深專業清潔顧問，擁有豐富的衣物與污漬處理經驗。
+            content: `
+你是 C.H 精緻洗衣 的專業清潔顧問，請用口語化繁體中文，結構如下：
 
-請用繁體中文、口語化但專業的方式，提供詳細分析：
+【分析】
+- 物品與污漬狀況（2–4 句：位置、範圍、顏色、滲入深度）
+- 材質特性與注意（縮水/掉色/塗層/皮革護理等）
+- 污漬可能來源（油/汗/化妝/墨水/咖啡…）
+- 清潔成功機率（可附百分比，但偏保守；用「有機會改善／可望提升外觀」）
+- 品牌/年份/款式推測（能推就推，用「可能為／推測為」）
+- 結尾：我們會根據材質特性進行適當清潔，確保最佳效果。
 
-【物品識別】
-- 仔細觀察物品類型（衣物/包包/鞋子/配件等）
-- 辨識材質特性（棉/麻/絲/羊毛/皮革/合成纖維/混紡等）
-- 觀察顏色、織法、塗層等特徵
-- 如能辨識品牌請註明（觀察 logo、設計元素、縫線等）
-
-【污漬分析】
-- 污漬位置與範圍（具體描述在哪個部位、大小、分布）
-- 污漬顏色與深淺（淺色/深色/泛黃/發黑等）
-- 污漬類型判斷（油性/水性/蛋白質/色素/複合型）
-- 可能來源推測（食物/化妝品/墨水/汗漬/環境污染等）
-- 滲入程度評估（表面/半滲入/完全滲透）
-
-【材質風險評估】
-- 可能的清潔風險（縮水/掉色/變形/光澤損失等）
-- 特殊材質的注意事項
-- 是否有塗層或特殊處理
-
-【清潔成功率】
-- 給出保守的成功率評估（30-90%）
-- 說明影響成功率的主要因素
-- 用「有機會改善」「可望提升」等保守用語
-
-【處理建議】
-- 簡短說明適合的清潔方式
-- 強調專業處理的必要性
-- 避免給出具體 DIY 配方
-
-請保持專業但易懂的語氣，給出實用的評估。`
+【清潔建議】
+- 只寫 1–2 句，不提供 DIY 比例，不使用「保證／一定」字眼
+- 可說「若擔心，建議交給 C.H 精緻洗衣專業處理，避免自行操作造成二次損傷 💙」
+`.trim(),
           },
-          { role: "user", content: userContent }
+          { role: "user", content: userContent },
         ],
-        temperature: 0.5,  // ✨ 調整溫度平衡創意與準確性
-        max_tokens: maxTokens
+        temperature: 0.6,
+        max_tokens: maxTokens,
       });
     });
 
-    let out = resp?.choices?.[0]?.message?.content || "建議交給 C.H 精緻洗衣評估與處理";
+    let out = resp?.choices?.[0]?.message?.content || "建議交給 C.H 精緻洗衣評估與處理喔 😊";
     out = out.replace(/\*\*/g, "");
     out = reducePercentages(out, 5);
     
-    if (!/我們會根據材質特性進行適當清潔/.test(out)) {
-      out += `\n\n我們會根據材質特性進行適當清潔，確保最佳效果。`;
+    if (!/我們會根據材質特性進行適當清潔，確保最佳效果。/.test(out)) {
+      out += `\n我們會根據材質特性進行適當清潔，確保最佳效果。`;
     }
 
-    // ✨ 品牌辨識補強
     let best = await detectBrandFromImageB64(base64Image);
     if (!best) best = await detectBrandFromText(out);
     
-    if (best && best.brand && !out.includes("品牌") && best.confidence > 50) {
-      const conf = Math.round(best.confidence);
-      out = `🔍 品牌辨識：${best.brand}（信心度 ${conf}%）\n${best.reason ? `辨識依據：${best.reason}\n` : ""}\n${out}`;
-      log('ANALYZE', `Brand added to analysis: ${best.brand} (${conf}%)`);
+    if (best && best.brand && !out.includes("品牌可能為")) {
+      const conf = Math.round(Math.max(0, Math.min(100, best.confidence)));
+      out = `🔍 品牌可能為：${best.brand}（信心約 ${conf}%）\n\n${out}`;
+      log('ANALYZE', `Brand added to analysis: ${best.brand}`);
     }
 
-    log('ANALYZE', 'Enhanced stain analysis completed successfully');
+    log('ANALYZE', 'Stain analysis completed successfully');
     return out;
     
   } catch (e) {
     log('ERROR', 'Stain analysis failed', e.message);
     console.error("[智能污漬分析錯誤]", e);
-    return "抱歉，目前分析系統忙碌中，請稍後再試";
+    return "抱歉，目前分析系統忙碌中，請稍後再試 🙏";
   }
 }
 
-/* ---------------- 固定模板（品項類回覆更自然） ---------------- */
+/* ---------------- 固定模板 ---------------- */
 const TPL_BAG = [
   "您好，包包我們有專業處理 💼 會依材質調整方式，像皮革會注意保養護理，布面則加強清潔與定型，請您放心交給 C.H 精緻洗衣 😊",
   "包包是可以處理的 👍 我們會先檢視材質狀況，盡量在清潔同時保護原有外觀，有需要也能加強整形或護理 💙",
@@ -495,12 +544,7 @@ async function smartAutoReply(inputText) {
     }
   }
   else if (/(付款|結帳|支付|刷卡|line ?pay|信用卡|匯款)/i.test(text)) {
-    reply = (
-      "以下提供兩種付款方式，您可以依方便選擇：\n\n" +
-      `1️⃣ LINE Pay 付款連結\n${LINE_PAY_URL}\n\n` +
-      `2️⃣ 信用卡付款（綠界 ECPay）\n${ECPAY_URL}\n\n` +
-      "感謝您的支持與配合 💙"
-    );
+    reply = "請稍候，我們會提供專屬付款連結給您，謝謝 😊";
   }
   else if (/(優惠|活動|折扣|促銷|特價|有沒有.*活動)/.test(text)) {
     reply = "您好，我們的優惠活動會不定期在官方網站及社群媒體上發布，建議您可以追蹤我們的社群平台以免錯過任何好康資訊。";
@@ -629,7 +673,7 @@ async function smartAutoReply(inputText) {
   return reply;
 }
 
-/* =================== ✅ 綠界付款功能（修正版） =================== */
+/* =================== 綠界付款功能 =================== */
 function createECPayPaymentLink(userId, userName, amount) {
   const { ECPAY_MERCHANT_ID, ECPAY_HASH_KEY, ECPAY_HASH_IV, RAILWAY_STATIC_URL } = process.env;
 
@@ -638,7 +682,6 @@ function createECPayPaymentLink(userId, userName, amount) {
     throw new Error('綠界環境變數未設定');
   }
 
-  // ✅ 修正：確保有 https:// 前綴
   let baseURL = RAILWAY_STATIC_URL || 'https://stain-bot-production-0fac.up.railway.app';
   
   if (!baseURL.startsWith('http://') && !baseURL.startsWith('https://')) {
@@ -666,7 +709,7 @@ function createECPayPaymentLink(userId, userName, amount) {
     TotalAmount: String(amount),
     TradeDesc: 'CH精緻洗衣服務',
     ItemName: '洗衣服務費用',
-    ReturnURL: `${baseURL}/payment/ecpay/callback`,  // ✅ 完整 URL
+    ReturnURL: `${baseURL}/payment/ecpay/callback`,
     ChoosePayment: 'ALL',
     EncryptType: 1,
     CustomField1: userId,
@@ -679,7 +722,7 @@ function createECPayPaymentLink(userId, userName, amount) {
     const paymentLink = `https://payment.ecpay.com.tw/Cashier/AioCheckOut/V5?${params}`;
     
     log('PAYMENT', `綠界連結已生成: 訂單=${merchantTradeNo}, 金額=${amount}元, 客戶=${userName}`);
-    log('PAYMENT', `ReturnURL=${paymentData.ReturnURL}`);  // ✅ 除錯日誌
+    log('PAYMENT', `ReturnURL=${paymentData.ReturnURL}`);
     
     return paymentLink;
   } catch (error) {
@@ -718,7 +761,7 @@ function generateECPayCheckMacValue(params) {
 module.exports = { 
   analyzeStainWithAI, 
   smartAutoReply,
-  createECPayPaymentLink,  // ✅ 新增：綠界付款功能
+  createECPayPaymentLink,
   validateImage,
   extractTWAddress,
   standardizeBrandName,
