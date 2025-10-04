@@ -10,10 +10,9 @@ const lineClient = new Client({
   channelSecret: process.env.LINE_CHANNEL_SECRET
 });
 
-// 管理員 USER ID（從你的 .env 讀取）
+// 管理員 USER ID（你的個人 LINE）
 const ADMIN_USER_IDS = [
-  'Uf89348a24611ce915b7bd78220cd2d68',
-  'U56032fd9822e437828d589a35a49dcf0'
+  'U5099169723d6e83588c5f23dfaf6f9cf'  // 你的個人 LINE ID
 ];
 
 /**
