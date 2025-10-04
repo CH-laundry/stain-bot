@@ -12,7 +12,10 @@ console.log(`sheet.json 初始化结束`);
 
 const app = express();
 app.use(express.json());
-app.use(express.urlencoded({ extended: true })); // ✅ 新增：支援綠界回調
+app.use(express.urlencoded({ extended: true }));
+
+// ✅ 靜態文件支援（網頁管理介面）
+app.use(express.static('public'));
 
 // ============== LINE Client（推播用）===============
 const client = new Client({
@@ -45,7 +48,7 @@ app.post('/webhook', async (req, res) => {
                     logger.logUserMessage(userId, userMessage);
                 }
             } catch (err) {
-                // logger.logError('處理事件時出錯', err, event.source?.userId);
+                logger.logError('處理事件時出錯', err, event.source?.userId);
             }
         }
     } catch (err) {
@@ -65,7 +68,7 @@ app.get('/log', (req, res) => {
 
 // ============== 測試推播路由 ==============
 app.get('/test-push', async (req, res) => {
-    const userId = "Uxxxxxxxxxxxxxxxxxxxx"; // 👈 換成你的 userId
+    const userId = process.env.ADMIN_USER_ID || "Uxxxxxxxxxxxxxxxxxxxx";
     try {
         await client.pushMessage(userId, {
             type: 'text',
@@ -74,7 +77,7 @@ app.get('/test-push', async (req, res) => {
         res.send("推播成功，請查看 LINE Bot 訊息");
     } catch (err) {
         console.error("推播錯誤", err);
-        res.status(500).send("推播失敗");
+        res.status(500).send(`推播失敗: ${err.message}`);
     }
 });
 
@@ -82,16 +85,20 @@ app.get('/test-push', async (req, res) => {
 app.post('/send-payment', async (req, res) => {
     const { userId, userName, amount, paymentType } = req.body;
     
+    logger.logToFile(`收到付款請求: userId=${userId}, userName=${userName}, amount=${amount}, type=${paymentType}`);
+    
     // 參數驗證
     if (!userId || !userName || !amount) {
+        logger.logToFile(`❌ 參數驗證失敗: userId=${userId}, userName=${userName}, amount=${amount}`);
         return res.status(400).json({ 
             error: '缺少必要參數',
             required: ['userId', 'userName', 'amount'],
+            received: { userId, userName, amount },
             example: {
                 userId: "U1234567890abcdef",
                 userName: "王小明",
                 amount: 1500,
-                paymentType: "ecpay" // 或 "linepay"
+                paymentType: "ecpay"
             }
         });
     }
@@ -99,6 +106,7 @@ app.post('/send-payment', async (req, res) => {
     // 金額驗證
     const numAmount = parseInt(amount);
     if (isNaN(numAmount) || numAmount <= 0) {
+        logger.logToFile(`❌ 金額驗證失敗: ${amount}`);
         return res.status(400).json({ error: '金額必須是正整數' });
     }
 
@@ -135,6 +143,8 @@ app.post('/send-payment', async (req, res) => {
         }
         
         // 發送給客戶
+        logger.logToFile(`📤 準備發送訊息給 ${userId}: ${message.substring(0, 50)}...`);
+        
         await client.pushMessage(userId, {
             type: 'text',
             text: message
@@ -155,6 +165,7 @@ app.post('/send-payment', async (req, res) => {
         });
     } catch (err) {
         logger.logError('發送付款連結失敗', err);
+        console.error('❌ 詳細錯誤:', err);
         res.status(500).json({ 
             error: '發送失敗', 
             details: err.message 
@@ -168,19 +179,19 @@ app.post('/payment/ecpay/callback', async (req, res) => {
         logger.logToFile(`收到綠界回調: ${JSON.stringify(req.body)}`);
         
         const { 
-            MerchantTradeNo,   // 訂單編號
-            RtnCode,           // 回傳碼 (1=成功)
-            RtnMsg,            // 回傳訊息
-            TradeAmt,          // 交易金額
-            PaymentDate,       // 付款時間
-            PaymentType,       // 付款方式
-            CustomField1: userId,   // 客戶 LINE userId
-            CustomField2: userName  // 客戶姓名
+            MerchantTradeNo,
+            RtnCode,
+            RtnMsg,
+            TradeAmt,
+            PaymentDate,
+            PaymentType,
+            CustomField1: userId,
+            CustomField2: userName
         } = req.body;
 
         // ✅ 驗證付款成功
         if (RtnCode === '1') {
-            const ADMIN_USER_ID = process.env.ADMIN_USER_ID; // 你的個人 LINE userId
+            const ADMIN_USER_ID = process.env.ADMIN_USER_ID;
             
             // 通知店家（你）
             if (ADMIN_USER_ID) {
@@ -211,11 +222,9 @@ app.post('/payment/ecpay/callback', async (req, res) => {
 
             logger.logToFile(`✅ 付款成功: ${userName} - ${TradeAmt}元 - 訂單${MerchantTradeNo}`);
         } else {
-            // 付款失敗或其他狀態
             logger.logToFile(`❌ 付款異常: 訂單${MerchantTradeNo} - ${RtnMsg}`);
         }
 
-        // 綠界要求必須回傳 "1|OK"
         res.send('1|OK');
     } catch (err) {
         logger.logError('處理綠界回調失敗', err);
@@ -235,10 +244,14 @@ function getPaymentTypeName(code) {
     return types[code] || code;
 }
 
+// ============== 🎨 付款管理網頁 ==============
+app.get('/payment', (req, res) => {
+    res.sendFile(__dirname + '/public/payment.html');
+});
+
 // ============== 🔍 查詢付款狀態（選用）==============
 app.get('/payment/status/:orderId', async (req, res) => {
     const { orderId } = req.params;
-    // 這裡可以實作查詢邏輯，例如從資料庫查詢
     res.json({
         message: '付款狀態查詢功能（待實作）',
         orderId
