@@ -288,6 +288,16 @@ class MessageHandler {
     if (maybeLaundryRelated(raw)) {
       try {
         const aiText = await smartAutoReply(raw);
+        
+        // ===== 新增：處理付款請求 =====
+        if (aiText === 'payment_request') {
+          const profile = await client.getProfile(userId);
+          await this.handlePaymentRequest(userId, profile.displayName, 500);
+          logger.logBotResponse(userId, originalMessage, '已發送付款連結', 'Bot (Payment)');
+          return;
+        }
+        // ===== 付款處理結束 =====
+        
         if (aiText && aiText.trim()) {
           if (this.lastReply.get(userId) === aiText.trim()) return;
           await client.pushMessage(userId, { type: 'text', text: aiText });
