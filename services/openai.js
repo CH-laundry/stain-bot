@@ -312,8 +312,6 @@ async function analyzeStainWithAI(imageBuffer, materialInfo = "", labelImageBuff
 }
 
 /* ---------------- 固定模板 ---------------- */
-const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
-
 const TPL_BAG = [
   "包包可以處理 💼 會依材質調整，請放心交給 C.H 精緻洗衣 😊",
 ];
