@@ -210,7 +210,7 @@ async function analyzeStainWithAI(imageBuffer, materialInfo = "", labelImageBuff
   return out;
 }
 
-  } catch (e) {
+    catch (e) {
     console.error("[智能污漬分析錯誤]", e);
     return "抱歉，目前分析系統忙碌中，請稍後再試 🙏";
   }
