@@ -58,13 +58,11 @@ function reducePercentages(s, delta = 5) {
 }
 
 // ===== 污漬智能分析 =====
-// ▼ 直接覆蓋原本的 analyzeStainWithAI 即可（維持 gpt-4o）
 async function analyzeStainWithAI(imageBuffer, materialInfo = "", labelImageBuffer = null) {
   const base64Image = imageBuffer.toString("base64");
   const base64Label = labelImageBuffer ? labelImageBuffer.toString("base64") : "";
-
   const userContent = [
-    { type: "text", text: "請就圖片進行專業清潔分析，並嚴格品牌辨識。" },
+    { type: "text", text: "請盡可能詳細分析此物品與污漬，並提供簡短清潔建議。" },
     ...(materialInfo ? [{ type: "text", text: `衣物材質：${materialInfo}` }] : []),
     { type: "image_url", image_url: { url: `data:image/png;base64,${base64Image}` } },
   ];
@@ -73,144 +71,42 @@ async function analyzeStainWithAI(imageBuffer, materialInfo = "", labelImageBuff
     userContent.push({ type: "image_url", image_url: { url: `data:image/png;base64,${base64Label}` } });
   }
 
-  // 小工具：把百分比保守下修 5%
-  const softenPercent = (s) =>
-    s.replace(/(\d{1,3})\s*%/g, (m, p1) => {
-      let n = parseInt(p1, 10);
-      if (!Number.isNaN(n) && n > 5) n = Math.max(n - 5, 1);
-      return `${n}%`;
-    });
-
-  // 小工具：套入品牌段落（若原文沒有就插入）
-  const upsertBrandSection = (report, brandBlock) => {
-    if (/品牌推測/.test(report)) {
-      return report.replace(/(^|\n)5\)\s*【?品牌推測】?[\s\S]*?(?=\n6\)|\n【清潔建議】|$)/, `\n5) 品牌推測\n${brandBlock}\n`);
-    }
-    return report.replace(/(清潔成功機率[\s\S]*?\n)/, `$1\n5) 品牌推測\n${brandBlock}\n`);
-  };
-
-  // ---------- 階段 1：完整分析（較低溫度，要求給依據但不強猜） ----------
-  let fullReport = "建議交給 C.H 精緻洗衣評估與處理喔 😊";
   try {
-    const respFull = await openaiClient.chat.completions.create({
+    const resp = await openaiClient.chat.completions.create({
       model: "gpt-4o",
-      temperature: 0.35,
-      top_p: 0.8,
-      max_tokens: 1200,
       messages: [
         {
           role: "system",
           content: `
-你是 C.H 精緻洗衣 的專業清潔顧問。**不得把不確定當作確定**。先觀察圖樣、皮革壓紋、五金、手把與版型，再做品牌推測；推測一定要附「依據」，信心要保守。
+你是 C.H 精緻洗衣 的專業清潔顧問，請用口語化繁體中文，結構如下：
 
-【品牌速查要點（嚴格）】
-- LV Monogram：深/淺棕底＋反覆「LV」與三種四瓣花，等距排列；常見金色五金、棕色手把。
-- LV Damier：棋盤格（兩色小方格交錯），Ebene 棕色/Graphite 黑灰。
-- CHANEL：菱格、雙C扣、鍊帶皮穿金。
-- Hermès：Birkin/Kelly 鎖扣、Togo/Epsom 紋理、素雅配色。
-- Gucci：雙G（GG Supreme）、綠紅綠織帶。
-- Dior：Oblique 斜紋「Dior」字樣。
+【分析】
+- 物品與污漬狀況（2–4 句：位置、範圍、顏色、滲入深度）
+- 材質特性與注意（縮水/掉色/塗層/皮革護理等）
+- 污漬可能來源（油/汗/化妝/墨水/咖啡…）
+- 清潔成功機率（可附百分比，但偏保守；用「有機會改善／可望提升外觀」）
+- 品牌/年份/款式推測（能推就推，務必用「可能為／推測為」）
+- 結尾：我們會根據材質特性進行適當清潔，確保最佳效果。
 
-【輸出格式（逐點）】
-1) 物品與污漬狀況：2–4 句（位置/範圍/顏色/滲入深度）
-2) 材質特性與注意：縮水/掉色/塗層/皮革護理等
-3) 污漬可能來源：油汙、汗漬、化妝品、墨水、咖啡…
-4) 清潔成功機率：用「有機會改善／可望提升外觀」等保守字眼，可附百分比
-5) 【品牌推測】可能為：品牌／系列（信心 X%）；下一行「依據：…」。若不確定→「品牌推測：不明（依據不足）」。
-6) 款式特徵：手把形狀、托特/波士頓/斜背、五金形制等
-7) 結尾：我們會根據材質特性進行適當清潔，確保最佳效果。
-
-【清潔建議（另段）】
-- 僅 1–2 句，不給 DIY 比例；避免「保證／一定」。
-- 可加：「若擔心，建議交給 C.H 精緻洗衣專業處理，避免自行操作造成二次損傷 💙」。
-          `.trim(),
+【清潔建議】
+- 僅 1–2 句，不提供 DIY 比例，不使用「保證／一定」字眼
+- 可說「若擔心，建議交給 C.H 精緻洗衣專業處理，避免自行操作造成二次損傷 💙」
+`,
         },
         { role: "user", content: userContent },
       ],
+      temperature: 0.6,
+      max_tokens: 1000,
     });
-    fullReport = respFull?.choices?.[0]?.message?.content || fullReport;
-  } catch (e) {
-    console.error("[分析階段1錯誤]", e);
-  }
 
-  // ---------- 階段 2：品牌「僅品牌」複審（JSON 輸出，方便程式判斷） ----------
-  let brandJSON = null;
-  try {
-    const respBrand = await openaiClient.chat.completions.create({
-      model: "gpt-4o",
-      temperature: 0.2, // 更嚴謹
-      max_tokens: 400,
-      messages: [
-        {
-          role: "system",
-          content: `
-你只做「品牌複審」。請**務必輸出 JSON**，格式如下：
-{"brand":"LV|Chanel|Hermes|Gucci|Dior|Unknown","series":"文字或空字串","confidence":0-100,"basis":["觀察到的花紋/五金/版型等依據…"]}
-
-規則：
-- 只在**圖樣與細節明確吻合**時才給 70 分以上；模糊或遮擋→小於 60。
-- LV 判斷重點：Monogram 四瓣花＋LV 交疊等距／Damier 棋盤格；搭配金色五金、棕色手把常見托特。
-- 不確定就 brand=Unknown，confidence 不得超過 60。
-`.trim(),
-        },
-        {
-          role: "user",
-          content: [
-            { type: "text", text: "請對同一張圖片進行品牌複審，只回答 JSON：" },
-            { type: "image_url", image_url: { url: `data:image/png;base64,${base64Image}` } },
-          ],
-        },
-      ],
-    });
-    const t = respBrand?.choices?.[0]?.message?.content || "";
-    // 嘗試從文字中抓 JSON
-    const match = t.match(/\{[\s\S]*\}$/);
-    if (match) brandJSON = JSON.parse(match[0]);
-  } catch (e) {
-    console.error("[分析階段2錯誤]", e);
-  }
-
-  // ---------- 合併：若複審信心高（≥70）→ 覆蓋品牌段落 ----------
-  try {
-    if (brandJSON && typeof brandJSON === "object") {
-      const b = (brandJSON.brand || "").toLowerCase();
-      const conf = Number(brandJSON.confidence || 0);
-      const series = brandJSON.series || "";
-      const basisArr = Array.isArray(brandJSON.basis) ? brandJSON.basis : [];
-      const basisText = basisArr.length ? `依據：${basisArr.join("；")}` : "依據：花紋/五金/版型等整體觀察";
-
-      if (conf >= 70 && b !== "unknown") {
-        // 高信心：覆蓋
-        const brandName =
-          b === "lv" ? "Louis Vuitton"
-          : b === "chanel" ? "CHANEL"
-          : b === "hermes" ? "Hermès"
-          : b === "gucci" ? "Gucci"
-          : b === "dior" ? "Dior"
-          : brandJSON.brand;
-        const brandBlock = `可能為：${brandName}${series ? `／${series}` : ""}（信心 ${Math.min(99, conf)}%）\n${basisText}`;
-        fullReport = upsertBrandSection(fullReport, brandBlock);
-      } else if (!/品牌推測/.test(fullReport)) {
-        // 低信心且原文沒有 → 補「依據不足」
-        fullReport = upsertBrandSection(fullReport, `品牌推測：不明（依據不足）`);
-      }
-    } else if (!/品牌推測/.test(fullReport)) {
-      fullReport = upsertBrandSection(fullReport, `品牌推測：不明（依據不足）`);
+    let out = resp?.choices?.[0]?.message?.content || "建議交給 C.H 精緻洗衣評估與處理喔 😊";
+    out = out.replace(/\*\*/g, "");
+    out = reducePercentages(out, 5);
+    if (!/我們會根據材質特性進行適當清潔，確保最佳效果。/.test(out)) {
+      out += `\n我們會根據材質特性進行適當清潔，確保最佳效果。`;
     }
+    return out;
   } catch (e) {
-    console.error("[品牌合併錯誤]", e);
-  }
-
-  // ---------- 後處理：下修百分比 + 固定結尾 ----------
-  let out = (fullReport || "").replace(/\*\*/g, "");
-  out = softenPercent(out);
-  if (!/我們會根據材質特性進行適當清潔，確保最佳效果。/.test(out)) {
-    out += `\n我們會根據材質特性進行適當清潔，確保最佳效果。`;
-  }
-  return out;
-}
-
-    catch (e) {
     console.error("[智能污漬分析錯誤]", e);
     return "抱歉，目前分析系統忙碌中，請稍後再試 🙏";
   }
