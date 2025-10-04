@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -226,8 +225,8 @@
     </div>
     
     <script>
-        // API 網址（自動使用當前網域）
-        const API_URL = window.location.origin + '/send-payment';
+        // ✅ 修正：直接使用 Railway 網址
+        const API_URL = 'https://stain-bot-production-2593.up.railway.app/send-payment';
         
         // 付款方式選擇
         document.querySelectorAll('.payment-option').forEach(option => {
@@ -247,11 +246,9 @@
             const amount = parseInt(document.getElementById('amount').value);
             const paymentType = document.querySelector('input[name="paymentType"]:checked').value;
             
-            // 除錯：顯示要發送的資料
             console.log('準備發送資料:', { userId, userName, amount, paymentType });
             console.log('API 網址:', API_URL);
             
-            // 顯示載入中
             document.getElementById('loading').style.display = 'block';
             document.getElementById('result').style.display = 'none';
             
@@ -270,8 +267,6 @@
                 });
                 
                 const data = await response.json();
-                
-                // 除錯：顯示回應
                 console.log('收到回應:', data);
                 
                 document.getElementById('loading').style.display = 'none';
@@ -287,7 +282,6 @@
                         方式：${paymentType === 'ecpay' ? '綠界' : 'LINE Pay'}
                     `;
                     
-                    // 清空表單
                     document.getElementById('paymentForm').reset();
                     document.querySelectorAll('.payment-option').forEach(opt => opt.classList.remove('active'));
                     document.querySelector('.payment-option').classList.add('active');
@@ -296,7 +290,6 @@
                     resultDiv.innerHTML = `<strong>❌ 發送失敗</strong><br>${data.error || '未知錯誤'}`;
                 }
             } catch (error) {
-                // 除錯：顯示錯誤詳情
                 console.error('錯誤詳情:', error);
                 
                 document.getElementById('loading').style.display = 'none';
