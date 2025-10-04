@@ -731,16 +731,131 @@ async function smartAutoReply(inputText) {
   return reply;
 }
 
+/* =================== 綠界付款功能（新增） =================== */
+/**
+ * 生成綠界付款連結
+ * @param {string} userId - 客戶的 LINE USER ID
+ * @param {string} userName - 客戶名稱
+ * @param {number} amount - 付款金額
+ * @returns {string} 付款連結
+ */
+function createECPayPaymentLink(userId, userName, amount) {
+  const {
+    ECPAY_MERCHANT_ID,
+    ECPAY_HASH_KEY,
+    ECPAY_HASH_IV,
+    RAILWAY_STATIC_URL
+  } = process.env;
+
+  // 檢查必要環境變數
+  if (!ECPAY_MERCHANT_ID || !ECPAY_HASH_KEY || !ECPAY_HASH_IV) {
+    log('ERROR', '缺少綠界環境變數');
+    return ECPAY_URL; // 返回預設連結
+  }
+
+  // Railway 網址
+  const baseURL = RAILWAY_STATIC_URL || 'https://stain-bot-production-0fac.up.railway.app';
+  
+  // 生成唯一訂單編號（最多 20 字元）
+  const merchantTradeNo = `CH${Date.now()}`;
+  
+  // 綠界要求的日期格式：yyyy/MM/dd HH:mm:ss
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const hour = String(now.getHours()).padStart(2, '0');
+  const minute = String(now.getMinutes()).padStart(2, '0');
+  const second = String(now.getSeconds()).padStart(2, '0');
+  const tradeDate = `${year}/${month}/${day} ${hour}:${minute}:${second}`;
+
+  // 綠界付款參數
+  const paymentData = {
+    MerchantID: ECPAY_MERCHANT_ID,
+    MerchantTradeNo: merchantTradeNo,
+    MerchantTradeDate: tradeDate,
+    PaymentType: 'aio',
+    TotalAmount: String(amount),
+    TradeDesc: 'CH精緻洗衣服務',
+    ItemName: '洗衣服務費用',
+    ReturnURL: `${baseURL}/payment/ecpay/callback`,
+    ChoosePayment: 'ALL',
+    EncryptType: 1,
+    CustomField1: userId,   // 記錄客戶 LINE ID
+    CustomField2: userName, // 記錄客戶名稱
+  };
+
+  // 生成檢查碼
+  try {
+    paymentData.CheckMacValue = generateECPayCheckMacValue(paymentData);
+    
+    // 組合成付款連結
+    const params = new URLSearchParams(paymentData).toString();
+    const paymentLink = `https://payment.ecpay.com.tw/Cashier/AioCheckOut/V5?${params}`;
+    
+    log('PAYMENT', `綠界付款連結已生成: 訂單=${merchantTradeNo}, 金額=${amount}`);
+    
+    return paymentLink;
+  } catch (error) {
+    log('ERROR', '生成綠界付款連結失敗', error.message);
+    return ECPAY_URL; // 返回預設連結
+  }
+}
+
+/**
+ * 生成綠界檢查碼
+ */
+function generateECPayCheckMacValue(params) {
+  const {
+    ECPAY_HASH_KEY,
+    ECPAY_HASH_IV
+  } = process.env;
+
+  // 1. 移除 CheckMacValue（如果有）
+  const data = { ...params };
+  delete data.CheckMacValue;
+
+  // 2. 按照 key 排序
+  const sortedKeys = Object.keys(data).sort();
+  
+  // 3. 組合字串
+  let checkString = `HashKey=${ECPAY_HASH_KEY}`;
+  sortedKeys.forEach(key => {
+    checkString += `&${key}=${data[key]}`;
+  });
+  checkString += `&HashIV=${ECPAY_HASH_IV}`;
+
+  // 4. URL encode（綠界特殊規則）
+  checkString = encodeURIComponent(checkString)
+    .replace(/%20/g, '+')
+    .replace(/%2d/g, '-')
+    .replace(/%5f/g, '_')
+    .replace(/%2e/g, '.')
+    .replace(/%21/g, '!')
+    .replace(/%2a/g, '*')
+    .replace(/%28/g, '(')
+    .replace(/%29/g, ')')
+    .toLowerCase();
+
+  // 5. SHA256 加密並轉大寫
+  const checkMacValue = crypto
+    .createHash('sha256')
+    .update(checkString)
+    .digest('hex')
+    .toUpperCase();
+
+  return checkMacValue;
+}
+
 /* =================== 導出模組 =================== */
 module.exports = { 
   analyzeStainWithAI, 
   smartAutoReply,
-  // 新增：導出工具函數供測試使用
+  createECPayPaymentLink,  // 新增：綠界付款連結生成
   validateImage,
   extractTWAddress,
   standardizeBrandName,
   isSaturday,
-  // 新增：導出快取管理函數
   getCacheStats: () => ({
     size: brandCache.size,
     keys: Array.from(brandCache.keys()).map(k => k.substring(0, 16) + '...')
