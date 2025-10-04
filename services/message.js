@@ -54,7 +54,6 @@ function isClearlyUnrelatedTopic(t='') {
   const chitchat = /(在幹嘛|在忙嗎|聊聊|聊天|怎麼樣|最近如何|在不在)/;
   return weather.test(s) || chitchat.test(s);
 }
-// 判斷是否洗衣相關（用來決定要不要丟給 AI）
 function maybeLaundryRelated(s='') {
   const t = normalize(s).toLowerCase();
   const kw = [
@@ -75,34 +74,29 @@ function maybeLaundryRelated(s='') {
   return kw.some(k => t.includes(k));
 }
 
-/* ---------------- 固定模板（更專業更自然） ---------------- */
-// 包包
+/* ---------------- 固定模板 ---------------- */
 const TPL_BAG = [
   "您好，包包我們有專業處理 💼 會依材質調整方式，像皮革會注意保養護理，布面則加強清潔與定型，請您放心交給 C.H 精緻洗衣 😊",
   "包包是可以處理的 👍 我們會先檢視材質狀況，盡量在清潔同時保護原有外觀，有需要也能加強整形或護理 💙",
   "可以的喔 💼 包包清潔會依布料或皮革狀況分別處理，細節我們都會把關，請放心交給 C.H 精緻洗衣 ✨",
 ];
-// 鞋子
 const TPL_SHOE = [
   "可以清潔鞋子，我們會依材質（布面/皮革/麂皮）調整方式，盡量恢復外觀 👟",
   "鞋子可處理；發霉、異味或黃斑多能改善，會先做不顯眼處測試再進行 😊",
   "可清潔；皮革鞋會注意上油護理，布面鞋會加強清潔與定型 💙",
   "可以清洗；鞋底與縫線易藏污，我們會細清與除味，穿著感更好 ✨",
 ];
-// 窗簾
 const TPL_CURTAIN = [
   "可以清潔窗簾，我們會依布料與織法調整流程，兼顧潔淨與版型 👌",
   "窗簾可處理；會先評估縮水與掉色風險，再安排合適方式 😊",
   "可清潔；若有特殊塗層會先做小範圍測試，處理後更清爽 💙",
   "窗簾可以清洗，會注意尺寸穩定與垂墜感，完成後更俐落 ✨",
 ];
-// 地毯
 const TPL_RUG = [
   "地毯可以清潔，我們會分區與深層清潔，兼顧纖維與色澤，整體觀感可望提升 ✨",
   "地毯可處理；會先做局部測試再進行深層清潔與除味，讓居家更清爽 😊",
   "可以清潔地毯；針對藏汙位置與邊緣收邊會特別留意，完成後更舒適 👍",
 ];
-// 棉被/被子
 const TPL_QUILT = [
   "棉被可以清潔；我們會兼顧蓬鬆度與乾爽度，睡感可望更舒適 😊",
   "被子可處理；流程會保護纖維結構並充分烘透，使用上更衛生 💙",
@@ -115,17 +109,12 @@ class MessageHandler {
     this.userState = {};
     this.lastReply = new Map();
     this.store = new Map();
-
-    // 汙漬分析使用次數
     this.MAX_USES_PER_USER = Number(process.env.MAX_USES_PER_USER || 40);
     this.MAX_USES_TIME_PERIOD = Number(process.env.MAX_USES_TIME_PERIOD || 604800);
-
-    // 按 1 視窗（避免重啟丟狀態）
     this.recentOneTs = new Map();
     this.ONE_WINDOW_MS = 10 * 60 * 1000;
   }
 
-  /* ---- 限流（智能分析） ---- */
   async checkUsage(userId) {
     const key = `rate_limit:user:${userId}`;
     const now = Date.now();
@@ -143,7 +132,6 @@ class MessageHandler {
     }
   }
 
-  /* ---- 汙漬分析 ---- */
   async handleStainAnalysis(userId, imageBuffer) {
     try {
       const imageHash = createHash('sha256').update(imageBuffer).digest('hex');
@@ -157,27 +145,83 @@ class MessageHandler {
     }
   }
 
-  /* ---- 付款請求處理（新增） ---- */
-  async handlePaymentRequest(userId, userName, amount) {
-    try {
-      // 生成專屬付款連結
-      const paymentLink = createECPayPaymentLink(userId, userName, amount);
-      
-      // 發送給客人
-      await client.pushMessage(userId, {
-        type: 'text',
-        text: `💳 專屬付款連結已產生\n\n📋 訂購人：${userName}\n💰 金額：NT$ ${amount}\n\n請點選以下連結完成付款：\n${paymentLink}\n\n付款完成後系統會自動通知我們 😊`
-      });
-      
-      logger.logToFile(`✅ 已發送付款連結給 ${userName} (${userId})`);
-      
-    } catch (error) {
-      logger.logError('發送付款連結失敗', error, userId);
-      await client.pushMessage(userId, {
-        type: 'text',
-        text: '抱歉，產生付款連結時發生錯誤，請稍後再試或聯繫客服 🙏'
-      });
+  /* ---- ✅ 管理員指令：發送付款連結 ---- */
+  async handleAdminPaymentCommand(userId, text) {
+    const ADMIN_USER_ID = process.env.ADMIN_USER_ID;
+    
+    // 只有管理員可用
+    if (userId !== ADMIN_USER_ID) {
+      return false;
     }
+
+    // 格式: /付款 U客戶ID 王小明 1500 ecpay
+    if (text.startsWith('/付款 ')) {
+      const parts = text.split(' ');
+      
+      if (parts.length < 4) {
+        await client.pushMessage(userId, {
+          type: 'text',
+          text: '❌ 格式錯誤\n\n正確格式：\n/付款 [客戶ID] [姓名] [金額] [付款方式]\n\n範例：\n/付款 U1234567890 王小明 1500 ecpay\n/付款 U1234567890 王小明 2000 linepay'
+        });
+        return true;
+      }
+      
+      const [_, customerId, customerName, amount, paymentType = 'ecpay'] = parts;
+      
+      try {
+        let message = '';
+        
+        if (paymentType === 'ecpay') {
+          const link = createECPayPaymentLink(customerId, customerName, parseInt(amount));
+          message = `💳 您好，${customerName}\n\n` +
+                   `您的專屬付款連結已生成\n` +
+                   `付款方式：信用卡/超商/ATM\n` +
+                   `金額：NT$ ${parseInt(amount).toLocaleString()}\n\n` +
+                   `請點擊以下連結完成付款：\n${link}\n\n` +
+                   `付款後系統會自動通知我們\n` +
+                   `感謝您的支持 💙`;
+        } else if (paymentType === 'linepay') {
+          const LINE_PAY_URL = process.env.LINE_PAY_URL;
+          message = `💚 您好，${customerName}\n\n` +
+                   `請使用 LINE Pay 付款\n` +
+                   `金額：NT$ ${parseInt(amount).toLocaleString()}\n\n` +
+                   `付款連結：\n${LINE_PAY_URL}\n\n` +
+                   `⚠️ 請確認付款金額為 NT$ ${amount}\n` +
+                   `完成付款後請告知我們，謝謝 😊`;
+        } else {
+          await client.pushMessage(userId, {
+            type: 'text',
+            text: '❌ 不支援的付款方式\n請使用 ecpay 或 linepay'
+          });
+          return true;
+        }
+        
+        // 發送給客戶
+        await client.pushMessage(customerId, {
+          type: 'text',
+          text: message
+        });
+        
+        // 回覆管理員
+        await client.pushMessage(userId, {
+          type: 'text',
+          text: `✅ 已發送付款連結\n\n客戶：${customerName}\n金額：NT$ ${amount}\n方式：${paymentType === 'ecpay' ? '綠界' : 'LINE Pay'}`
+        });
+        
+        logger.logToFile(`✅ [管理員指令] 已發送付款連結給 ${customerName} (${customerId}) - ${amount}元`);
+        
+      } catch (err) {
+        logger.logError('發送付款連結失敗', err);
+        await client.pushMessage(userId, {
+          type: 'text',
+          text: `❌ 發送失敗：${err.message}`
+        });
+      }
+      
+      return true;
+    }
+    
+    return false;
   }
 
   /* ---- 文字訊息 ---- */
@@ -185,12 +229,17 @@ class MessageHandler {
     const raw = text || '';
     const lower = raw.toLowerCase().trim();
 
-    // 0) 「1」→ 立刻開啟智能分析（支援全形/半形）
+    // ✅ 0) 管理員指令優先處理
+    const isAdminCommand = await this.handleAdminPaymentCommand(userId, raw);
+    if (isAdminCommand) return;
+
+    // 1) 「1」→ 立刻開啟智能分析
     if (isOneKey(raw)) {
       this.recentOneTs.set(userId, Date.now());
       return this.handleNumberOneCommand(userId);
     }
-    // 0.1) 直接輸入「智能污漬分析」→ 引導
+
+    // 2) 直接輸入「智能污漬分析」→ 引導
     if (/智能[污汙]漬分析/.test(raw)) {
       await client.pushMessage(userId, {
         type: 'text',
@@ -199,7 +248,7 @@ class MessageHandler {
       return;
     }
 
-    // 1) 忽略固定選單/無關訊息
+    // 3) 忽略固定選單/無關訊息
     if (ignoredKeywords.some(k => lower.includes(k.toLowerCase())) ||
         isEmojiOrPuncOnly(raw) || isSmallTalk(raw) || isPhoneNumberOnly(raw) ||
         isUrlOnly(raw) || isClearlyUnrelatedTopic(raw)) {
@@ -207,18 +256,18 @@ class MessageHandler {
       return;
     }
 
-    // 2) 地址偵測（含樓層）
+    // 4) 地址偵測
     if (AddressDetector.isAddress(raw)) {
       await this.handleAddressMessage(userId, raw);
       return;
     }
 
-    // 3) 進度查詢（固定回覆 + QuickReply）
+    // 5) 進度查詢
     if (this.isProgressQuery(lower)) {
       return this.handleProgressQuery(userId);
     }
 
-    // 3.1) 收件/收衣意圖 → 先判斷週六公休，再決定回覆
+    // 6) 收件/收衣意圖
     if (/(收衣|收件|來收|到府|上門|取件)/.test(raw)) {
       const isSaturday = new Date().getDay() === 6;
       if (isSaturday) {
@@ -243,7 +292,7 @@ class MessageHandler {
       return;
     }
 
-    // 4) 特規：汽座/手推車/嬰兒車 → 固定回覆 +「按 2」
+    // 7) 汽座/手推車/嬰兒車 → 按 2
     const strollerKeywords = ['汽座','手推車','嬰兒推車','嬰兒車','安全座椅'];
     if (strollerKeywords.some(k => raw.includes(k))) {
       const reply = '這類寶寶用品我們都有處理 👶 會針對安全性與清潔特別注意。\n要詳細了解請按 2，謝謝您 😊';
@@ -252,7 +301,7 @@ class MessageHandler {
       return;
     }
 
-    // 5) 品項模板（更自然的固定回覆）
+    // 8) 品項模板
     if (/(包包|名牌包|手提袋|背包|書包)/.test(raw)) {
       const msg = pick(TPL_BAG);
       await client.pushMessage(userId, { type: 'text', text: msg });
@@ -284,20 +333,10 @@ class MessageHandler {
       return;
     }
 
-    // 6) 其餘洗衣相關 → 交給 AI 高度判斷
+    // 9) 其餘洗衣相關 → 交給 AI
     if (maybeLaundryRelated(raw)) {
       try {
         const aiText = await smartAutoReply(raw);
-        
-        // ===== 新增：處理付款請求 =====
-        if (aiText === 'payment_request') {
-          const profile = await client.getProfile(userId);
-          await this.handlePaymentRequest(userId, profile.displayName, 500);
-          logger.logBotResponse(userId, originalMessage, '已發送付款連結', 'Bot (Payment)');
-          return;
-        }
-        // ===== 付款處理結束 =====
-        
         if (aiText && aiText.trim()) {
           if (this.lastReply.get(userId) === aiText.trim()) return;
           await client.pushMessage(userId, { type: 'text', text: aiText });
@@ -310,11 +349,9 @@ class MessageHandler {
       }
     }
 
-    // 7) 其它情況：不回（避免打擾）
     logger.logToFile(`未回覆（非洗衣相關或 AI 判定無需回）：${raw}`);
   }
 
-  /* ---- 圖片訊息（雙保險） ---- */
   async handleImageMessage(userId, messageId) {
     try {
       const stream = await client.getMessageContent(messageId);
@@ -325,8 +362,6 @@ class MessageHandler {
       const hasWaiting = this.userState[userId]?.waitingForImage === true;
       const lastOneTs = this.recentOneTs.get(userId) || 0;
       const withinWindow = Date.now() - lastOneTs <= this.ONE_WINDOW_MS;
-
-      logger.logToFile(`waiting=${hasWaiting}, withinWindow=${withinWindow}`);
 
       if (hasWaiting || withinWindow) {
         await this.handleStainAnalysis(userId, buffer);
@@ -339,7 +374,6 @@ class MessageHandler {
     }
   }
 
-  /* ---- 「1」提示上傳 ---- */
   async handleNumberOneCommand(userId) {
     const ok = await this.checkUsage(userId);
     if (!ok) {
@@ -351,11 +385,11 @@ class MessageHandler {
     logger.logToFile(`提示上傳照片 (User ${userId})`);
   }
 
-  /* ---- 進度查詢 ---- */
   isProgressQuery(text) {
     const keys = ['洗好','洗好了嗎','可以拿了嗎','進度','好了嗎','完成了嗎','查進度','查詢進度'];
     return keys.some(k => text.includes(k));
   }
+
   async handleProgressQuery(userId) {
     await client.pushMessage(userId, {
       type: 'text',
@@ -369,7 +403,6 @@ class MessageHandler {
     });
   }
 
-  /* ---- 地址處理 ---- */
   async handleAddressMessage(userId, address) {
     try {
       const profile = await client.getProfile(userId);
