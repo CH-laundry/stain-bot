@@ -1,6 +1,6 @@
 // services/message.js
 const { Client } = require('@line/bot-sdk');
-const { analyzeStainWithAI, smartAutoReply } = require('./openai');
+const { analyzeStainWithAI, smartAutoReply, createECPayPaymentLink } = require('./openai');
 const logger = require('./logger');
 const { createHash } = require('crypto');
 const AddressDetector = require('../utils/address');
@@ -157,6 +157,29 @@ class MessageHandler {
     }
   }
 
+  /* ---- 付款請求處理（新增） ---- */
+  async handlePaymentRequest(userId, userName, amount) {
+    try {
+      // 生成專屬付款連結
+      const paymentLink = createECPayPaymentLink(userId, userName, amount);
+      
+      // 發送給客人
+      await client.pushMessage(userId, {
+        type: 'text',
+        text: `💳 專屬付款連結已產生\n\n📋 訂購人：${userName}\n💰 金額：NT$ ${amount}\n\n請點選以下連結完成付款：\n${paymentLink}\n\n付款完成後系統會自動通知我們 😊`
+      });
+      
+      logger.logToFile(`✅ 已發送付款連結給 ${userName} (${userId})`);
+      
+    } catch (error) {
+      logger.logError('發送付款連結失敗', error, userId);
+      await client.pushMessage(userId, {
+        type: 'text',
+        text: '抱歉，產生付款連結時發生錯誤，請稍後再試或聯繫客服 🙏'
+      });
+    }
+  }
+
   /* ---- 文字訊息 ---- */
   async handleTextMessage(userId, text, originalMessage) {
     const raw = text || '';
@@ -195,9 +218,9 @@ class MessageHandler {
       return this.handleProgressQuery(userId);
     }
 
-    // 3.1) 收件/收衣意圖 → 先判斷週六公休，再決定回覆（★你要的版本）
+    // 3.1) 收件/收衣意圖 → 先判斷週六公休，再決定回覆
     if (/(收衣|收件|來收|到府|上門|取件)/.test(raw)) {
-      const isSaturday = new Date().getDay() === 6; // 0=週日, 6=週六
+      const isSaturday = new Date().getDay() === 6;
       if (isSaturday) {
         const reply = "今天週六固定公休，明天週日有營業的，可以去收回 🙏";
         await client.pushMessage(userId, { type: "text", text: reply });
@@ -205,7 +228,6 @@ class MessageHandler {
         return;
       }
 
-      // 非週六 → 照常收件；如果訊息裡偵測到地址就重複一次
       let reply = "好的 😊 我們會去收回的";
       try {
         if (AddressDetector.isAddress(raw)) {
@@ -214,7 +236,7 @@ class MessageHandler {
             reply = `好的 😊 我們會去收回的\n地址是：${formattedAddress}`;
           }
         }
-      } catch (_) { /* 忽略地址解析錯誤，回預設句 */ }
+      } catch (_) { }
 
       await client.pushMessage(userId, { type: "text", text: reply });
       logger.logBotResponse(userId, originalMessage, reply, "Bot (Rule: pickup)");
@@ -267,7 +289,7 @@ class MessageHandler {
       try {
         const aiText = await smartAutoReply(raw);
         if (aiText && aiText.trim()) {
-          if (this.lastReply.get(userId) === aiText.trim()) return; // 避免重複
+          if (this.lastReply.get(userId) === aiText.trim()) return;
           await client.pushMessage(userId, { type: 'text', text: aiText });
           this.lastReply.set(userId, aiText.trim());
           logger.logBotResponse(userId, originalMessage, aiText, 'Bot (AI)');
@@ -300,9 +322,6 @@ class MessageHandler {
         await this.handleStainAnalysis(userId, buffer);
         delete this.userState[userId];
         this.recentOneTs.delete(userId);
-      } else {
-        // 想超保險可解開：任何圖片都嘗試分析
-        // await this.handleStainAnalysis(userId, buffer);
       }
     } catch (err) {
       logger.logError('處理圖片錯誤', err, userId);
