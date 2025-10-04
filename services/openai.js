@@ -95,30 +95,126 @@ const isSaturday = () => {
 
 /* ---------------- 品牌名稱標準化與 JSON 安全解析 ---------------- */
 const BRAND_MAP = {
-  "lv": "Louis Vuitton", "louis vuitton": "Louis Vuitton", "路易威登": "Louis Vuitton",
-  "chanel": "Chanel", "香奈兒": "Chanel",
-  "gucci": "Gucci", "古馳": "Gucci",
-  "dior": "Dior", "迪奧": "Dior",
-  "hermes": "Hermès", "hèrmes": "Hermès", "愛馬仕": "Hermès",
-  "prada": "Prada", "普拉達": "Prada",
-  "coach": "Coach", "蔻馳": "Coach",
-  "balenciaga": "Balenciaga", "巴黎世家": "Balenciaga",
+  // ========== 精品包包品牌 ==========
+  "lv": "Louis Vuitton", "louis vuitton": "Louis Vuitton", "路易威登": "Louis Vuitton", "lv包": "Louis Vuitton",
+  "chanel": "Chanel", "香奈兒": "Chanel", "香奈儿": "Chanel",
+  "gucci": "Gucci", "古馳": "Gucci", "古驰": "Gucci",
+  "hermes": "Hermès", "hermès": "Hermès", "愛馬仕": "Hermès", "爱马仕": "Hermès",
+  "prada": "Prada", "普拉達": "Prada", "普拉达": "Prada",
+  "dior": "Dior", "迪奧": "Dior", "迪奥": "Dior",
+  "fendi": "Fendi", "芬迪": "Fendi", "芬地": "Fendi",
+  "bottega veneta": "Bottega Veneta", "bv": "Bottega Veneta", "寶緹嘉": "Bottega Veneta", "bv包": "Bottega Veneta",
+  "celine": "Celine", "思琳": "Celine", "賽琳": "Celine",
+  "ysl": "Saint Laurent", "saint laurent": "Saint Laurent", "聖羅蘭": "Saint Laurent", "圣罗兰": "Saint Laurent",
+  "balenciaga": "Balenciaga", "巴黎世家": "Balenciaga", "巴黎士家": "Balenciaga",
+  "givenchy": "Givenchy", "紀梵希": "Givenchy", "纪梵希": "Givenchy",
+  "loewe": "Loewe", "羅意威": "Loewe", "罗意威": "Loewe",
+  "valentino": "Valentino", "華倫天奴": "Valentino", "华伦天奴": "Valentino",
+  "burberry": "Burberry", "巴寶莉": "Burberry", "博柏利": "Burberry",
   "goyard": "Goyard", "戈雅": "Goyard",
-  "miu miu": "Miu Miu", "miumiu": "Miu Miu",
-  "celine": "Celine", "思琳": "Celine",
-  "ysl": "Saint Laurent", "saint laurent": "Saint Laurent", "聖羅蘭": "Saint Laurent",
-  "burberry": "Burberry", "巴寶莉": "Burberry",
-  // 新增品牌
-  "fendi": "Fendi", "芬迪": "Fendi",
-  "bottega veneta": "Bottega Veneta", "bv": "Bottega Veneta", "寶緹嘉": "Bottega Veneta",
-  "loewe": "Loewe", "羅意威": "Loewe",
-  "givenchy": "Givenchy", "紀梵希": "Givenchy",
-  "valentino": "Valentino", "華倫天奴": "Valentino",
+  "miu miu": "Miu Miu", "miumiu": "Miu Miu", "繆繆": "Miu Miu",
   "mcm": "MCM",
-  "longchamp": "Longchamp", "瓏驤": "Longchamp",
-  "michael kors": "Michael Kors", "mk": "Michael Kors",
-  "kate spade": "Kate Spade",
-  "tory burch": "Tory Burch",
+  "coach": "Coach", "蔻馳": "Coach", "寇茲": "Coach",
+  "michael kors": "Michael Kors", "mk": "Michael Kors", "麥可·寇斯": "Michael Kors",
+  "longchamp": "Longchamp", "瓏驤": "Longchamp", "珑骧": "Longchamp",
+  "kate spade": "Kate Spade", "凱特絲蓓": "Kate Spade",
+  "tory burch": "Tory Burch", "湯麗柏琦": "Tory Burch",
+  "furla": "Furla", "芙拉": "Furla",
+  "mulberry": "Mulberry", "瑪百莉": "Mulberry",
+  
+  // ========== 運動鞋品牌 ==========
+  "nike": "Nike", "耐吉": "Nike", "耐克": "Nike",
+  "adidas": "Adidas", "愛迪達": "Adidas", "阿迪達斯": "Adidas",
+  "new balance": "New Balance", "nb": "New Balance", "紐巴倫": "New Balance", "新百倫": "New Balance",
+  "puma": "Puma", "彪馬": "Puma",
+  "asics": "Asics", "亞瑟士": "Asics", "亞瑟膠": "Asics",
+  "converse": "Converse", "匡威": "Converse",
+  "vans": "Vans", "范斯": "Vans",
+  "reebok": "Reebok", "銳跑": "Reebok",
+  "under armour": "Under Armour", "ua": "Under Armour", "安德瑪": "Under Armour",
+  "skechers": "Skechers", "斯凱奇": "Skechers",
+  "fila": "Fila", "斐樂": "Fila",
+  "mizuno": "Mizuno", "美津濃": "Mizuno",
+  "hoka": "Hoka", "hoka one one": "Hoka",
+  "on running": "On", "on": "On", "昂跑": "On",
+  "salomon": "Salomon", "薩洛蒙": "Salomon",
+  "brooks": "Brooks",
+  
+  // ========== 精品鞋履品牌 ==========
+  "jimmy choo": "Jimmy Choo", "周仰傑": "Jimmy Choo",
+  "manolo blahnik": "Manolo Blahnik", "馬諾洛": "Manolo Blahnik",
+  "christian louboutin": "Christian Louboutin", "cl": "Christian Louboutin", "紅底鞋": "Christian Louboutin", "羅布廷": "Christian Louboutin",
+  "salvatore ferragamo": "Salvatore Ferragamo", "ferragamo": "Salvatore Ferragamo", "菲拉格慕": "Salvatore Ferragamo",
+  "tod's": "Tod's", "tods": "Tod's", "托德斯": "Tod's",
+  "roger vivier": "Roger Vivier", "羅傑·維維亞": "Roger Vivier",
+  "giuseppe zanotti": "Giuseppe Zanotti", "朱塞佩·薩諾第": "Giuseppe Zanotti",
+  "sergio rossi": "Sergio Rossi", "塞喬·羅西": "Sergio Rossi",
+  "stuart weitzman": "Stuart Weitzman", "斯圖爾特·韋茨曼": "Stuart Weitzman",
+  "clarks": "Clarks", "其樂": "Clarks",
+  "timberland": "Timberland", "添柏嵐": "Timberland", "踢不爛": "Timberland",
+  "dr. martens": "Dr. Martens", "dr martens": "Dr. Martens", "馬汀大夫": "Dr. Martens", "馬丁鞋": "Dr. Martens",
+  "ugg": "UGG", "雪靴": "UGG",
+  "birkenstock": "Birkenstock", "勃肯": "Birkenstock",
+  "crocs": "Crocs", "卡駱馳": "Crocs", "布希鞋": "Crocs",
+  
+  // ========== 服飾品牌 ==========
+  "uniqlo": "Uniqlo", "優衣庫": "Uniqlo",
+  "zara": "Zara", "颯拉": "Zara",
+  "h&m": "H&M", "hm": "H&M",
+  "gap": "Gap",
+  "muji": "Muji", "無印良品": "Muji",
+  "gu": "GU",
+  "mango": "Mango", "芒果": "Mango",
+  "massimo dutti": "Massimo Dutti", "麥絲瑪拉": "Massimo Dutti",
+  "cos": "COS",
+  "pull & bear": "Pull & Bear", "pull&bear": "Pull & Bear",
+  "bershka": "Bershka",
+  
+  // ========== 精品服飾品牌 ==========
+  "armani": "Armani", "亞曼尼": "Armani", "阿瑪尼": "Armani",
+  "versace": "Versace", "凡賽斯": "Versace", "范思哲": "Versace",
+  "dolce & gabbana": "Dolce & Gabbana", "d&g": "Dolce & Gabbana", "杜嘉班納": "Dolce & Gabbana",
+  "ralph lauren": "Ralph Lauren", "polo": "Ralph Lauren", "拉夫勞倫": "Ralph Lauren",
+  "tommy hilfiger": "Tommy Hilfiger", "湯米": "Tommy Hilfiger",
+  "calvin klein": "Calvin Klein", "ck": "Calvin Klein", "卡爾文克雷恩": "Calvin Klein",
+  "hugo boss": "Hugo Boss", "boss": "Hugo Boss", "波士": "Hugo Boss",
+  "lacoste": "Lacoste", "鱷魚牌": "Lacoste",
+  "fred perry": "Fred Perry", "月桂葉": "Fred Perry",
+  "paul smith": "Paul Smith", "保羅史密斯": "Paul Smith",
+  "vivienne westwood": "Vivienne Westwood", "薇薇安魏斯伍德": "Vivienne Westwood", "土星": "Vivienne Westwood",
+  
+  // ========== 運動服飾品牌 ==========
+  "lululemon": "Lululemon", "露露檸檬": "Lululemon",
+  "the north face": "The North Face", "tnf": "The North Face", "北臉": "The North Face", "北面": "The North Face",
+  "patagonia": "Patagonia", "巴塔哥尼亞": "Patagonia",
+  "columbia": "Columbia", "哥倫比亞": "Columbia",
+  "mammut": "Mammut", "長毛象": "Mammut",
+  "arc'teryx": "Arc'teryx", "arcteryx": "Arc'teryx", "始祖鳥": "Arc'teryx",
+  "marmot": "Marmot", "土撥鼠": "Marmot",
+  "mountain hardwear": "Mountain Hardwear", "山浩": "Mountain Hardwear",
+  
+  // ========== 日本品牌 ==========
+  "comme des garcons": "Comme des Garçons", "川久保玲": "Comme des Garçons", "cdg": "Comme des Garçons",
+  "issey miyake": "Issey Miyake", "三宅一生": "Issey Miyake",
+  "yohji yamamoto": "Yohji Yamamoto", "山本耀司": "Yohji Yamamoto",
+  "bape": "Bape", "a bathing ape": "Bape", "猿人頭": "Bape",
+  "neighborhood": "Neighborhood", "nbhd": "Neighborhood",
+  "visvim": "Visvim",
+  "porter": "Porter", "吉田包": "Porter",
+  
+  // ========== 其他常見品牌 ==========
+  "levis": "Levi's", "levi's": "Levi's", "李維斯": "Levi's",
+  "wrangler": "Wrangler", "牧馬人": "Wrangler",
+  "lee": "Lee",
+  "diesel": "Diesel", "迪賽": "Diesel",
+  "g-star": "G-Star", "gstar": "G-Star",
+  "superdry": "Superdry", "極度乾燥": "Superdry",
+  "stussy": "Stüssy", "stüssy": "Stüssy", "史圖西": "Stüssy",
+  "supreme": "Supreme",
+  "palace": "Palace",
+  "off-white": "Off-White", "offwhite": "Off-White",
+  "stone island": "Stone Island", "石頭島": "Stone Island",
+  "cp company": "C.P. Company", "c.p. company": "C.P. Company",
 };
 
 function standardizeBrandName(name = "") {
@@ -198,7 +294,7 @@ async function detectBrandFromImageB64(base64Image) {
   // Mock 模式
   if (IS_DEVELOPMENT && USE_MOCK) {
     log('MOCK', 'Using mock brand detection from image');
-    return { brand: "Louis Vuitton", confidence: 85 };
+    return { brand: "Nike", confidence: 85 };
   }
 
   // 檢查快取
@@ -219,7 +315,7 @@ async function detectBrandFromImageB64(base64Image) {
           {
             role: "user",
             content: [
-              { type: "text", text: "請辨識圖片中的品牌。" },
+              { type: "text", text: "請辨識圖片中的品牌（包包、鞋子、衣服都可以）。" },
               { type: "image_url", image_url: { url: `data:image/png;base64,${base64Image}` } }
             ]
           }
@@ -255,7 +351,7 @@ async function detectBrandFromText(text) {
   // Mock 模式
   if (IS_DEVELOPMENT && USE_MOCK) {
     log('MOCK', 'Using mock brand detection from text');
-    return { brand: "Gucci", confidence: 75 };
+    return { brand: "Adidas", confidence: 75 };
   }
 
   // 檢查快取
