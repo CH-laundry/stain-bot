@@ -195,6 +195,32 @@ class MessageHandler {
       return this.handleProgressQuery(userId);
     }
 
+    // 3.1) 收件/收衣意圖 → 先判斷週六公休，再決定回覆（★你要的版本）
+    if (/(收衣|收件|來收|到府|上門|取件)/.test(raw)) {
+      const isSaturday = new Date().getDay() === 6; // 0=週日, 6=週六
+      if (isSaturday) {
+        const reply = "今天週六固定公休，明天週日有營業的，可以去收回 🙏";
+        await client.pushMessage(userId, { type: "text", text: reply });
+        logger.logBotResponse(userId, originalMessage, reply, "Bot (Rule: pickup-sat-closed)");
+        return;
+      }
+
+      // 非週六 → 照常收件；如果訊息裡偵測到地址就重複一次
+      let reply = "好的 😊 我們會去收回的";
+      try {
+        if (AddressDetector.isAddress(raw)) {
+          const { formattedAddress } = AddressDetector.formatResponse(raw);
+          if (formattedAddress) {
+            reply = `好的 😊 我們會去收回的\n地址是：${formattedAddress}`;
+          }
+        }
+      } catch (_) { /* 忽略地址解析錯誤，回預設句 */ }
+
+      await client.pushMessage(userId, { type: "text", text: reply });
+      logger.logBotResponse(userId, originalMessage, reply, "Bot (Rule: pickup)");
+      return;
+    }
+
     // 4) 特規：汽座/手推車/嬰兒車 → 固定回覆 +「按 2」
     const strollerKeywords = ['汽座','手推車','嬰兒推車','嬰兒車','安全座椅'];
     if (strollerKeywords.some(k => raw.includes(k))) {
