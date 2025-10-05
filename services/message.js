@@ -5,6 +5,7 @@ const logger = require('./logger');
 const { createHash } = require('crypto');
 const AddressDetector = require('../utils/address');
 const { addCustomerInfo } = require('./google');
+const fetch = require('node-fetch');
 
 // LINE client
 const client = new Client({
@@ -174,18 +175,29 @@ class MessageHandler {
         if (paymentType === 'ecpay') {
           const link = createECPayPaymentLink(customerId, customerName, parseInt(amount));
           
-          // ✅ 修改後的簡潔訊息格式
+          // ✅ 自動縮短網址
+          let shortUrl = link;
+          try {
+            const response = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(link)}`);
+            const result = await response.text();
+            if (result && result.startsWith('http')) {
+              shortUrl = result;
+              logger.logToFile(`✅ 已縮短網址: ${shortUrl}`);
+            }
+          } catch (error) {
+            logger.logToFile(`⚠️ 短網址生成失敗,使用原網址: ${error.message}`);
+          }
+          
           message = `您好,${customerName} 👋\n\n` +
                    `您的專屬付款連結已生成\n` +
                    `付款方式:信用卡\n` +
                    `金額:NT$ ${parseInt(amount).toLocaleString()}\n\n` +
-                   `👉 請點擊下方連結完成付款\n${link}\n\n` +
+                   `👉 請點擊下方連結完成付款\n${shortUrl}\n\n` +
                    `✅ 付款後系統會自動通知我們\n` +
                    `感謝您的支持 💙`;
         } else if (paymentType === 'linepay') {
           const LINE_PAY_URL = process.env.LINE_PAY_URL;
           
-          // ✅ LINE Pay 也改成簡潔版
           message = `您好,${customerName} 👋\n\n` +
                    `您的專屬付款連結已生成\n` +
                    `付款方式:LINE Pay\n` +
