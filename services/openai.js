@@ -683,24 +683,13 @@ function createECPayPaymentLink(userId, userName, amount) {
   }
 
   let baseURL = RAILWAY_STATIC_URL || 'https://stain-bot-production-2593.up.railway.app';
-  
   if (!baseURL.startsWith('http://') && !baseURL.startsWith('https://')) {
     baseURL = `https://${baseURL}`;
   }
   
-  log('PAYMENT', `使用的 baseURL: ${baseURL}`);
-  
-  // 生成唯一訂單編號（加入隨機碼避免重複）
   const merchantTradeNo = `CH${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
-  
   const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  const hour = String(now.getHours()).padStart(2, '0');
-  const minute = String(now.getMinutes()).padStart(2, '0');
-  const second = String(now.getSeconds()).padStart(2, '0');
-  const tradeDate = `${year}/${month}/${day} ${hour}:${minute}:${second}`;
+  const tradeDate = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
 
   const paymentData = {
     MerchantID: ECPAY_MERCHANT_ID,
@@ -711,7 +700,7 @@ function createECPayPaymentLink(userId, userName, amount) {
     TradeDesc: 'CH精緻洗衣服務',
     ItemName: '洗衣服務費用',
     ReturnURL: `${baseURL}/payment/ecpay/callback`,
-    ClientBackURL: `${baseURL}/payment/success`,  // 付款完成返回頁面
+    ClientBackURL: `${baseURL}/payment/success`,
     ChoosePayment: 'ALL',
     EncryptType: 1,
     CustomField1: userId,
@@ -720,15 +709,58 @@ function createECPayPaymentLink(userId, userName, amount) {
 
   try {
     paymentData.CheckMacValue = generateECPayCheckMacValue(paymentData);
-    
-    // 使用跳轉頁面而非直接 URL 參數
     const paymentLink = `${baseURL}/payment/redirect?data=${encodeURIComponent(Buffer.from(JSON.stringify(paymentData)).toString('base64'))}`;
-    
     log('PAYMENT', `綠界連結已生成: 訂單=${merchantTradeNo}, 金額=${amount}元, 客戶=${userName}`);
-    
     return paymentLink;
   } catch (error) {
     log('ERROR', '生成付款連結失敗', error.message);
     throw error;
   }
 }
+
+function generateECPayCheckMacValue(params) {
+  const { ECPAY_HASH_KEY, ECPAY_HASH_IV } = process.env;
+  const data = { ...params };
+  delete data.CheckMacValue;
+
+  const sortedKeys = Object.keys(data).sort();
+  let checkString = `HashKey=${ECPAY_HASH_KEY}`;
+  sortedKeys.forEach(key => {
+    checkString += `&${key}=${data[key]}`;
+  });
+  checkString += `&HashIV=${ECPAY_HASH_IV}`;
+
+  checkString = encodeURIComponent(checkString)
+    .replace(/%20/g, '+')
+    .replace(/%2d/g, '-')
+    .replace(/%5f/g, '_')
+    .replace(/%2e/g, '.')
+    .replace(/%21/g, '!')
+    .replace(/%2a/g, '*')
+    .replace(/%28/g, '(')
+    .replace(/%29/g, ')')
+    .toLowerCase();
+
+  return crypto.createHash('sha256').update(checkString).digest('hex').toUpperCase();
+}
+
+/* =================== 導出模組 =================== */
+module.exports = { 
+  analyzeStainWithAI, 
+  smartAutoReply,
+  createECPayPaymentLink,
+  validateImage,
+  extractTWAddress,
+  standardizeBrandName,
+  isSaturday,
+  getCacheStats: () => ({
+    size: brandCache.size,
+    keys: Array.from(brandCache.keys()).map(k => k.substring(0, 16) + '...')
+  }),
+  clearCache: () => {
+    const size = brandCache.size;
+    brandCache.clear();
+    log('CACHE', `Cleared ${size} cache entries`);
+    return size;
+  }
+};
