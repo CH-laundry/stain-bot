@@ -471,16 +471,30 @@ async function analyzeStainWithAI(imageBuffer, materialInfo = "", labelImageBuff
       out += `\n我們會根據材質特性進行適當清潔,確保最佳效果。`;
     }
 
-    // 如果 AI 沒有識別出品牌,嘗試用品牌辨識
-    if (!out.includes("🏷️ 品牌:") || out.includes("無法確定")) {
+    // ✅ 修正:如果 AI 沒有識別出品牌,嘗試用品牌辨識
+    if (!out.includes("🏷️ 品牌:")) {
       let best = await detectBrandFromImageB64(base64Image);
       if (!best) best = await detectBrandFromText(out);
       
       if (best && best.brand) {
         const conf = Math.round(Math.max(0, Math.min(100, best.confidence)));
-        // 在回覆開頭插入品牌資訊
-        out = out.replace(/🏷️ 品牌:.*?\n/, `🏷️ 品牌:${best.brand}(信心約 ${conf}%)\n`);
+        const lines = out.split('\n');
+        if (lines[0] && lines[0].includes('📦 物品類型:')) {
+          lines.splice(1, 0, `🏷️ 品牌:${best.brand}(信心約 ${conf}%)`);
+          out = lines.join('\n');
+        } else {
+          out = `🏷️ 品牌:${best.brand}(信心約 ${conf}%)\n\n${out}`;
+        }
         log('ANALYZE', `Brand added to analysis: ${best.brand}`);
+      }
+    } else if (out.includes("無法確定")) {
+      let best = await detectBrandFromImageB64(base64Image);
+      if (!best) best = await detectBrandFromText(out);
+      
+      if (best && best.brand) {
+        const conf = Math.round(Math.max(0, Math.min(100, best.confidence)));
+        out = out.replace(/🏷️ 品牌:.*?無法確定.*?\n/, `🏷️ 品牌:${best.brand}(信心約 ${conf}%)\n`);
+        log('ANALYZE', `Brand updated in analysis: ${best.brand}`);
       }
     }
 
