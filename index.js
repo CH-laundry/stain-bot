@@ -14,10 +14,10 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ✅ 靜態文件支援（網頁管理介面）
+// 靜態文件支援
 app.use(express.static('public'));
 
-// ============== LINE Client（推播用）===============
+// ============== LINE Client ==============
 const client = new Client({
     channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
     channelSecret: process.env.LINE_CHANNEL_SECRET,
@@ -81,32 +81,110 @@ app.get('/test-push', async (req, res) => {
     }
 });
 
-// ============== 📱 發送付款連結 API ==============
+// ============== 綠界付款跳轉頁面 ==============
+app.get('/payment/redirect', (req, res) => {
+    const { data } = req.query;
+    
+    if (!data) {
+        return res.status(400).send('缺少付款資料');
+    }
+    
+    try {
+        const paymentData = JSON.parse(Buffer.from(decodeURIComponent(data), 'base64').toString());
+        
+        const formHTML = `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>跳轉到綠界付款</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; padding: 50px; }
+        .loading { font-size: 18px; color: #666; }
+    </style>
+</head>
+<body>
+    <h3 class="loading">正在跳轉到付款頁面...</h3>
+    <p>請稍候，若未自動跳轉請點擊下方按鈕</p>
+    <form id="ecpayForm" action="https://payment.ecpay.com.tw/Cashier/AioCheckOut/V5" method="post">
+        ${Object.keys(paymentData).map(key => 
+            `<input type="hidden" name="${key}" value="${paymentData[key]}">`
+        ).join('\n')}
+        <button type="submit" style="padding: 10px 20px; font-size: 16px; cursor: pointer;">前往付款</button>
+    </form>
+    <script>
+        setTimeout(function() {
+            document.getElementById('ecpayForm').submit();
+        }, 500);
+    </script>
+</body>
+</html>
+        `;
+        
+        res.send(formHTML);
+        
+    } catch (error) {
+        logger.logError('付款跳轉失敗', error);
+        res.status(500).send('付款連結錯誤');
+    }
+});
+
+// ============== 付款成功返回頁面 ==============
+app.get('/payment/success', (req, res) => {
+    res.send(`
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>付款完成</title>
+    <style>
+        body { 
+            font-family: sans-serif; 
+            text-align: center; 
+            padding: 50px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        h1 { color: #fff; font-size: 32px; }
+        p { font-size: 18px; }
+        .container {
+            background: rgba(255,255,255,0.1);
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 500px;
+            margin: 0 auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>✅ 付款已完成</h1>
+        <p>感謝您的支付，我們會盡快處理您的訂單</p>
+        <p>您可以關閉此頁面了</p>
+    </div>
+</body>
+</html>
+    `);
+});
+
+// ============== 發送付款連結 API ==============
 app.post('/send-payment', async (req, res) => {
     const { userId, userName, amount, paymentType } = req.body;
     
     logger.logToFile(`收到付款請求: userId=${userId}, userName=${userName}, amount=${amount}, type=${paymentType}`);
     
-    // 參數驗證
     if (!userId || !userName || !amount) {
-        logger.logToFile(`❌ 參數驗證失敗: userId=${userId}, userName=${userName}, amount=${amount}`);
+        logger.logToFile(`❌ 參數驗證失敗`);
         return res.status(400).json({ 
             error: '缺少必要參數',
-            required: ['userId', 'userName', 'amount'],
-            received: { userId, userName, amount },
-            example: {
-                userId: "U1234567890abcdef",
-                userName: "王小明",
-                amount: 1500,
-                paymentType: "ecpay"
-            }
+            required: ['userId', 'userName', 'amount']
         });
     }
 
-    // 金額驗證
     const numAmount = parseInt(amount);
     if (isNaN(numAmount) || numAmount <= 0) {
-        logger.logToFile(`❌ 金額驗證失敗: ${amount}`);
         return res.status(400).json({ error: '金額必須是正整數' });
     }
 
@@ -117,112 +195,59 @@ app.post('/send-payment', async (req, res) => {
         const type = paymentType || 'ecpay';
 
         if (type === 'ecpay') {
-            // ✅ 綠界付款（動態金額）
             paymentLink = createECPayPaymentLink(userId, userName, numAmount);
-            message = `💳 您好，${userName}\n\n` +
-                     `您的專屬付款連結已生成\n` +
-                     `付款方式：信用卡/超商/ATM\n` +
-                     `金額：NT$ ${numAmount.toLocaleString()}\n\n` +
-                     `請點擊以下連結完成付款：\n${paymentLink}\n\n` +
-                     `✅ 付款後系統會自動通知我們\n` +
-                     `感謝您的支持 💙`;
+            message = `💳 您好，${userName}\n\n您的專屬付款連結已生成\n付款方式：信用卡/超商/ATM\n金額：NT$ ${numAmount.toLocaleString()}\n\n請點擊以下連結完成付款：\n${paymentLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
         } else if (type === 'linepay') {
-            // ✅ LINE Pay（固定連結）
             const LINE_PAY_URL = process.env.LINE_PAY_URL;
             if (!LINE_PAY_URL) {
                 return res.status(500).json({ error: 'LINE Pay 連結未設定' });
             }
-            message = `💚 您好，${userName}\n\n` +
-                     `請使用 LINE Pay 付款\n` +
-                     `金額：NT$ ${numAmount.toLocaleString()}\n\n` +
-                     `付款連結：\n${LINE_PAY_URL}\n\n` +
-                     `⚠️ 請確認付款金額為 NT$ ${numAmount}\n` +
-                     `完成付款後請告知我們，謝謝 😊`;
+            message = `💚 您好，${userName}\n\n請使用 LINE Pay 付款\n金額：NT$ ${numAmount.toLocaleString()}\n\n付款連結：\n${LINE_PAY_URL}\n\n⚠️ 請確認付款金額為 NT$ ${numAmount}\n完成付款後請告知我們，謝謝 😊`;
         } else {
-            return res.status(400).json({ error: '不支援的付款方式，請使用 ecpay 或 linepay' });
+            return res.status(400).json({ error: '不支援的付款方式' });
         }
         
-        // 發送給客戶
-        logger.logToFile(`📤 準備發送訊息給 ${userId}: ${message.substring(0, 50)}...`);
-        
-        await client.pushMessage(userId, {
-            type: 'text',
-            text: message
-        });
-        
-        logger.logToFile(`✅ 已發送${type === 'linepay' ? 'LINE Pay' : '綠界'}付款連結: ${userName} (${userId}) - ${numAmount}元`);
+        await client.pushMessage(userId, { type: 'text', text: message });
+        logger.logToFile(`✅ 已發送付款連結: ${userName} - ${numAmount}元`);
         
         res.json({ 
             success: true, 
             message: '付款連結已發送',
-            data: {
-                userId,
-                userName,
-                amount: numAmount,
-                paymentType: type,
-                link: type === 'ecpay' ? paymentLink : LINE_PAY_URL
-            }
+            data: { userId, userName, amount: numAmount, paymentType: type, link: type === 'ecpay' ? paymentLink : LINE_PAY_URL }
         });
     } catch (err) {
         logger.logError('發送付款連結失敗', err);
-        console.error('❌ 詳細錯誤:', err);
-        res.status(500).json({ 
-            error: '發送失敗', 
-            details: err.message 
-        });
+        res.status(500).json({ error: '發送失敗', details: err.message });
     }
 });
 
-// ============== 💰 綠界付款回調（自動通知）==============
+// ============== 綠界付款回調 ==============
 app.post('/payment/ecpay/callback', async (req, res) => {
     try {
         logger.logToFile(`收到綠界回調: ${JSON.stringify(req.body)}`);
         
-        const { 
-            MerchantTradeNo,
-            RtnCode,
-            RtnMsg,
-            TradeAmt,
-            PaymentDate,
-            PaymentType,
-            CustomField1: userId,
-            CustomField2: userName
-        } = req.body;
+        const { MerchantTradeNo, RtnCode, RtnMsg, TradeAmt, PaymentDate, PaymentType, CustomField1: userId, CustomField2: userName } = req.body;
 
-        // ✅ 驗證付款成功
         if (RtnCode === '1') {
             const ADMIN_USER_ID = process.env.ADMIN_USER_ID;
             
-            // 通知店家（你）
             if (ADMIN_USER_ID) {
                 await client.pushMessage(ADMIN_USER_ID, {
                     type: 'text',
-                    text: `🎉 收到付款通知\n\n` +
-                          `客戶姓名：${userName}\n` +
-                          `付款金額：NT$ ${parseInt(TradeAmt).toLocaleString()}\n` +
-                          `付款方式：${getPaymentTypeName(PaymentType)}\n` +
-                          `付款時間：${PaymentDate}\n` +
-                          `訂單編號：${MerchantTradeNo}\n\n` +
-                          `狀態：✅ 付款成功`
+                    text: `🎉 收到付款通知\n\n客戶姓名：${userName}\n付款金額：NT$ ${parseInt(TradeAmt).toLocaleString()}\n付款方式：${getPaymentTypeName(PaymentType)}\n付款時間：${PaymentDate}\n訂單編號：${MerchantTradeNo}\n\n狀態：✅ 付款成功`
                 });
             }
 
-            // 通知客戶
             if (userId && userId !== 'undefined') {
                 await client.pushMessage(userId, {
                     type: 'text',
-                    text: `✅ 付款成功\n\n` +
-                          `感謝 ${userName} 的支付\n` +
-                          `金額：NT$ ${parseInt(TradeAmt).toLocaleString()}\n` +
-                          `訂單編號：${MerchantTradeNo}\n\n` +
-                          `我們會盡快處理您的訂單\n` +
-                          `感謝您的支持 💙`
+                    text: `✅ 付款成功\n\n感謝 ${userName} 的支付\n金額：NT$ ${parseInt(TradeAmt).toLocaleString()}\n訂單編號：${MerchantTradeNo}\n\n我們會盡快處理您的訂單\n感謝您的支持 💙`
                 });
             }
 
-            logger.logToFile(`✅ 付款成功: ${userName} - ${TradeAmt}元 - 訂單${MerchantTradeNo}`);
+            logger.logToFile(`✅ 付款成功: ${userName} - ${TradeAmt}元`);
         } else {
-            logger.logToFile(`❌ 付款異常: 訂單${MerchantTradeNo} - ${RtnMsg}`);
+            logger.logToFile(`❌ 付款異常: ${RtnMsg}`);
         }
 
         res.send('1|OK');
@@ -232,7 +257,6 @@ app.post('/payment/ecpay/callback', async (req, res) => {
     }
 });
 
-// ============== 工具函數：付款方式名稱 ==============
 function getPaymentTypeName(code) {
     const types = {
         'Credit_CreditCard': '信用卡',
@@ -244,18 +268,13 @@ function getPaymentTypeName(code) {
     return types[code] || code;
 }
 
-// ============== 🎨 付款管理網頁 ==============
+// ============== 付款管理網頁 ==============
 app.get('/payment', (req, res) => {
     res.sendFile(__dirname + '/public/payment.html');
 });
 
-// ============== 🔍 查詢付款狀態（選用）==============
 app.get('/payment/status/:orderId', async (req, res) => {
-    const { orderId } = req.params;
-    res.json({
-        message: '付款狀態查詢功能（待實作）',
-        orderId
-    });
+    res.json({ message: '付款狀態查詢功能（待實作）', orderId: req.params.orderId });
 });
 
 // 啟動伺服器
