@@ -12,7 +12,7 @@ const client = new Client({
   channelSecret: process.env.LINE_CHANNEL_SECRET,
 });
 
-// 固定忽略（選單文字等）
+// 固定忽略(選單文字等)
 const ignoredKeywords = [
   '常見問題', '服務價目&儲值優惠', '到府收送', '店面地址&營業時間',
   '付款方式', '寶寶汽座&手推車', '顧客須知', '智能污漬分析'
@@ -76,31 +76,31 @@ function maybeLaundryRelated(s='') {
 
 /* ---------------- 固定模板 ---------------- */
 const TPL_BAG = [
-  "您好，包包我們有專業處理 💼 會依材質調整方式，像皮革會注意保養護理，布面則加強清潔與定型，請您放心交給 C.H 精緻洗衣 😊",
-  "包包是可以處理的 👍 我們會先檢視材質狀況，盡量在清潔同時保護原有外觀，有需要也能加強整形或護理 💙",
-  "可以的喔 💼 包包清潔會依布料或皮革狀況分別處理，細節我們都會把關，請放心交給 C.H 精緻洗衣 ✨",
+  "您好,包包我們有專業處理 💼 會依材質調整方式,像皮革會注意保養護理,布面則加強清潔與定型,請您放心交給 C.H 精緻洗衣 😊",
+  "包包是可以處理的 👍 我們會先檢視材質狀況,盡量在清潔同時保護原有外觀,有需要也能加強整形或護理 💙",
+  "可以的喔 💼 包包清潔會依布料或皮革狀況分別處理,細節我們都會把關,請放心交給 C.H 精緻洗衣 ✨",
 ];
 const TPL_SHOE = [
-  "可以清潔鞋子，我們會依材質（布面/皮革/麂皮）調整方式，盡量恢復外觀 👟",
-  "鞋子可處理；發霉、異味或黃斑多能改善，會先做不顯眼處測試再進行 😊",
-  "可清潔；皮革鞋會注意上油護理，布面鞋會加強清潔與定型 💙",
-  "可以清洗；鞋底與縫線易藏污，我們會細清與除味，穿著感更好 ✨",
+  "可以清潔鞋子,我們會依材質(布面/皮革/麂皮)調整方式,盡量恢復外觀 👟",
+  "鞋子可處理;發霉、異味或黃斑多能改善,會先做不顯眼處測試再進行 😊",
+  "可清潔;皮革鞋會注意上油護理,布面鞋會加強清潔與定型 💙",
+  "可以清洗;鞋底與縫線易藏污,我們會細清與除味,穿著感更好 ✨",
 ];
 const TPL_CURTAIN = [
-  "可以清潔窗簾，我們會依布料與織法調整流程，兼顧潔淨與版型 👌",
-  "窗簾可處理；會先評估縮水與掉色風險，再安排合適方式 😊",
-  "可清潔；若有特殊塗層會先做小範圍測試，處理後更清爽 💙",
-  "窗簾可以清洗，會注意尺寸穩定與垂墜感，完成後更俐落 ✨",
+  "可以清潔窗簾,我們會依布料與織法調整流程,兼顧潔淨與版型 👌",
+  "窗簾可處理;會先評估縮水與掉色風險,再安排合適方式 😊",
+  "可清潔;若有特殊塗層會先做小範圍測試,處理後更清爽 💙",
+  "窗簾可以清洗,會注意尺寸穩定與垂墜感,完成後更俐落 ✨",
 ];
 const TPL_RUG = [
-  "地毯可以清潔，我們會分區與深層清潔，兼顧纖維與色澤，整體觀感可望提升 ✨",
-  "地毯可處理；會先做局部測試再進行深層清潔與除味，讓居家更清爽 😊",
-  "可以清潔地毯；針對藏汙位置與邊緣收邊會特別留意，完成後更舒適 👍",
+  "地毯可以清潔,我們會分區與深層清潔,兼顧纖維與色澤,整體觀感可望提升 ✨",
+  "地毯可處理;會先做局部測試再進行深層清潔與除味,讓居家更清爽 😊",
+  "可以清潔地毯;針對藏汙位置與邊緣收邊會特別留意,完成後更舒適 👍",
 ];
 const TPL_QUILT = [
-  "棉被可以清潔；我們會兼顧蓬鬆度與乾爽度，睡感可望更舒適 😊",
-  "被子可處理；流程會保護纖維結構並充分烘透，使用上更衛生 💙",
-  "可以清洗棉被；完成後會更乾淨清新，收納也更安心 ✨",
+  "棉被可以清潔;我們會兼顧蓬鬆度與乾爽度,睡感可望更舒適 😊",
+  "被子可處理;流程會保護纖維結構並充分烘透,使用上更衛生 💙",
+  "可以清洗棉被;完成後會更乾淨清新,收納也更安心 ✨",
 ];
 
 /* ---------------- 主處理 ---------------- */
@@ -135,17 +135,17 @@ class MessageHandler {
   async handleStainAnalysis(userId, imageBuffer) {
     try {
       const imageHash = createHash('sha256').update(imageBuffer).digest('hex');
-      logger.logToFile(`圖片已接收，hash: ${imageHash}`);
+      logger.logToFile(`圖片已接收,hash: ${imageHash}`);
       const result = await analyzeStainWithAI(imageBuffer);
       await client.pushMessage(userId, { type: 'text', text: `${result}\n\n✨ 智能分析完成 👕` });
       logger.logImageAnalysis(userId, result);
     } catch (err) {
       logger.logError('污漬分析錯誤', err, userId);
-      await client.pushMessage(userId, { type: 'text', text: '服務暫時不可用，請稍後再試。' });
+      await client.pushMessage(userId, { type: 'text', text: '服務暫時不可用,請稍後再試。' });
     }
   }
 
-  /* ---- ✅ 管理員指令：發送付款連結 ---- */
+  /* ---- ✅ 管理員指令:發送付款連結 ---- */
   async handleAdminPaymentCommand(userId, text) {
     const ADMIN_USER_ID = process.env.ADMIN_USER_ID;
     
@@ -161,7 +161,7 @@ class MessageHandler {
       if (parts.length < 4) {
         await client.pushMessage(userId, {
           type: 'text',
-          text: '❌ 格式錯誤\n\n正確格式：\n/付款 [客戶ID] [姓名] [金額] [付款方式]\n\n範例：\n/付款 U1234567890 王小明 1500 ecpay\n/付款 U1234567890 王小明 2000 linepay'
+          text: '❌ 格式錯誤\n\n正確格式:\n/付款 [客戶ID] [姓名] [金額] [付款方式]\n\n範例:\n/付款 U1234567890 王小明 1500 ecpay\n/付款 U1234567890 王小明 2000 linepay'
         });
         return true;
       }
@@ -173,21 +173,26 @@ class MessageHandler {
         
         if (paymentType === 'ecpay') {
           const link = createECPayPaymentLink(customerId, customerName, parseInt(amount));
-          message = `💳 您好，${customerName}\n\n` +
+          
+          // ✅ 修改後的簡潔訊息格式
+          message = `您好,${customerName} 👋\n\n` +
                    `您的專屬付款連結已生成\n` +
-                   `付款方式：信用卡/超商/ATM\n` +
-                   `金額：NT$ ${parseInt(amount).toLocaleString()}\n\n` +
-                   `請點擊以下連結完成付款：\n${link}\n\n` +
-                   `付款後系統會自動通知我們\n` +
+                   `付款方式:信用卡\n` +
+                   `金額:NT$ ${parseInt(amount).toLocaleString()}\n\n` +
+                   `👉 請點擊下方連結完成付款\n${link}\n\n` +
+                   `✅ 付款後系統會自動通知我們\n` +
                    `感謝您的支持 💙`;
         } else if (paymentType === 'linepay') {
           const LINE_PAY_URL = process.env.LINE_PAY_URL;
-          message = `💚 您好，${customerName}\n\n` +
-                   `請使用 LINE Pay 付款\n` +
-                   `金額：NT$ ${parseInt(amount).toLocaleString()}\n\n` +
-                   `付款連結：\n${LINE_PAY_URL}\n\n` +
-                   `⚠️ 請確認付款金額為 NT$ ${amount}\n` +
-                   `完成付款後請告知我們，謝謝 😊`;
+          
+          // ✅ LINE Pay 也改成簡潔版
+          message = `您好,${customerName} 👋\n\n` +
+                   `您的專屬付款連結已生成\n` +
+                   `付款方式:LINE Pay\n` +
+                   `金額:NT$ ${parseInt(amount).toLocaleString()}\n\n` +
+                   `👉 請點擊下方連結完成付款\n${LINE_PAY_URL}\n\n` +
+                   `✅ 付款後系統會自動通知我們\n` +
+                   `感謝您的支持 💙`;
         } else {
           await client.pushMessage(userId, {
             type: 'text',
@@ -205,7 +210,7 @@ class MessageHandler {
         // 回覆管理員
         await client.pushMessage(userId, {
           type: 'text',
-          text: `✅ 已發送付款連結\n\n客戶：${customerName}\n金額：NT$ ${amount}\n方式：${paymentType === 'ecpay' ? '綠界' : 'LINE Pay'}`
+          text: `✅ 已發送付款連結\n\n客戶:${customerName}\n金額:NT$ ${amount}\n方式:${paymentType === 'ecpay' ? '綠界' : 'LINE Pay'}`
         });
         
         logger.logToFile(`✅ [管理員指令] 已發送付款連結給 ${customerName} (${customerId}) - ${amount}元`);
@@ -214,7 +219,7 @@ class MessageHandler {
         logger.logError('發送付款連結失敗', err);
         await client.pushMessage(userId, {
           type: 'text',
-          text: `❌ 發送失敗：${err.message}`
+          text: `❌ 發送失敗:${err.message}`
         });
       }
       
@@ -243,7 +248,7 @@ class MessageHandler {
     if (/智能[污汙]漬分析/.test(raw)) {
       await client.pushMessage(userId, {
         type: 'text',
-        text: '「想知道污漬的清潔成功率？」\n按 1 並上傳照片，我們提供貼心的智能分析，即時回應 🧼'
+        text: '「想知道污漬的清潔成功率?」\n按 1 並上傳照片,我們提供貼心的智能分析,即時回應 🧼'
       });
       return;
     }
@@ -252,7 +257,7 @@ class MessageHandler {
     if (ignoredKeywords.some(k => lower.includes(k.toLowerCase())) ||
         isEmojiOrPuncOnly(raw) || isSmallTalk(raw) || isPhoneNumberOnly(raw) ||
         isUrlOnly(raw) || isClearlyUnrelatedTopic(raw)) {
-      logger.logToFile(`前置過濾忽略：「${raw}」(User ${userId})`);
+      logger.logToFile(`前置過濾忽略:「${raw}」(User ${userId})`);
       return;
     }
 
@@ -271,7 +276,7 @@ class MessageHandler {
     if (/(收衣|收件|來收|到府|上門|取件)/.test(raw)) {
       const isSaturday = new Date().getDay() === 6;
       if (isSaturday) {
-        const reply = "今天週六固定公休，明天週日有營業的，可以去收回 🙏";
+        const reply = "今天週六固定公休,明天週日有營業的,可以去收回 🙏";
         await client.pushMessage(userId, { type: "text", text: reply });
         logger.logBotResponse(userId, originalMessage, reply, "Bot (Rule: pickup-sat-closed)");
         return;
@@ -282,7 +287,7 @@ class MessageHandler {
         if (AddressDetector.isAddress(raw)) {
           const { formattedAddress } = AddressDetector.formatResponse(raw);
           if (formattedAddress) {
-            reply = `好的 😊 我們會去收回的\n地址是：${formattedAddress}`;
+            reply = `好的 😊 我們會去收回的\n地址是:${formattedAddress}`;
           }
         }
       } catch (_) { }
@@ -295,7 +300,7 @@ class MessageHandler {
     // 7) 汽座/手推車/嬰兒車 → 按 2
     const strollerKeywords = ['汽座','手推車','嬰兒推車','嬰兒車','安全座椅'];
     if (strollerKeywords.some(k => raw.includes(k))) {
-      const reply = '這類寶寶用品我們都有處理 👶 會針對安全性與清潔特別注意。\n要詳細了解請按 2，謝謝您 😊';
+      const reply = '這類寶寶用品我們都有處理 👶 會針對安全性與清潔特別注意。\n要詳細了解請按 2,謝謝您 😊';
       await client.pushMessage(userId, { type:'text', text: reply });
       logger.logBotResponse(userId, originalMessage, reply, 'Bot (Rule: stroller)');
       return;
@@ -349,7 +354,7 @@ class MessageHandler {
       }
     }
 
-    logger.logToFile(`未回覆（非洗衣相關或 AI 判定無需回）：${raw}`);
+    logger.logToFile(`未回覆(非洗衣相關或 AI 判定無需回):${raw}`);
   }
 
   async handleImageMessage(userId, messageId) {
@@ -370,18 +375,18 @@ class MessageHandler {
       }
     } catch (err) {
       logger.logError('處理圖片錯誤', err, userId);
-      await client.pushMessage(userId, { type: 'text', text: '服務暫時不可用，請稍後再試。' });
+      await client.pushMessage(userId, { type: 'text', text: '服務暫時不可用,請稍後再試。' });
     }
   }
 
   async handleNumberOneCommand(userId) {
     const ok = await this.checkUsage(userId);
     if (!ok) {
-      await client.pushMessage(userId, { type: 'text', text: '您已達到每週使用上限，請下週再試喔～' });
+      await client.pushMessage(userId, { type: 'text', text: '您已達到每週使用上限,請下週再試喔～' });
       return;
     }
     this.userState[userId] = { waitingForImage: true };
-    await client.pushMessage(userId, { type: 'text', text: '請上傳照片，以進行智能污漬分析 ✨📷' });
+    await client.pushMessage(userId, { type: 'text', text: '請上傳照片,以進行智能污漬分析 ✨📷' });
     logger.logToFile(`提示上傳照片 (User ${userId})`);
   }
 
@@ -393,7 +398,7 @@ class MessageHandler {
   async handleProgressQuery(userId) {
     await client.pushMessage(userId, {
       type: 'text',
-      text: '您可以線上查詢 C.H精緻洗衣 🔍\n或是營業時間會有專人回覆，謝謝您 🙏',
+      text: '您可以線上查詢 C.H精緻洗衣 🔍\n或是營業時間會有專人回覆,謝謝您 🙏',
       quickReply: {
         items: [{
           type: 'action',
@@ -412,7 +417,7 @@ class MessageHandler {
       logger.logBotResponse(userId, address, response, 'Bot (Address)');
     } catch (err) {
       logger.logError('地址錯誤', err, userId);
-      await client.pushMessage(userId, { type: 'text', text: '抱歉，處理地址時發生錯誤，請稍後再試 🙏' });
+      await client.pushMessage(userId, { type: 'text', text: '抱歉,處理地址時發生錯誤,請稍後再試 🙏' });
     }
   }
 }
