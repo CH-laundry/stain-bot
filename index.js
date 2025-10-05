@@ -2,6 +2,7 @@
 const fs = require('fs');
 const express = require('express');
 require('dotenv').config();
+const fetch = require('node-fetch');
 const logger = require('./services/logger');
 const messageHandler = require('./services/message');
 const { Client } = require('@line/bot-sdk');
@@ -196,7 +197,21 @@ app.post('/send-payment', async (req, res) => {
 
         if (type === 'ecpay') {
             paymentLink = createECPayPaymentLink(userId, userName, numAmount);
-            message = `💳 您好，${userName}\n\n您的專屬付款連結已生成\n付款方式：信用卡/超商/ATM\n金額：NT$ ${numAmount.toLocaleString()}\n\n請點擊以下連結完成付款：\n${paymentLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
+            
+            // ✅ 自動縮短網址
+            let shortUrl = paymentLink;
+            try {
+                const response = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(paymentLink)}`);
+                const result = await response.text();
+                if (result && result.startsWith('http')) {
+                    shortUrl = result;
+                    logger.logToFile(`✅ 已縮短綠界付款網址: ${shortUrl}`);
+                }
+            } catch (error) {
+                logger.logToFile(`⚠️ 短網址生成失敗,使用原網址: ${error.message}`);
+            }
+            
+            message = `💳 您好，${userName}\n\n您的專屬付款連結已生成\n付款方式：信用卡/超商/ATM\n金額：NT$ ${numAmount.toLocaleString()}\n\n請點擊以下連結完成付款：\n${shortUrl}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
         } else if (type === 'linepay') {
             const LINE_PAY_URL = process.env.LINE_PAY_URL;
             if (!LINE_PAY_URL) {
