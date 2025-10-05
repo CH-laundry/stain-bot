@@ -1,6 +1,7 @@
 // services/openai.js
 const { OpenAI } = require("openai");
 const crypto = require('crypto');
+const fetch = require('node-fetch');
 
 // ============ 環境變數檢查 ============
 if (!process.env.OPENAI_API_KEY) {
@@ -18,6 +19,23 @@ const USE_MOCK = process.env.USE_MOCK === 'true';
 // ============ 快取機制 ============
 const brandCache = new Map();
 const CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24小時
+
+// ============ 短網址服務 ============
+async function shortenURL(longUrl) {
+  try {
+    const response = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(longUrl)}`);
+    const shortUrl = await response.text();
+    if (shortUrl && shortUrl.startsWith('http')) {
+      log('URL', `已縮短網址: ${shortUrl}`);
+      return shortUrl;
+    }
+    log('WARN', '短網址服務失敗,使用原網址');
+    return longUrl;
+  } catch (error) {
+    log('ERROR', '短網址生成失敗', error.message);
+    return longUrl;
+  }
+}
 
 // ============ 日誌工具 ============
 function log(type, message, data = null) {
@@ -708,7 +726,7 @@ async function smartAutoReply(inputText) {
 }
 
 /* =================== 綠界付款功能(修正版)=================== */
-function createECPayPaymentLink(userId, userName, amount) {
+async function createECPayPaymentLink(userId, userName, amount) {
   const { ECPAY_MERCHANT_ID, ECPAY_HASH_KEY, ECPAY_HASH_IV, RAILWAY_STATIC_URL } = process.env;
 
   if (!ECPAY_MERCHANT_ID || !ECPAY_HASH_KEY || !ECPAY_HASH_IV) {
@@ -744,8 +762,12 @@ function createECPayPaymentLink(userId, userName, amount) {
   try {
     paymentData.CheckMacValue = generateECPayCheckMacValue(paymentData);
     const paymentLink = `${baseURL}/payment/redirect?data=${encodeURIComponent(Buffer.from(JSON.stringify(paymentData)).toString('base64'))}`;
+    
+    // ✅ 自動縮短網址
+    const shortUrl = await shortenURL(paymentLink);
+    
     log('PAYMENT', `綠界連結已生成: 訂單=${merchantTradeNo}, 金額=${amount}元, 客戶=${userName}`);
-    return paymentLink;
+    return shortUrl;
   } catch (error) {
     log('ERROR', '生成付款連結失敗', error.message);
     throw error;
