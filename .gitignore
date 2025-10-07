@@ -1,6 +1,13 @@
-# Google OAuth 憑證
+# OAuth 憑證和 Token
 credentials.json
 token.json
 
 # 環境變數
 .env
+
+# Node modules
+node_modules/
+
+# 日誌檔案
+logs.txt
+*.log
