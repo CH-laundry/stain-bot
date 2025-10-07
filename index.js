@@ -8,9 +8,14 @@ const messageHandler = require('./services/message');
 const { Client } = require('@line/bot-sdk');
 const googleAuth = require('./services/googleAuth');  // 新增：Google OAuth
 
-console.log(`正在初始化 sheet.json: ${process.env.GOOGLE_PRIVATE_KEY ? '成功' : '失敗'}`);
-fs.writeFileSync("./sheet.json", process.env.GOOGLE_PRIVATE_KEY);
-console.log(`sheet.json 初始化结束`);
+// 初始化 sheet.json (如果有 GOOGLE_PRIVATE_KEY 環境變數的話)
+if (process.env.GOOGLE_PRIVATE_KEY) {
+    console.log(`正在初始化 sheet.json: 成功`);
+    fs.writeFileSync("./sheet.json", process.env.GOOGLE_PRIVATE_KEY);
+    console.log(`sheet.json 初始化结束`);
+} else {
+    console.log(`跳過 sheet.json 初始化 (使用 OAuth 2.0)`);
+}
 
 const app = express();
 app.use(express.json());
