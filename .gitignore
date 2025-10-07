@@ -1,3 +1,6 @@
-node_modules
-logs.txt
+# Google OAuth 憑證
+credentials.json
+token.json
+
+# 環境變數
 .env
