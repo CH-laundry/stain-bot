@@ -159,7 +159,7 @@ app.get('/test-sheets', async (req, res) => {
         const timestamp = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
         await sheets.spreadsheets.values.append({
             spreadsheetId,
-            range: 'A1',
+            range: 'A:E',  // 使用整列範圍
             valueInputOption: 'USER_ENTERED',
             resource: {
                 values: [[
@@ -219,11 +219,28 @@ app.get('/test-sheets', async (req, res) => {
 <head>
     <meta charset="UTF-8">
     <title>測試失敗</title>
+    <style>
+        body { 
+            font-family: sans-serif; 
+            text-align: center; 
+            padding: 50px;
+        }
+        h1 { color: #e74c3c; }
+        pre { 
+            text-align: left; 
+            background: #f5f5f5; 
+            padding: 20px; 
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        a { color: #3498db; }
+    </style>
 </head>
 <body>
     <h1>❌ 測試失敗</h1>
-    <p>錯誤訊息: ${error.message}</p>
-    <p><a href="/auth">重新授權</a></p>
+    <p>錯誤訊息:</p>
+    <pre>${error.message}</pre>
+    <p><a href="/auth">重新授權</a> | <a href="/test-sheets">重試</a></p>
 </body>
 </html>
         `);
@@ -471,4 +488,3 @@ app.listen(PORT, () => {
     console.log(`伺服器正在運行，端口：${PORT}`);
     logger.logToFile(`伺服器正在運行，端口：${PORT}`);
 });
-
