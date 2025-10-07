@@ -135,6 +135,101 @@ app.get('/auth/status', (req, res) => {
     });
 });
 
+// ============== 測試 Google Sheets OAuth 寫入 ==============
+app.get('/test-sheets', async (req, res) => {
+    try {
+        const { google } = require('googleapis');
+        const googleAuth = require('./services/googleAuth');
+        
+        // 檢查是否已授權
+        if (!googleAuth.isAuthorized()) {
+            return res.send('❌ 尚未完成 OAuth 授權!<br><a href="/auth">點此進行授權</a>');
+        }
+        
+        const auth = googleAuth.getOAuth2Client();
+        const sheets = google.sheets({ version: 'v4', auth });
+        
+        const spreadsheetId = process.env.GOOGLE_SHEETS_ID_CUSTOMER;
+        
+        if (!spreadsheetId) {
+            return res.send('❌ 請在 .env 中設定 GOOGLE_SHEETS_ID_CUSTOMER');
+        }
+        
+        // 寫入測試資料
+        const timestamp = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
+        await sheets.spreadsheets.values.append({
+            spreadsheetId,
+            range: 'Sheet1!A1',
+            valueInputOption: 'USER_ENTERED',
+            resource: {
+                values: [[
+                    timestamp,
+                    'OAuth 測試客戶',
+                    'test@example.com',
+                    '測試地址',
+                    'OAuth 2.0 寫入測試成功! ✅'
+                ]]
+            }
+        });
+        
+        logger.logToFile('✅ Google Sheets OAuth 測試成功');
+        
+        res.send(`
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>測試成功</title>
+    <style>
+        body { 
+            font-family: sans-serif; 
+            text-align: center; 
+            padding: 50px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .container {
+            background: rgba(255,255,255,0.1);
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        h1 { font-size: 32px; margin-bottom: 20px; }
+        a { color: #fff; text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>✅ Google Sheets 寫入測試成功!</h1>
+        <p>已成功使用 OAuth 2.0 寫入資料到試算表</p>
+        <p>寫入時間: ${timestamp}</p>
+        <p><a href="https://docs.google.com/spreadsheets/d/${spreadsheetId}" target="_blank">點此查看試算表</a></p>
+        <p><a href="/">返回首頁</a></p>
+    </div>
+</body>
+</html>
+        `);
+        
+    } catch (error) {
+        logger.logError('Google Sheets 測試失敗', error);
+        res.status(500).send(`
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>測試失敗</title>
+</head>
+<body>
+    <h1>❌ 測試失敗</h1>
+    <p>錯誤訊息: ${error.message}</p>
+    <p><a href="/auth">重新授權</a></p>
+</body>
+</html>
+        `);
+    }
+});
+
 // ============== 下載日誌文件 ==============
 app.get('/log', (req, res) => {
     res.download(logger.getLogFilePath(), 'logs.txt', (err) => {
