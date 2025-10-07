@@ -6,6 +6,7 @@ const fetch = require('node-fetch');
 const logger = require('./services/logger');
 const messageHandler = require('./services/message');
 const { Client } = require('@line/bot-sdk');
+const googleAuth = require('./services/googleAuth');  // 新增：Google OAuth
 
 console.log(`正在初始化 sheet.json: ${process.env.GOOGLE_PRIVATE_KEY ? '成功' : '失敗'}`);
 fs.writeFileSync("./sheet.json", process.env.GOOGLE_PRIVATE_KEY);
@@ -55,6 +56,78 @@ app.post('/webhook', async (req, res) => {
     } catch (err) {
         logger.logError('全局錯誤', err);
     }
+});
+
+// ============== Google OAuth 路由 ==============
+// 開始授權
+app.get('/auth', (req, res) => {
+    try {
+        const authUrl = googleAuth.getAuthUrl();
+        console.log('生成授權 URL:', authUrl);
+        res.redirect(authUrl);
+    } catch (error) {
+        logger.logError('生成授權 URL 失敗', error);
+        res.status(500).send('授權失敗: ' + error.message);
+    }
+});
+
+// OAuth 回呼
+app.get('/oauth2callback', async (req, res) => {
+    const { code } = req.query;
+    
+    if (!code) {
+        return res.status(400).send('缺少授權碼');
+    }
+    
+    try {
+        await googleAuth.getTokenFromCode(code);
+        logger.logToFile('✅ Google OAuth 授權成功');
+        res.send(`
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>授權成功</title>
+    <style>
+        body { 
+            font-family: sans-serif; 
+            text-align: center; 
+            padding: 50px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .container {
+            background: rgba(255,255,255,0.1);
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 500px;
+            margin: 0 auto;
+        }
+        h1 { font-size: 32px; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>✅ 授權成功!</h1>
+        <p>Google Sheets 和 Drive 已成功連接</p>
+        <p>您可以關閉此視窗了</p>
+    </div>
+</body>
+</html>
+        `);
+    } catch (error) {
+        logger.logError('處理授權碼失敗', error);
+        res.status(500).send('授權失敗: ' + error.message);
+    }
+});
+
+// 檢查授權狀態
+app.get('/auth/status', (req, res) => {
+    const isAuthorized = googleAuth.isAuthorized();
+    res.json({ 
+        authorized: isAuthorized,
+        message: isAuthorized ? '已授權' : '未授權'
+    });
 });
 
 // ============== 下載日誌文件 ==============
