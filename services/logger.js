@@ -12,6 +12,7 @@ function logToFile(message) {
     
     try {
         fs.appendFileSync(LOG_FILE, logMessage, 'utf8');
+        console.log(logMessage.trim()); // 同時輸出到 console
     } catch (err) {
         console.error('寫入日誌失敗:', err);
     }
@@ -36,6 +37,20 @@ function logError(context, error, userId = '') {
 }
 
 /**
+ * 記錄機器人回應
+ */
+function logBotResponse(userId, userMessage, botReply, source = '') {
+    logToFile(`Bot → ${userId}: ${botReply} ${source ? `(${source})` : ''}`);
+}
+
+/**
+ * 記錄圖片分析
+ */
+function logImageAnalysis(userId, result) {
+    logToFile(`圖片分析 (User ${userId}): ${result}`);
+}
+
+/**
  * 取得日誌檔案路徑
  */
 function getLogFilePath() {
@@ -46,5 +61,7 @@ module.exports = {
     logToFile,
     logUserMessage,
     logError,
+    logBotResponse,
+    logImageAnalysis,
     getLogFilePath
 };
