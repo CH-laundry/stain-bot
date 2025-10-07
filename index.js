@@ -159,7 +159,7 @@ app.get('/test-sheets', async (req, res) => {
         const timestamp = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
         await sheets.spreadsheets.values.append({
             spreadsheetId,
-            range: 'Sheet1!A1',
+            range: 'A1',
             valueInputOption: 'USER_ENTERED',
             resource: {
                 values: [[
@@ -471,3 +471,4 @@ app.listen(PORT, () => {
     console.log(`伺服器正在運行，端口：${PORT}`);
     logger.logToFile(`伺服器正在運行，端口：${PORT}`);
 });
+
