@@ -6,7 +6,11 @@ const fetch = require('node-fetch');
 const logger = require('./services/logger');
 const messageHandler = require('./services/message');
 const { Client } = require('@line/bot-sdk');
-const googleAuth = require('./services/googleAuth');  // 新增：Google OAuth
+const googleAuth = require('./services/googleAuth');
+const multer = require('multer');
+
+// 設定 multer 使用記憶體儲存
+const upload = multer({ storage: multer.memoryStorage() });
 
 // 初始化 sheet.json (如果有 GOOGLE_PRIVATE_KEY 環境變數的話)
 if (process.env.GOOGLE_PRIVATE_KEY) {
@@ -159,7 +163,7 @@ app.get('/test-sheets', async (req, res) => {
         const timestamp = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
         await sheets.spreadsheets.values.append({
             spreadsheetId,
-            range: 'A:E',  // 使用整列範圍
+            range: 'A:E',
             valueInputOption: 'USER_ENTERED',
             resource: {
                 values: [[
@@ -244,6 +248,214 @@ app.get('/test-sheets', async (req, res) => {
 </body>
 </html>
         `);
+    }
+});
+
+// ============== 測試照片上傳到 Google Drive ==============
+app.get('/test-upload', (req, res) => {
+    res.send(`
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>測試照片上傳</title>
+    <style>
+        body { 
+            font-family: sans-serif; 
+            max-width: 800px; 
+            margin: 50px auto;
+            padding: 20px;
+        }
+        h1 { color: #333; }
+        .upload-section {
+            background: #f5f5f5; 
+            padding: 20px; 
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        .upload-section h2 {
+            color: #667eea;
+            margin-top: 0;
+        }
+        input[type="file"] { 
+            margin: 10px 0; 
+        }
+        button { 
+            background: #667eea; 
+            color: white; 
+            padding: 10px 20px; 
+            border: none; 
+            border-radius: 5px; 
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        button:hover { 
+            background: #5568d3; 
+        }
+        button.after {
+            background: #52c41a;
+        }
+        button.after:hover {
+            background: #49b015;
+        }
+        .result { 
+            margin-top: 20px; 
+            padding: 15px; 
+            border-radius: 5px; 
+        }
+        .success { 
+            background: #d4edda; 
+            color: #155724; 
+        }
+        .error { 
+            background: #f8d7da; 
+            color: #721c24; 
+        }
+        .links {
+            margin-top: 20px;
+            padding: 15px;
+            background: #e3f2fd;
+            border-radius: 5px;
+        }
+        .links a {
+            color: #1976d2;
+            text-decoration: none;
+            margin: 0 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>📸 測試照片上傳到 Google Drive</h1>
+    
+    <div class="upload-section">
+        <h2>🔵 洗前照片上傳</h2>
+        <form id="uploadFormBefore">
+            <label>選擇洗前照片:</label><br>
+            <input type="file" id="imageFileBefore" accept="image/*" required><br><br>
+            <button type="submit">上傳洗前照片</button>
+        </form>
+        <div id="resultBefore" class="result"></div>
+    </div>
+
+    <div class="upload-section">
+        <h2>🟢 洗後照片上傳</h2>
+        <form id="uploadFormAfter">
+            <label>選擇洗後照片:</label><br>
+            <input type="file" id="imageFileAfter" accept="image/*" required><br><br>
+            <button type="submit" class="after">上傳洗後照片</button>
+        </form>
+        <div id="resultAfter" class="result"></div>
+    </div>
+
+    <div class="links">
+        <strong>快速連結:</strong>
+        <a href="https://drive.google.com/drive/folders/1cY9yRk-BGnTO5wuDEi_xQQ3MQ7YJA1Iw" target="_blank">查看洗前資料夾</a> |
+        <a href="https://drive.google.com/drive/folders/1U5SNlg2YZkBUnnv1R466Y6vqtmXfKnvP" target="_blank">查看洗後資料夾</a>
+    </div>
+
+    <script>
+        // 洗前照片上傳
+        document.getElementById('uploadFormBefore').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await handleUpload('imageFileBefore', 'resultBefore', 'before');
+        });
+
+        // 洗後照片上傳
+        document.getElementById('uploadFormAfter').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await handleUpload('imageFileAfter', 'resultAfter', 'after');
+        });
+
+        async function handleUpload(fileInputId, resultDivId, type) {
+            const fileInput = document.getElementById(fileInputId);
+            const resultDiv = document.getElementById(resultDivId);
+            
+            if (!fileInput.files[0]) {
+                resultDiv.innerHTML = '<div class="error">請選擇照片!</div>';
+                return;
+            }
+            
+            resultDiv.innerHTML = '<div>⏳ 上傳中...</div>';
+            
+            const formData = new FormData();
+            formData.append('image', fileInput.files[0]);
+            formData.append('type', type);
+            
+            try {
+                const response = await fetch('/api/test-upload-image', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    resultDiv.innerHTML = \`
+                        <div class="success">
+                            <h3>✅ \${type === 'before' ? '洗前' : '洗後'}照片上傳成功!</h3>
+                            <p><strong>檔案 ID:</strong> \${data.fileId}</p>
+                            <p><a href="\${data.viewLink}" target="_blank">點此查看照片</a></p>
+                            <p><a href="\${data.folderLink}" target="_blank">前往資料夾</a></p>
+                        </div>
+                    \`;
+                    fileInput.value = '';
+                } else {
+                    resultDiv.innerHTML = \`<div class="error">❌ 上傳失敗: \${data.error}</div>\`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = \`<div class="error">❌ 錯誤: \${error.message}</div>\`;
+            }
+        }
+    </script>
+</body>
+</html>
+    `);
+});
+
+// ============== API: 處理照片上傳 ==============
+app.post('/api/test-upload-image', upload.single('image'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ success: false, error: '沒有收到圖片' });
+        }
+        
+        const type = req.body.type || 'before'; // 'before' 或 'after'
+        const { customerLogService } = require('./services/multiSheets');
+        
+        // 生成檔案名稱
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const typeLabel = type === 'after' ? '洗後' : '洗前';
+        const filename = `${typeLabel}_test_${timestamp}.jpg`;
+        
+        // 上傳到 Google Drive
+        const result = await customerLogService.uploadImageToDrive(
+            req.file.buffer,
+            filename,
+            type
+        );
+        
+        if (result.success) {
+            logger.logToFile(`✅ ${typeLabel}測試上傳成功: ${filename}`);
+            
+            const folderLink = type === 'after' 
+                ? 'https://drive.google.com/drive/folders/1U5SNlg2YZkBUnnv1R466Y6vqtmXfKnvP'
+                : 'https://drive.google.com/drive/folders/1cY9yRk-BGnTO5wuDEi_xQQ3MQ7YJA1Iw';
+            
+            res.json({
+                success: true,
+                fileId: result.fileId,
+                viewLink: result.viewLink,
+                downloadLink: result.downloadLink,
+                folderLink: folderLink,
+                type: type
+            });
+        } else {
+            res.status(500).json({ success: false, error: result.error });
+        }
+    } catch (error) {
+        logger.logError('測試上傳失敗', error);
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 
