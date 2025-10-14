@@ -9,6 +9,7 @@ const messageHandler = require('./services/message');
 const { Client } = require('@line/bot-sdk');
 const googleAuth = require('./services/googleAuth');
 const multer = require('multer');
+const customerDB = require('./services/customerDatabase');
 
 // 設定 multer 使用記憶體儲存
 const upload = multer({ storage: multer.memoryStorage() });
@@ -36,27 +37,11 @@ const client = new Client({
 });
 
 // ============== 用戶資料儲存 ==============
-const userProfiles = new Map(); // 儲存 userId -> { displayName, pictureUrl, lastSeen }
-
 // 自動記錄用戶資料函數
 async function saveUserProfile(userId) {
     try {
-        if (!userProfiles.has(userId)) {
-            const profile = await client.getProfile(userId);
-            userProfiles.set(userId, {
-                userId: userId,
-                displayName: profile.displayName,
-                pictureUrl: profile.pictureUrl,
-                statusMessage: profile.statusMessage,
-                lastSeen: new Date().toISOString()
-            });
-            logger.logToFile(`✅ 已記錄新用戶: ${profile.displayName} (${userId})`);
-        } else {
-            // 更新最後活動時間
-            const user = userProfiles.get(userId);
-            user.lastSeen = new Date().toISOString();
-            userProfiles.set(userId, user);
-        }
+        const profile = await client.getProfile(userId);
+        await customerDB.saveCustomer(userId, profile.displayName);
     } catch (error) {
         logger.logError('記錄用戶資料失敗', error, userId);
     }
@@ -64,7 +49,7 @@ async function saveUserProfile(userId) {
 
 // 查詢用戶資料 API
 app.get('/api/users', (req, res) => {
-    const users = Array.from(userProfiles.values());
+    const users = customerDB.getAllCustomers();
     res.json({
         total: users.length,
         users: users
@@ -73,15 +58,16 @@ app.get('/api/users', (req, res) => {
 
 // 查詢特定用戶 API
 app.get('/api/user/:userId', (req, res) => {
-    const user = userProfiles.get(req.params.userId);
+    const user = customerDB.getCustomer(req.params.userId);
     if (user) {
         res.json(user);
     } else {
         res.status(404).json({ error: '找不到此用戶' });
     }
 });
-// ============== 新增:更新用戶名稱 API ==============
-app.put('/api/user/:userId/name', express.json(), (req, res) => {
+
+// 更新用戶名稱 API
+app.put('/api/user/:userId/name', express.json(), async (req, res) => {
     const { userId } = req.params;
     const { displayName } = req.body;
     
@@ -89,25 +75,19 @@ app.put('/api/user/:userId/name', express.json(), (req, res) => {
         return res.status(400).json({ error: '名稱不能為空' });
     }
     
-    const user = userProfiles.get(userId);
-    if (user) {
-        user.displayName = displayName.trim();
-        user.customName = true; // 標記為自訂名稱
-        userProfiles.set(userId, user);
-        
-        logger.logToFile(`✅ 已更新用戶名稱: ${userId} -> ${displayName}`);
-        
+    try {
+        const user = await customerDB.updateCustomerName(userId, displayName.trim());
         res.json({ 
             success: true, 
             message: '名稱已更新',
             user: user
         });
-    } else {
-        res.status(404).json({ error: '找不到此用戶' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
     }
 });
 
-// ============== 新增:用名稱搜尋用戶 API ==============
+// 搜尋用戶 API
 app.get('/api/search/user', (req, res) => {
     const { name } = req.query;
     
@@ -115,12 +95,7 @@ app.get('/api/search/user', (req, res) => {
         return res.status(400).json({ error: '請提供搜尋名稱' });
     }
     
-    const searchTerm = name.toLowerCase().trim();
-    const users = Array.from(userProfiles.values());
-    
-    const results = users.filter(user => 
-        user.displayName.toLowerCase().includes(searchTerm)
-    );
+    const results = customerDB.searchCustomers(name);
     
     res.json({
         total: results.length,
@@ -920,8 +895,17 @@ app.get('/payment/status/:orderId', async (req, res) => {
 
 // 啟動伺服器
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
     console.log(`伺服器正在運行,端口:${PORT}`);
     logger.logToFile(`伺服器正在運行,端口:${PORT}`);
+    
+    // 載入客戶資料
+    try {
+        await customerDB.loadAllCustomers();
+        console.log('✅ 客戶資料載入完成');
+    } catch (error) {
+        console.error('❌ 客戶資料載入失敗:', error.message);
+    }
 });
+
 
