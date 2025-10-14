@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>C.H 精緻洗衣 - 付款管理</title>
+    <title>C.H 精緻洗衣 - 付款管理系統</title>
     <style>
         * {
             margin: 0;
@@ -19,11 +19,11 @@
         }
         
         .container {
-            max-width: 600px;
+            max-width: 700px;
             margin: 0 auto;
             background: white;
             border-radius: 20px;
-            padding: 30px;
+            padding: 40px;
             box-shadow: 0 20px 60px rgba(0,0,0,0.3);
         }
         
@@ -31,29 +31,30 @@
             color: #667eea;
             text-align: center;
             margin-bottom: 10px;
-            font-size: 28px;
+            font-size: 32px;
         }
         
         .subtitle {
             text-align: center;
             color: #666;
-            margin-bottom: 30px;
+            margin-bottom: 40px;
             font-size: 14px;
         }
         
         .form-group {
-            margin-bottom: 20px;
+            margin-bottom: 25px;
         }
         
         label {
             display: block;
+            margin-bottom: 8px;
             color: #333;
             font-weight: 600;
-            margin-bottom: 8px;
             font-size: 14px;
         }
         
-        input, select {
+        input[type="text"],
+        input[type="number"] {
             width: 100%;
             padding: 12px 15px;
             border: 2px solid #e0e0e0;
@@ -62,183 +63,325 @@
             transition: all 0.3s;
         }
         
-        input:focus, select:focus {
+        input[type="text"]:focus,
+        input[type="number"]:focus {
             outline: none;
             border-color: #667eea;
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
         
-        .payment-type {
+        .payment-options {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: repeat(3, 1fr);
             gap: 15px;
-            margin-bottom: 20px;
+            margin-bottom: 30px;
         }
         
         .payment-option {
-            padding: 15px;
-            border: 2px solid #e0e0e0;
-            border-radius: 10px;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-        
-        .payment-option:hover {
-            border-color: #667eea;
-            background: #f8f9ff;
-        }
-        
-        .payment-option.active {
-            border-color: #667eea;
-            background: #667eea;
-            color: white;
+            position: relative;
         }
         
         .payment-option input[type="radio"] {
-            display: none;
+            position: absolute;
+            opacity: 0;
+        }
+        
+        .payment-option label {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 15px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+            height: 100%;
+        }
+        
+        .payment-option input[type="radio"]:checked + label {
+            border-color: #667eea;
+            background: #f0f4ff;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.2);
         }
         
         .payment-icon {
             font-size: 32px;
-            margin-bottom: 5px;
+            margin-bottom: 8px;
         }
         
-        button {
+        .payment-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .payment-desc {
+            font-size: 11px;
+            color: #999;
+            margin-top: 4px;
+        }
+        
+        .btn {
             width: 100%;
             padding: 15px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             border: none;
-            border-radius: 10px;
+            border-radius: 12px;
             font-size: 18px;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
         }
         
-        button:hover {
+        .btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
         }
         
-        button:active {
+        .btn:active {
             transform: translateY(0);
         }
         
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+        
         .result {
-            margin-top: 20px;
-            padding: 15px;
-            border-radius: 10px;
+            margin-top: 30px;
+            padding: 20px;
+            border-radius: 12px;
             display: none;
         }
         
         .result.success {
             background: #d4edda;
-            border: 1px solid #c3e6cb;
+            border: 2px solid #28a745;
             color: #155724;
         }
         
         .result.error {
             background: #f8d7da;
-            border: 1px solid #f5c6cb;
+            border: 2px solid #dc3545;
             color: #721c24;
         }
         
-        .hint {
-            font-size: 12px;
-            color: #999;
-            margin-top: 5px;
+        .result h3 {
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+        
+        .result p {
+            margin: 5px 0;
+            font-size: 14px;
         }
         
         .loading {
             display: none;
             text-align: center;
-            padding: 20px;
+            margin-top: 20px;
         }
         
-        .spinner {
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #667eea;
+        .loading-spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
             border-radius: 50%;
             width: 40px;
             height: 40px;
             animation: spin 1s linear infinite;
-            margin: 0 auto;
+            margin: 0 auto 10px;
         }
         
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        
+        .info-box {
+            background: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            margin-bottom: 30px;
+            border-radius: 8px;
+        }
+        
+        .info-box p {
+            margin: 5px 0;
+            font-size: 14px;
+            color: #0c5460;
+        }
+        
+        .info-box strong {
+            color: #004085;
+        }
+        
+        .user-list {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 12px;
+        }
+        
+        .user-list h3 {
+            margin-bottom: 15px;
+            color: #667eea;
+            font-size: 18px;
+        }
+        
+        .user-list button {
+            padding: 8px 15px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-bottom: 15px;
+        }
+        
+        .user-list button:hover {
+            background: #5568d3;
+        }
+        
+        .user-item {
+            background: white;
+            padding: 12px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .user-item:hover {
+            border-color: #667eea;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+        }
+        
+        .user-item strong {
+            color: #333;
+            font-size: 15px;
+        }
+        
+        .user-item small {
+            display: block;
+            color: #999;
+            font-size: 12px;
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>💳 付款管理系統</h1>
-        <p class="subtitle">C.H 精緻洗衣</p>
+        <p class="subtitle">C.H 精緻洗衣 - 發送付款連結給客戶</p>
+        
+        <div class="info-box">
+            <p><strong>📌 使用說明:</strong></p>
+            <p>1. 輸入客戶的 LINE User ID 和姓名</p>
+            <p>2. 輸入付款金額</p>
+            <p>3. 選擇付款方式</p>
+            <p>4. 點擊發送,客戶會收到付款連結</p>
+        </div>
         
         <form id="paymentForm">
             <div class="form-group">
-                <label>客戶 LINE ID</label>
-                <input type="text" id="userId" placeholder="例如：U1234567890abcdef" required>
-                <p class="hint">從 BOT 對話中複製客戶的 userId</p>
+                <label for="userId">客戶 LINE User ID *</label>
+                <input 
+                    type="text" 
+                    id="userId" 
+                    placeholder="例如: U1234567890abcdef" 
+                    required
+                >
             </div>
             
             <div class="form-group">
-                <label>客戶姓名</label>
-                <input type="text" id="userName" placeholder="例如：王小明" required>
+                <label for="userName">客戶姓名 *</label>
+                <input 
+                    type="text" 
+                    id="userName" 
+                    placeholder="例如: 王小明" 
+                    required
+                >
             </div>
             
             <div class="form-group">
-                <label>付款金額（元）</label>
-                <input type="number" id="amount" placeholder="例如：1500" min="1" required>
+                <label for="amount">付款金額 (NT$) *</label>
+                <input 
+                    type="number" 
+                    id="amount" 
+                    placeholder="例如: 1500" 
+                    min="1"
+                    required
+                >
             </div>
             
             <div class="form-group">
-                <label>付款方式</label>
-                <div class="payment-type">
-                    <label class="payment-option active">
-                        <input type="radio" name="paymentType" value="ecpay" checked>
-                        <div class="payment-icon">💳</div>
-                        <div>綠界</div>
-                        <small>信用卡/ATM</small>
-                    </label>
-                    <label class="payment-option">
-                        <input type="radio" name="paymentType" value="linepay">
-                        <div class="payment-icon">💚</div>
-                        <div>LINE Pay</div>
-                        <small>行動支付</small>
-                    </label>
+                <label>付款方式 *</label>
+                <div class="payment-options">
+                    <div class="payment-option">
+                        <input type="radio" id="both" name="paymentType" value="both" checked>
+                        <label for="both">
+                            <div class="payment-icon">🎯</div>
+                            <div class="payment-name">兩者都發</div>
+                            <div class="payment-desc">綠界+LINE Pay</div>
+                        </label>
+                    </div>
+                    
+                    <div class="payment-option">
+                        <input type="radio" id="ecpay" name="paymentType" value="ecpay">
+                        <label for="ecpay">
+                            <div class="payment-icon">💳</div>
+                            <div class="payment-name">綠界支付</div>
+                            <div class="payment-desc">信用卡/超商/ATM</div>
+                        </label>
+                    </div>
+                    
+                    <div class="payment-option">
+                        <input type="radio" id="linepay" name="paymentType" value="linepay">
+                        <label for="linepay">
+                            <div class="payment-icon">💚</div>
+                            <div class="payment-name">LINE Pay</div>
+                            <div class="payment-desc">LINE 錢包</div>
+                        </label>
+                    </div>
                 </div>
             </div>
             
-            <button type="submit">🚀 發送付款連結</button>
+            <button type="submit" class="btn" id="submitBtn">
+                發送付款連結 🚀
+            </button>
         </form>
         
         <div class="loading" id="loading">
-            <div class="spinner"></div>
-            <p style="margin-top: 10px; color: #667eea;">發送中...</p>
+            <div class="loading-spinner"></div>
+            <p>正在發送付款連結...</p>
         </div>
         
         <div class="result" id="result"></div>
+        
+        <div class="user-list">
+            <h3>👥 已記錄的客戶</h3>
+            <button onclick="loadUsers()">載入客戶列表</button>
+            <div id="userList"></div>
+        </div>
     </div>
     
     <script>
-        // ✅ 修正：直接使用 Railway 網址
-        const API_URL = 'https://stain-bot-production-2593.up.railway.app/send-payment';
+        const form = document.getElementById('paymentForm');
+        const submitBtn = document.getElementById('submitBtn');
+        const loading = document.getElementById('loading');
+        const result = document.getElementById('result');
+        const userListDiv = document.getElementById('userList');
         
-        // 付款方式選擇
-        document.querySelectorAll('.payment-option').forEach(option => {
-            option.addEventListener('click', function() {
-                document.querySelectorAll('.payment-option').forEach(opt => opt.classList.remove('active'));
-                this.classList.add('active');
-                this.querySelector('input[type="radio"]').checked = true;
-            });
-        });
-        
-        // 表單提交
-        document.getElementById('paymentForm').addEventListener('submit', async (e) => {
+        // 發送付款連結
+        form.addEventListener('submit', async (e) => {
             e.preventDefault();
             
             const userId = document.getElementById('userId').value.trim();
@@ -246,66 +389,111 @@
             const amount = parseInt(document.getElementById('amount').value);
             const paymentType = document.querySelector('input[name="paymentType"]:checked').value;
             
-            console.log('準備發送資料:', { userId, userName, amount, paymentType });
-            console.log('API 網址:', API_URL);
+            if (!userId || !userName || !amount) {
+                showResult('error', '請填寫所有必填欄位!');
+                return;
+            }
             
-            document.getElementById('loading').style.display = 'block';
-            document.getElementById('result').style.display = 'none';
+            submitBtn.disabled = true;
+            loading.style.display = 'block';
+            result.style.display = 'none';
             
             try {
-                const response = await fetch(API_URL, {
+                const response = await fetch('/send-payment', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        userId,
-                        userName,
-                        amount,
-                        paymentType
+                        userId: userId,
+                        userName: userName,
+                        amount: amount,
+                        paymentType: paymentType
                     })
                 });
                 
                 const data = await response.json();
-                console.log('收到回應:', data);
-                
-                document.getElementById('loading').style.display = 'none';
-                const resultDiv = document.getElementById('result');
-                resultDiv.style.display = 'block';
                 
                 if (data.success) {
-                    resultDiv.className = 'result success';
-                    resultDiv.innerHTML = `
-                        <strong>✅ 發送成功！</strong><br>
-                        客戶：${userName}<br>
-                        金額：NT$ ${amount.toLocaleString()}<br>
-                        方式：${paymentType === 'ecpay' ? '綠界' : 'LINE Pay'}
-                    `;
+                    let message = `✅ 付款連結已發送給 ${userName}!<br><br>`;
+                    message += `金額: NT$ ${amount.toLocaleString()}<br>`;
                     
-                    document.getElementById('paymentForm').reset();
-                    document.querySelectorAll('.payment-option').forEach(opt => opt.classList.remove('active'));
-                    document.querySelector('.payment-option').classList.add('active');
+                    if (paymentType === 'both') {
+                        message += `付款方式: 綠界 + LINE Pay (兩者都已發送)<br>`;
+                    } else if (paymentType === 'ecpay') {
+                        message += `付款方式: 綠界支付<br>`;
+                    } else {
+                        message += `付款方式: LINE Pay<br>`;
+                    }
+                    
+                    message += `<br>客戶已收到付款連結,付款完成後會自動通知您 💙`;
+                    
+                    showResult('success', message);
+                    form.reset();
                 } else {
-                    resultDiv.className = 'result error';
-                    resultDiv.innerHTML = `<strong>❌ 發送失敗</strong><br>${data.error || '未知錯誤'}`;
+                    showResult('error', `❌ 發送失敗: ${data.error}`);
                 }
             } catch (error) {
-                console.error('錯誤詳情:', error);
-                
-                document.getElementById('loading').style.display = 'none';
-                const resultDiv = document.getElementById('result');
-                resultDiv.style.display = 'block';
-                resultDiv.className = 'result error';
-                resultDiv.innerHTML = `
-                    <strong>❌ 連線失敗</strong><br>
-                    ${error.message}<br><br>
-                    <small>請檢查：<br>
-                    1. 網址是否正確<br>
-                    2. 伺服器是否正常運行<br>
-                    3. 按 F12 查看瀏覽器 Console 的錯誤訊息</small>
-                `;
+                showResult('error', `❌ 發生錯誤: ${error.message}`);
+            } finally {
+                submitBtn.disabled = false;
+                loading.style.display = 'none';
             }
         });
+        
+        // 載入客戶列表
+        async function loadUsers() {
+            try {
+                const response = await fetch('/api/users');
+                const data = await response.json();
+                
+                if (data.users && data.users.length > 0) {
+                    let html = `<p style="color:#666; font-size:14px; margin-bottom:15px;">共 ${data.total} 位客戶</p>`;
+                    
+                    data.users.forEach(user => {
+                        const lastSeen = new Date(user.lastSeen).toLocaleString('zh-TW');
+                        html += `
+                            <div class="user-item" onclick="selectUser('${user.userId}', '${user.displayName}')">
+                                <strong>${user.displayName}</strong>
+                                <small>ID: ${user.userId}</small>
+                                <small>最後活動: ${lastSeen}</small>
+                            </div>
+                        `;
+                    });
+                    
+                    userListDiv.innerHTML = html;
+                } else {
+                    userListDiv.innerHTML = '<p style="color:#999; text-align:center;">尚無客戶記錄</p>';
+                }
+            } catch (error) {
+                userListDiv.innerHTML = `<p style="color:#dc3545;">載入失敗: ${error.message}</p>`;
+            }
+        }
+        
+        // 選擇客戶自動填入表單
+        function selectUser(userId, userName) {
+            document.getElementById('userId').value = userId;
+            document.getElementById('userName').value = userName;
+            
+            // 平滑滾動到表單
+            document.getElementById('paymentForm').scrollIntoView({ 
+                behavior: 'smooth', 
+                block: 'start' 
+            });
+        }
+        
+        // 顯示結果訊息
+        function showResult(type, message) {
+            result.className = `result ${type}`;
+            result.innerHTML = message;
+            result.style.display = 'block';
+            
+            // 滾動到結果區域
+            result.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+        
+        // 頁面載入時自動載入客戶列表
+        window.addEventListener('load', loadUsers);
     </script>
 </body>
 </html>
