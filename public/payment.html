@@ -19,7 +19,7 @@
         }
         
         .container {
-            max-width: 700px;
+            max-width: 900px;
             margin: 0 auto;
             background: white;
             border-radius: 20px;
@@ -39,6 +39,42 @@
             color: #666;
             margin-bottom: 40px;
             font-size: 14px;
+        }
+        
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        
+        .tab {
+            padding: 12px 24px;
+            background: none;
+            border: none;
+            color: #666;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+        }
+        
+        .tab:hover {
+            color: #667eea;
+        }
+        
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
         }
         
         .form-group {
@@ -153,6 +189,17 @@
             box-shadow: none;
         }
         
+        .btn-secondary {
+            background: linear-gradient(135deg, #52c41a 0%, #389e0d 100%);
+        }
+        
+        .btn-small {
+            padding: 8px 15px;
+            font-size: 14px;
+            width: auto;
+            display: inline-block;
+        }
+        
         .result {
             margin-top: 30px;
             padding: 20px;
@@ -223,9 +270,6 @@
         
         .user-list {
             margin-top: 30px;
-            padding: 20px;
-            background: #f8f9fa;
-            border-radius: 12px;
         }
         
         .user-list h3 {
@@ -234,29 +278,26 @@
             font-size: 18px;
         }
         
-        .user-list button {
-            padding: 8px 15px;
-            background: #667eea;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            margin-bottom: 15px;
+        .search-box {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
         }
         
-        .user-list button:hover {
-            background: #5568d3;
+        .search-box input {
+            flex: 1;
         }
         
         .user-item {
-            background: white;
-            padding: 12px;
+            background: #f8f9fa;
+            padding: 15px;
             margin-bottom: 10px;
             border-radius: 8px;
             border: 1px solid #e0e0e0;
-            cursor: pointer;
             transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 15px;
         }
         
         .user-item:hover {
@@ -264,16 +305,104 @@
             box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
         }
         
-        .user-item strong {
-            color: #333;
-            font-size: 15px;
+        .user-info {
+            flex: 1;
+            cursor: pointer;
         }
         
-        .user-item small {
+        .user-info strong {
+            color: #333;
+            font-size: 16px;
+            display: block;
+            margin-bottom: 5px;
+        }
+        
+        .user-info small {
             display: block;
             color: #999;
             font-size: 12px;
-            margin-top: 5px;
+            margin-top: 3px;
+        }
+        
+        .user-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .user-actions button {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.3s;
+        }
+        
+        .btn-edit {
+            background: #ffc107;
+            color: #333;
+        }
+        
+        .btn-edit:hover {
+            background: #ffb300;
+        }
+        
+        .btn-select {
+            background: #667eea;
+            color: white;
+        }
+        
+        .btn-select:hover {
+            background: #5568d3;
+        }
+        
+        .edit-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .edit-modal.active {
+            display: flex;
+        }
+        
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+        
+        .modal-content h3 {
+            margin-bottom: 20px;
+            color: #667eea;
+        }
+        
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .modal-buttons button {
+            flex: 1;
+        }
+        
+        .btn-cancel {
+            background: #6c757d;
+        }
+        
+        .btn-cancel:hover {
+            background: #5a6268;
         }
     </style>
 </head>
@@ -282,105 +411,163 @@
         <h1>💳 付款管理系統</h1>
         <p class="subtitle">C.H 精緻洗衣 - 發送付款連結給客戶</p>
         
-        <div class="info-box">
-            <p><strong>📌 使用說明:</strong></p>
-            <p>1. 輸入客戶的 LINE User ID 和姓名</p>
-            <p>2. 輸入付款金額</p>
-            <p>3. 選擇付款方式</p>
-            <p>4. 點擊發送,客戶會收到付款連結</p>
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('payment')">💳 發送付款</button>
+            <button class="tab" onclick="switchTab('users')">👥 客戶管理</button>
         </div>
         
-        <form id="paymentForm">
-            <div class="form-group">
-                <label for="userId">客戶 LINE User ID *</label>
-                <input 
-                    type="text" 
-                    id="userId" 
-                    placeholder="例如: U1234567890abcdef" 
-                    required
-                >
+        <!-- 發送付款頁籤 -->
+        <div id="payment-tab" class="tab-content active">
+            <div class="info-box">
+                <p><strong>📌 使用說明:</strong></p>
+                <p>1. 輸入客戶的 LINE User ID 和姓名</p>
+                <p>2. 輸入付款金額</p>
+                <p>3. 選擇付款方式</p>
+                <p>4. 點擊發送,客戶會收到付款連結</p>
             </div>
             
-            <div class="form-group">
-                <label for="userName">客戶姓名 *</label>
-                <input 
-                    type="text" 
-                    id="userName" 
-                    placeholder="例如: 王小明" 
-                    required
-                >
-            </div>
-            
-            <div class="form-group">
-                <label for="amount">付款金額 (NT$) *</label>
-                <input 
-                    type="number" 
-                    id="amount" 
-                    placeholder="例如: 1500" 
-                    min="1"
-                    required
-                >
-            </div>
-            
-            <div class="form-group">
-                <label>付款方式 *</label>
-                <div class="payment-options">
-                    <div class="payment-option">
-                        <input type="radio" id="both" name="paymentType" value="both" checked>
-                        <label for="both">
-                            <div class="payment-icon">🎯</div>
-                            <div class="payment-name">兩者都發</div>
-                            <div class="payment-desc">綠界+LINE Pay</div>
-                        </label>
-                    </div>
-                    
-                    <div class="payment-option">
-                        <input type="radio" id="ecpay" name="paymentType" value="ecpay">
-                        <label for="ecpay">
-                            <div class="payment-icon">💳</div>
-                            <div class="payment-name">綠界支付</div>
-                            <div class="payment-desc">信用卡/超商/ATM</div>
-                        </label>
-                    </div>
-                    
-                    <div class="payment-option">
-                        <input type="radio" id="linepay" name="paymentType" value="linepay">
-                        <label for="linepay">
-                            <div class="payment-icon">💚</div>
-                            <div class="payment-name">LINE Pay</div>
-                            <div class="payment-desc">LINE 錢包</div>
-                        </label>
+            <form id="paymentForm">
+                <div class="form-group">
+                    <label for="userId">客戶 LINE User ID *</label>
+                    <input 
+                        type="text" 
+                        id="userId" 
+                        placeholder="例如: U1234567890abcdef" 
+                        required
+                    >
+                </div>
+                
+                <div class="form-group">
+                    <label for="userName">客戶姓名 *</label>
+                    <input 
+                        type="text" 
+                        id="userName" 
+                        placeholder="例如: 王小明" 
+                        required
+                    >
+                </div>
+                
+                <div class="form-group">
+                    <label for="amount">付款金額 (NT$) *</label>
+                    <input 
+                        type="number" 
+                        id="amount" 
+                        placeholder="例如: 1500" 
+                        min="1"
+                        required
+                    >
+                </div>
+                
+                <div class="form-group">
+                    <label>付款方式 *</label>
+                    <div class="payment-options">
+                        <div class="payment-option">
+                            <input type="radio" id="both" name="paymentType" value="both" checked>
+                            <label for="both">
+                                <div class="payment-icon">🎯</div>
+                                <div class="payment-name">兩者都發</div>
+                                <div class="payment-desc">綠界+LINE Pay</div>
+                            </label>
+                        </div>
+                        
+                        <div class="payment-option">
+                            <input type="radio" id="ecpay" name="paymentType" value="ecpay">
+                            <label for="ecpay">
+                                <div class="payment-icon">💳</div>
+                                <div class="payment-name">綠界支付</div>
+                                <div class="payment-desc">信用卡/超商/ATM</div>
+                            </label>
+                        </div>
+                        
+                        <div class="payment-option">
+                            <input type="radio" id="linepay" name="paymentType" value="linepay">
+                            <label for="linepay">
+                                <div class="payment-icon">💚</div>
+                                <div class="payment-name">LINE Pay</div>
+                                <div class="payment-desc">LINE 錢包</div>
+                            </label>
+                        </div>
                     </div>
                 </div>
+                
+                <button type="submit" class="btn" id="submitBtn">
+                    發送付款連結 🚀
+                </button>
+            </form>
+            
+            <div class="loading" id="loading">
+                <div class="loading-spinner"></div>
+                <p>正在發送付款連結...</p>
             </div>
             
-            <button type="submit" class="btn" id="submitBtn">
-                發送付款連結 🚀
-            </button>
-        </form>
-        
-        <div class="loading" id="loading">
-            <div class="loading-spinner"></div>
-            <p>正在發送付款連結...</p>
+            <div class="result" id="result"></div>
         </div>
         
-        <div class="result" id="result"></div>
-        
-        <div class="user-list">
-            <h3>👥 已記錄的客戶</h3>
-            <button onclick="loadUsers()">載入客戶列表</button>
-            <div id="userList"></div>
+        <!-- 客戶管理頁籤 -->
+        <div id="users-tab" class="tab-content">
+            <div class="user-list">
+                <h3>👥 客戶管理</h3>
+                
+                <div class="search-box">
+                    <input 
+                        type="text" 
+                        id="searchInput" 
+                        placeholder="搜尋客戶名稱..." 
+                        onkeyup="searchUsers()"
+                    >
+                    <button class="btn btn-secondary btn-small" onclick="loadUsers()">
+                        🔄 重新載入
+                    </button>
+                </div>
+                
+                <div id="userList">
+                    <p style="text-align:center; color:#999;">載入中...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 編輯名稱彈窗 -->
+    <div class="edit-modal" id="editModal">
+        <div class="modal-content">
+            <h3>✏️ 編輯客戶名稱</h3>
+            <div class="form-group">
+                <label>User ID</label>
+                <input type="text" id="editUserId" readonly style="background:#f5f5f5;">
+            </div>
+            <div class="form-group">
+                <label>真實姓名</label>
+                <input type="text" id="editUserName" placeholder="輸入客戶的真實姓名">
+            </div>
+            <div class="modal-buttons">
+                <button class="btn btn-cancel" onclick="closeEditModal()">取消</button>
+                <button class="btn" onclick="saveUserName()">💾 儲存</button>
+            </div>
         </div>
     </div>
     
     <script>
+        let allUsers = [];
+        
+        // 切換頁籤
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(`${tabName}-tab`).classList.add('active');
+            
+            if (tabName === 'users') {
+                loadUsers();
+            }
+        }
+        
+        // 發送付款連結
         const form = document.getElementById('paymentForm');
         const submitBtn = document.getElementById('submitBtn');
         const loading = document.getElementById('loading');
         const result = document.getElementById('result');
-        const userListDiv = document.getElementById('userList');
         
-        // 發送付款連結
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
             
@@ -443,31 +630,73 @@
         
         // 載入客戶列表
         async function loadUsers() {
+            const userListDiv = document.getElementById('userList');
+            userListDiv.innerHTML = '<p style="text-align:center; color:#999;">載入中...</p>';
+            
             try {
                 const response = await fetch('/api/users');
                 const data = await response.json();
                 
-                if (data.users && data.users.length > 0) {
-                    let html = `<p style="color:#666; font-size:14px; margin-bottom:15px;">共 ${data.total} 位客戶</p>`;
-                    
-                    data.users.forEach(user => {
-                        const lastSeen = new Date(user.lastSeen).toLocaleString('zh-TW');
-                        html += `
-                            <div class="user-item" onclick="selectUser('${user.userId}', '${user.displayName}')">
-                                <strong>${user.displayName}</strong>
-                                <small>ID: ${user.userId}</small>
-                                <small>最後活動: ${lastSeen}</small>
-                            </div>
-                        `;
-                    });
-                    
-                    userListDiv.innerHTML = html;
-                } else {
-                    userListDiv.innerHTML = '<p style="color:#999; text-align:center;">尚無客戶記錄</p>';
-                }
+                allUsers = data.users || [];
+                displayUsers(allUsers);
+                
             } catch (error) {
-                userListDiv.innerHTML = `<p style="color:#dc3545;">載入失敗: ${error.message}</p>`;
+                userListDiv.innerHTML = `<p style="color:#dc3545; text-align:center;">載入失敗: ${error.message}</p>`;
             }
+        }
+        
+        // 顯示用戶列表
+        function displayUsers(users) {
+            const userListDiv = document.getElementById('userList');
+            
+            if (users.length === 0) {
+                userListDiv.innerHTML = '<p style="color:#999; text-align:center;">尚無客戶記錄</p>';
+                return;
+            }
+            
+            let html = `<p style="color:#666; font-size:14px; margin-bottom:15px;">共 ${users.length} 位客戶</p>`;
+            
+            users.forEach(user => {
+                const lastSeen = new Date(user.lastSeen).toLocaleString('zh-TW');
+                const customBadge = user.customName ? '<span style="background:#52c41a; color:white; padding:2px 8px; border-radius:4px; font-size:11px; margin-left:8px;">已編輯</span>' : '';
+                
+                html += `
+                    <div class="user-item">
+                        <div class="user-info" onclick="selectUser('${user.userId}', '${user.displayName}')">
+                            <strong>${user.displayName}${customBadge}</strong>
+                            <small>User ID: ${user.userId}</small>
+                            <small>最後活動: ${lastSeen}</small>
+                        </div>
+                        <div class="user-actions">
+                            <button class="btn-edit" onclick="openEditModal('${user.userId}', '${user.displayName}')">
+                                ✏️ 編輯
+                            </button>
+                            <button class="btn-select" onclick="selectUser('${user.userId}', '${user.displayName}')">
+                                選擇
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            userListDiv.innerHTML = html;
+        }
+        
+        // 搜尋用戶
+        function searchUsers() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase().trim();
+            
+            if (searchTerm === '') {
+                displayUsers(allUsers);
+                return;
+            }
+            
+            const filtered = allUsers.filter(user => 
+                user.displayName.toLowerCase().includes(searchTerm) ||
+                user.userId.toLowerCase().includes(searchTerm)
+            );
+            
+            displayUsers(filtered);
         }
         
         // 選擇客戶自動填入表單
@@ -475,11 +704,62 @@
             document.getElementById('userId').value = userId;
             document.getElementById('userName').value = userName;
             
+            // 切換到付款頁籤
+            switchTab('payment');
+            document.querySelector('.tab').classList.add('active');
+            
             // 平滑滾動到表單
-            document.getElementById('paymentForm').scrollIntoView({ 
-                behavior: 'smooth', 
-                block: 'start' 
-            });
+            setTimeout(() => {
+                document.getElementById('paymentForm').scrollIntoView({ 
+                    behavior: 'smooth', 
+                    block: 'start' 
+                });
+            }, 100);
+        }
+        
+        // 打開編輯彈窗
+        function openEditModal(userId, currentName) {
+            document.getElementById('editUserId').value = userId;
+            document.getElementById('editUserName').value = currentName;
+            document.getElementById('editModal').classList.add('active');
+        }
+        
+        // 關閉編輯彈窗
+        function closeEditModal() {
+            document.getElementById('editModal').classList.remove('active');
+        }
+        
+        // 儲存用戶名稱
+        async function saveUserName() {
+            const userId = document.getElementById('editUserId').value;
+            const newName = document.getElementById('editUserName').value.trim();
+            
+            if (!newName) {
+                alert('請輸入名稱');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/user/${userId}/name`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ displayName: newName })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert('✅ 名稱已更新!');
+                    closeEditModal();
+                    loadUsers();
+                } else {
+                    alert('❌ 更新失敗: ' + data.error);
+                }
+            } catch (error) {
+                alert('❌ 發生錯誤: ' + error.message);
+            }
         }
         
         // 顯示結果訊息
@@ -488,9 +768,15 @@
             result.innerHTML = message;
             result.style.display = 'block';
             
-            // 滾動到結果區域
             result.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
+        
+        // 點擊彈窗外部關閉
+        document.getElementById('editModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeEditModal();
+            }
+        });
         
         // 頁面載入時自動載入客戶列表
         window.addEventListener('load', loadUsers);
