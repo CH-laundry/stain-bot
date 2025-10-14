@@ -1,4 +1,5 @@
 // ============== 引入依賴 ==============
+const customerDB = require('./services/customerDatabase');
 const fs = require('fs');
 const express = require('express');
 require('dotenv').config();
@@ -907,5 +908,6 @@ app.listen(PORT, async () => {
         console.error('❌ 客戶資料載入失敗:', error.message);
     }
 });
+
 
 
