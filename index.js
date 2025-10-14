@@ -80,7 +80,85 @@ app.get('/api/user/:userId', (req, res) => {
         res.status(404).json({ error: '找不到此用戶' });
     }
 });
+// ============== 新增:更新用戶名稱 API ==============
+app.put('/api/user/:userId/name', express.json(), (req, res) => {
+    const { userId } = req.params;
+    const { displayName } = req.body;
+    
+    if (!displayName || displayName.trim() === '') {
+        return res.status(400).json({ error: '名稱不能為空' });
+    }
+    
+    const user = userProfiles.get(userId);
+    if (user) {
+        user.displayName = displayName.trim();
+        user.customName = true; // 標記為自訂名稱
+        userProfiles.set(userId, user);
+        
+        logger.logToFile(`✅ 已更新用戶名稱: ${userId} -> ${displayName}`);
+        
+        res.json({ 
+            success: true, 
+            message: '名稱已更新',
+            user: user
+        });
+    } else {
+        res.status(404).json({ error: '找不到此用戶' });
+    }
+});
 
+// ============== 新增:用名稱搜尋用戶 API ==============
+app.get('/api/search/user', (req, res) => {
+    const { name } = req.query;
+    
+    if (!name) {
+        return res.status(400).json({ error: '請提供搜尋名稱' });
+    }
+    
+    const searchTerm = name.toLowerCase().trim();
+    const users = Array.from(userProfiles.values());
+    
+    const results = users.filter(user => 
+        user.displayName.toLowerCase().includes(searchTerm)
+    );
+    
+    res.json({
+        total: results.length,
+        users: results
+    });
+});
+
+// ============== 新增:批量匯入/匯出用戶名稱對照表 API ==============
+app.post('/api/users/import', express.json(), (req, res) => {
+    const { mappings } = req.body; // [{ userId, realName }]
+    
+    if (!Array.isArray(mappings)) {
+        return res.status(400).json({ error: '格式錯誤' });
+    }
+    
+    let updated = 0;
+    let notFound = [];
+    
+    mappings.forEach(mapping => {
+        const user = userProfiles.get(mapping.userId);
+        if (user) {
+            user.displayName = mapping.realName;
+            user.customName = true;
+            userProfiles.set(mapping.userId, user);
+            updated++;
+        } else {
+            notFound.push(mapping.userId);
+        }
+    });
+    
+    logger.logToFile(`✅ 批量更新用戶名稱: 成功 ${updated} 筆, 失敗 ${notFound.length} 筆`);
+    
+    res.json({
+        success: true,
+        updated: updated,
+        notFound: notFound
+    });
+});
 // ============== LINE Pay 設定 ==============
 const LINE_PAY_CONFIG = {
     channelId: process.env.LINE_PAY_CHANNEL_ID,
@@ -846,3 +924,4 @@ app.listen(PORT, () => {
     console.log(`伺服器正在運行,端口:${PORT}`);
     logger.logToFile(`伺服器正在運行,端口:${PORT}`);
 });
+
