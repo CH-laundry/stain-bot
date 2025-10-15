@@ -666,8 +666,25 @@ app.get('/payment/linepay/cancel', (req, res) => {
 });
 
 // ============== LINE Pay 確認付款 ==============
+// ============== LINE Pay 確認付款 ==============
 app.get('/payment/linepay/confirm', async (req, res) => {
     const { transactionId, orderId, userId, userName, amount } = req.query;
+    
+    try {
+        const orderTimestamp = orderId.replace('LP', '').substring(0, 13);
+        const orderTime = parseInt(orderTimestamp);
+        const now = Date.now();
+        const hoursPassed = (now - orderTime) / (1000 * 60 * 60);
+        
+        if (hoursPassed > 168) {
+            logger.logToFile(`❌ LINE Pay 付款連結已過期: ${orderId} (已過 ${hoursPassed.toFixed(1)} 小時)`);
+            return res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>付款連結已過期</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#f093fb 0%,#f5576c 100%);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}h1{font-size:32px;margin-bottom:20px}p{font-size:18px;margin:15px 0}</style></head><body><div class="container"><h1>⏰ 付款連結已過期</h1><p>此付款連結已超過 7 天(168 小時)</p><p>已過時間: ${Math.floor(hoursPassed)} 小時</p><p>請聯繫 C.H 精緻洗衣客服重新取得付款連結</p></div></body></html>`);
+        }
+        
+        logger.logToFile(`✅ LINE Pay 付款連結有效: ${orderId} (已過 ${hoursPassed.toFixed(1)} 小時)`);
+    } catch (error) {
+        logger.logError('檢查付款過期時間失敗', error);
+    }
     
     try {
         const nonce = crypto.randomBytes(16).toString('base64');
@@ -715,24 +732,7 @@ app.get('/payment/linepay/confirm', async (req, res) => {
             res.redirect('/payment/success');
         } else {
             logger.logToFile(`❌ LINE Pay 付款確認失敗: ${result.returnCode} - ${result.returnMessage}`);
-            res.send(`
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>付款失敗</title>
-    <style>
-        body { font-family: sans-serif; text-align: center; padding: 50px; }
-        h1 { color: #e74c3c; }
-    </style>
-</head>
-<body>
-    <h1>❌ 付款失敗</h1>
-    <p>${result.returnMessage}</p>
-    <p>請聯繫客服處理</p>
-</body>
-</html>
-            `);
+            res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>付款失敗</title><style>body{font-family:sans-serif;text-align:center;padding:50px}h1{color:#e74c3c}</style></head><body><h1>❌ 付款失敗</h1><p>${result.returnMessage}</p><p>請聯繫客服處理</p></body></html>`);
         }
     } catch (error) {
         logger.logError('LINE Pay 確認付款失敗', error);
@@ -912,6 +912,7 @@ app.listen(PORT, async () => {
         console.error('❌ 客戶資料載入失敗:', error.message);
     }
 });
+
 
 
 
