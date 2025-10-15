@@ -10,6 +10,7 @@ const messageHandler = require('./services/message');
 const { Client } = require('@line/bot-sdk');
 const googleAuth = require('./services/googleAuth');
 const multer = require('multer');
+const orderManager = require('./services/orderManager');
 
 // 設定 multer 使用記憶體儲存
 const upload = multer({ storage: multer.memoryStorage() });
@@ -912,6 +913,7 @@ app.listen(PORT, async () => {
         console.error('❌ 客戶資料載入失敗:', error.message);
     }
 });
+
 
 
 
