@@ -333,26 +333,45 @@ class MessageHandler {
     if (/(收衣|收件|來收|到府|上門|取件)/.test(raw)) {
       const isSaturday = new Date().getDay() === 6;
       if (isSaturday) {
-        const reply = "今天週六固定公休,明天週日有營業的,可以去收回 🙏";
+        const reply = "今天週六固定公休，明天週日有營業的，可以去收回 🙏";
         await client.pushMessage(userId, { type: "text", text: reply });
         logger.logBotResponse(userId, originalMessage, reply, "Bot (Rule: pickup-sat-closed)");
         return;
-      }
-
-      let reply = "好的 😊 我們會去收回的";
-      try {
-        if (AddressDetector.isAddress(raw)) {
-          const { formattedAddress } = AddressDetector.formatResponse(raw);
-          if (formattedAddress) {
-            reply = `好的 😊 我們會去收回的\n地址是:${formattedAddress}`;
-          }
-        }
-      } catch (_) { }
-
-      await client.pushMessage(userId, { type: "text", text: reply });
-      logger.logBotResponse(userId, originalMessage, reply, "Bot (Rule: pickup)");
-      return;
     }
+
+    // 預設說法（你要求的）
+    let reply = "可以的 🙏 我們會到您輸入的地址收送，送達後再通知您 💙";
+
+    try {
+      const rawClean2 = cleanText(raw);
+      let formatted = "";
+
+      // 先嚴格
+      if (AddressDetector.isAddress(rawClean2)) {
+        const r = AddressDetector.formatResponse(rawClean2) || {};
+        formatted = r.formattedAddress || "";
+      }
+      // 再寬鬆
+      if (!formatted) {
+        const loose = rawClean2.match(LOOSE_ADDR_RE);
+        if (loose) {
+          const cityDistrict = autoDetectCityDistrict(rawClean2);
+          formatted = `${cityDistrict}${loose[0].replace(/\s+/g, "")}`;
+      }
+    }
+
+    if (formatted) {
+      reply = `可以的 🙏 我們會到您輸入的地址收送：\n${formatted}\n送達後會再通知您 💙`;
+    }
+  } catch (err) {
+    logger.logError("收件地址處理錯誤", err, userId);
+  }
+
+  await client.pushMessage(userId, { type: "text", text: reply });
+  logger.logBotResponse(userId, originalMessage, reply, "Bot (Rule: pickup)");
+  return;
+}
+
 
     // 7) 汽座/手推車/嬰兒車 → 按 2
     const strollerKeywords = ['汽座','手推車','嬰兒推車','嬰兒車','安全座椅'];
@@ -521,7 +540,7 @@ class MessageHandler {
        }
      })();
    }
-
-   }   
+  }
+     
 
    module.exports = new MessageHandler();
