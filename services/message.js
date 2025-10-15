@@ -26,9 +26,10 @@ const isOneKey = (s='') => {
   return t === '1' || t === '１';
 };
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
-// 寬鬆地址偵測：允許只寫 路/街/大道 + 號（可含 段/巷/弄/樓/樓層）
+
+// 支援：中文數字/阿拉伯數字 的「段、樓」，以及「之」號碼（例：211之1號）
 const LOOSE_ADDR_RE =
-  /[\u4e00-\u9fa5一二三四五六七八九十0-9]{1,12}(?:路|街|大道)\s*(?:\d+段)?\s*(?:\d+巷)?\s*(?:\d+弄)?\s*\d+號(?:\s*\d+樓)?/;
+  /[\u4e00-\u9fa5A-Za-z0-9]{1,12}(?:路|街|大道)\s*(?:(?:\d+|[一二三四五六七八九十]+)段)?\s*(?:\d+巷)?\s*(?:\d+弄)?\s*\d+(?:之\d+)?號(?:\s*(?:\d+|[一二三四五六七八九十]+)樓)?/;
 
 // 自動判斷市區（依關鍵字推斷）
 function autoDetectCityDistrict(addr) {
@@ -166,7 +167,9 @@ class MessageHandler {
       let arr = this.store.get(key) || [];
       arr = arr.filter(ts => ts > now - ttl);
       if (arr.length < this.MAX_USES_PER_USER) {
-        arr.push(now); this.store.set(key, arr); return true;
+        arr.push(now);
+        this.store.set(key, arr);
+        return true;
       }
       return false;
     } catch (e) {
@@ -191,8 +194,6 @@ class MessageHandler {
   /* ---- ✅ 管理員指令:發送付款連結 ---- */
   async handleAdminPaymentCommand(userId, text) {
     const ADMIN_USER_ID = process.env.ADMIN_USER_ID;
-    
-    // 只有管理員可用
     if (userId !== ADMIN_USER_ID) {
       return false;
     }
@@ -200,7 +201,6 @@ class MessageHandler {
     // 格式: /付款 U客戶ID 王小明 1500 ecpay
     if (text.startsWith('/付款 ')) {
       const parts = text.split(' ');
-      
       if (parts.length < 4) {
         await client.pushMessage(userId, {
           type: 'text',
@@ -208,16 +208,12 @@ class MessageHandler {
         });
         return true;
       }
-      
+
       const [_, customerId, customerName, amount, paymentType = 'ecpay'] = parts;
-      
       try {
         let message = '';
-        
         if (paymentType === 'ecpay') {
           const link = createECPayPaymentLink(customerId, customerName, parseInt(amount));
-          
-          // ✅ 自動縮短網址
           let shortUrl = link;
           try {
             const response = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(link)}`);
@@ -229,57 +225,41 @@ class MessageHandler {
           } catch (error) {
             logger.logToFile(`⚠️ 短網址生成失敗,使用原網址: ${error.message}`);
           }
-          
+
           message = `您好,${customerName} 👋\n\n` +
-                   `您的專屬付款連結已生成\n` +
-                   `付款方式:信用卡\n` +
-                   `金額:NT$ ${parseInt(amount).toLocaleString()}\n\n` +
-                   `👉 請點擊下方連結完成付款\n${shortUrl}\n\n` +
-                   `✅ 付款後系統會自動通知我們\n` +
-                   `感謝您的支持 💙`;
+                    `您的專屬付款連結已生成\n` +
+                    `付款方式:信用卡\n` +
+                    `金額:NT$ ${parseInt(amount).toLocaleString()}\n\n` +
+                    `👉 請點擊下方連結完成付款\n${shortUrl}\n\n` +
+                    `✅ 付款後系統會自動通知我們\n` +
+                    `感謝您的支持 💙`;
         } else if (paymentType === 'linepay') {
           const LINE_PAY_URL = process.env.LINE_PAY_URL;
-          
           message = `您好,${customerName} 👋\n\n` +
-                   `您的專屬付款連結已生成\n` +
-                   `付款方式:LINE Pay\n` +
-                   `金額:NT$ ${parseInt(amount).toLocaleString()}\n\n` +
-                   `👉 請點擊下方連結完成付款\n${LINE_PAY_URL}\n\n` +
-                   `✅ 付款後系統會自動通知我們\n` +
-                   `感謝您的支持 💙`;
+                    `您的專屬付款連結已生成\n` +
+                    `付款方式:LINE Pay\n` +
+                    `金額:NT$ ${parseInt(amount).toLocaleString()}\n\n` +
+                    `👉 請點擊下方連結完成付款\n${LINE_PAY_URL}\n\n` +
+                    `✅ 付款後系統會自動通知我們\n` +
+                    `感謝您的支持 💙`;
         } else {
-          await client.pushMessage(userId, {
-            type: 'text',
-            text: '❌ 不支援的付款方式\n請使用 ecpay 或 linepay'
-          });
+          await client.pushMessage(userId, { type: 'text', text: '❌ 不支援的付款方式\n請使用 ecpay 或 linepay' });
           return true;
         }
-        
-        // 發送給客戶
-        await client.pushMessage(customerId, {
-          type: 'text',
-          text: message
-        });
-        
-        // 回覆管理員
+
+        await client.pushMessage(customerId, { type: 'text', text: message });
         await client.pushMessage(userId, {
           type: 'text',
           text: `✅ 已發送付款連結\n\n客戶:${customerName}\n金額:NT$ ${amount}\n方式:${paymentType === 'ecpay' ? '綠界' : 'LINE Pay'}`
         });
-        
+
         logger.logToFile(`✅ [管理員指令] 已發送付款連結給 ${customerName} (${customerId}) - ${amount}元`);
-        
       } catch (err) {
         logger.logError('發送付款連結失敗', err);
-        await client.pushMessage(userId, {
-          type: 'text',
-          text: `❌ 發送失敗:${err.message}`
-        });
+        await client.pushMessage(userId, { type: 'text', text: `❌ 發送失敗:${err.message}` });
       }
-      
       return true;
     }
-    
     return false;
   }
 
@@ -288,26 +268,19 @@ class MessageHandler {
     const raw = text || '';
     const lower = raw.toLowerCase().trim();
 
-    // ✅ 0) 管理員指令優先處理
     const isAdminCommand = await this.handleAdminPaymentCommand(userId, raw);
     if (isAdminCommand) return;
 
-    // 1) 「1」→ 立刻開啟智能分析
     if (isOneKey(raw)) {
       this.recentOneTs.set(userId, Date.now());
       return this.handleNumberOneCommand(userId);
     }
 
-    // 2) 直接輸入「智能污漬分析」→ 引導
     if (/智能[污汙]漬分析/.test(raw)) {
-      await client.pushMessage(userId, {
-        type: 'text',
-        text: '「想知道污漬的清潔成功率?」\n按 1 並上傳照片,我們提供貼心的智能分析,即時回應 🧼'
-      });
+      await client.pushMessage(userId, { type: 'text', text: '「想知道污漬的清潔成功率?」\n按 1 並上傳照片,我們提供貼心的智能分析,即時回應 🧼' });
       return;
     }
 
-    // 3) 忽略固定選單/無關訊息
     if (ignoredKeywords.some(k => lower.includes(k.toLowerCase())) ||
         isEmojiOrPuncOnly(raw) || isSmallTalk(raw) || isPhoneNumberOnly(raw) ||
         isUrlOnly(raw) || isClearlyUnrelatedTopic(raw)) {
@@ -315,65 +288,55 @@ class MessageHandler {
       return;
     }
 
-   // 4) 地址偵測（先清洗，再用嚴格或寬鬆規則）
-   const rawClean = cleanText(raw);
-   if (AddressDetector.isAddress(rawClean) || LOOSE_ADDR_RE.test(rawClean)) {
-     await this.handleAddressMessage(userId, raw);
-     return;
+    const rawClean = cleanText(raw);
+    if (AddressDetector.isAddress(rawClean) || LOOSE_ADDR_RE.test(rawClean)) {
+      await this.handleAddressMessage(userId, raw);
+      return;
     }
 
-
-
-    // 5) 進度查詢
     if (this.isProgressQuery(lower)) {
       return this.handleProgressQuery(userId);
     }
 
-    // 6) 收件/收衣意圖
+    // 收件／收衣意圖
     if (/(收衣|收件|來收|到府|上門|取件)/.test(raw)) {
       const isSaturday = new Date().getDay() === 6;
       if (isSaturday) {
-        const reply = "今天週六固定公休，明天週日有營業的，可以去收回 🙏";
+        const reply = "今天週六固定公休 🙏 明天週日有營業，我們可再安排收件時間。";
         await client.pushMessage(userId, { type: "text", text: reply });
         logger.logBotResponse(userId, originalMessage, reply, "Bot (Rule: pickup-sat-closed)");
         return;
-    }
-
-    // 預設說法（你要求的）
-    let reply = "可以的 🙏 我們會到您輸入的地址收送，送達後再通知您 💙";
-
-    try {
-      const rawClean2 = cleanText(raw);
-      let formatted = "";
-
-      // 先嚴格
-      if (AddressDetector.isAddress(rawClean2)) {
-        const r = AddressDetector.formatResponse(rawClean2) || {};
-        formatted = r.formattedAddress || "";
       }
-      // 再寬鬆
-      if (!formatted) {
-        const loose = rawClean2.match(LOOSE_ADDR_RE);
-        if (loose) {
-          const cityDistrict = autoDetectCityDistrict(rawClean2);
-          formatted = `${cityDistrict}${loose[0].replace(/\s+/g, "")}`;
+
+      let reply = "可以的 🙏 我們會到您輸入的地址收送，送達後再通知您 💙";
+
+      try {
+        const rawClean2 = cleanText(raw);
+        let formatted = "";
+        if (AddressDetector.isAddress(rawClean2)) {
+          const r = AddressDetector.formatResponse(rawClean2) || {};
+          formatted = r.formattedAddress || "";
+        }
+        if (!formatted) {
+          const loose = rawClean2.match(LOOSE_ADDR_RE);
+          if (loose) {
+            const cityDistrict = autoDetectCityDistrict(rawClean2);
+            formatted = `${cityDistrict}${loose[0].replace(/\s+/g, "")}`;
+          }
+        }
+        if (formatted) {
+          reply = `可以的 🙏 我們會到您輸入的地址收送：\n${formatted}\n送達後會再通知您 💙`;
+        }
+      } catch (err) {
+        logger.logError("收件地址處理錯誤", err, userId);
       }
+
+      await client.pushMessage(userId, { type: "text", text: reply });
+      logger.logBotResponse(userId, originalMessage, reply, "Bot (Rule: pickup)");
+      return;
     }
 
-    if (formatted) {
-      reply = `可以的 🙏 我們會到您輸入的地址收送：\n${formatted}\n送達後會再通知您 💙`;
-    }
-  } catch (err) {
-    logger.logError("收件地址處理錯誤", err, userId);
-  }
-
-  await client.pushMessage(userId, { type: "text", text: reply });
-  logger.logBotResponse(userId, originalMessage, reply, "Bot (Rule: pickup)");
-  return;
-}
-
-
-    // 7) 汽座/手推車/嬰兒車 → 按 2
+    // 汽座／手推車／嬰兒車
     const strollerKeywords = ['汽座','手推車','嬰兒推車','嬰兒車','安全座椅'];
     if (strollerKeywords.some(k => raw.includes(k))) {
       const reply = '這類寶寶用品我們都有處理 👶 會針對安全性與清潔特別注意。\n要詳細了解請按 2,謝謝您 😊';
@@ -382,7 +345,6 @@ class MessageHandler {
       return;
     }
 
-    // 8) 品項模板
     if (/(包包|名牌包|手提袋|背包|書包)/.test(raw)) {
       const msg = pick(TPL_BAG);
       await client.pushMessage(userId, { type: 'text', text: msg });
@@ -414,7 +376,6 @@ class MessageHandler {
       return;
     }
 
-    // 9) 其餘洗衣相關 → 交給 AI
     if (maybeLaundryRelated(raw)) {
       try {
         const aiText = await smartAutoReply(raw);
@@ -483,6 +444,7 @@ class MessageHandler {
       }
     });
   }
+
   async handleAddressMessage(userId, address) {
     const original = address || '';
     const input = cleanText(original);
@@ -496,51 +458,49 @@ class MessageHandler {
       response = r.response || '';
     } catch (e) {
       logger.logError('地址解析失敗', e, userId);
-      // 不立刻 return，下面有寬鬆補救
     }
 
-      // 2) 寬鬆補救：若嚴格解析失敗，但抓得到「路/街/號」，自動補市區
-      if (!formattedAddress) {
-        const loose = input.match(LOOSE_ADDR_RE);
-        if (loose) {
-          const cityDistrict = autoDetectCityDistrict(input);
-          const guessed = `${cityDistrict}${loose[0].replace(/\s+/g,'')}`;
-          formattedAddress = guessed;
-          response = `已收到地址：${guessed}\n（若市/區需更改，請直接回覆正確完整地址 🙏）`;
-        }
+    // 2) 寬鬆補救：若嚴格解析失敗，但抓得到「路/街/號」，自動補市區
+    if (!formattedAddress) {
+      const loose = input.match(LOOSE_ADDR_RE);
+      if (loose) {
+        const cityDistrict = autoDetectCityDistrict(input);
+        const guessed = `${cityDistrict}${loose[0].replace(/\s+/g,'')}`;
+        formattedAddress = guessed;
+        response = `已收到地址：${guessed}\n（若市/區需更改，請直接回覆正確完整地址 🙏）`;
       }
+    }
 
-      // 3) 還是抓不到 → 請用戶補充
-      if (!formattedAddress) {
-        await client.pushMessage(userId, {
+    // 3) 還是抓不到 → 請用戶補充
+    if (!formattedAddress) {
+      await client.pushMessage(userId, {
         type:'text',
         text:'我沒有抓到完整地址 🙏\n請用這個格式提供：\n「新北市板橋區華江一路582號4樓」'
       });
       return;
     }
 
-     // 4) 先回覆用戶（不受 Google 影響）
-     const okText = response && response.trim()
-       ? response
-       : `已收到地址：${formattedAddress}\n我們會盡快安排收件，謝謝您 🙏`;
-     await client.pushMessage(userId, { type:'text', text: okText });
-     logger.logBotResponse(userId, original, okText, 'Bot (Address)');
+    // 4) 先回覆用戶（不受 Google 影響）
+    const okText = response && response.trim()
+      ? response
+      : `已收到地址：${formattedAddress}\n我們會盡快安排收件，謝謝您 🙏`;
+    await client.pushMessage(userId, { type:'text', text: okText });
+    logger.logBotResponse(userId, original, okText, 'Bot (Address)');
 
-     // 5) 背景寫入 Google（失敗只記錄，不打擾用戶）
-     (async () => {
-       try {
-         const profile = await safeGetProfile(userId);
-         await addCustomerInfo({
-           userId,
-           userName: profile.displayName || '',
-           address: formattedAddress
-         });
-       } catch (err) {
-         logger.logError('寫入Google失敗(不影響用戶)', err, userId);
-       }
-     })();
-   }
+    // 5) 背景寫入 Google（失敗只記錄，不打擾用戶）
+    (async () => {
+      try {
+        const profile = await safeGetProfile(userId);
+        await addCustomerInfo({
+          userId,
+          userName: profile.displayName || '',
+          address: formattedAddress
+        });
+      } catch (err) {
+        logger.logError('寫入Google失敗(不影響用戶)', err, userId);
+      }
+    })();
   }
-     
+}
 
-   module.exports = new MessageHandler();
+module.exports = new MessageHandler();
