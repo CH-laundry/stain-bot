@@ -26,6 +26,26 @@ const isOneKey = (s='') => {
   return t === '1' || t === '１';
 };
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+// 寬鬆地址偵測：允許只寫 路/街/大道 + 號（可含 段/巷/弄/樓/樓層）
+const LOOSE_ADDR_RE =
+  /[\u4e00-\u9fa5一二三四五六七八九十0-9]{1,12}(?:路|街|大道)\s*(?:\d+段)?\s*(?:\d+巷)?\s*(?:\d+弄)?\s*\d+號(?:\s*\d+樓)?/;
+
+// 自動判斷市區（依關鍵字推斷）
+function autoDetectCityDistrict(addr) {
+  if (!addr) return '新北市板橋區';
+  const t = String(addr).toLowerCase();
+  if (/板橋/.test(t)) return '新北市板橋區';
+  if (/中和/.test(t)) return '新北市中和區';
+  if (/永和/.test(t)) return '新北市永和區';
+  if (/新莊/.test(t)) return '新北市新莊區';
+  if (/土城/.test(t)) return '新北市土城區';
+  if (/萬華/.test(t)) return '台北市萬華區';
+  if (/雙和/.test(t)) return '新北市中和區'; // 雙和→中和/永和，此處先歸中和
+  if (/三重/.test(t)) return '新北市三重區';
+  if (/新店/.test(t)) return '新北市新店區';
+  if (/台北|臺北/.test(t)) return '台北市';
+  return '新北市板橋區'; // 預設
+}
 
 // 文字清理：去 emoji、全形轉半形、壓縮多餘空白
 function cleanText(s = '') {
@@ -295,12 +315,13 @@ class MessageHandler {
       return;
     }
 
-    // 4) 地址偵測（先清洗再判斷）
-    const rawClean = cleanText(raw);
-    if (AddressDetector.isAddress(rawClean)) {
-      await this.handleAddressMessage(userId, raw);
-      return;
-}
+   // 4) 地址偵測（先清洗，再用嚴格或寬鬆規則）
+   const rawClean = cleanText(raw);
+   if (AddressDetector.isAddress(rawClean) || LOOSE_ADDR_RE.test(rawClean)) {
+     await this.handleAddressMessage(userId, raw);
+     return;
+    }
+
 
 
     // 5) 進度查詢
@@ -443,57 +464,64 @@ class MessageHandler {
       }
     });
   }
-
   async handleAddressMessage(userId, address) {
-  const original = address || '';
-  const input = cleanText(original);
+    const original = address || '';
+    const input = cleanText(original);
 
-  // 1) 嘗試解析地址
-  let formattedAddress = '';
-  let response = '';
-  try {
-    const r = AddressDetector.formatResponse(input) || {};
-    formattedAddress = r.formattedAddress || '';
-    response = r.response || '';
-  } catch (e) {
-    logger.logError('地址解析失敗', e, userId);
-    await client.pushMessage(userId, {
-      type:'text',
-      text:'我沒有抓到完整地址 🙏\n請用這個格式提供：\n「新北市板橋區華江一路582號4樓」'
-    });
-    return;
-  }
-
-  if (!formattedAddress) {
-    await client.pushMessage(userId, {
-      type:'text',
-      text:'我沒有抓到完整地址 🙏\n請用這個格式提供：\n「新北市板橋區華江一路582號4樓」'
-    });
-    return;
-  }
-
-  // 2) 先回覆用戶（不受 Google 影響）
-  const okText = response && response.trim()
-    ? response
-    : `已收到地址：${formattedAddress}\n我們會盡快安排收件，謝謝您 🙏`;
-  await client.pushMessage(userId, { type:'text', text: okText });
-  logger.logBotResponse(userId, original, okText, 'Bot (Address)');
-
-  // 3) 再背景寫入 Google（寫錯也不會再打擾用戶）
-  (async () => {
+    // 1) 嚴格解析（可能成功，也可能抓不到）
+    let formattedAddress = '';
+    let response = '';
     try {
-      const profile = await safeGetProfile(userId);
-      await addCustomerInfo({
-        userId,
-        userName: profile.displayName || '',
-        address: formattedAddress
-      });
-    } catch (err) {
-      logger.logError('寫入Google失敗(不影響用戶)', err, userId);
+      const r = AddressDetector.formatResponse(input) || {};
+      formattedAddress = r.formattedAddress || '';
+      response = r.response || '';
+    } catch (e) {
+      logger.logError('地址解析失敗', e, userId);
+      // 不立刻 return，下面有寬鬆補救
     }
-  })();
-}
 
-}    
+      // 2) 寬鬆補救：若嚴格解析失敗，但抓得到「路/街/號」，自動補市區
+      if (!formattedAddress) {
+        const loose = input.match(LOOSE_ADDR_RE);
+        if (loose) {
+          const cityDistrict = autoDetectCityDistrict(input);
+          const guessed = `${cityDistrict}${loose[0].replace(/\s+/g,'')}`;
+          formattedAddress = guessed;
+          response = `已收到地址：${guessed}\n（若市/區需更改，請直接回覆正確完整地址 🙏）`;
+        }
+      }
 
-module.exports = new MessageHandler();
+      // 3) 還是抓不到 → 請用戶補充
+      if (!formattedAddress) {
+        await client.pushMessage(userId, {
+        type:'text',
+        text:'我沒有抓到完整地址 🙏\n請用這個格式提供：\n「新北市板橋區華江一路582號4樓」'
+      });
+      return;
+    }
+
+     // 4) 先回覆用戶（不受 Google 影響）
+     const okText = response && response.trim()
+       ? response
+       : `已收到地址：${formattedAddress}\n我們會盡快安排收件，謝謝您 🙏`;
+     await client.pushMessage(userId, { type:'text', text: okText });
+     logger.logBotResponse(userId, original, okText, 'Bot (Address)');
+
+     // 5) 背景寫入 Google（失敗只記錄，不打擾用戶）
+     (async () => {
+       try {
+         const profile = await safeGetProfile(userId);
+         await addCustomerInfo({
+           userId,
+           userName: profile.displayName || '',
+           address: formattedAddress
+         });
+       } catch (err) {
+         logger.logError('寫入Google失敗(不影響用戶)', err, userId);
+       }
+     })();
+   }
+
+   }   
+
+   module.exports = new MessageHandler();
