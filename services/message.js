@@ -27,6 +27,28 @@ const isOneKey = (s='') => {
 };
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
+// 文字清理：去 emoji、全形轉半形、壓縮多餘空白
+function cleanText(s = '') {
+  const toHalf = x =>
+    x
+      .replace(/[\uFF01-\uFF5E]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0)) // 全形轉半形
+      .replace(/\u3000/g, ' '); // 全形空白轉半形
+  return toHalf(s)
+    .replace(/[\u{1F300}-\u{1FAFF}]/gu, '') // 移除 emoji
+    .replace(/\s+/g, ' ') // 合併多個空白
+    .trim();
+}
+
+// 安全取得使用者資料，若失敗不報錯
+async function safeGetProfile(userId) {
+  try {
+    return await client.getProfile(userId);
+  } catch (err) {
+    logger.logError('取得使用者資料失敗', err, userId);
+    return { displayName: '' }; // 傳回空物件避免整段報錯
+  }
+}
+
 function isEmojiOrPuncOnly(s = '') {
   const t = (s || '').trim();
   if (!t) return true;
@@ -421,17 +443,54 @@ class MessageHandler {
   }
 
   async handleAddressMessage(userId, address) {
-    try {
-      const profile = await client.getProfile(userId);
-      const { formattedAddress, response } = AddressDetector.formatResponse(address);
-      await addCustomerInfo({ userId, userName: profile.displayName, address: formattedAddress });
-      await client.pushMessage(userId, { type: 'text', text: response });
-      logger.logBotResponse(userId, address, response, 'Bot (Address)');
-    } catch (err) {
-      logger.logError('地址錯誤', err, userId);
-      await client.pushMessage(userId, { type: 'text', text: '抱歉,處理地址時發生錯誤,請稍後再試 🙏' });
-    }
+  const original = address || '';
+  const input = cleanText(original);
+
+  // 1) 嘗試解析地址
+  let formattedAddress = '';
+  let response = '';
+  try {
+    const r = AddressDetector.formatResponse(input) || {};
+    formattedAddress = r.formattedAddress || '';
+    response = r.response || '';
+  } catch (e) {
+    logger.logError('地址解析失敗', e, userId);
+    await client.pushMessage(userId, {
+      type:'text',
+      text:'我沒有抓到完整地址 🙏\n請用這個格式提供：\n「新北市板橋區華江一路582號4樓」'
+    });
+    return;
   }
+
+  if (!formattedAddress) {
+    await client.pushMessage(userId, {
+      type:'text',
+      text:'我沒有抓到完整地址 🙏\n請用這個格式提供：\n「新北市板橋區華江一路582號4樓」'
+    });
+    return;
+  }
+
+  // 2) 先回覆用戶（不受 Google 影響）
+  const okText = response && response.trim()
+    ? response
+    : `已收到地址：${formattedAddress}\n我們會盡快安排收件，謝謝您 🙏`;
+  await client.pushMessage(userId, { type:'text', text: okText });
+  logger.logBotResponse(userId, original, okText, 'Bot (Address)');
+
+  // 3) 再背景寫入 Google（寫錯也不會再打擾用戶）
+  (async () => {
+    try {
+      const profile = await safeGetProfile(userId);
+      await addCustomerInfo({
+        userId,
+        userName: profile.displayName || '',
+        address: formattedAddress
+      });
+    } catch (err) {
+      logger.logError('寫入Google失敗(不影響用戶)', err, userId);
+    }
+  })();
 }
+
 
 module.exports = new MessageHandler();
