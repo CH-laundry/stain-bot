@@ -197,8 +197,9 @@ async function createLinePayPayment(userId, userName, amount) {
         
         const result = await response.json();
         
-        if (result.returnCode === '0000') {
+       if (result.returnCode === '0000') {
             logger.logToFile(`✅ LINE Pay 付款請求成功: ${orderId}`);
+            
             return {
                 success: true,
                 paymentUrl: result.info.paymentUrl.web,
@@ -913,6 +914,7 @@ app.listen(PORT, async () => {
         console.error('❌ 客戶資料載入失敗:', error.message);
     }
 });
+
 
 
 
