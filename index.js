@@ -742,9 +742,9 @@ app.get('/payment/linepay/confirm', async (req, res) => {
 
 // ============== 發送付款連結 API (整合綠界 + LINE Pay) ==============
 app.post('/send-payment', async (req, res) => {
-    const { userId, userName, amount, paymentType } = req.body;
+    const { userId, userName, amount, paymentType, customMessage } = req.body;
     
-    logger.logToFile(`收到付款請求: userId=${userId}, userName=${userName}, amount=${amount}, type=${paymentType}`);
+    logger.logToFile(`收到付款請求: userId=${userId}, userName=${userName}, amount=${amount}, type=${paymentType}, customMessage=${customMessage}`);
     
     if (!userId || !userName || !amount) {
         logger.logToFile(`❌ 參數驗證失敗`);
@@ -763,11 +763,10 @@ app.post('/send-payment', async (req, res) => {
         const { createECPayPaymentLink } = require('./services/openai');
         const type = paymentType || 'both';
         
-        let message = '';
+        let finalMessage = '';
         let ecpayLink = '';
         let linepayLink = '';
         
-        // 生成綠界連結
         if (type === 'ecpay' || type === 'both') {
             ecpayLink = createECPayPaymentLink(userId, userName, numAmount);
             
@@ -776,18 +775,16 @@ app.post('/send-payment', async (req, res) => {
                 const result = await response.text();
                 if (result && result.startsWith('http')) {
                     ecpayLink = result;
-                    logger.logToFile(`✅ 已縮短綠界付款網址: ${ecpayLink}`);
+                    logger.logToFile(`✅ 已縮短綠界付款網址`);
                 }
             } catch (error) {
-                logger.logToFile(`⚠️ 短網址生成失敗,使用原網址: ${error.message}`);
+                logger.logToFile(`⚠️ 短網址生成失敗,使用原網址`);
             }
         }
         
-        // 生成 LINE Pay 連結
         if (type === 'linepay' || type === 'both') {
             const linePayResult = await createLinePayPayment(userId, userName, numAmount);
             if (linePayResult.success) {
-                linepayLink = linePayResult
                 linepayLink = linePayResult.paymentUrl;
                 
                 try {
@@ -795,28 +792,35 @@ app.post('/send-payment', async (req, res) => {
                     const result = await response.text();
                     if (result && result.startsWith('http')) {
                         linepayLink = result;
-                        logger.logToFile(`✅ 已縮短 LINE Pay 付款網址: ${linepayLink}`);
+                        logger.logToFile(`✅ 已縮短 LINE Pay 付款網址`);
                     }
                 } catch (error) {
-                    logger.logToFile(`⚠️ LINE Pay 短網址生成失敗,使用原網址: ${error.message}`);
+                    logger.logToFile(`⚠️ LINE Pay 短網址生成失敗,使用原網址`);
                 }
             } else {
-                logger.logToFile(`❌ LINE Pay 付款請求失敗: ${linePayResult.error}`);
+                logger.logToFile(`❌ LINE Pay 付款請求失敗`);
             }
         }
         
-        // 組合訊息
+        const userMessage = customMessage || '';
+        
         if (type === 'both' && ecpayLink && linepayLink) {
-            message = `💳 您好,${userName}\n\n您的專屬付款連結已生成\n金額:NT$ ${numAmount.toLocaleString()}\n\n請選擇付款方式:\n\n【綠界支付】信用卡 \n💙 ${ecpayLink}\n\n【LINE Pay】\n💙 ${linepayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
-        } else if (type === 'ecpay' || (type === 'both' && ecpayLink && !linepayLink)) {
-            message = `💳 您好,${userName}\n\n您的專屬付款連結已生成\n付款方式:信用卡/超商/ATM\n金額:NT$ ${numAmount.toLocaleString()}\n\n請點擊以下連結完成付款:\n${ecpayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
-        } else if (type === 'linepay' || (type === 'both' && !ecpayLink && linepayLink)) {
-            message = `💚 您好,${userName}\n\n您的專屬付款連結已生成\n付款方式:LINE Pay\n金額:NT$ ${numAmount.toLocaleString()}\n\n請點擊以下連結完成付款:\n${linepayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
+            finalMessage = userMessage 
+                ? `${userMessage}\n\n💙 付款連結如下:\n\n【信用卡付款】\n💙 ${ecpayLink}\n\n【LINE Pay】\n💙 ${linepayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`
+                : `💙 您好,${userName}\n\n您的專屬付款連結已生成\n金額:NT$ ${numAmount.toLocaleString()}\n\n請選擇付款方式:\n\n【信用卡付款】\n💙 ${ecpayLink}\n\n【LINE Pay】\n💙 ${linepayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
+        } else if (type === 'ecpay' && ecpayLink) {
+            finalMessage = userMessage
+                ? `${userMessage}\n\n💙 付款連結如下:\n💙 ${ecpayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`
+                : `💙 您好,${userName}\n\n您的專屬付款連結已生成\n付款方式:信用卡\n金額:NT$ ${numAmount.toLocaleString()}\n\n請點擊以下連結完成付款:\n💙 ${ecpayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
+        } else if (type === 'linepay' && linepayLink) {
+            finalMessage = userMessage
+                ? `${userMessage}\n\n💙 付款連結如下:\n💙 ${linepayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`
+                : `💙 您好,${userName}\n\n您的專屬付款連結已生成\n付款方式:LINE Pay\n金額:NT$ ${numAmount.toLocaleString()}\n\n請點擊以下連結完成付款:\n💙 ${linepayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
         } else {
             return res.status(500).json({ error: '付款連結生成失敗' });
         }
         
-        await client.pushMessage(userId, { type: 'text', text: message });
+        await client.pushMessage(userId, { type: 'text', text: finalMessage });
         logger.logToFile(`✅ 已發送付款連結: ${userName} - ${numAmount}元 (${type})`);
         
         res.json({ 
@@ -828,7 +832,8 @@ app.post('/send-payment', async (req, res) => {
                 amount: numAmount, 
                 paymentType: type,
                 ecpayLink: ecpayLink || null,
-                linepayLink: linepayLink || null
+                linepayLink: linepayLink || null,
+                customMessage: userMessage
             }
         });
     } catch (err) {
@@ -907,6 +912,7 @@ app.listen(PORT, async () => {
         console.error('❌ 客戶資料載入失敗:', error.message);
     }
 });
+
 
 
 
