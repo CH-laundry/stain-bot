@@ -5,140 +5,422 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>C.H 精緻洗衣 - 付款管理系統</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
+        .container { max-width: 900px; margin: 0 auto; background: white; border-radius: 20px; padding: 30px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+        h1 { color: #667eea; text-align: center; margin-bottom: 10px; font-size: 28px; }
+        .subtitle { text-align: center; color: #666; margin-bottom: 30px; font-size: 14px; }
+        .tabs { display: flex; gap: 10px; margin-bottom: 30px; border-bottom: 2px solid #e0e0e0; flex-wrap: wrap; }
+        .tab { padding: 12px 20px; background: none; border: none; color: #666; font-size: 15px; font-weight: 600; cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.3s; }
+        .tab:hover { color: #667eea; }
+        .tab.active { color: #667eea; border-bottom-color: #667eea; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; color: #333; font-weight: 600; font-size: 14px; }
+        input, textarea, select { width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 10px; font-size: 16px; transition: all 0.3s; font-family: inherit; }
+        textarea { min-height: 100px; resize: vertical; }
+        input:focus, textarea:focus, select:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1); }
+        .quick-search { display: flex; gap: 10px; margin-bottom: 20px; }
+        .quick-search input { flex: 1; }
+        .btn { width: 100%; padding: 15px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 12px; font-size: 18px; font-weight: 600; cursor: pointer; transition: all 0.3s; }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6); }
+        .btn:disabled { background: #ccc; cursor: not-allowed; }
+        .btn-small { padding: 10px 20px; font-size: 14px; width: auto; }
+        .btn-secondary { background: linear-gradient(135deg, #52c41a 0%, #389e0d 100%); }
+        .payment-options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px; }
+        .payment-option { position: relative; }
+        .payment-option input[type="radio"] { position: absolute; opacity: 0; }
+        .payment-option label { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 15px 10px; border: 2px solid #e0e0e0; border-radius: 15px; cursor: pointer; transition: all 0.3s; text-align: center; height: 100%; }
+        .payment-option input[type="radio"]:checked + label { border-color: #667eea; background: #f0f4ff; transform: translateY(-2px); box-shadow: 0 5px 15px rgba(102, 126, 234, 0.2); }
+        .payment-icon { font-size: 28px; margin-bottom: 5px; }
+        .payment-name { font-size: 13px; font-weight: 600; color: #333; }
+        .message-templates { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 15px; }
+        .template-btn { padding: 12px; background: #f5f5f5; border: 2px solid #e0e0e0; border-radius: 8px; cursor: pointer; font-size: 14px; transition: all 0.3s; text-align: left; }
+        .template-btn:hover { border-color: #667eea; background: #f0f4ff; }
+        .template-btn.active { border-color: #667eea; background: #e7f0ff; }
+        .result { margin-top: 20px; padding: 20px; border-radius: 12px; display: none; }
+        .result.success { background: #d4edda; border: 2px solid #28a745; color: #155724; }
+        .result.error { background: #f8d7da; border: 2px solid #dc3545; color: #721c24; }
+        .loading { display: none; text-align: center; margin-top: 20px; }
+        .loading-spinner { border: 4px solid #f3f3f3; border-top: 4px solid #667eea; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 10px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .user-item { background: #f8f9fa; padding: 15px; margin-bottom: 10px; border-radius: 8px; border: 1px solid #e0e0e0; transition: all 0.3s; display: flex; align-items: center; gap: 15px; }
+        .user-item:hover { border-color: #667eea; box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2); }
+        .user-info { flex: 1; cursor: pointer; }
+        .user-info strong { color: #333; font-size: 16px; display: block; margin-bottom: 5px; }
+        .user-info small { display: block; color: #999; font-size: 12px; margin-top: 3px; }
+        .customer-card { background: #f0f4ff; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #667eea; }
+        .customer-card h4 { color: #667eea; margin-bottom: 10px; }
+        .customer-card p { margin: 5px 0; font-size: 14px; color: #333; }
+        .info-badge { background: #52c41a; color: white; padding: 3px 10px; border-radius: 5px; font-size: 12px; margin-left: 10px; }
+        @media (max-width: 768px) {
+            .container { padding: 20px; }
+            h1 { font-size: 24px; }
+            .payment-options { grid-template-columns: 1fr; }
+            .message-templates { grid-template-columns: 1fr; }
+            .tabs { font-size: 13px; }
+            .tab { padding: 10px 15px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>💳 付款管理系統</h1>
+        <p class="subtitle">C.H 精緻洗衣 - 發送付款連結給客戶</p>
+        
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('payment')">💳 發送付款</button>
+            <button class="tab" onclick="switchTab('customers')">📋 客戶編號</button>
+            <button class="tab" onclick="switchTab('users')">👥 客戶列表</button>
+        </div>
+        
+        <!-- 發送付款頁籤 -->
+        <div id="payment-tab" class="tab-content active">
+            <!-- 快速查詢 -->
+            <div class="form-group">
+                <label>🔍 快速查詢 (輸入編號或姓名)</label>
+                <div class="quick-search">
+                    <input type="text" id="quickSearch" placeholder="例如: 755 或 王小明">
+                    <button class="btn btn-small" onclick="quickSearchCustomer()">查詢</button>
+                </div>
+            </div>
+            
+            <!-- 客戶資訊卡片 (查詢後顯示) -->
+            <div id="customerCard" class="customer-card" style="display:none;">
+                <h4>✅ 客戶資訊</h4>
+                <p><strong>編號:</strong> <span id="cardNumber"></span></p>
+                <p><strong>姓名:</strong> <span id="cardName"></span></p>
+                <p><strong>User ID:</strong> <span id="cardUserId"></span></p>
+            </div>
+            
+            <form id="paymentForm">
+                <div class="form-group">
+                    <label>客戶 LINE User ID *</label>
+                    <input type="text" id="userId" placeholder="U1234567890abcdef" required>
+                </div>
+                
+                <div class="form-group">
+                    <label>客戶姓名 *</label>
+                    <input type="text" id="userName" placeholder="王小明" required>
+                </div>
+                
+                <div class="form-group">
+                    <label>付款金額 (NT$) *</label>
+                    <input type="number" id="amount" placeholder="1500" min="1" required>
+                </div>
+                
+                <div class="form-group">
+                    <label>付款方式 *</label>
+                    <div class="payment-options">
+                        <div class="payment-option">
+                            <input type="radio" id="both" name="paymentType" value="both" checked>
+                            <label for="both">
+                                <div class="payment-icon">🎯</div>
+                                <div class="payment-name">兩者都發</div>
+                            </label>
+                        </div>
+                        <div class="payment-option">
+                            <input type="radio" id="ecpay" name="paymentType" value="ecpay">
+                            <label for="ecpay">
+                                <div class="payment-icon">💳</div>
+                                <div class="payment-name">綠界支付</div>
+                            </label>
+                        </div>
+                        <div class="payment-option">
+                            <input type="radio" id="linepay" name="paymentType" value="linepay">
+                            <label for="linepay">
+                                <div class="payment-icon">💚</div>
+                                <div class="payment-name">LINE Pay</div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>訊息內容 (可選固定模板或自行輸入)</label>
+                    <div class="message-templates">
+                        <button type="button" class="template-btn" onclick="selectTemplate('已收回衣物,金額 NT$ {amount},請儘速付款,謝謝!')">✅ 已收回衣物</button>
+                        <button type="button" class="template-btn" onclick="selectTemplate('您的衣物已清洗完成,金額 NT$ {amount},可付款取件')">🧺 清洗完成</button>
+                        <button type="button" class="template-btn" onclick="selectTemplate('衣物處理中,預付金額 NT$ {amount}')">⏳ 處理中</button>
+                        <button type="button" class="template-btn" onclick="selectTemplate('訂金收訖 NT$ {amount},感謝您的支持!')">💰 訂金收訖</button>
+                    </div>
+                    <textarea id="customMessage" placeholder="自訂訊息內容(可使用 {amount} 代表金額)&#10;例如: 您好,已收回衣物,金額 NT$ {amount}"></textarea>
+                </div>
+                
+                <button type="submit" class="btn" id="submitBtn">發送付款連結 🚀</button>
+            </form>
+            
+            <div class="loading" id="loading">
+                <div class="loading-spinner"></div>
+                <p>正在發送...</p>
+            </div>
+            
+            <div class="result" id="result"></div>
+        </div>
+        
+        <!-- 客戶編號管理頁籤 -->
+        <div id="customers-tab" class="tab-content">
+            <h3 style="color:#667eea; margin-bottom:20px;">📋 客戶編號管理</h3>
+            
+            <div class="form-group">
+                <label>新增客戶編號</label>
+                <input type="text" id="newCustomerNumber" placeholder="例如: 755">
+            </div>
+            
+            <div class="form-group">
+                <label>客戶姓名</label>
+                <input type="text" id="newCustomerName" placeholder="例如: 王小明">
+            </div>
+            
+            <div class="form-group">
+                <label>User ID</label>
+                <input type="text" id="newCustomerUserId" placeholder="U1234567890abcdef">
+            </div>
+            
+            <button class="btn btn-secondary" onclick="saveCustomerNumber()">💾 儲存客戶編號</button>
+            
+            <div style="margin-top:30px;">
+                <h4 style="color:#667eea; margin-bottom:15px;">已儲存的客戶編號</h4>
+                <div id="savedCustomers"></div>
+            </div>
+        </div>
+        
+        <!-- 客戶列表頁籤 -->
+        <div id="users-tab" class="tab-content">
+            <h3 style="color:#667eea; margin-bottom:20px;">👥 客戶列表</h3>
+            <button class="btn btn-secondary btn-small" onclick="loadUsers()" style="margin-bottom:20px;">🔄 重新載入</button>
+            <div id="userList"><p style="text-align:center; color:#999;">載入中...</p></div>
+        </div>
+    </div>
+    
+    <script>
+        let savedCustomers = JSON.parse(localStorage.getItem('customerNumbers') || '{}');
+        let allUsers = [];
+        
+        // 切換頁籤
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById(`${tabName}-tab`).classList.add('active');
+            if (tabName === 'customers') displaySavedCustomers();
+            if (tabName === 'users') loadUsers();
         }
         
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
+        // 快速查詢客戶
+        function quickSearchCustomer() {
+            const query = document.getElementById('quickSearch').value.trim();
+            if (!query) { alert('請輸入編號或姓名'); return; }
+            
+            // 先查編號
+            if (savedCustomers[query]) {
+                const customer = savedCustomers[query];
+                document.getElementById('userId').value = customer.userId;
+                document.getElementById('userName').value = customer.name;
+                showCustomerCard(query, customer.name, customer.userId);
+                return;
+            }
+            
+            // 再查姓名
+            const found = Object.entries(savedCustomers).find(([num, data]) => data.name.includes(query));
+            if (found) {
+                const [number, customer] = found;
+                document.getElementById('userId').value = customer.userId;
+                document.getElementById('userName').value = customer.name;
+                showCustomerCard(number, customer.name, customer.userId);
+                return;
+            }
+            
+            alert('找不到此客戶,請確認編號或姓名');
         }
         
-        .container {
-            max-width: 900px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 20px;
-            padding: 40px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        // 顯示客戶資訊卡片
+        function showCustomerCard(number, name, userId) {
+            document.getElementById('cardNumber').textContent = number;
+            document.getElementById('cardName').textContent = name;
+            document.getElementById('cardUserId').textContent = userId;
+            document.getElementById('customerCard').style.display = 'block';
         }
         
-        h1 {
-            color: #667eea;
-            text-align: center;
-            margin-bottom: 10px;
-            font-size: 32px;
+        // 選擇訊息模板
+        function selectTemplate(template) {
+            document.getElementById('customMessage').value = template;
+            document.querySelectorAll('.template-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
         }
         
-        .subtitle {
-            text-align: center;
-            color: #666;
-            margin-bottom: 40px;
-            font-size: 14px;
+        // 發送付款
+        document.getElementById('paymentForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const userId = document.getElementById('userId').value.trim();
+            const userName = document.getElementById('userName').value.trim();
+            const amount = parseInt(document.getElementById('amount').value);
+            const paymentType = document.querySelector('input[name="paymentType"]:checked').value;
+            const customMessage = document.getElementById('customMessage').value.trim();
+            
+            if (!userId || !userName || !amount) {
+                showResult('error', '請填寫所有必填欄位!');
+                return;
+            }
+            
+            document.getElementById('submitBtn').disabled = true;
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('result').style.display = 'none';
+            
+            try {
+                const response = await fetch('/send-payment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        userId, userName, amount, paymentType,
+                        customMessage: customMessage.replace('{amount}', amount.toLocaleString())
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    let msg = `✅ 付款連結已發送給 ${userName}!<br><br>金額: NT$ ${amount.toLocaleString()}<br>`;
+                    if (paymentType === 'both') msg += '付款方式: 綠界 + LINE Pay<br>';
+                    else if (paymentType === 'ecpay') msg += '付款方式: 綠界支付<br>';
+                    else msg += '付款方式: LINE Pay<br>';
+                    if (customMessage) msg += `<br>附加訊息: ${customMessage}`;
+                    showResult('success', msg);
+                    document.getElementById('paymentForm').reset();
+                    document.getElementById('customerCard').style.display = 'none';
+                } else {
+                    showResult('error', `❌ 發送失敗: ${data.error}`);
+                }
+            } catch (error) {
+                showResult('error', `❌ 錯誤: ${error.message}`);
+            } finally {
+                document.getElementById('submitBtn').disabled = false;
+                document.getElementById('loading').style.display = 'none';
+            }
+        });
+        
+        // 儲存客戶編號
+        function saveCustomerNumber() {
+            const number = document.getElementById('newCustomerNumber').value.trim();
+            const name = document.getElementById('newCustomerName').value.trim();
+            const userId = document.getElementById('newCustomerUserId').value.trim();
+            
+            if (!number || !name || !userId) {
+                alert('請填寫所有欄位');
+                return;
+            }
+            
+            savedCustomers[number] = { name, userId };
+            localStorage.setItem('customerNumbers', JSON.stringify(savedCustomers));
+            
+            alert(`✅ 已儲存客戶編號 ${number}`);
+            document.getElementById('newCustomerNumber').value = '';
+            document.getElementById('newCustomerName').value = '';
+            document.getElementById('newCustomerUserId').value = '';
+            displaySavedCustomers();
         }
         
-        .tabs {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 30px;
-            border-bottom: 2px solid #e0e0e0;
-            flex-wrap: wrap;
+        // 顯示已儲存的客戶
+        function displaySavedCustomers() {
+            const container = document.getElementById('savedCustomers');
+            if (Object.keys(savedCustomers).length === 0) {
+                container.innerHTML = '<p style="text-align:center; color:#999;">尚無儲存的客戶編號</p>';
+                return;
+            }
+            
+            let html = '';
+            Object.entries(savedCustomers).forEach(([number, data]) => {
+                html += `
+                    <div class="user-item">
+                        <div class="user-info" onclick="useCustomerNumber('${number}')">
+                            <strong>編號 ${number} - ${data.name}</strong>
+                            <small>User ID: ${data.userId}</small>
+                        </div>
+                        <button class="btn btn-small" onclick="deleteCustomerNumber('${number}')" style="background:#dc3545;">刪除</button>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
         }
         
-        .tab {
-            padding: 12px 20px;
-            background: none;
-            border: none;
-            color: #666;
-            font-size: 15px;
-            font-weight: 600;
-            cursor: pointer;
-            border-bottom: 3px solid transparent;
-            transition: all 0.3s;
-            white-space: nowrap;
+        // 使用客戶編號
+        function useCustomerNumber(number) {
+            const customer = savedCustomers[number];
+            document.getElementById('userId').value = customer.userId;
+            document.getElementById('userName').value = customer.name;
+            document.getElementById('quickSearch').value = number;
+            showCustomerCard(number, customer.name, customer.userId);
+            switchTab('payment');
+            document.querySelector('.tab').classList.add('active');
         }
         
-        .tab:hover {
-            color: #667eea;
+        // 刪除客戶編號
+        function deleteCustomerNumber(number) {
+            if (confirm(`確定要刪除編號 ${number} 嗎?`)) {
+                delete savedCustomers[number];
+                localStorage.setItem('customerNumbers', JSON.stringify(savedCustomers));
+                displaySavedCustomers();
+            }
         }
         
-        .tab.active {
-            color: #667eea;
-            border-bottom-color: #667eea;
+        // 載入客戶列表
+        async function loadUsers() {
+            const userListDiv = document.getElementById('userList');
+            userListDiv.innerHTML = '<p style="text-align:center; color:#999;">載入中...</p>';
+            
+            try {
+                const response = await fetch('/api/users');
+                const data = await response.json();
+                allUsers = data.users || [];
+                
+                if (allUsers.length === 0) {
+                    userListDiv.innerHTML = '<p style="text-align:center; color:#999;">尚無客戶記錄</p>';
+                    return;
+                }
+                
+                let html = `<p style="color:#666; font-size:14px; margin-bottom:15px;">共 ${allUsers.length} 位客戶</p>`;
+                allUsers.forEach(user => {
+                    const lastSeen = new Date(user.lastSeen).toLocaleString('zh-TW');
+                    html += `
+                        <div class="user-item" onclick="selectUser('${user.userId}', '${user.displayName}')">
+                            <div class="user-info">
+                                <strong>${user.displayName}</strong>
+                                <small>User ID: ${user.userId}</small>
+                                <small>最後活動: ${lastSeen}</small>
+                            </div>
+                        </div>
+                    `;
+                });
+                userListDiv.innerHTML = html;
+            } catch (error) {
+                userListDiv.innerHTML = `<p style="color:#dc3545; text-align:center;">載入失敗: ${error.message}</p>`;
+            }
         }
         
-        .tab-content {
-            display: none;
+        // 選擇客戶
+        function selectUser(userId, userName) {
+            document.getElementById('userId').value = userId;
+            document.getElementById('userName').value = userName;
+            switchTab('payment');
+            document.querySelector('.tab').classList.add('active');
         }
         
-        .tab-content.active {
-            display: block;
+        // 顯示結果
+        function showResult(type, message) {
+            const result = document.getElementById('result');
+            result.className = `result ${type}`;
+            result.innerHTML = message;
+            result.style.display = 'block';
+            result.scrollIntoView({ behavior: 'smooth' });
         }
         
-        .form-group {
-            margin-bottom: 25px;
-        }
-        
-        label {
-            display: block;
-            margin-bottom: 8px;
-            color: #333;
-            font-weight: 600;
-            font-size: 14px;
-        }
-        
-        input[type="text"],
-        input[type="number"],
-        textarea,
-        select {
-            width: 100%;
-            padding: 12px 15px;
-            border: 2px solid #e0e0e0;
-            border-radius: 10px;
-            font-size: 16px;
-            transition: all 0.3s;
-            font-family: inherit;
-        }
-        
-        textarea {
-            min-height: 100px;
-            resize: vertical;
-        }
-        
-        input[type="text"]:focus,
-        input[type="number"]:focus,
-        textarea:focus,
-        select:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
-        
-        .quick-search {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-        
-        .quick-search input {
-            flex: 1;
-        }
-        
-        .quick-search button {
-            padding: 12px 24px;
-            background: #667eea;
-            color: white;
-            border: none;
-            border-radius: 10px;
-            cursor: pointer;
-            font-weight: 600;
-            transition: all 0.3s;
-        }
-        
-        .quick-search button:hover {
-            background: #5568d3;
-            transform: translateY(-1
+        // 初始化
+        window.addEventListener('load', () => {
+            displaySavedCustomers();
+            loadUsers();
+        });
+    </script>
+</body>
+</html>
