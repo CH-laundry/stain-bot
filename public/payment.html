@@ -19,7 +19,7 @@
         .form-group { margin-bottom: 20px; }
         label { display: block; margin-bottom: 8px; color: #333; font-weight: 600; font-size: 14px; }
         input, textarea, select { width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 10px; font-size: 16px; transition: all 0.3s; font-family: inherit; }
-        textarea { min-height: 100px; resize: vertical; }
+        textarea { min-height: 120px; resize: vertical; }
         input:focus, textarea:focus, select:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1); }
         .quick-search { display: flex; gap: 10px; margin-bottom: 20px; }
         .quick-search input { flex: 1; }
@@ -28,7 +28,8 @@
         .btn:disabled { background: #ccc; cursor: not-allowed; }
         .btn-small { padding: 10px 20px; font-size: 14px; width: auto; }
         .btn-secondary { background: linear-gradient(135deg, #52c41a 0%, #389e0d 100%); }
-        .payment-options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px; }
+        .btn-danger { background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); }
+        .payment-options { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-bottom: 20px; }
         .payment-option { position: relative; }
         .payment-option input[type="radio"] { position: absolute; opacity: 0; }
         .payment-option label { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 15px 10px; border: 2px solid #e0e0e0; border-radius: 15px; cursor: pointer; transition: all 0.3s; text-align: center; height: 100%; }
@@ -36,9 +37,17 @@
         .payment-icon { font-size: 28px; margin-bottom: 5px; }
         .payment-name { font-size: 13px; font-weight: 600; color: #333; }
         .message-templates { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 15px; }
-        .template-btn { padding: 12px; background: #f5f5f5; border: 2px solid #e0e0e0; border-radius: 8px; cursor: pointer; font-size: 14px; transition: all 0.3s; text-align: left; }
+        .template-btn { padding: 12px; background: #f5f5f5; border: 2px solid #e0e0e0; border-radius: 8px; cursor: pointer; font-size: 14px; transition: all 0.3s; text-align: left; position: relative; }
         .template-btn:hover { border-color: #667eea; background: #f0f4ff; }
         .template-btn.active { border-color: #667eea; background: #e7f0ff; }
+        .template-actions { display: flex; gap: 5px; margin-top: 10px; }
+        .template-actions button { padding: 8px 12px; font-size: 12px; border: none; border-radius: 6px; cursor: pointer; transition: all 0.3s; }
+        .btn-save-template { background: #52c41a; color: white; }
+        .btn-save-template:hover { background: #389e0d; }
+        .btn-edit-template { background: #ffc107; color: #333; }
+        .btn-edit-template:hover { background: #ffb300; }
+        .btn-delete-template { background: #dc3545; color: white; }
+        .btn-delete-template:hover { background: #c82333; }
         .result { margin-top: 20px; padding: 20px; border-radius: 12px; display: none; }
         .result.success { background: #d4edda; border: 2px solid #28a745; color: #155724; }
         .result.error { background: #f8d7da; border: 2px solid #dc3545; color: #721c24; }
@@ -53,7 +62,10 @@
         .customer-card { background: #f0f4ff; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #667eea; }
         .customer-card h4 { color: #667eea; margin-bottom: 10px; }
         .customer-card p { margin: 5px 0; font-size: 14px; color: #333; }
-        .info-badge { background: #52c41a; color: white; padding: 3px 10px; border-radius: 5px; font-size: 12px; margin-left: 10px; }
+        .my-templates { margin-top: 20px; padding: 20px; background: #f8f9fa; border-radius: 10px; }
+        .my-templates h4 { color: #667eea; margin-bottom: 15px; }
+        .template-item { background: white; padding: 12px; margin-bottom: 10px; border-radius: 8px; border: 1px solid #e0e0e0; }
+        .template-item:hover { border-color: #667eea; }
         @media (max-width: 768px) {
             .container { padding: 20px; }
             h1 { font-size: 24px; }
@@ -72,12 +84,12 @@
         <div class="tabs">
             <button class="tab active" onclick="switchTab('payment')">💳 發送付款</button>
             <button class="tab" onclick="switchTab('customers')">📋 客戶編號</button>
+            <button class="tab" onclick="switchTab('templates')">📝 訊息模板</button>
             <button class="tab" onclick="switchTab('users')">👥 客戶列表</button>
         </div>
         
         <!-- 發送付款頁籤 -->
         <div id="payment-tab" class="tab-content active">
-            <!-- 快速查詢 -->
             <div class="form-group">
                 <label>🔍 快速查詢 (輸入編號或姓名)</label>
                 <div class="quick-search">
@@ -86,7 +98,6 @@
                 </div>
             </div>
             
-            <!-- 客戶資訊卡片 (查詢後顯示) -->
             <div id="customerCard" class="customer-card" style="display:none;">
                 <h4>✅ 客戶資訊</h4>
                 <p><strong>編號:</strong> <span id="cardNumber"></span></p>
@@ -116,15 +127,8 @@
                         <div class="payment-option">
                             <input type="radio" id="both" name="paymentType" value="both" checked>
                             <label for="both">
-                                <div class="payment-icon">🎯</div>
+                                <div class="payment-icon">💙</div>
                                 <div class="payment-name">兩者都發</div>
-                            </label>
-                        </div>
-                        <div class="payment-option">
-                            <input type="radio" id="ecpay" name="paymentType" value="ecpay">
-                            <label for="ecpay">
-                                <div class="payment-icon">💳</div>
-                                <div class="payment-name">綠界支付</div>
                             </label>
                         </div>
                         <div class="payment-option">
@@ -138,17 +142,12 @@
                 </div>
                 
                 <div class="form-group">
-                    <label>訊息內容 (可選固定模板或自行輸入)</label>
-                    <div class="message-templates">
-                        <button type="button" class="template-btn" onclick="selectTemplate('已收回衣物,金額 NT$ {amount},請儘速付款,謝謝!')">✅ 已收回衣物</button>
-                        <button type="button" class="template-btn" onclick="selectTemplate('您的衣物已清洗完成,金額 NT$ {amount},可付款取件')">🧺 清洗完成</button>
-                        <button type="button" class="template-btn" onclick="selectTemplate('衣物處理中,預付金額 NT$ {amount}')">⏳ 處理中</button>
-                        <button type="button" class="template-btn" onclick="selectTemplate('訂金收訖 NT$ {amount},感謝您的支持!')">💰 訂金收訖</button>
-                    </div>
-                    <textarea id="customMessage" placeholder="自訂訊息內容(可使用 {amount} 代表金額)&#10;例如: 您好,已收回衣物,金額 NT$ {amount}"></textarea>
+                    <label>訊息內容 (選擇模板或自行輸入)</label>
+                    <div id="customTemplates" class="message-templates"></div>
+                    <textarea id="customMessage" placeholder="輸入訊息內容,使用 {amount} 會自動替換成金額&#10;&#10;例如: 您好,已收回衣物,金額 NT$ {amount},請儘速付款,謝謝!"></textarea>
                 </div>
                 
-                <button type="submit" class="btn" id="submitBtn">發送付款連結 🚀</button>
+                <button type="submit" class="btn" id="submitBtn">💙 發送付款連結</button>
             </form>
             
             <div class="loading" id="loading">
@@ -186,6 +185,23 @@
             </div>
         </div>
         
+        <!-- 訊息模板頁籤 -->
+        <div id="templates-tab" class="tab-content">
+            <h3 style="color:#667eea; margin-bottom:20px;">📝 自訂訊息模板</h3>
+            
+            <div class="form-group">
+                <label>新增模板內容 (使用 {amount} 代表金額)</label>
+                <textarea id="newTemplateContent" placeholder="例如: 您好,已收回衣物,金額 NT$ {amount},請儘速付款,謝謝!"></textarea>
+            </div>
+            
+            <button class="btn btn-secondary" onclick="saveTemplate()">💾 儲存模板</button>
+            
+            <div class="my-templates">
+                <h4>我的模板</h4>
+                <div id="templateList"></div>
+            </div>
+        </div>
+        
         <!-- 客戶列表頁籤 -->
         <div id="users-tab" class="tab-content">
             <h3 style="color:#667eea; margin-bottom:20px;">👥 客戶列表</h3>
@@ -196,24 +212,51 @@
     
     <script>
         let savedCustomers = JSON.parse(localStorage.getItem('customerNumbers') || '{}');
+        let savedTemplates = JSON.parse(localStorage.getItem('messageTemplates') || '[]');
         let allUsers = [];
         
-        // 切換頁籤
+        // 初始化模板
+        if (savedTemplates.length === 0) {
+            savedTemplates = [
+                '您好,已收回衣物,金額 NT$ {amount},請儘速付款,謝謝!',
+                '您的衣物已清洗完成,金額 NT$ {amount},可付款取件',
+                '衣物處理中,預付金額 NT$ {amount}',
+                '訂金收訖 NT$ {amount},感謝您的支持!'
+            ];
+            localStorage.setItem('messageTemplates', JSON.stringify(savedTemplates));
+        }
+        
         function switchTab(tabName) {
             document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
             event.target.classList.add('active');
             document.getElementById(`${tabName}-tab`).classList.add('active');
             if (tabName === 'customers') displaySavedCustomers();
+            if (tabName === 'templates') displayTemplates();
             if (tabName === 'users') loadUsers();
+            if (tabName === 'payment') loadCustomTemplates();
         }
         
-        // 快速查詢客戶
+        function loadCustomTemplates() {
+            const container = document.getElementById('customTemplates');
+            let html = '';
+            savedTemplates.forEach((template, index) => {
+                const preview = template.length > 30 ? template.substring(0, 30) + '...' : template;
+                html += `<button type="button" class="template-btn" onclick="selectTemplate(${index})">${preview}</button>`;
+            });
+            container.innerHTML = html;
+        }
+        
+        function selectTemplate(index) {
+            document.getElementById('customMessage').value = savedTemplates[index];
+            document.querySelectorAll('.template-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+        }
+        
         function quickSearchCustomer() {
             const query = document.getElementById('quickSearch').value.trim();
             if (!query) { alert('請輸入編號或姓名'); return; }
             
-            // 先查編號
             if (savedCustomers[query]) {
                 const customer = savedCustomers[query];
                 document.getElementById('userId').value = customer.userId;
@@ -222,7 +265,6 @@
                 return;
             }
             
-            // 再查姓名
             const found = Object.entries(savedCustomers).find(([num, data]) => data.name.includes(query));
             if (found) {
                 const [number, customer] = found;
@@ -232,10 +274,9 @@
                 return;
             }
             
-            alert('找不到此客戶,請確認編號或姓名');
+            alert('找不到此客戶');
         }
         
-        // 顯示客戶資訊卡片
         function showCustomerCard(number, name, userId) {
             document.getElementById('cardNumber').textContent = number;
             document.getElementById('cardName').textContent = name;
@@ -243,14 +284,6 @@
             document.getElementById('customerCard').style.display = 'block';
         }
         
-        // 選擇訊息模板
-        function selectTemplate(template) {
-            document.getElementById('customMessage').value = template;
-            document.querySelectorAll('.template-btn').forEach(btn => btn.classList.remove('active'));
-            event.target.classList.add('active');
-        }
-        
-        // 發送付款
         document.getElementById('paymentForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             
@@ -258,7 +291,7 @@
             const userName = document.getElementById('userName').value.trim();
             const amount = parseInt(document.getElementById('amount').value);
             const paymentType = document.querySelector('input[name="paymentType"]:checked').value;
-            const customMessage = document.getElementById('customMessage').value.trim();
+            const customMessage = document.getElementById('customMessage').value.trim().replace('{amount}', amount.toLocaleString());
             
             if (!userId || !userName || !amount) {
                 showResult('error', '請填寫所有必填欄位!');
@@ -274,8 +307,7 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        userId, userName, amount, paymentType,
-                        customMessage: customMessage.replace('{amount}', amount.toLocaleString())
+                        userId, userName, amount, paymentType, customMessage
                     })
                 });
                 
@@ -283,8 +315,7 @@
                 
                 if (data.success) {
                     let msg = `✅ 付款連結已發送給 ${userName}!<br><br>金額: NT$ ${amount.toLocaleString()}<br>`;
-                    if (paymentType === 'both') msg += '付款方式: 綠界 + LINE Pay<br>';
-                    else if (paymentType === 'ecpay') msg += '付款方式: 綠界支付<br>';
+                    if (paymentType === 'both') msg += '付款方式: 信用卡 + LINE Pay<br>';
                     else msg += '付款方式: LINE Pay<br>';
                     if (customMessage) msg += `<br>附加訊息: ${customMessage}`;
                     showResult('success', msg);
@@ -301,7 +332,6 @@
             }
         });
         
-        // 儲存客戶編號
         function saveCustomerNumber() {
             const number = document.getElementById('newCustomerNumber').value.trim();
             const name = document.getElementById('newCustomerName').value.trim();
@@ -322,7 +352,6 @@
             displaySavedCustomers();
         }
         
-        // 顯示已儲存的客戶
         function displaySavedCustomers() {
             const container = document.getElementById('savedCustomers');
             if (Object.keys(savedCustomers).length === 0) {
@@ -338,14 +367,13 @@
                             <strong>編號 ${number} - ${data.name}</strong>
                             <small>User ID: ${data.userId}</small>
                         </div>
-                        <button class="btn btn-small" onclick="deleteCustomerNumber('${number}')" style="background:#dc3545;">刪除</button>
+                        <button class="btn btn-small btn-danger" onclick="deleteCustomerNumber('${number}')">刪除</button>
                     </div>
                 `;
             });
             container.innerHTML = html;
         }
         
-        // 使用客戶編號
         function useCustomerNumber(number) {
             const customer = savedCustomers[number];
             document.getElementById('userId').value = customer.userId;
@@ -356,7 +384,6 @@
             document.querySelector('.tab').classList.add('active');
         }
         
-        // 刪除客戶編號
         function deleteCustomerNumber(number) {
             if (confirm(`確定要刪除編號 ${number} 嗎?`)) {
                 delete savedCustomers[number];
@@ -365,7 +392,49 @@
             }
         }
         
-        // 載入客戶列表
+        function saveTemplate() {
+            const content = document.getElementById('newTemplateContent').value.trim();
+            if (!content) {
+                alert('請輸入模板內容');
+                return;
+            }
+            
+            savedTemplates.push(content);
+            localStorage.setItem('messageTemplates', JSON.stringify(savedTemplates));
+            alert('✅ 模板已儲存');
+            document.getElementById('newTemplateContent').value = '';
+            displayTemplates();
+            loadCustomTemplates();
+        }
+        
+        function displayTemplates() {
+            const container = document.getElementById('templateList');
+            if (savedTemplates.length === 0) {
+                container.innerHTML = '<p style="text-align:center; color:#999;">尚無自訂模板</p>';
+                return;
+            }
+            
+            let html = '';
+            savedTemplates.forEach((template, index) => {
+                html += `
+                    <div class="template-item">
+                        <p style="margin-bottom:10px;">${template}</p>
+                        <button class="btn btn-small btn-danger" onclick="deleteTemplate(${index})">刪除</button>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+        
+        function deleteTemplate(index) {
+            if (confirm('確定要刪除此模板嗎?')) {
+                savedTemplates.splice(index, 1);
+                localStorage.setItem('messageTemplates', JSON.stringify(savedTemplates));
+                displayTemplates();
+                loadCustomTemplates();
+            }
+        }
+        
         async function loadUsers() {
             const userListDiv = document.getElementById('userList');
             userListDiv.innerHTML = '<p style="text-align:center; color:#999;">載入中...</p>';
@@ -399,7 +468,6 @@
             }
         }
         
-        // 選擇客戶
         function selectUser(userId, userName) {
             document.getElementById('userId').value = userId;
             document.getElementById('userName').value = userName;
@@ -407,7 +475,6 @@
             document.querySelector('.tab').classList.add('active');
         }
         
-        // 顯示結果
         function showResult(type, message) {
             const result = document.getElementById('result');
             result.className = `result ${type}`;
@@ -416,9 +483,10 @@
             result.scrollIntoView({ behavior: 'smooth' });
         }
         
-        // 初始化
         window.addEventListener('load', () => {
+            loadCustomTemplates();
             displaySavedCustomers();
+            displayTemplates();
             loadUsers();
         });
     </script>
