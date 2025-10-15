@@ -360,6 +360,115 @@ app.get('/payment/linepay/confirm', async (req, res) => {
         res.status(500).send('付款處理失敗');
     }
 });
+app.get('/api/orders', (req, res) => {
+    const { status } = req.query;
+    let orders;
+    if (status) {
+        orders = orderManager.getOrdersByStatus(status);
+    } else {
+        orders = orderManager.getAllOrders();
+    }
+    const ordersWithStatus = orders.map(order => ({
+        ...order,
+        isExpired: orderManager.isExpired(order.orderId),
+        remainingTime: Math.max(0, order.expiryTime - Date.now()),
+        remainingHours: Math.floor(Math.max(0, order.expiryTime - Date.now()) / (1000 * 60 * 60))
+    }));
+    res.json({
+        success: true,
+        total: ordersWithStatus.length,
+        orders: ordersWithStatus,
+        statistics: orderManager.getStatistics()
+    });
+});
+app.get('/api/order/:orderId', (req, res) => {
+    const order = orderManager.getOrder(req.params.orderId);
+    if (order) {
+        res.json({
+            success: true,
+            order: {
+                ...order,
+                isExpired: orderManager.isExpired(order.orderId),
+                remainingTime: Math.max(0, order.expiryTime - Date.now()),
+                remainingHours: Math.floor(Math.max(0, order.expiryTime - Date.now()) / (1000 * 60 * 60))
+            }
+        });
+    } else {
+        res.status(404).json({ success: false, error: '找不到此訂單' });
+    }
+});
+app.post('/api/order/:orderId/renew', async (req, res) => {
+    const { orderId } = req.params;
+    const order = orderManager.renewOrder(orderId);
+    if (!order) {
+        return res.status(404).json({ success: false, error: '找不到此訂單' });
+    }
+    try {
+        const linePayResult = await createLinePayPayment(order.userId, order.userName, order.amount);
+        if (linePayResult.success) {
+            orderManager.updatePaymentInfo(orderId, linePayResult.transactionId, linePayResult.paymentUrl);
+            const persistentUrl = `${process.env.RAILWAY_PUBLIC_DOMAIN || 'https://stain-bot-production-0fac.up.railway.app'}/payment/linepay/pay/${orderId}`;
+            await client.pushMessage(order.userId, {
+                type: 'text',
+                text: `🔄 您的付款連結已重新生成\n\n訂單編號: ${orderId}\n客戶姓名: ${order.userName}\n金額: NT$ ${order.amount.toLocaleString()}\n\n新連結 (7天內有效):\n💙 ${persistentUrl}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`
+            });
+            logger.logToFile(`✅ 訂單 ${orderId} 已重新發送`);
+            res.json({
+                success: true,
+                message: '訂單已續約並重新發送付款連結',
+                order: order,
+                paymentUrl: persistentUrl
+            });
+        } else {
+            res.status(500).json({ success: false, error: '重新生成付款連結失敗' });
+        }
+    } catch (error) {
+        logger.logError('續約訂單失敗', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+app.delete('/api/order/:orderId', (req, res) => {
+    const deleted = orderManager.deleteOrder(req.params.orderId);
+    if (deleted) {
+        res.json({ success: true, message: '訂單已刪除' });
+    } else {
+        res.status(404).json({ success: false, error: '找不到此訂單' });
+    }
+});
+app.post('/api/orders/send-reminders', async (req, res) => {
+    const ordersNeedingReminder = orderManager.getOrdersNeedingReminder();
+    if (ordersNeedingReminder.length === 0) {
+        return res.json({ success: true, message: '目前沒有需要提醒的訂單', sent: 0 });
+    }
+    let sent = 0;
+    const baseURL = process.env.RAILWAY_PUBLIC_DOMAIN || 'https://stain-bot-production-0fac.up.railway.app';
+    for (const order of ordersNeedingReminder) {
+        try {
+            const remainingHours = Math.floor((order.expiryTime - Date.now()) / (1000 * 60 * 60));
+            const paymentLink = `${baseURL}/payment/linepay/pay/${order.orderId}`;
+            await client.pushMessage(order.userId, {
+                type: 'text',
+                text: `⏰ 付款提醒\n\n您好 ${order.userName},\n\n您的訂單即將過期!\n訂單編號: ${order.orderId}\n金額: NT$ ${order.amount.toLocaleString()}\n剩餘時間: ${remainingHours} 小時\n\n請盡快完成付款:\n💙 ${paymentLink}\n\n如有任何問題請聯繫我們\n感謝您的支持 💙`
+            });
+            orderManager.markReminderSent(order.orderId);
+            sent++;
+            logger.logToFile(`✅ 已發送付款提醒: ${order.orderId}`);
+        } catch (error) {
+            logger.logError(`發送提醒失敗: ${order.orderId}`, error);
+        }
+    }
+    res.json({ success: true, message: `已發送 ${sent} 筆付款提醒`, sent: sent });
+});
+app.get('/api/orders/statistics', (req, res) => {
+    res.json({
+        success: true,
+        statistics: orderManager.getStatistics()
+    });
+});
+app.post('/api/orders/clean-expired', (req, res) => {
+    const cleaned = orderManager.cleanExpiredOrders();
+    res.json({ success: true, message: `已清理 ${cleaned} 筆過期訂單`, cleaned: cleaned });
+});
 app.post('/send-payment', async (req, res) => {
     const { userId, userName, amount, paymentType, customMessage } = req.body;
     logger.logToFile(`收到付款請求: userId=${userId}, userName=${userName}, amount=${amount}, type=${paymentType}, customMessage=${customMessage}`);
@@ -394,8 +503,7 @@ app.post('/send-payment', async (req, res) => {
             const linePayResult = await createLinePayPayment(userId, userName, numAmount);
             if (linePayResult.success) {
                 const order = orderManager.createOrder(linePayResult.orderId, { userId: userId, userName: userName, amount: numAmount });
-                orderManager.updatePaymentInfo(linePayResult.orderId,
-linePayResult.transactionId, linePayResult.paymentUrl);
+                orderManager.updatePaymentInfo(linePayResult.orderId, linePayResult.transactionId, linePayResult.paymentUrl);
                 const persistentUrl = `${process.env.RAILWAY_PUBLIC_DOMAIN || 'https://stain-bot-production-0fac.up.railway.app'}/payment/linepay/pay/${linePayResult.orderId}`;
                 linepayLink = persistentUrl;
                 try {
@@ -471,133 +579,6 @@ function getPaymentTypeName(code) {
 app.get('/payment', (req, res) => {
     res.sendFile('payment.html', { root: './public' });
 });
-// ============== 訂單管理 API ==============
-app.get('/api/orders', (req, res) => {
-    const { status } = req.query;
-    let orders;
-    
-    if (status) {
-        orders = orderManager.getOrdersByStatus(status);
-    } else {
-        orders = orderManager.getAllOrders();
-    }
-    
-    const ordersWithStatus = orders.map(order => ({
-        ...order,
-        isExpired: orderManager.isExpired(order.orderId),
-        remainingTime: Math.max(0, order.expiryTime - Date.now()),
-        remainingHours: Math.floor(Math.max(0, order.expiryTime - Date.now()) / (1000 * 60 * 60))
-    }));
-    
-    res.json({
-        success: true,
-        total: ordersWithStatus.length,
-        orders: ordersWithStatus,
-        statistics: orderManager.getStatistics()
-    });
-});
-
-app.get('/api/order/:orderId', (req, res) => {
-    const order = orderManager.getOrder(req.params.orderId);
-    if (order) {
-        res.json({
-            success: true,
-            order: {
-                ...order,
-                isExpired: orderManager.isExpired(order.orderId),
-                remainingTime: Math.max(0, order.expiryTime - Date.now()),
-                remainingHours: Math.floor(Math.max(0, order.expiryTime - Date.now()) / (1000 * 60 * 60))
-            }
-        });
-    } else {
-        res.status(404).json({ success: false, error: '找不到此訂單' });
-    }
-});
-
-app.post('/api/order/:orderId/renew', async (req, res) => {
-    const { orderId } = req.params;
-    const order = orderManager.renewOrder(orderId);
-    
-    if (!order) {
-        return res.status(404).json({ success: false, error: '找不到此訂單' });
-    }
-    
-    try {
-        const linePayResult = await createLinePayPayment(order.userId, order.userName, order.amount);
-        
-        if (linePayResult.success) {
-            orderManager.updatePaymentInfo(orderId, linePayResult.transactionId, linePayResult.paymentUrl);
-            
-            const persistentUrl = `${process.env.RAILWAY_PUBLIC_DOMAIN || 'https://stain-bot-production-0fac.up.railway.app'}/payment/linepay/pay/${orderId}`;
-            
-            await client.pushMessage(order.userId, {
-                type: 'text',
-                text: `🔄 您的付款連結已重新生成\n\n訂單編號: ${orderId}\n客戶姓名: ${order.userName}\n金額: NT$ ${order.amount.toLocaleString()}\n\n新連結 (7天內有效):\n💙 ${persistentUrl}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`
-            });
-            
-            logger.logToFile(`✅ 訂單 ${orderId} 已重新發送`);
-            
-            res.json({
-                success: true,
-                message: '訂單已續約並重新發送付款連結',
-                order: order,
-                paymentUrl: persistentUrl
-            });
-        } else {
-            res.status(500).json({ success: false, error: '重新生成付款連結失敗' });
-        }
-    } catch (error) {
-        logger.logError('續約訂單失敗', error);
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-app.delete('/api/order/:orderId', (req, res) => {
-    const deleted = orderManager.deleteOrder(req.params.orderId);
-    if (deleted) {
-        res.json({ success: true, message: '訂單已刪除' });
-    } else {
-        res.status(404).json({ success: false, error: '找不到此訂單' });
-    }
-});
-
-app.post('/api/orders/send-reminders', async (req, res) => {
-    const ordersNeedingReminder = orderManager.getOrdersNeedingReminder();
-    
-    if (ordersNeedingReminder.length === 0) {
-        return res.json({ success: true, message: '目前沒有需要提醒的訂單', sent: 0 });
-    }
-    
-    let sent = 0;
-    const baseURL = process.env.RAILWAY_PUBLIC_DOMAIN || 'https://stain-bot-production-0fac.up.railway.app';
-    
-    for (const order of ordersNeedingReminder) {
-        try {
-            const remainingHours = Math.floor((order.expiryTime - Date.now()) / (1000 * 60 * 60));
-            const paymentLink = `${baseURL}/payment/linepay/pay/${order.orderId}`;
-            
-            await client.pushMessage(order.userId, {
-                type: 'text',
-                text: `⏰ 付款提醒\n\n您好 ${order.userName},\n\n您的訂單即將過期!\n訂單編號: ${order.orderId}\n金額: NT$ ${order.amount.toLocaleString()}\n剩餘時間: ${remainingHours} 小時\n\n請盡快完成付款:\n💙 ${paymentLink}\n\n如有任何問題請聯繫我們\n感謝您的支持 💙`
-            });
-            
-            orderManager.markReminderSent(order.orderId);
-            sent++;
-            logger.logToFile(`✅ 已發送付款提醒: ${order.orderId}`);
-        } catch (error) {
-            logger.logError(`發送提醒失敗: ${order.orderId}`, error);
-        }
-    }
-    
-    res.json({ success: true, message: `已發送 ${sent} 筆付款提醒`, sent: sent });
-});
-
-app.get('/api/orders/statistics', (req, res) => {
-    res.json({
-        success: true,
-        statistics: orderManager.getStatistics()
-    });
-});
 app.get('/payment/status/:orderId', async (req, res) => {
     res.json({ message: '付款狀態查詢功能(待實作)', orderId: req.params.orderId });
 });
@@ -614,5 +595,22 @@ app.listen(PORT, async () => {
     setInterval(() => {
         orderManager.cleanExpiredOrders();
     }, 24 * 60 * 60 * 1000);
+    setInterval(async () => {
+        const ordersNeedingReminder = orderManager.getOrdersNeedingReminder();
+        const baseURL = process.env.RAILWAY_PUBLIC_DOMAIN || 'https://stain-bot-production-0fac.up.railway.app';
+        for (const order of ordersNeedingReminder) {
+            try {
+                const remainingHours = Math.floor((order.expiryTime - Date.now()) / (1000 * 60 * 60));
+                const paymentLink = `${baseURL}/payment/linepay/pay/${order.orderId}`;
+                await client.pushMessage(order.userId, {
+                    type: 'text',
+                    text: `⏰ 付款提醒\n\n您好 ${order.userName},\n\n您的訂單即將過期!\n訂單編號: ${order.orderId}\n金額: NT$ ${order.amount.toLocaleString()}\n剩餘時間: ${remainingHours} 小時\n\n請盡快完成付款:\n💙 ${paymentLink}\n\n如有任何問題請聯繫我們\n感謝您的支持 💙`
+                });
+                orderManager.markReminderSent(order.orderId);
+                logger.logToFile(`✅ 自動發送付款提醒: ${order.orderId}`);
+            } catch (error) {
+                logger.logError(`自動提醒失敗: ${order.orderId}`, error);
+            }
+        }
+    }, 12 * 60 * 60 * 1000);
 });
-
