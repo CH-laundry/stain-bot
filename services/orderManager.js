@@ -1,33 +1,126 @@
+const fs = require('fs');
+const path = require('path');
 const logger = require('./logger');
+
+const ORDERS_FILE = path.join(__dirname, '../data/orders.json');
+const EXPIRY_TIME = 7 * 24 * 60 * 60 * 1000; // 7 天
 
 class OrderManager {
     constructor() {
         this.orders = new Map();
+        this.ensureDataDirectory();
+        this.loadOrders();
     }
 
-    createOrder(orderId, data) {
-        const expiryTime = Date.now() + (168 * 60 * 60 * 1000);
-        
+    ensureDataDirectory() {
+        const dataDir = path.join(__dirname, '../data');
+        if (!fs.existsSync(dataDir)) {
+            fs.mkdirSync(dataDir, { recursive: true });
+        }
+    }
+
+    loadOrders() {
+        try {
+            if (fs.existsSync(ORDERS_FILE)) {
+                const data = fs.readFileSync(ORDERS_FILE, 'utf8');
+                const ordersArray = JSON.parse(data);
+                ordersArray.forEach(order => {
+                    this.orders.set(order.orderId, order);
+                });
+                logger.logToFile(`✅ 載入 ${ordersArray.length} 筆訂單`);
+            }
+        } catch (error) {
+            logger.logError('載入訂單失敗', error);
+        }
+    }
+
+    saveOrders() {
+        try {
+            const ordersArray = Array.from(this.orders.values());
+            fs.writeFileSync(ORDERS_FILE, JSON.stringify(ordersArray, null, 2), 'utf8');
+        } catch (error) {
+            logger.logError('儲存訂單失敗', error);
+        }
+    }
+
+    createOrder(orderId, orderData) {
+        const now = Date.now();
         const order = {
-            orderId: orderId,
-            userId: data.userId,
-            userName: data.userName,
-            amount: data.amount,
+            orderId,
+            userId: orderData.userId,
+            userName: orderData.userName,
+            amount: orderData.amount,
             status: 'pending',
-            createdAt: Date.now(),
-            expiryTime: expiryTime,
-            lastPaymentUrl: null,
-            lastTransactionId: null
+            createdAt: now,
+            expiryTime: now + EXPIRY_TIME,
+            transactionId: null,
+            paymentUrl: null,
+            lastReminderSent: null,
+            retryCount: 0
         };
-        
         this.orders.set(orderId, order);
-        logger.logToFile(`✅ 已建立訂單: ${orderId}, 過期時間: ${new Date(expiryTime).toLocaleString('zh-TW')}`);
-        
+        this.saveOrders();
+        logger.logToFile(`✅ 建立訂單: ${orderId} - ${orderData.userName} - NT$ ${orderData.amount}`);
         return order;
     }
 
     getOrder(orderId) {
         return this.orders.get(orderId);
+    }
+
+    getAllOrders() {
+        return Array.from(this.orders.values()).sort((a, b) => b.createdAt - a.createdAt);
+    }
+
+    getPendingOrders() {
+        return this.getAllOrders().filter(order => order.status === 'pending' && !this.isExpired(order.orderId));
+    }
+
+    getOrdersByStatus(status) {
+        return this.getAllOrders().filter(order => order.status === status);
+    }
+
+    getOrdersNeedingReminder() {
+        const now = Date.now();
+        const oneDayBeforeExpiry = 24 * 60 * 60 * 1000;
+        
+        return this.getPendingOrders().filter(order => {
+            const timeUntilExpiry = order.expiryTime - now;
+            const shouldRemind = timeUntilExpiry <= oneDayBeforeExpiry && timeUntilExpiry > 0;
+            const noRecentReminder = !order.lastReminderSent || (now - order.lastReminderSent) > 12 * 60 * 60 * 1000;
+            return shouldRemind && noRecentReminder;
+        });
+    }
+
+    updatePaymentInfo(orderId, transactionId, paymentUrl) {
+        const order = this.orders.get(orderId);
+        if (order) {
+            order.transactionId = transactionId;
+            order.paymentUrl = paymentUrl;
+            order.retryCount++;
+            this.saveOrders();
+            logger.logToFile(`✅ 更新訂單付款資訊: ${orderId}`);
+        }
+    }
+
+    updateOrderStatus(orderId, status) {
+        const order = this.orders.get(orderId);
+        if (order) {
+            order.status = status;
+            if (status === 'paid') {
+                order.paidAt = Date.now();
+            }
+            this.saveOrders();
+            logger.logToFile(`✅ 更新訂單狀態: ${orderId} -> ${status}`);
+        }
+    }
+
+    markReminderSent(orderId) {
+        const order = this.orders.get(orderId);
+        if (order) {
+            order.lastReminderSent = Date.now();
+            this.saveOrders();
+        }
     }
 
     isExpired(orderId) {
@@ -36,24 +129,13 @@ class OrderManager {
         return Date.now() > order.expiryTime;
     }
 
-    updatePaymentInfo(orderId, transactionId, paymentUrl) {
-        const order = this.orders.get(orderId);
-        if (order) {
-            order.lastTransactionId = transactionId;
-            order.lastPaymentUrl = paymentUrl;
-            order.lastUpdated = Date.now();
-            this.orders.set(orderId, order);
+    deleteOrder(orderId) {
+        const deleted = this.orders.delete(orderId);
+        if (deleted) {
+            this.saveOrders();
+            logger.logToFile(`🗑️ 刪除訂單: ${orderId}`);
         }
-    }
-
-    updateOrderStatus(orderId, status) {
-        const order = this.orders.get(orderId);
-        if (order) {
-            order.status = status;
-            order.paidAt = Date.now();
-            this.orders.set(orderId, order);
-            logger.logToFile(`✅ 訂單狀態更新: ${orderId} -> ${status}`);
-        }
+        return deleted;
     }
 
     cleanExpiredOrders() {
@@ -61,17 +143,44 @@ class OrderManager {
         let cleaned = 0;
         
         for (const [orderId, order] of this.orders.entries()) {
-            if (now > order.expiryTime && order.status === 'pending') {
+            if (order.status === 'pending' && now > order.expiryTime) {
                 this.orders.delete(orderId);
                 cleaned++;
             }
         }
         
         if (cleaned > 0) {
-            logger.logToFile(`🗑️ 清理了 ${cleaned} 個過期訂單`);
+            this.saveOrders();
+            logger.logToFile(`🧹 清理 ${cleaned} 筆過期訂單`);
         }
         
         return cleaned;
+    }
+
+    renewOrder(orderId) {
+        const order = this.orders.get(orderId);
+        if (order) {
+            const now = Date.now();
+            order.expiryTime = now + EXPIRY_TIME;
+            order.status = 'pending';
+            order.retryCount = 0;
+            order.lastReminderSent = null;
+            this.saveOrders();
+            logger.logToFile(`🔄 續約訂單: ${orderId} (新過期時間: 7天後)`);
+            return order;
+        }
+        return null;
+    }
+
+    getStatistics() {
+        const all = this.getAllOrders();
+        return {
+            total: all.length,
+            pending: all.filter(o => o.status === 'pending' && !this.isExpired(o.orderId)).length,
+            paid: all.filter(o => o.status === 'paid').length,
+            expired: all.filter(o => o.status === 'pending' && this.isExpired(o.orderId)).length,
+            needReminder: this.getOrdersNeedingReminder().length
+        };
     }
 }
 
