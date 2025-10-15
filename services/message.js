@@ -295,11 +295,13 @@ class MessageHandler {
       return;
     }
 
-    // 4) 地址偵測
-    if (AddressDetector.isAddress(raw)) {
+    // 4) 地址偵測（先清洗再判斷）
+    const rawClean = cleanText(raw);
+    if (AddressDetector.isAddress(rawClean)) {
       await this.handleAddressMessage(userId, raw);
       return;
-    }
+}
+
 
     // 5) 進度查詢
     if (this.isProgressQuery(lower)) {
