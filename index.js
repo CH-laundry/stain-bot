@@ -158,7 +158,7 @@ async function createLinePayPayment(userId, userName, amount) {
         const orderId = `LP${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
         const nonce = crypto.randomBytes(16).toString('base64');
         
-        const baseURL = process.env.RAILWAY_STATIC_URL || 'https://stain-bot-production-2593.up.railway.app';
+        const baseURL = process.env.RAILWAY_PUBLIC_DOMAIN || 'https://stain-bot-production-2593.up.railway.app';
         
         const requestBody = {
             amount: amount,
@@ -912,6 +912,7 @@ app.listen(PORT, async () => {
         console.error('❌ 客戶資料載入失敗:', error.message);
     }
 });
+
 
 
 
