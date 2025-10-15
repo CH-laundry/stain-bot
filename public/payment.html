@@ -18,36 +18,27 @@
         .tab-content.active { display: block; }
         .form-group { margin-bottom: 20px; }
         label { display: block; margin-bottom: 8px; color: #333; font-weight: 600; font-size: 14px; }
-        input, textarea, select { width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 10px; font-size: 16px; transition: all 0.3s; font-family: inherit; }
+        input, textarea { width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 10px; font-size: 16px; transition: all 0.3s; font-family: inherit; }
         textarea { min-height: 120px; resize: vertical; }
-        input:focus, textarea:focus, select:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1); }
-        .quick-search { display: flex; gap: 10px; margin-bottom: 20px; }
-        .quick-search input { flex: 1; }
+        input:focus, textarea:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1); }
+        .quick-search { display: flex; gap: 10px; }
         .btn { width: 100%; padding: 15px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 12px; font-size: 18px; font-weight: 600; cursor: pointer; transition: all 0.3s; }
         .btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6); }
         .btn:disabled { background: #ccc; cursor: not-allowed; }
         .btn-small { padding: 10px 20px; font-size: 14px; width: auto; }
         .btn-secondary { background: linear-gradient(135deg, #52c41a 0%, #389e0d 100%); }
         .btn-danger { background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); }
-        .payment-options { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-bottom: 20px; }
+        .payment-options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px; }
         .payment-option { position: relative; }
         .payment-option input[type="radio"] { position: absolute; opacity: 0; }
-        .payment-option label { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 15px 10px; border: 2px solid #e0e0e0; border-radius: 15px; cursor: pointer; transition: all 0.3s; text-align: center; height: 100%; }
+        .payment-option label { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 15px; border: 2px solid #e0e0e0; border-radius: 15px; cursor: pointer; transition: all 0.3s; text-align: center; height: 100%; }
         .payment-option input[type="radio"]:checked + label { border-color: #667eea; background: #f0f4ff; transform: translateY(-2px); box-shadow: 0 5px 15px rgba(102, 126, 234, 0.2); }
         .payment-icon { font-size: 28px; margin-bottom: 5px; }
         .payment-name { font-size: 13px; font-weight: 600; color: #333; }
         .message-templates { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 15px; }
-        .template-btn { padding: 12px; background: #f5f5f5; border: 2px solid #e0e0e0; border-radius: 8px; cursor: pointer; font-size: 14px; transition: all 0.3s; text-align: left; position: relative; }
+        .template-btn { padding: 12px; background: #f5f5f5; border: 2px solid #e0e0e0; border-radius: 8px; cursor: pointer; font-size: 14px; transition: all 0.3s; text-align: left; }
         .template-btn:hover { border-color: #667eea; background: #f0f4ff; }
         .template-btn.active { border-color: #667eea; background: #e7f0ff; }
-        .template-actions { display: flex; gap: 5px; margin-top: 10px; }
-        .template-actions button { padding: 8px 12px; font-size: 12px; border: none; border-radius: 6px; cursor: pointer; transition: all 0.3s; }
-        .btn-save-template { background: #52c41a; color: white; }
-        .btn-save-template:hover { background: #389e0d; }
-        .btn-edit-template { background: #ffc107; color: #333; }
-        .btn-edit-template:hover { background: #ffb300; }
-        .btn-delete-template { background: #dc3545; color: white; }
-        .btn-delete-template:hover { background: #c82333; }
         .result { margin-top: 20px; padding: 20px; border-radius: 12px; display: none; }
         .result.success { background: #d4edda; border: 2px solid #28a745; color: #155724; }
         .result.error { background: #f8d7da; border: 2px solid #dc3545; color: #721c24; }
@@ -62,17 +53,12 @@
         .customer-card { background: #f0f4ff; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #667eea; }
         .customer-card h4 { color: #667eea; margin-bottom: 10px; }
         .customer-card p { margin: 5px 0; font-size: 14px; color: #333; }
-        .my-templates { margin-top: 20px; padding: 20px; background: #f8f9fa; border-radius: 10px; }
-        .my-templates h4 { color: #667eea; margin-bottom: 15px; }
         .template-item { background: white; padding: 12px; margin-bottom: 10px; border-radius: 8px; border: 1px solid #e0e0e0; }
-        .template-item:hover { border-color: #667eea; }
         @media (max-width: 768px) {
             .container { padding: 20px; }
             h1 { font-size: 24px; }
             .payment-options { grid-template-columns: 1fr; }
             .message-templates { grid-template-columns: 1fr; }
-            .tabs { font-size: 13px; }
-            .tab { padding: 10px 15px; }
         }
     </style>
 </head>
@@ -80,47 +66,39 @@
     <div class="container">
         <h1>💳 付款管理系統</h1>
         <p class="subtitle">C.H 精緻洗衣 - 發送付款連結給客戶</p>
-        
         <div class="tabs">
             <button class="tab active" onclick="switchTab('payment')">💳 發送付款</button>
             <button class="tab" onclick="switchTab('customers')">📋 客戶編號</button>
             <button class="tab" onclick="switchTab('templates')">📝 訊息模板</button>
             <button class="tab" onclick="switchTab('users')">👥 客戶列表</button>
         </div>
-        
-        <!-- 發送付款頁籤 -->
         <div id="payment-tab" class="tab-content active">
             <div class="form-group">
-                <label>🔍 快速查詢 (輸入編號或姓名)</label>
+                <label>🔍 快速查詢</label>
                 <div class="quick-search">
-                    <input type="text" id="quickSearch" placeholder="例如: 755 或 王小明">
+                    <input type="text" id="quickSearch" placeholder="輸入編號或姓名">
                     <button class="btn btn-small" onclick="quickSearchCustomer()">查詢</button>
                 </div>
             </div>
-            
             <div id="customerCard" class="customer-card" style="display:none;">
                 <h4>✅ 客戶資訊</h4>
                 <p><strong>編號:</strong> <span id="cardNumber"></span></p>
                 <p><strong>姓名:</strong> <span id="cardName"></span></p>
                 <p><strong>User ID:</strong> <span id="cardUserId"></span></p>
             </div>
-            
             <form id="paymentForm">
                 <div class="form-group">
                     <label>客戶 LINE User ID *</label>
                     <input type="text" id="userId" placeholder="U1234567890abcdef" required>
                 </div>
-                
                 <div class="form-group">
                     <label>客戶姓名 *</label>
                     <input type="text" id="userName" placeholder="王小明" required>
                 </div>
-                
                 <div class="form-group">
                     <label>付款金額 (NT$) *</label>
                     <input type="number" id="amount" placeholder="1500" min="1" required>
                 </div>
-                
                 <div class="form-group">
                     <label>付款方式 *</label>
                     <div class="payment-options">
@@ -132,6 +110,13 @@
                             </label>
                         </div>
                         <div class="payment-option">
+                            <input type="radio" id="ecpay" name="paymentType" value="ecpay">
+                            <label for="ecpay">
+                                <div class="payment-icon">💳</div>
+                                <div class="payment-name">綠界支付</div>
+                            </label>
+                        </div>
+                        <div class="payment-option">
                             <input type="radio" id="linepay" name="paymentType" value="linepay">
                             <label for="linepay">
                                 <div class="payment-icon">💚</div>
@@ -140,92 +125,65 @@
                         </div>
                     </div>
                 </div>
-                
                 <div class="form-group">
-                    <label>訊息內容 (選擇模板或自行輸入)</label>
+                    <label>訊息內容</label>
                     <div id="customTemplates" class="message-templates"></div>
                     <textarea id="customMessage" placeholder="輸入訊息內容,使用 {amount} 會自動替換成金額&#10;&#10;例如: 您好,已收回衣物,金額 NT$ {amount},請儘速付款,謝謝!"></textarea>
                 </div>
-                
                 <button type="submit" class="btn" id="submitBtn">💙 發送付款連結</button>
             </form>
-            
             <div class="loading" id="loading">
                 <div class="loading-spinner"></div>
                 <p>正在發送...</p>
             </div>
-            
             <div class="result" id="result"></div>
         </div>
-        
-        <!-- 客戶編號管理頁籤 -->
         <div id="customers-tab" class="tab-content">
             <h3 style="color:#667eea; margin-bottom:20px;">📋 客戶編號管理</h3>
-            
             <div class="form-group">
-                <label>新增客戶編號</label>
+                <label>客戶編號</label>
                 <input type="text" id="newCustomerNumber" placeholder="例如: 755">
             </div>
-            
             <div class="form-group">
                 <label>客戶姓名</label>
                 <input type="text" id="newCustomerName" placeholder="例如: 王小明">
             </div>
-            
             <div class="form-group">
                 <label>User ID</label>
                 <input type="text" id="newCustomerUserId" placeholder="U1234567890abcdef">
             </div>
-            
             <button class="btn btn-secondary" onclick="saveCustomerNumber()">💾 儲存客戶編號</button>
-            
             <div style="margin-top:30px;">
                 <h4 style="color:#667eea; margin-bottom:15px;">已儲存的客戶編號</h4>
                 <div id="savedCustomers"></div>
             </div>
         </div>
-        
-        <!-- 訊息模板頁籤 -->
         <div id="templates-tab" class="tab-content">
-            <h3 style="color:#667eea; margin-bottom:20px;">📝 自訂訊息模板</h3>
-            
+            <h3 style="color:#667eea; margin-bottom:20px;">📝 訊息模板管理</h3>
             <div class="form-group">
-                <label>新增模板內容 (使用 {amount} 代表金額)</label>
+                <label>新增模板 (使用 {amount} 代表金額)</label>
                 <textarea id="newTemplateContent" placeholder="例如: 您好,已收回衣物,金額 NT$ {amount},請儘速付款,謝謝!"></textarea>
             </div>
-            
             <button class="btn btn-secondary" onclick="saveTemplate()">💾 儲存模板</button>
-            
-            <div class="my-templates">
-                <h4>我的模板</h4>
+            <div style="margin-top:30px;">
+                <h4 style="color:#667eea; margin-bottom:15px;">我的模板</h4>
                 <div id="templateList"></div>
             </div>
         </div>
-        
-        <!-- 客戶列表頁籤 -->
         <div id="users-tab" class="tab-content">
             <h3 style="color:#667eea; margin-bottom:20px;">👥 客戶列表</h3>
             <button class="btn btn-secondary btn-small" onclick="loadUsers()" style="margin-bottom:20px;">🔄 重新載入</button>
             <div id="userList"><p style="text-align:center; color:#999;">載入中...</p></div>
         </div>
     </div>
-    
     <script>
         let savedCustomers = JSON.parse(localStorage.getItem('customerNumbers') || '{}');
         let savedTemplates = JSON.parse(localStorage.getItem('messageTemplates') || '[]');
         let allUsers = [];
-        
-        // 初始化模板
         if (savedTemplates.length === 0) {
-            savedTemplates = [
-                '您好,已收回衣物,金額 NT$ {amount},請儘速付款,謝謝!',
-                '您的衣物已清洗完成,金額 NT$ {amount},可付款取件',
-                '衣物處理中,預付金額 NT$ {amount}',
-                '訂金收訖 NT$ {amount},感謝您的支持!'
-            ];
+            savedTemplates = ['您好,已收回衣物,金額 NT$ {amount},請儘速付款,謝謝!', '您的衣物已清洗完成,金額 NT$ {amount},可付款取件', '衣物處理中,預付金額 NT$ {amount}', '訂金收訖 NT$ {amount},感謝您的支持!'];
             localStorage.setItem('messageTemplates', JSON.stringify(savedTemplates));
         }
-        
         function switchTab(tabName) {
             document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
@@ -236,7 +194,6 @@
             if (tabName === 'users') loadUsers();
             if (tabName === 'payment') loadCustomTemplates();
         }
-        
         function loadCustomTemplates() {
             const container = document.getElementById('customTemplates');
             let html = '';
@@ -246,17 +203,14 @@
             });
             container.innerHTML = html;
         }
-        
         function selectTemplate(index) {
             document.getElementById('customMessage').value = savedTemplates[index];
             document.querySelectorAll('.template-btn').forEach(btn => btn.classList.remove('active'));
             event.target.classList.add('active');
         }
-        
         function quickSearchCustomer() {
             const query = document.getElementById('quickSearch').value.trim();
             if (!query) { alert('請輸入編號或姓名'); return; }
-            
             if (savedCustomers[query]) {
                 const customer = savedCustomers[query];
                 document.getElementById('userId').value = customer.userId;
@@ -264,7 +218,6 @@
                 showCustomerCard(query, customer.name, customer.userId);
                 return;
             }
-            
             const found = Object.entries(savedCustomers).find(([num, data]) => data.name.includes(query));
             if (found) {
                 const [number, customer] = found;
@@ -273,49 +226,39 @@
                 showCustomerCard(number, customer.name, customer.userId);
                 return;
             }
-            
             alert('找不到此客戶');
         }
-        
         function showCustomerCard(number, name, userId) {
             document.getElementById('cardNumber').textContent = number;
             document.getElementById('cardName').textContent = name;
             document.getElementById('cardUserId').textContent = userId;
             document.getElementById('customerCard').style.display = 'block';
         }
-        
         document.getElementById('paymentForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            
             const userId = document.getElementById('userId').value.trim();
             const userName = document.getElementById('userName').value.trim();
             const amount = parseInt(document.getElementById('amount').value);
             const paymentType = document.querySelector('input[name="paymentType"]:checked').value;
             const customMessage = document.getElementById('customMessage').value.trim().replace('{amount}', amount.toLocaleString());
-            
             if (!userId || !userName || !amount) {
                 showResult('error', '請填寫所有必填欄位!');
                 return;
             }
-            
             document.getElementById('submitBtn').disabled = true;
             document.getElementById('loading').style.display = 'block';
             document.getElementById('result').style.display = 'none';
-            
             try {
                 const response = await fetch('/send-payment', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        userId, userName, amount, paymentType, customMessage
-                    })
+                    body: JSON.stringify({ userId, userName, amount, paymentType, customMessage })
                 });
-                
                 const data = await response.json();
-                
                 if (data.success) {
                     let msg = `✅ 付款連結已發送給 ${userName}!<br><br>金額: NT$ ${amount.toLocaleString()}<br>`;
                     if (paymentType === 'both') msg += '付款方式: 信用卡 + LINE Pay<br>';
+                    else if (paymentType === 'ecpay') msg += '付款方式: 綠界支付<br>';
                     else msg += '付款方式: LINE Pay<br>';
                     if (customMessage) msg += `<br>附加訊息: ${customMessage}`;
                     showResult('success', msg);
@@ -331,49 +274,31 @@
                 document.getElementById('loading').style.display = 'none';
             }
         });
-        
         function saveCustomerNumber() {
             const number = document.getElementById('newCustomerNumber').value.trim();
             const name = document.getElementById('newCustomerName').value.trim();
             const userId = document.getElementById('newCustomerUserId').value.trim();
-            
-            if (!number || !name || !userId) {
-                alert('請填寫所有欄位');
-                return;
-            }
-            
+            if (!number || !name || !userId) { alert('請填寫所有欄位'); return; }
             savedCustomers[number] = { name, userId };
             localStorage.setItem('customerNumbers', JSON.stringify(savedCustomers));
-            
             alert(`✅ 已儲存客戶編號 ${number}`);
             document.getElementById('newCustomerNumber').value = '';
             document.getElementById('newCustomerName').value = '';
             document.getElementById('newCustomerUserId').value = '';
             displaySavedCustomers();
         }
-        
         function displaySavedCustomers() {
             const container = document.getElementById('savedCustomers');
             if (Object.keys(savedCustomers).length === 0) {
                 container.innerHTML = '<p style="text-align:center; color:#999;">尚無儲存的客戶編號</p>';
                 return;
             }
-            
             let html = '';
             Object.entries(savedCustomers).forEach(([number, data]) => {
-                html += `
-                    <div class="user-item">
-                        <div class="user-info" onclick="useCustomerNumber('${number}')">
-                            <strong>編號 ${number} - ${data.name}</strong>
-                            <small>User ID: ${data.userId}</small>
-                        </div>
-                        <button class="btn btn-small btn-danger" onclick="deleteCustomerNumber('${number}')">刪除</button>
-                    </div>
-                `;
+                html += `<div class="user-item"><div class="user-info" onclick="useCustomerNumber('${number}')"><strong>編號 ${number} - ${data.name}</strong><small>User ID: ${data.userId}</small></div><button class="btn btn-small btn-danger" onclick="deleteCustomerNumber('${number}')">刪除</button></div>`;
             });
             container.innerHTML = html;
         }
-        
         function useCustomerNumber(number) {
             const customer = savedCustomers[number];
             document.getElementById('userId').value = customer.userId;
@@ -383,7 +308,6 @@
             switchTab('payment');
             document.querySelector('.tab').classList.add('active');
         }
-        
         function deleteCustomerNumber(number) {
             if (confirm(`確定要刪除編號 ${number} 嗎?`)) {
                 delete savedCustomers[number];
@@ -391,14 +315,9 @@
                 displaySavedCustomers();
             }
         }
-        
         function saveTemplate() {
             const content = document.getElementById('newTemplateContent').value.trim();
-            if (!content) {
-                alert('請輸入模板內容');
-                return;
-            }
-            
+            if (!content) { alert('請輸入模板內容'); return; }
             savedTemplates.push(content);
             localStorage.setItem('messageTemplates', JSON.stringify(savedTemplates));
             alert('✅ 模板已儲存');
@@ -406,26 +325,18 @@
             displayTemplates();
             loadCustomTemplates();
         }
-        
         function displayTemplates() {
             const container = document.getElementById('templateList');
             if (savedTemplates.length === 0) {
                 container.innerHTML = '<p style="text-align:center; color:#999;">尚無自訂模板</p>';
                 return;
             }
-            
             let html = '';
             savedTemplates.forEach((template, index) => {
-                html += `
-                    <div class="template-item">
-                        <p style="margin-bottom:10px;">${template}</p>
-                        <button class="btn btn-small btn-danger" onclick="deleteTemplate(${index})">刪除</button>
-                    </div>
-                `;
+                html += `<div class="template-item"><p style="margin-bottom:10px;">${template}</p><button class="btn btn-small btn-danger" onclick="deleteTemplate(${index})">刪除</button></div>`;
             });
             container.innerHTML = html;
         }
-        
         function deleteTemplate(index) {
             if (confirm('確定要刪除此模板嗎?')) {
                 savedTemplates.splice(index, 1);
@@ -434,47 +345,33 @@
                 loadCustomTemplates();
             }
         }
-        
         async function loadUsers() {
             const userListDiv = document.getElementById('userList');
             userListDiv.innerHTML = '<p style="text-align:center; color:#999;">載入中...</p>';
-            
             try {
                 const response = await fetch('/api/users');
                 const data = await response.json();
                 allUsers = data.users || [];
-                
                 if (allUsers.length === 0) {
                     userListDiv.innerHTML = '<p style="text-align:center; color:#999;">尚無客戶記錄</p>';
                     return;
                 }
-                
                 let html = `<p style="color:#666; font-size:14px; margin-bottom:15px;">共 ${allUsers.length} 位客戶</p>`;
                 allUsers.forEach(user => {
                     const lastSeen = new Date(user.lastSeen).toLocaleString('zh-TW');
-                    html += `
-                        <div class="user-item" onclick="selectUser('${user.userId}', '${user.displayName}')">
-                            <div class="user-info">
-                                <strong>${user.displayName}</strong>
-                                <small>User ID: ${user.userId}</small>
-                                <small>最後活動: ${lastSeen}</small>
-                            </div>
-                        </div>
-                    `;
+                    html += `<div class="user-item" onclick="selectUser('${user.userId}', '${user.displayName}')"><div class="user-info"><strong>${user.displayName}</strong><small>User ID: ${user.userId}</small><small>最後活動: ${lastSeen}</small></div></div>`;
                 });
                 userListDiv.innerHTML = html;
             } catch (error) {
                 userListDiv.innerHTML = `<p style="color:#dc3545; text-align:center;">載入失敗: ${error.message}</p>`;
             }
         }
-        
         function selectUser(userId, userName) {
             document.getElementById('userId').value = userId;
             document.getElementById('userName').value = userName;
             switchTab('payment');
             document.querySelector('.tab').classList.add('active');
         }
-        
         function showResult(type, message) {
             const result = document.getElementById('result');
             result.className = `result ${type}`;
@@ -482,7 +379,6 @@
             result.style.display = 'block';
             result.scrollIntoView({ behavior: 'smooth' });
         }
-        
         window.addEventListener('load', () => {
             loadCustomTemplates();
             displaySavedCustomers();
