@@ -18,9 +18,9 @@
         .tab-content.active { display: block; }
         .form-group { margin-bottom: 20px; }
         label { display: block; margin-bottom: 8px; color: #333; font-weight: 600; font-size: 14px; }
-        input, textarea { width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 10px; font-size: 16px; transition: all 0.3s; font-family: inherit; }
+        input, textarea, select { width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 10px; font-size: 16px; transition: all 0.3s; font-family: inherit; }
         textarea { min-height: 120px; resize: vertical; }
-        input:focus, textarea:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1); }
+        input:focus, textarea:focus, select:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1); }
         .quick-search { display: flex; gap: 10px; }
         .btn { width: 100%; padding: 15px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 12px; font-size: 18px; font-weight: 600; cursor: pointer; transition: all 0.3s; }
         .btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6); }
@@ -68,10 +68,12 @@
         <p class="subtitle">C.H 精緻洗衣 - 發送付款連結給客戶</p>
         <div class="tabs">
             <button class="tab active" onclick="switchTab('payment')">💳 發送付款</button>
+            <button class="tab" onclick="switchTab('orders')">📦 訂單管理</button>
             <button class="tab" onclick="switchTab('customers')">📋 客戶編號</button>
             <button class="tab" onclick="switchTab('templates')">📝 訊息模板</button>
             <button class="tab" onclick="switchTab('users')">👥 客戶列表</button>
         </div>
+        
         <div id="payment-tab" class="tab-content active">
             <div class="form-group">
                 <label>🔍 快速查詢</label>
@@ -138,6 +140,27 @@
             </div>
             <div class="result" id="result"></div>
         </div>
+
+        <div id="orders-tab" class="tab-content">
+            <h3 style="color:#667eea; margin-bottom:20px;">📦 訂單管理</h3>
+            <div style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
+                <button class="btn btn-secondary btn-small" onclick="loadOrders()">🔄 重新整理</button>
+                <button class="btn btn-secondary btn-small" onclick="sendReminders()">⏰ 發送付款提醒</button>
+                <button class="btn btn-secondary btn-small" onclick="cleanExpired()">🧹 清理過期訂單</button>
+            </div>
+            <div id="orderStats" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:15px; margin-bottom:20px;"></div>
+            <div style="margin-bottom:15px;">
+                <label style="font-size:14px; color:#666;">篩選狀態:</label>
+                <select id="orderStatusFilter" onchange="filterOrders()" style="padding:8px; border-radius:8px; border:2px solid #e0e0e0;">
+                    <option value="">全部訂單</option>
+                    <option value="pending">待付款</option>
+                    <option value="paid">已付款</option>
+                    <option value="expired">已過期</option>
+                </select>
+            </div>
+            <div id="orderList"><p style="text-align:center; color:#999;">載入中...</p></div>
+        </div>
+
         <div id="customers-tab" class="tab-content">
             <h3 style="color:#667eea; margin-bottom:20px;">📋 客戶編號管理</h3>
             <div class="form-group">
@@ -158,6 +181,7 @@
                 <div id="savedCustomers"></div>
             </div>
         </div>
+
         <div id="templates-tab" class="tab-content">
             <h3 style="color:#667eea; margin-bottom:20px;">📝 訊息模板管理</h3>
             <div class="form-group">
@@ -170,20 +194,25 @@
                 <div id="templateList"></div>
             </div>
         </div>
+
         <div id="users-tab" class="tab-content">
             <h3 style="color:#667eea; margin-bottom:20px;">👥 客戶列表</h3>
             <button class="btn btn-secondary btn-small" onclick="loadUsers()" style="margin-bottom:20px;">🔄 重新載入</button>
             <div id="userList"><p style="text-align:center; color:#999;">載入中...</p></div>
         </div>
     </div>
+
     <script>
         let savedCustomers = JSON.parse(localStorage.getItem('customerNumbers') || '{}');
         let savedTemplates = JSON.parse(localStorage.getItem('messageTemplates') || '[]');
         let allUsers = [];
+        let allOrders = [];
+
         if (savedTemplates.length === 0) {
             savedTemplates = ['您好,已收回衣物,金額 NT$ {amount},請儘速付款,謝謝!', '您的衣物已清洗完成,金額 NT$ {amount},可付款取件', '衣物處理中,預付金額 NT$ {amount}', '訂金收訖 NT$ {amount},感謝您的支持!'];
             localStorage.setItem('messageTemplates', JSON.stringify(savedTemplates));
         }
+
         function switchTab(tabName) {
             document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
@@ -193,7 +222,9 @@
             if (tabName === 'templates') displayTemplates();
             if (tabName === 'users') loadUsers();
             if (tabName === 'payment') loadCustomTemplates();
+            if (tabName === 'orders') loadOrders();
         }
+
         function loadCustomTemplates() {
             const container = document.getElementById('customTemplates');
             let html = '';
@@ -203,11 +234,13 @@
             });
             container.innerHTML = html;
         }
+
         function selectTemplate(index) {
             document.getElementById('customMessage').value = savedTemplates[index];
             document.querySelectorAll('.template-btn').forEach(btn => btn.classList.remove('active'));
             event.target.classList.add('active');
         }
+
         function quickSearchCustomer() {
             const query = document.getElementById('quickSearch').value.trim();
             if (!query) { alert('請輸入編號或姓名'); return; }
@@ -228,12 +261,14 @@
             }
             alert('找不到此客戶');
         }
+
         function showCustomerCard(number, name, userId) {
             document.getElementById('cardNumber').textContent = number;
             document.getElementById('cardName').textContent = name;
             document.getElementById('cardUserId').textContent = userId;
             document.getElementById('customerCard').style.display = 'block';
         }
+
         document.getElementById('paymentForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const userId = document.getElementById('userId').value.trim();
@@ -274,6 +309,218 @@
                 document.getElementById('loading').style.display = 'none';
             }
         });
+
+        async function loadOrders() {
+            const orderListDiv = document.getElementById('orderList');
+            orderListDiv.innerHTML = '<p style="text-align:center; color:#999;">載入中...</p>';
+            try {
+                const response = await fetch('/api/orders');
+                const data = await response.json();
+                if (!data.success) {
+                    orderListDiv.innerHTML = '<p style="color:#dc3545; text-align:center;">載入失敗</p>';
+                    return;
+                }
+                allOrders = data.orders;
+                displayOrderStats(data.statistics);
+                displayOrders(allOrders);
+            } catch (error) {
+                orderListDiv.innerHTML = `<p style="color:#dc3545; text-align:center;">載入失敗: ${error.message}</p>`;
+            }
+        }
+
+        function displayOrderStats(stats) {
+            const statsDiv = document.getElementById('orderStats');
+            statsDiv.innerHTML = `
+                <div style="background:#f0f4ff; padding:15px; border-radius:10px; text-align:center;">
+                    <div style="font-size:24px; font-weight:bold; color:#667eea;">${stats.total}</div>
+                    <div style="font-size:14px; color:#666;">總訂單數</div>
+                </div>
+                <div style="background:#fff3cd; padding:15px; border-radius:10px; text-align:center;">
+                    <div style="font-size:24px; font-weight:bold; color:#ffc107;">${stats.pending}</div>
+                    <div style="font-size:14px; color:#666;">待付款</div>
+                </div>
+                <div style="background:#d4edda; padding:15px; border-radius:10px; text-align:center;">
+                    <div style="font-size:24px; font-weight:bold; color:#28a745;">${stats.paid}</div>
+                    <div style="font-size:14px; color:#666;">已付款</div>
+                </div>
+                <div style="background:#f8d7da; padding:15px; border-radius:10px; text-align:center;">
+                    <div style="font-size:24px; font-weight:bold; color:#dc3545;">${stats.expired}</div>
+                    <div style="font-size:14px; color:#666;">已過期</div>
+                </div>
+                <div style="background:#e7f0ff; padding:15px; border-radius:10px; text-align:center;">
+                    <div style="font-size:24px; font-weight:bold; color:#0066cc;">${stats.needReminder}</div>
+                    <div style="font-size:14px; color:#666;">需提醒</div>
+                </div>
+            `;
+        }
+
+        function displayOrders(orders) {
+            const orderListDiv = document.getElementById('orderList');
+            if (orders.length === 0) {
+                orderListDiv.innerHTML = '<p style="text-align:center; color:#999;">尚無訂單記錄</p>';
+                return;
+            }
+            let html = '';
+            orders.forEach(order => {
+                const createdDate = new Date(order.createdAt).toLocaleString('zh-TW');
+                const expiryDate = new Date(order.expiryTime).toLocaleString('zh-TW');
+                let statusBadge = '';
+                let actionButtons = '';
+                if (order.status === 'paid') {
+                    statusBadge = '<span style="background:#28a745; color:white; padding:5px 10px; border-radius:5px; font-size:12px;">✅ 已付款</span>';
+                } else if (order.isExpired) {
+                    statusBadge = '<span style="background:#dc3545; color:white; padding:5px 10px; border-radius:5px; font-size:12px;">❌ 已過期</span>';
+                    actionButtons = `<button class="btn btn-small btn-secondary" onclick="renewOrder('${order.orderId}')">🔄 續約重發</button>`;
+                } else {
+                    statusBadge = `<span style="background:#ffc107; color:white; padding:5px 10px; border-radius:5px; font-size:12px;">⏰ 剩餘 ${order.remainingHours} 小時</span>`;
+                    actionButtons = `
+                        <button class="btn btn-small btn-secondary" onclick="copyPaymentLink('${order.orderId}')">📋 複製連結</button>
+                        <button class="btn btn-small btn-secondary" onclick="sendSingleReminder('${order.orderId}')">⏰ 提醒</button>
+                    `;
+                }
+                actionButtons += `<button class="btn btn-small btn-danger" onclick="deleteOrder('${order.orderId}')">刪除</button>`;
+                html += `
+                    <div class="user-item" style="display:block;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                            <div>
+                                <strong style="font-size:16px;">${order.userName}</strong>
+                                ${statusBadge}
+                            </div>
+                            <div style="font-size:18px; font-weight:bold; color:#667eea;">NT$ ${order.amount.toLocaleString()}</div>
+                        </div>
+                        <div style="font-size:13px; color:#666; margin-bottom:10px;">
+                            <div>訂單編號: ${order.orderId}</div>
+                            <div>建立時間: ${createdDate}</div>
+                            <div>過期時間: ${expiryDate}</div>
+                            ${order.retryCount > 0 ? `<div>重試次數: ${order.retryCount}</div>` : ''}
+                        </div>
+                        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                            ${actionButtons}
+                        </div>
+                    </div>
+                `;
+            });
+            orderListDiv.innerHTML = html;
+        }
+
+        function filterOrders() {
+            const filter = document.getElementById('orderStatusFilter').value;
+            let filtered = allOrders;
+            if (filter === 'pending') {
+                filtered = allOrders.filter(o => o.status === 'pending' && !o.isExpired);
+            } else if (filter === 'paid') {
+                filtered = allOrders.filter(o => o.status === 'paid');
+            } else if (filter === 'expired') {
+                filtered = allOrders.filter(o => o.status === 'pending' && o.isExpired);
+            }
+            displayOrders(filtered);
+        }
+
+        async function renewOrder(orderId) {
+            if (!confirm('確定要續約並重新發送此訂單的付款連結嗎?')) return;
+            try {
+                const response = await fetch(`/api/order/${orderId}/renew`, { method: 'POST' });
+                const data = await response.json();
+                if (data.success) {
+                    alert('✅ 訂單已續約並重新發送付款連結!');
+                    loadOrders();
+                } else {
+                    alert(`❌ 續約失敗: ${data.error}`);
+                }
+            } catch (error) {
+                alert(`❌ 錯誤: ${error.message}`);
+            }
+        }
+
+        async function deleteOrder(orderId) {
+            if (!confirm('確定要刪除此訂單嗎?')) return;
+            try {
+                const response = await fetch(`/api/order/${orderId}`, { method: 'DELETE' });
+                const data = await response.json();
+                if (data.success) {
+                    alert('✅ 訂單已刪除');
+                    loadOrders();
+                } else {
+                    alert(`❌ 刪除失敗: ${data.error}`);
+                }
+            } catch (error) {
+                alert(`❌ 錯誤: ${error.message}`);
+            }
+        }
+
+        async function sendReminders() {
+            if (!confirm('確定要發送付款提醒給所有即將過期的訂單嗎?')) return;
+            try {
+                const response = await fetch('/api/orders/send-reminders', { method: 'POST' });
+                const data = await response.json();
+                if (data.success) {
+                    alert(`✅ ${data.message}`);
+                    loadOrders();
+                } else {
+                    alert(`❌ 發送失敗: ${data.error}`);
+                }
+            } catch (error) {
+                alert(`❌ 錯誤: ${error.message}`);
+            }
+        }
+
+        async function sendSingleReminder(orderId) {
+            const order = allOrders.find(o => o.orderId === orderId);
+            if (!order) return;
+            if (!confirm(`確定要發送付款提醒給 ${order.userName} 嗎?`)) return;
+            try {
+                const baseURL = window.location.origin;
+                const paymentLink = `${baseURL}/payment/linepay/pay/${orderId}`;
+                const remainingHours = Math.floor((order.expiryTime - Date.now()) / (1000 * 60 * 60));
+                const response = await fetch('/send-payment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        userId: order.userId,
+                        userName: order.userName,
+                        amount: order.amount,
+                        paymentType: 'linepay',
+                        customMessage: `⏰ 付款提醒\n\n您的訂單即將過期!\n訂單編號: ${orderId}\n剩餘時間: ${remainingHours} 小時\n\n請盡快完成付款,感謝!`
+                    })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    alert('✅ 提醒已發送');
+                } else {
+                    alert(`❌ 發送失敗: ${data.error}`);
+                }
+            } catch (error) {
+                alert(`❌ 錯誤: ${error.message}`);
+            }
+        }
+
+        async function copyPaymentLink(orderId) {
+            const baseURL = window.location.origin;
+            const paymentLink = `${baseURL}/payment/linepay/pay/${orderId}`;
+            try {
+                await navigator.clipboard.writeText(paymentLink);
+                alert('✅ 付款連結已複製到剪貼簿!');
+            } catch (error) {
+                prompt('請手動複製以下連結:', paymentLink);
+            }
+        }
+
+        async function cleanExpired() {
+            if (!confirm('確定要清理所有過期訂單嗎?此操作無法復原!')) return;
+            try {
+                const response = await fetch('/api/orders/clean-expired', { method: 'POST' });
+                const data = await response.json();
+                if (data.success) {
+                    alert(`✅ 已清理 ${data.cleaned} 筆過期訂單`);
+                    loadOrders();
+                } else {
+                    alert(`❌ 清理失敗: ${data.error}`);
+                }
+            } catch (error) {
+                alert(`❌ 錯誤: ${error.message}`);
+            }
+        }
+
         function saveCustomerNumber() {
             const number = document.getElementById('newCustomerNumber').value.trim();
             const name = document.getElementById('newCustomerName').value.trim();
@@ -287,6 +534,7 @@
             document.getElementById('newCustomerUserId').value = '';
             displaySavedCustomers();
         }
+
         function displaySavedCustomers() {
             const container = document.getElementById('savedCustomers');
             if (Object.keys(savedCustomers).length === 0) {
@@ -299,6 +547,7 @@
             });
             container.innerHTML = html;
         }
+
         function useCustomerNumber(number) {
             const customer = savedCustomers[number];
             document.getElementById('userId').value = customer.userId;
@@ -308,6 +557,7 @@
             switchTab('payment');
             document.querySelector('.tab').classList.add('active');
         }
+
         function deleteCustomerNumber(number) {
             if (confirm(`確定要刪除編號 ${number} 嗎?`)) {
                 delete savedCustomers[number];
@@ -315,6 +565,7 @@
                 displaySavedCustomers();
             }
         }
+
         function saveTemplate() {
             const content = document.getElementById('newTemplateContent').value.trim();
             if (!content) { alert('請輸入模板內容'); return; }
@@ -325,6 +576,7 @@
             displayTemplates();
             loadCustomTemplates();
         }
+
         function displayTemplates() {
             const container = document.getElementById('templateList');
             if (savedTemplates.length === 0) {
@@ -337,6 +589,7 @@
             });
             container.innerHTML = html;
         }
+
         function deleteTemplate(index) {
             if (confirm('確定要刪除此模板嗎?')) {
                 savedTemplates.splice(index, 1);
@@ -345,6 +598,7 @@
                 loadCustomTemplates();
             }
         }
+
         async function loadUsers() {
             const userListDiv = document.getElementById('userList');
             userListDiv.innerHTML = '<p style="text-align:center; color:#999;">載入中...</p>';
@@ -366,12 +620,14 @@
                 userListDiv.innerHTML = `<p style="color:#dc3545; text-align:center;">載入失敗: ${error.message}</p>`;
             }
         }
+
         function selectUser(userId, userName) {
             document.getElementById('userId').value = userId;
             document.getElementById('userName').value = userName;
             switchTab('payment');
             document.querySelector('.tab').classList.add('active');
         }
+
         function showResult(type, message) {
             const result = document.getElementById('result');
             result.className = `result ${type}`;
@@ -379,11 +635,13 @@
             result.style.display = 'block';
             result.scrollIntoView({ behavior: 'smooth' });
         }
+
         window.addEventListener('load', () => {
             loadCustomTemplates();
             displaySavedCustomers();
             displayTemplates();
             loadUsers();
+            loadOrders();
         });
     </script>
 </body>
