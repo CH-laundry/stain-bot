@@ -577,9 +577,6 @@ async function smartAutoReply(inputText) {
       reply = addr ? `好的 😊 我們會去收回,地址是:${addr}` : "好的 😊 我們會去收回的";
     }
   }
-  else if (/(|結帳|支付|刷卡|line ?pay|信用卡|匯款)/i.test(text)) {
-    reply = "請稍候,我們會提供專屬付款連結給您,謝謝 😊";
-  }
   else if (/(優惠|活動|折扣|促銷|特價|有沒有.*活動)/.test(text)) {
     reply = "您好,我們的優惠活動會不定期在官方網站及社群媒體上發布,建議您可以追蹤我們的社群平台以免錯過任何好康資訊。";
   }
