@@ -807,7 +807,7 @@ app.post('/send-payment', async (req, res) => {
         
         // 組合訊息
         if (type === 'both' && ecpayLink && linepayLink) {
-            message = `💳 您好,${userName}\n\n您的專屬付款連結已生成\n金額:NT$ ${numAmount.toLocaleString()}\n\n請選擇付款方式:\n\n【綠界支付】信用卡/超商/ATM\n👉 ${ecpayLink}\n\n【LINE Pay】\n👉 ${linepayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
+            message = `💳 您好,${userName}\n\n您的專屬付款連結已生成\n金額:NT$ ${numAmount.toLocaleString()}\n\n請選擇付款方式:\n\n【綠界支付】信用卡 \n💙 ${ecpayLink}\n\n【LINE Pay】\n💙 ${linepayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
         } else if (type === 'ecpay' || (type === 'both' && ecpayLink && !linepayLink)) {
             message = `💳 您好,${userName}\n\n您的專屬付款連結已生成\n付款方式:信用卡/超商/ATM\n金額:NT$ ${numAmount.toLocaleString()}\n\n請點擊以下連結完成付款:\n${ecpayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
         } else if (type === 'linepay' || (type === 'both' && !ecpayLink && linepayLink)) {
@@ -907,6 +907,7 @@ app.listen(PORT, async () => {
         console.error('❌ 客戶資料載入失敗:', error.message);
     }
 });
+
 
 
 
