@@ -311,7 +311,15 @@ if (LOOSE_ADDR_RE.test(raw)) {
       if (d.fullCityDistrict) lines.push(`📍 ${d.fullCityDistrict}`);
       if (d.community || d.sublocality) lines.push(`🏢 社區/大樓：${d.community || d.sublocality}`);
       if (d.formattedAddress) lines.push(`📫 地址：${d.formattedAddress}`);
-      
+
+        // 📌 若客戶訊息只包含地址、電話、姓名等基本資料（無收件送件字眼），只回覆地址資訊
+    const addrIntentKeywords = /(收件|收衣|到府|上門|取件|送回|送件|送來|預約)/;
+    if (!addrIntentKeywords.test(raw)) {
+      await client.pushMessage(userId, { type: 'text', text: lines.join('\n') });
+      handledAddress = true;
+      return;
+    }
+
 
       await client.pushMessage(userId, { type: 'text', text: lines.join('\n') });
       handledAddress = true;
