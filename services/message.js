@@ -120,6 +120,9 @@ function maybeLaundryRelated(s='') {
   return kw.some(k => t.includes(k));
 }
 
+// 收件/送回/預約等動作意圖（小寫比對）
+const ACTION_INTENT_RE = /(收件|收衣|到府|上門|來收|取件|預約|約收|送回|送件|送來|取回|還衣|送返|送還)/;
+
 /* ---------------- 固定模板 ---------------- */
 const TPL_BAG = [
   "包包清潔我們有專業流程 💼 會先確認材質與發霉或變色情況，再評估適合的處理方式。皮革類會盡量清潔並保養護理，若材質老化則會先告知風險。",
@@ -300,7 +303,10 @@ class MessageHandler {
     }
 
 let handledAddress = false;
- 
+
+  // 🔍 檢查是否包含收件 / 送件 / 還衣等動作
+const isActionIntent = ACTION_INTENT_RE.test(raw);
+
     // ---------- Google Maps 地址解析開始 ----------
 if (LOOSE_ADDR_RE.test(raw)) {
   try {
@@ -312,13 +318,20 @@ if (LOOSE_ADDR_RE.test(raw)) {
       if (d.community || d.sublocality) lines.push(`🏢 社區/大樓：${d.community || d.sublocality}`);
       if (d.formattedAddress) lines.push(`📫 地址：${d.formattedAddress}`);
 
-        // 📌 若客戶訊息只包含地址、電話、姓名等基本資料（無收件送件字眼），只回覆地址資訊
-    const addrIntentKeywords = /(收件|收衣|到府|上門|取件|送回|送件|送來|預約)/;
-    if (!addrIntentKeywords.test(raw)) {
-      await client.pushMessage(userId, { type: 'text', text: lines.join('\n') });
-      handledAddress = true;
-      return;
-    }
+       
+     // 📦 根據內容判斷要不要回覆
+if (!isActionIntent) {
+  // 純地址情況（沒有收件或送回關鍵字）
+  await client.pushMessage(userId, { type: 'text', text: lines.join('\n') });
+} else {
+  // 有收件／送件關鍵字 → 不自動回覆，交給原本的流程處理
+  logger.logToFile(`偵測到地址含收件/送件關鍵字，交由原邏輯處理: ${raw}`);
+}
+
+handledAddress = true;
+return;
+
+
 
 
       await client.pushMessage(userId, { type: 'text', text: lines.join('\n') });
