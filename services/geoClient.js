@@ -1,182 +1,124 @@
 // services/geoClient.js
 const fetch = require('node-fetch');
 
-const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
-if (!GOOGLE_MAPS_API_KEY) {
-  console.warn('[geoClient] Missing GOOGLE_MAPS_API_KEY');
+const MAPS_BASE = 'https://maps.googleapis.com/maps/api';
+const KEY = process.env.GOOGLE_MAPS_API_KEY;
+
+// 從原始輸入中盡量抓樓層（中文/數字）
+function extractFloor(input = '') {
+  const m = String(input).match(/([0-9０-９一二三四五六七八九十]+)\s*樓/);
+  return m ? m[1].replace(/[０-９]/g, d => String('０１２３４５６７８９'.indexOf(d))) : '';
 }
 
-/* ---------------- In-Memory Cache ---------------- */
-const CACHE_TTL_MS = 12 * 60 * 60 * 1000; // 12h
-const cache = new Map();
-function getCache(key) {
-  const hit = cache.get(key);
-  if (!hit) return null;
-  const { data, ts } = hit;
-  if (Date.now() - ts > CACHE_TTL_MS) {
-    cache.delete(key);
-    return null;
+// 從 geocoding address_components 推出市+區
+function cityDistrictFromComponents(components = []) {
+  const pick = t => (components.find(c => c.types.includes(t)) || {}).long_name || '';
+  // 台灣常見：level_1=直轄市/縣、level_2=區/鄉鎮、市
+  const city = pick('administrative_area_level_1') || pick('administrative_area_level_2');
+  const dist = pick('administrative_area_level_2') || pick('administrative_area_level_3');
+  if (city && dist && city !== dist) return city + dist;
+  return city || dist || '';
+}
+
+// 優先從 geocoding components 推「社區/大樓」名稱；不夠再用 Places Text Search
+function pickCommunityFromComponents(components = []) {
+  const pref = ['premise', 'subpremise', 'establishment', 'point_of_interest',
+                'neighborhood', 'sublocality_level_1', 'sublocality'];
+  for (const t of pref) {
+    const c = components.find(x => x.types.includes(t));
+    if (c && c.long_name) return c.long_name;
   }
-  return data;
-}
-function setCache(key, data) {
-  cache.set(key, { data, ts: Date.now() });
+  return '';
 }
 
-/* ---------------- Helpers ---------------- */
-const COMMUNITY_NAME_RE =
-  /(社區|大樓|廣場|園區|花園|天廈|帝景|苑|城|園|峰|莊|會館|名人|首席|御|官邸|國宅|社宅|之森|世界|悅|馥|璽|晶華|凱旋|御品|首府|國際|中心|金融|企業|商務|商業|百貨)/;
-
-function isLikelyCommunityName(name = '', route = '') {
-  if (!name) return false;
-  // 排除「○○市/區/鄉/鎮/里/村」或純道路名
-  if (/[市區鄉鎮里村]$/.test(name)) return false;
-  if (/^.+(路|街|大道|巷|弄)$/.test(name)) return false;
-  // 避免把「路名」本身當成社區
-  if (route && name.replace(/\s/g, '') === route.replace(/\s/g, '')) return false;
-  // 關鍵字 or 專有名詞（>=3字）
-  return COMMUNITY_NAME_RE.test(name) || name.length >= 3;
+async function geocode(address) {
+  const url = `${MAPS_BASE}/geocode/json?address=${encodeURIComponent(address)}&language=zh-TW&region=tw&key=${KEY}`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`Geocode HTTP ${r.status}`);
+  return r.json();
 }
 
-function pickAddressComponent(components = [], type) {
-  return components.find(c => c.types.includes(type))?.long_name || '';
+async function placesTextSearch(query) {
+  const url = `${MAPS_BASE}/place/textsearch/json?query=${encodeURIComponent(query)}&language=zh-TW&region=tw&key=${KEY}`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`TextSearch HTTP ${r.status}`);
+  return r.json();
 }
 
-function buildFullCityDistrict(components = []) {
-  // 台灣常見：administrative_area_level_1 = 直轄市/縣；level_2/3 = 區
-  const city =
-    pickAddressComponent(components, 'administrative_area_level_1') ||
-    pickAddressComponent(components, 'administrative_area_level_2');
-  const district =
-    pickAddressComponent(components, 'administrative_area_level_2') ||
-    pickAddressComponent(components, 'administrative_area_level_3') ||
-    pickAddressComponent(components, 'postal_town');
-  // 避免重複：若 city == district，就只要 city
-  if (city && district && city !== district) return `${city}${district}`;
-  return city || district || '';
+async function placeDetails(placeId) {
+  const fields = ['name','formatted_address','address_components','geometry','types'].join(',');
+  const url = `${MAPS_BASE}/place/details/json?place_id=${placeId}&fields=${fields}&language=zh-TW&region=tw&key=${KEY}`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`Details HTTP ${r.status}`);
+  return r.json();
 }
 
-/* ---------------- Core: geocodeAddress ---------------- */
-async function geocodeAddress(input) {
-  if (!input || !GOOGLE_MAPS_API_KEY) {
-    return { ok: false, error: '缺少地址或 API KEY' };
-  }
+/**
+ * geocodeAddress(raw): 回傳
+ * {
+ *   ok: true/false,
+ *   data: {
+ *     fullCityDistrict,         // 例：新北市板橋區
+ *     formattedAddress,         // Google 標準地址
+ *     floor,                    // 從原始輸入推得的「幾樓」(可空)
+ *     community,                // 社區/大樓（盡量推）
+ *     sublocality,              // 次行政區（備用）
+ *     placeId,                  // 主要 Place ID
+ *     location: { lat, lng }
+ *   }
+ * }
+ */
+async function geocodeAddress(raw = '') {
+  if (!KEY) return { ok: false, error: 'Missing GOOGLE_MAPS_API_KEY' };
+  const floor = extractFloor(raw);
 
-  const cacheKey = `geo:${input}`;
-  const hit = getCache(cacheKey);
-  if (hit) return { ok: true, data: hit, cached: true };
+  // Step 1: geocode
+  const g = await geocode(raw);
+  const best = (g.results || [])[0];
+  if (!best) return { ok: false, error: 'GEOCODE_ZERO_RESULTS' };
 
-  try {
-    /* 1) Geocoding：把文字 → 座標 + 元件 */
-    const geoUrl = new URL('https://maps.googleapis.com/maps/api/geocode/json');
-    geoUrl.searchParams.set('address', input);
-    geoUrl.searchParams.set('language', 'zh-TW');
-    geoUrl.searchParams.set('region', 'tw');
-    geoUrl.searchParams.set('key', GOOGLE_MAPS_API_KEY);
+  const comps = best.address_components || [];
+  const formattedAddress = best.formatted_address || '';
+  const location = best.geometry?.location || {};
+  const placeId = best.place_id || '';
+  const fullCityDistrict = cityDistrictFromComponents(comps);
 
-    const geoRes = await fetch(geoUrl.toString());
-    const geoData = await geoRes.json();
+  let community = pickCommunityFromComponents(comps);
+  const sublocality =
+    (comps.find(c => c.types.includes('sublocality_level_1')) || {}).long_name ||
+    (comps.find(c => c.types.includes('sublocality')) || {}).long_name || '';
 
-    if (geoData.status !== 'OK' || !Array.isArray(geoData.results) || !geoData.results.length) {
-      return { ok: false, error: geoData.error_message || '查無此地址' };
-    }
-
-    const result = geoData.results[0];
-    const placeId = result.place_id;
-    const formattedAddress = result.formatted_address || '';
-    const components = result.address_components || [];
-    const location = result.geometry?.location || {};
-    const lat = location.lat;
-    const lng = location.lng;
-
-    const route =
-      pickAddressComponent(components, 'route') ||
-      pickAddressComponent(components, 'point_of_interest');
-
-    // 次行政區（如「○○里」「○○里/○○段」常被標為 sublocality 或 neighborhood）
-    const sublocality =
-      pickAddressComponent(components, 'sublocality') ||
-      pickAddressComponent(components, 'neighborhood') ||
-      pickAddressComponent(components, 'sublocality_level_1');
-
-    const fullCityDistrict = buildFullCityDistrict(components);
-
-    /* 2) Place Details：用 place_id 抓可能的大樓/社區名稱 */
-    let community = '';
-    if (placeId) {
-      const detailsUrl = new URL('https://maps.googleapis.com/maps/api/place/details/json');
-      detailsUrl.searchParams.set('place_id', placeId);
-      detailsUrl.searchParams.set('language', 'zh-TW');
-      detailsUrl.searchParams.set('fields', 'name,types,formatted_address');
-      detailsUrl.searchParams.set('key', GOOGLE_MAPS_API_KEY);
-
-      const detRes = await fetch(detailsUrl.toString());
-      const detData = await detRes.json();
-      const name = detData?.result?.name;
-      if (name && isLikelyCommunityName(name, route)) {
-        community = name.trim();
-      }
-    }
-
-    /* 3) Nearby Search 兜底：以座標為中心，半徑 80m 搜「大樓/社區」 */
-    if (!community && lat != null && lng != null) {
-      const nearbyUrl = new URL('https://maps.googleapis.com/maps/api/place/nearbysearch/json');
-      nearbyUrl.searchParams.set('location', `${lat},${lng}`);
-      nearbyUrl.searchParams.set('radius', '80'); // 可視情況 80~120
-      // 關鍵字：常見社區/大樓詞
-      nearbyUrl.searchParams.set('keyword', '社區 大樓 廣場 園區 花園 帝景 悅 名人 首府 首席 國際 企業 中心');
-      nearbyUrl.searchParams.set('language', 'zh-TW');
-      nearbyUrl.searchParams.set('key', GOOGLE_MAPS_API_KEY);
-
-      const nearRes = await fetch(nearbyUrl.toString());
-      const nearData = await nearRes.json();
-
-      if (nearData.status === 'OK' && Array.isArray(nearData.results)) {
-        // 取最接近的一個
-        const cand = nearData.results[0];
-        const candName = cand?.name;
-        if (candName && isLikelyCommunityName(candName, route)) {
-          community = candName.trim();
+  // Step 2: 不夠明確再用 Places Text Search 強化，盡量抓到社區/大樓名稱
+  if (!community) {
+    try {
+      const t = await placesTextSearch(raw);
+      const first = (t.results || [])[0];
+      if (first && first.place_id) {
+        const d = await placeDetails(first.place_id);
+        const p = d.result || {};
+        const route = (p.address_components || []).find(c => c.types.includes('route'))?.long_name || '';
+        // 避免把路名當作社區名
+        if (p.name && p.name.replace(/\s/g,'') !== route.replace(/\s/g,'')) {
+          community = p.name;
         }
       }
+    } catch (e) {
+      // 靜默失敗，不中斷
     }
+  }
 
-    /* 4) Find Place From Text 兜底：用整串地址再問一次 */
-    if (!community && formattedAddress) {
-      const findUrl = new URL('https://maps.googleapis.com/maps/api/place/findplacefromtext/json');
-      findUrl.searchParams.set('input', formattedAddress);
-      findUrl.searchParams.set('inputtype', 'textquery');
-      findUrl.searchParams.set('fields', 'name,geometry,types');
-      findUrl.searchParams.set('language', 'zh-TW');
-      findUrl.searchParams.set('key', GOOGLE_MAPS_API_KEY);
-
-      const findRes = await fetch(findUrl.toString());
-      const findData = await findRes.json();
-      if (findData.status === 'OK' && Array.isArray(findData.candidates) && findData.candidates.length) {
-        const cand = findData.candidates[0];
-        const candName = cand?.name;
-        if (candName && isLikelyCommunityName(candName, route)) {
-          community = candName.trim();
-        }
-      }
-    }
-
-    const payload = {
-      formattedAddress,
+  return {
+    ok: true,
+    data: {
       fullCityDistrict,
-      sublocality,
-      route,
+      formattedAddress,
+      floor,
       community,
-      lat,
-      lng,
-    };
-
-    setCache(cacheKey, payload);
-    return { ok: true, data: payload };
-  } catch (err) {
-    console.error('[geoClient] geocodeAddress error:', err);
-    return { ok: false, error: err.message || 'unknown error' };
-  }
+      sublocality,
+      placeId,
+      location
+    }
+  };
 }
 
 module.exports = { geocodeAddress };
