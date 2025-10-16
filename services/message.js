@@ -273,28 +273,32 @@ class MessageHandler {
     const raw = text || '';
     const lower = raw.toLowerCase().trim();
 
+    // 管理員指令
     const isAdminCommand = await this.handleAdminPaymentCommand(userId, raw);
     if (isAdminCommand) return;
 
+    // 按 1 的指令
     if (isOneKey(raw)) {
       this.recentOneTs.set(userId, Date.now());
       return this.handleNumberOneCommand(userId);
     }
 
+    // 智能污漬分析
     if (/智能[污汙]漬分析/.test(raw)) {
       await client.pushMessage(userId, { type: 'text', text: '「想知道污漬的清潔成功率?」\n按 1 並上傳照片,我們提供貼心的智能分析,即時回應 🧼' });
       return;
     }
 
     // 🧭 地址偵測提示（像「文化路二段」但沒寫號）
-   if (/路|街|巷|弄/.test(raw) && !/號/.test(raw)) {
-     await client.pushMessage(userId, { 
-       type: 'text', 
-       text: '請提供完整地址（包含門牌號）才能查詢是否在免費收送範圍 🙏\n例如：「新北市板橋區文化路二段182巷1號」' 
-     });
-     return;
-   }
+    if (/路|街|巷|弄/.test(raw) && !/號/.test(raw)) {
+      await client.pushMessage(userId, { 
+        type: 'text', 
+        text: '請提供完整地址（包含門牌號）才能查詢是否在免費收送範圍 🙏\n例如：「新北市板橋區文化路二段182巷1號」' 
+      });
+      return;
+    }
 
+    // 前置過濾
     if (ignoredKeywords.some(k => lower.includes(k.toLowerCase())) ||
         isEmojiOrPuncOnly(raw) || isSmallTalk(raw) || isPhoneNumberOnly(raw) ||
         isUrlOnly(raw) || isClearlyUnrelatedTopic(raw)) {
@@ -302,82 +306,52 @@ class MessageHandler {
       return;
     }
 
-let handledAddress = false;
+    // 檢查是否包含收件 / 送件 / 還衣等動作
+    const isActionIntent = ACTION_INTENT_RE.test(raw);
 
-  // 🔍 檢查是否包含收件 / 送件 / 還衣等動作
-const isActionIntent = ACTION_INTENT_RE.test(raw);
+    // ---------- Google Maps 地址解析（統一處理） ----------
+    let handledAddress = false;
+    
+    if (LOOSE_ADDR_RE.test(raw)) {
+      try {
+        const geo = await geocodeAddress(raw);
+        if (geo.ok && geo.data) {
+          const d = geo.data;
+          const lines = [];
 
-   // ---------- Google Maps 地址解析（放在 rawClean 之前） ----------
+          // 不顯示「行政區」三個字，但保留「市 + 區」
+          if (d.fullCityDistrict) lines.push(`📍 ${d.fullCityDistrict}`);
+          // 社區 / 大樓（盡量顯示）
+          if (d.community || d.sublocality) lines.push(`🏢 社區/大樓：${d.community || d.sublocality}`);
+          // 標準地址
+          if (d.formattedAddress) lines.push(`📫 地址：${d.formattedAddress}`);
+          // 樓層（有才顯示）
+          if (d.floor) lines.push(`🏷 樓層：${d.floor}`);
 
-
-// 🔍 是否包含收件/送回等動作（有動作就不要在這裡回覆，避免和你原本流程打架）
-
-if (LOOSE_ADDR_RE.test(raw)) {
-  try {
-    const geo = await geocodeAddress(raw);
-    if (geo.ok && geo.data) {
-      const d = geo.data;
-      const lines = [];
-
-      // 不顯示「行政區」三個字，但保留「市 + 區」
-      if (d.fullCityDistrict) lines.push(`📍 ${d.fullCityDistrict}`);
-      // 社區 / 大樓（盡量顯示）
-      if (d.community || d.sublocality) lines.push(`🏢 社區/大樓：${d.community || d.sublocality}`);
-      // 標準地址
-      if (d.formattedAddress) lines.push(`📫 地址：${d.formattedAddress}`);
-      // 樓層（有才顯示）
-      if (d.floor) lines.push(`🏷 樓層：${d.floor}`);
-
-      if (!isActionIntent) {
-        // ✅ 純地址：只回一則整合好的文字
-        await client.pushMessage(userId, { type: 'text', text: lines.join('\n') });
-        handledAddress = true;
-        return;
+          if (!isActionIntent) {
+            // ✅ 純地址：只回一則整合好的文字
+            await client.pushMessage(userId, { type: 'text', text: lines.join('\n') });
+            handledAddress = true;
+            return;
+          } else {
+            // 有收/送動作 → 不在這裡回，交給原有的收件/送回邏輯處理
+            logger.logToFile(`偵測到地址含收件/送件關鍵字，交由原邏輯處理: ${raw}`);
+          }
+        }
+      } catch (err) {
+        logger.logError('[Geocode Error]', err);
       }
-      // 有收/送動作 → 不在這裡回，交給原有的收件/送回邏輯處理
-      logger.logToFile(`偵測到地址含收件/送件關鍵字，交由原邏輯處理: ${raw}`);
     }
-  } catch (err) {
-    console.error('[Geocode Error]', err);
-  }
-}
-// ---------- Google Maps 地址解析結束 ----------
+    // ---------- Google Maps 地址解析結束 ----------
 
-
-       
-     // 📦 根據內容判斷要不要回覆
-if (!isActionIntent) {
-  // 純地址情況（沒有收件或送回關鍵字）
-  await client.pushMessage(userId, { type: 'text', text: lines.join('\n') });
-} else {
-  // 有收件／送件關鍵字 → 不自動回覆，交給原本的流程處理
-  logger.logToFile(`偵測到地址含收件/送件關鍵字，交由原邏輯處理: ${raw}`);
-}
-
-handledAddress = true;
-return;
-
-
-
-
-      await client.pushMessage(userId, { type: 'text', text: lines.join('\n') });
-      handledAddress = true;
-      return;
-
-    }
-  } catch (err) {
-    console.error('[Geocode Error]', err);
-  }
-}
-// ---------- Google Maps 地址解析結束 ----------
-
+    // 如果沒有被 Google Maps 處理，檢查是否為一般地址
     const rawClean = cleanText(raw);
-    if (!handledAddress && (AddressDetector.isAddress(rawClean) || LOOSE_ADDR_RE.test(rawClean))) {
+    if (!handledAddress && !isActionIntent && (AddressDetector.isAddress(rawClean) || LOOSE_ADDR_RE.test(rawClean))) {
       await this.handleAddressMessage(userId, raw);
       return;
-}
+    }
 
-
+    // 進度查詢
     if (this.isProgressQuery(lower)) {
       return this.handleProgressQuery(userId);
     }
@@ -429,30 +403,39 @@ return;
       return;
     }
 
+    // 包包
     if (/(包包|名牌包|手提袋|背包|書包)/.test(raw)) {
       const msg = pick(TPL_BAG);
       await client.pushMessage(userId, { type: 'text', text: msg });
       logger.logBotResponse(userId, originalMessage, msg, 'Bot (Template: bag)');
       return;
     }
+    
+    // 鞋子
     if (/(有.*洗.*鞋|有洗鞋|鞋(子)?可以洗|洗鞋(服務)?)/i.test(raw) || /(鞋|球鞋|運動鞋|皮鞋|靴子|涼鞋)/.test(raw)) {
       const msg = pick(TPL_SHOE);
       await client.pushMessage(userId, { type: 'text', text: msg });
       logger.logBotResponse(userId, originalMessage, msg, 'Bot (Template: shoe)');
       return;
     }
+    
+    // 窗簾
     if (/(窗簾|布簾|遮光簾)/.test(raw)) {
       const msg = pick(TPL_CURTAIN);
       await client.pushMessage(userId, { type: 'text', text: msg });
       logger.logBotResponse(userId, originalMessage, msg, 'Bot (Template: curtain)');
       return;
     }
+    
+    // 地毯
     if (/(地毯|地墊)/.test(raw)) {
       const msg = pick(TPL_RUG);
       await client.pushMessage(userId, { type: 'text', text: msg });
       logger.logBotResponse(userId, originalMessage, msg, 'Bot (Template: rug)');
       return;
     }
+    
+    // 棉被
     if (/(棉被|被子|羽絨被)/.test(raw)) {
       const msg = pick(TPL_QUILT);
       await client.pushMessage(userId, { type: 'text', text: msg });
@@ -460,6 +443,7 @@ return;
       return;
     }
 
+    // AI 回覆（洗衣相關）
     if (maybeLaundryRelated(raw)) {
       try {
         const aiText = await smartAutoReply(raw);
@@ -481,7 +465,8 @@ return;
   async handleImageMessage(userId, messageId) {
     try {
       const stream = await client.getMessageContent(messageId);
-      const chunks = []; for await (const c of stream) chunks.push(c);
+      const chunks = []; 
+      for await (const c of stream) chunks.push(c);
       const buffer = Buffer.concat(chunks);
       logger.logToFile(`收到圖片 (User ${userId}) len=${buffer.length}`);
 
