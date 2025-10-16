@@ -1,149 +1,182 @@
 // services/geoClient.js
-// 需求：node-fetch（你專案已在用）
-// 功能：把地址丟給 Google Geocoding，解析市/區/路/門牌；再用 Places 取「社區/大樓」名稱
-// 重要：請在環境變數設定 GOOGLE_MAPS_API_KEY，並在 GCP 啟用 Geocoding API + Places API
-
 const fetch = require('node-fetch');
 
-// 可自行增補關鍵字；用來判斷名稱是否像社區/大樓（而非行政區）
+const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
+if (!GOOGLE_MAPS_API_KEY) {
+  console.warn('[geoClient] Missing GOOGLE_MAPS_API_KEY');
+}
+
+/* ---------------- In-Memory Cache ---------------- */
+const CACHE_TTL_MS = 12 * 60 * 60 * 1000; // 12h
+const cache = new Map();
+function getCache(key) {
+  const hit = cache.get(key);
+  if (!hit) return null;
+  const { data, ts } = hit;
+  if (Date.now() - ts > CACHE_TTL_MS) {
+    cache.delete(key);
+    return null;
+  }
+  return data;
+}
+function setCache(key, data) {
+  cache.set(key, { data, ts: Date.now() });
+}
+
+/* ---------------- Helpers ---------------- */
 const COMMUNITY_NAME_RE =
-  /(社區|大樓|廣場|園區|花園|天廈|帝景|苑|城|園|峰|莊|會館|名人|首席|御|官邸|國宅|社宅|之森|世界|悅|馥|璽|首席|晶華|凱旋|御品|首府)/;
+  /(社區|大樓|廣場|園區|花園|天廈|帝景|苑|城|園|峰|莊|會館|名人|首席|御|官邸|國宅|社宅|之森|世界|悅|馥|璽|晶華|凱旋|御品|首府|國際|中心|金融|企業|商務|商業|百貨)/;
 
 function isLikelyCommunityName(name = '', route = '') {
   if (!name) return false;
-  // 避免抓成「板橋區 / 信義區 / ○○里」
+  // 排除「○○市/區/鄉/鎮/里/村」或純道路名
   if (/[市區鄉鎮里村]$/.test(name)) return false;
-  // 名稱與路名完全相同通常不是社區名（例如「華江一路」）
+  if (/^.+(路|街|大道|巷|弄)$/.test(name)) return false;
+  // 避免把「路名」本身當成社區
   if (route && name.replace(/\s/g, '') === route.replace(/\s/g, '')) return false;
-  // 關鍵字或長度>=3（例如「帝景苑」「名人」等）
+  // 關鍵字 or 專有名詞（>=3字）
   return COMMUNITY_NAME_RE.test(name) || name.length >= 3;
 }
 
-function pickComp(components, type) {
-  const c = components.find(x => x.types?.includes(type));
-  return c ? c.long_name : '';
+function pickAddressComponent(components = [], type) {
+  return components.find(c => c.types.includes(type))?.long_name || '';
 }
-function pickAny(components, types = []) {
-  for (const t of types) {
-    const v = pickComp(components, t);
-    if (v) return v;
+
+function buildFullCityDistrict(components = []) {
+  // 台灣常見：administrative_area_level_1 = 直轄市/縣；level_2/3 = 區
+  const city =
+    pickAddressComponent(components, 'administrative_area_level_1') ||
+    pickAddressComponent(components, 'administrative_area_level_2');
+  const district =
+    pickAddressComponent(components, 'administrative_area_level_2') ||
+    pickAddressComponent(components, 'administrative_area_level_3') ||
+    pickAddressComponent(components, 'postal_town');
+  // 避免重複：若 city == district，就只要 city
+  if (city && district && city !== district) return `${city}${district}`;
+  return city || district || '';
+}
+
+/* ---------------- Core: geocodeAddress ---------------- */
+async function geocodeAddress(input) {
+  if (!input || !GOOGLE_MAPS_API_KEY) {
+    return { ok: false, error: '缺少地址或 API KEY' };
   }
-  return '';
-}
 
-// 你有用到是否免費收送，但目前訊息不顯示；保留欄位以便未來使用
-const FREE_PICKUP_AREAS = ['板橋區', '中和區', '永和區', '新莊區', '土城區', '萬華區'];
-
-function isFreePickup(district) {
-  return FREE_PICKUP_AREAS.includes(district);
-}
-
-async function geocodeAddress(address) {
-  const apiKey = process.env.GOOGLE_MAPS_API_KEY;
-  if (!apiKey) return { ok: false, error: 'NO_API_KEY (缺少 GOOGLE_MAPS_API_KEY)' };
-  if (!address) return { ok: false, error: 'EMPTY_ADDRESS' };
+  const cacheKey = `geo:${input}`;
+  const hit = getCache(cacheKey);
+  if (hit) return { ok: true, data: hit, cached: true };
 
   try {
-    // 1) Geocoding：先把地址解析出市/區/路/門牌與 place_id、座標
+    /* 1) Geocoding：把文字 → 座標 + 元件 */
     const geoUrl = new URL('https://maps.googleapis.com/maps/api/geocode/json');
-    geoUrl.searchParams.set('address', address);
+    geoUrl.searchParams.set('address', input);
     geoUrl.searchParams.set('language', 'zh-TW');
     geoUrl.searchParams.set('region', 'tw');
-    geoUrl.searchParams.set('key', apiKey);
+    geoUrl.searchParams.set('key', GOOGLE_MAPS_API_KEY);
 
     const geoRes = await fetch(geoUrl.toString());
-    if (!geoRes.ok) return { ok: false, error: `HTTP_${geoRes.status}` };
     const geoData = await geoRes.json();
 
     if (geoData.status !== 'OK' || !Array.isArray(geoData.results) || !geoData.results.length) {
-      return { ok: false, error: `GEOCODE_${geoData.status || 'NO_RESULTS'}` };
+      return { ok: false, error: geoData.error_message || '查無此地址' };
     }
 
-    const best = geoData.results[0];
-    const components = best.address_components || [];
-    const location = best.geometry?.location || null;
-    const placeId = best.place_id || '';
+    const result = geoData.results[0];
+    const placeId = result.place_id;
+    const formattedAddress = result.formatted_address || '';
+    const components = result.address_components || [];
+    const location = result.geometry?.location || {};
+    const lat = location.lat;
+    const lng = location.lng;
 
-    // 抽取各層級
-    const country   = pickComp(components, 'country'); // 台灣
-    const city      = pickComp(components, 'administrative_area_level_1'); // 新北市/臺北市
-    // district 有時在 level_2、有時在 locality（Google 在台灣資料常見兩種）
-    const district  = pickAny(components, ['administrative_area_level_2', 'locality', 'postal_town']);
-    const sublocality = pickAny(components, ['sublocality_level_2', 'sublocality_level_1', 'sublocality', 'neighborhood']);
-    const route     = pickComp(components, 'route');           // 華江一路
-    const streetNum = pickComp(components, 'street_number');   // 582號
-    const postal    = pickComp(components, 'postal_code');
-    const formattedAddress = best.formatted_address || '';
+    const route =
+      pickAddressComponent(components, 'route') ||
+      pickAddressComponent(components, 'point_of_interest');
 
-    // 初步社區名稱（Geocoding 自帶欄位）
-    let community = pickAny(components, ['premise', 'establishment', 'subpremise', 'neighborhood', 'sublocality_level_2']) || '';
+    // 次行政區（如「○○里」「○○里/○○段」常被標為 sublocality 或 neighborhood）
+    const sublocality =
+      pickAddressComponent(components, 'sublocality') ||
+      pickAddressComponent(components, 'neighborhood') ||
+      pickAddressComponent(components, 'sublocality_level_1');
 
-    // 2) Places Details：若尚未抓到，嘗試用 place_id 取得更「像社區/大樓」的 name
-    if (!community && placeId) {
-      const detailUrl = new URL('https://maps.googleapis.com/maps/api/place/details/json');
-      detailUrl.searchParams.set('place_id', placeId);
-      detailUrl.searchParams.set('fields', 'name,types');
-      detailUrl.searchParams.set('language', 'zh-TW');
-      detailUrl.searchParams.set('key', apiKey);
+    const fullCityDistrict = buildFullCityDistrict(components);
 
-      const detRes = await fetch(detailUrl.toString());
+    /* 2) Place Details：用 place_id 抓可能的大樓/社區名稱 */
+    let community = '';
+    if (placeId) {
+      const detailsUrl = new URL('https://maps.googleapis.com/maps/api/place/details/json');
+      detailsUrl.searchParams.set('place_id', placeId);
+      detailsUrl.searchParams.set('language', 'zh-TW');
+      detailsUrl.searchParams.set('fields', 'name,types,formatted_address');
+      detailsUrl.searchParams.set('key', GOOGLE_MAPS_API_KEY);
+
+      const detRes = await fetch(detailsUrl.toString());
       const detData = await detRes.json();
-      if (detData.status === 'OK' && detData.result?.name) {
-        const name = detData.result.name.trim();
-        if (isLikelyCommunityName(name, route)) {
-          community = name;
-        }
+      const name = detData?.result?.name;
+      if (name && isLikelyCommunityName(name, route)) {
+        community = name.trim();
       }
     }
 
-    // 3) Nearby Search 備援：Details 也沒抓到時，以 80m 圓域搜尋鄰近「像社區/大樓」的名稱
-    if (!community && location?.lat && location?.lng) {
+    /* 3) Nearby Search 兜底：以座標為中心，半徑 80m 搜「大樓/社區」 */
+    if (!community && lat != null && lng != null) {
       const nearbyUrl = new URL('https://maps.googleapis.com/maps/api/place/nearbysearch/json');
-      nearbyUrl.searchParams.set('location', `${location.lat},${location.lng}`);
-      nearbyUrl.searchParams.set('radius', '80');                 // 60~100m 自行調整
-      nearbyUrl.searchParams.set('type', 'establishment');
+      nearbyUrl.searchParams.set('location', `${lat},${lng}`);
+      nearbyUrl.searchParams.set('radius', '80'); // 可視情況 80~120
+      // 關鍵字：常見社區/大樓詞
+      nearbyUrl.searchParams.set('keyword', '社區 大樓 廣場 園區 花園 帝景 悅 名人 首府 首席 國際 企業 中心');
       nearbyUrl.searchParams.set('language', 'zh-TW');
-      nearbyUrl.searchParams.set('key', apiKey);
+      nearbyUrl.searchParams.set('key', GOOGLE_MAPS_API_KEY);
 
       const nearRes = await fetch(nearbyUrl.toString());
       const nearData = await nearRes.json();
-      if (nearData.status === 'OK' && Array.isArray(nearData.results) && nearData.results.length) {
-        const candidate =
-          nearData.results.find(r => isLikelyCommunityName(r.name, route)) || nearData.results[0];
-        if (candidate?.name && isLikelyCommunityName(candidate.name, route)) {
-          community = candidate.name.trim();
+
+      if (nearData.status === 'OK' && Array.isArray(nearData.results)) {
+        // 取最接近的一個
+        const cand = nearData.results[0];
+        const candName = cand?.name;
+        if (candName && isLikelyCommunityName(candName, route)) {
+          community = candName.trim();
         }
       }
     }
 
-    const fullCityDistrict = `${city || ''}${district || ''}`; // 例如：新北市板橋區
-    const free = isFreePickup(district);
+    /* 4) Find Place From Text 兜底：用整串地址再問一次 */
+    if (!community && formattedAddress) {
+      const findUrl = new URL('https://maps.googleapis.com/maps/api/place/findplacefromtext/json');
+      findUrl.searchParams.set('input', formattedAddress);
+      findUrl.searchParams.set('inputtype', 'textquery');
+      findUrl.searchParams.set('fields', 'name,geometry,types');
+      findUrl.searchParams.set('language', 'zh-TW');
+      findUrl.searchParams.set('key', GOOGLE_MAPS_API_KEY);
 
-    return {
-      ok: true,
-      data: {
-        input: address,
-        formattedAddress,
-        placeId,
-        location,            // { lat, lng }
-        country,
-        city,
-        district,
-        sublocality,
-        route,
-        streetNumber: streetNum,
-        postalCode: postal,
-        fullCityDistrict,    // 你在 message.js 會印成「📍 新北市板橋區」
-        community,           // 你在 message.js 會印成「🏢 社區/大樓：×××」
-        isFreePickup: free,  // 目前訊息不顯示，但留著以後要用
+      const findRes = await fetch(findUrl.toString());
+      const findData = await findRes.json();
+      if (findData.status === 'OK' && Array.isArray(findData.candidates) && findData.candidates.length) {
+        const cand = findData.candidates[0];
+        const candName = cand?.name;
+        if (candName && isLikelyCommunityName(candName, route)) {
+          community = candName.trim();
+        }
       }
+    }
+
+    const payload = {
+      formattedAddress,
+      fullCityDistrict,
+      sublocality,
+      route,
+      community,
+      lat,
+      lng,
     };
+
+    setCache(cacheKey, payload);
+    return { ok: true, data: payload };
   } catch (err) {
-    console.error('[geocodeAddress error]', err);
-    return { ok: false, error: err.message || 'UNKNOWN_ERROR' };
+    console.error('[geoClient] geocodeAddress error:', err);
+    return { ok: false, error: err.message || 'unknown error' };
   }
 }
 
-module.exports = {
-  geocodeAddress
-};
+module.exports = { geocodeAddress };
