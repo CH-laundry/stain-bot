@@ -283,6 +283,15 @@ class MessageHandler {
       return;
     }
 
+    // 🧭 地址偵測提示（像「文化路二段」但沒寫號）
+   if (/路|街|巷|弄/.test(raw) && !/號/.test(raw)) {
+     await client.pushMessage(userId, { 
+       type: 'text', 
+       text: '請提供完整地址（包含門牌號）才能查詢是否在免費收送範圍 🙏\n例如：「新北市板橋區文化路二段182巷1號」' 
+     });
+     return;
+   }
+
     if (ignoredKeywords.some(k => lower.includes(k.toLowerCase())) ||
         isEmojiOrPuncOnly(raw) || isSmallTalk(raw) || isPhoneNumberOnly(raw) ||
         isUrlOnly(raw) || isClearlyUnrelatedTopic(raw)) {
@@ -290,6 +299,8 @@ class MessageHandler {
       return;
     }
 
+let handledAddress = false;
+ 
     // ---------- Google Maps 地址解析開始 ----------
 if (LOOSE_ADDR_RE.test(raw)) {
   try {
@@ -306,7 +317,9 @@ if (LOOSE_ADDR_RE.test(raw)) {
         : 'ℹ️ 此區域暫不在免費收送範圍，可提供付費收送或到店服務。');
 
       await client.pushMessage(userId, { type: 'text', text: lines.join('\n') });
-      return; // 已處理，這次就不再往下走原本的 AddressDetector
+      handledAddress = true;
+      return;
+
     }
   } catch (err) {
     console.error('[Geocode Error]', err);
@@ -315,10 +328,11 @@ if (LOOSE_ADDR_RE.test(raw)) {
 // ---------- Google Maps 地址解析結束 ----------
 
     const rawClean = cleanText(raw);
-    if (AddressDetector.isAddress(rawClean) || LOOSE_ADDR_RE.test(rawClean)) {
+    if (!handledAddress && (AddressDetector.isAddress(rawClean) || LOOSE_ADDR_RE.test(rawClean))) {
       await this.handleAddressMessage(userId, raw);
       return;
-    }
+}
+
 
     if (this.isProgressQuery(lower)) {
       return this.handleProgressQuery(userId);
