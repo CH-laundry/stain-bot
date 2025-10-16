@@ -308,7 +308,7 @@ let handledAddress = false;
 const isActionIntent = ACTION_INTENT_RE.test(raw);
 
    // ---------- Google Maps 地址解析（放在 rawClean 之前） ----------
-let handledAddress = false;
+
 
 // 🔍 是否包含收件/送回等動作（有動作就不要在這裡回覆，避免和你原本流程打架）
 const isActionIntent = ACTION_INTENT_RE.test(raw);
