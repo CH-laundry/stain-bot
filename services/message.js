@@ -308,13 +308,10 @@ if (LOOSE_ADDR_RE.test(raw)) {
     if (geo.ok && geo.data) {
       const d = geo.data;
       const lines = [];
-      if (d.fullCityDistrict) lines.push(`📍 行政區：${d.fullCityDistrict}`);
+      if (d.fullCityDistrict) lines.push(`📍 ${d.fullCityDistrict}`);
       if (d.community || d.sublocality) lines.push(`🏢 社區/大樓：${d.community || d.sublocality}`);
       if (d.formattedAddress) lines.push(`📫 地址：${d.formattedAddress}`);
-      lines.push('');
-      lines.push(d.isFreePickup
-        ? '✅ 此區域屬於我們的「免費收送範圍」。'
-        : 'ℹ️ 此區域暫不在免費收送範圍，可提供付費收送或到店服務。');
+      
 
       await client.pushMessage(userId, { type: 'text', text: lines.join('\n') });
       handledAddress = true;
