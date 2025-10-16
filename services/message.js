@@ -6,6 +6,8 @@ const { createHash } = require('crypto');
 const AddressDetector = require('../utils/address');
 const { addCustomerInfo } = require('./google');
 const fetch = require('node-fetch');
+const { geocodeAddress } = require('./geoClient');
+
 
 // LINE client
 const client = new Client({
@@ -287,6 +289,30 @@ class MessageHandler {
       logger.logToFile(`前置過濾忽略:「${raw}」(User ${userId})`);
       return;
     }
+
+    // ---------- Google Maps 地址解析開始 ----------
+if (LOOSE_ADDR_RE.test(raw)) {
+  try {
+    const geo = await geocodeAddress(raw);
+    if (geo.ok && geo.data) {
+      const d = geo.data;
+      const lines = [];
+      if (d.fullCityDistrict) lines.push(`📍 行政區：${d.fullCityDistrict}`);
+      if (d.community || d.sublocality) lines.push(`🏢 社區/大樓：${d.community || d.sublocality}`);
+      if (d.formattedAddress) lines.push(`📫 地址：${d.formattedAddress}`);
+      lines.push('');
+      lines.push(d.isFreePickup
+        ? '✅ 此區域屬於我們的「免費收送範圍」。'
+        : 'ℹ️ 此區域暫不在免費收送範圍，可提供付費收送或到店服務。');
+
+      await client.pushMessage(userId, { type: 'text', text: lines.join('\n') });
+      return; // 已處理，這次就不再往下走原本的 AddressDetector
+    }
+  } catch (err) {
+    console.error('[Geocode Error]', err);
+  }
+}
+// ---------- Google Maps 地址解析結束 ----------
 
     const rawClean = cleanText(raw);
     if (AddressDetector.isAddress(rawClean) || LOOSE_ADDR_RE.test(rawClean)) {
