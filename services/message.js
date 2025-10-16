@@ -21,34 +21,7 @@ const ignoredKeywords = [
   '付款方式', '寶寶汽座&手推車', '顧客須知', '智能污漬分析'
 ];
 
-/* ---------------- 小工具 ---------------- */
-const normalize = (s='') => (s || '').trim();
-const isOneKey = (s='') => {
-  const t = normalize(s);
-  return t === '1' || t === '１';
-};
-const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
-// 支援：中文數字/阿拉伯數字 的「段、樓」，以及「之」號碼（例：211之1號）
-const LOOSE_ADDR_RE =
-  /[\u4e00-\u9fa5A-Za-z0-9]{1,12}(?:路|街|大道)\s*(?:(?:\d+|[一二三四五六七八九十]+)段)?\s*(?:\d+巷)?\s*(?:\d+弄)?\s*\d+(?:之\d+)?號(?:\s*(?:\d+|[一二三四五六七八九十]+)樓)?/;
-
-// 自動判斷市區（依關鍵字推斷）
-function autoDetectCityDistrict(addr) {
-  if (!addr) return '新北市板橋區';
-  const t = String(addr).toLowerCase();
-  if (/板橋/.test(t)) return '新北市板橋區';
-  if (/中和/.test(t)) return '新北市中和區';
-  if (/永和/.test(t)) return '新北市永和區';
-  if (/新莊/.test(t)) return '新北市新莊區';
-  if (/土城/.test(t)) return '新北市土城區';
-  if (/萬華/.test(t)) return '台北市萬華區';
-  if (/雙和/.test(t)) return '新北市中和區'; // 雙和→中和/永和，此處先歸中和
-  if (/三重/.test(t)) return '新北市三重區';
-  if (/新店/.test(t)) return '新北市新店區';
-  if (/台北|臺北/.test(t)) return '台北市';
-  return '新北市板橋區'; // 預設
-}
 
 // 文字清理：去 emoji、全形轉半形、壓縮多餘空白
 function cleanText(s = '') {
