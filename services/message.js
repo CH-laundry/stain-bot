@@ -311,7 +311,6 @@ const isActionIntent = ACTION_INTENT_RE.test(raw);
 
 
 // 🔍 是否包含收件/送回等動作（有動作就不要在這裡回覆，避免和你原本流程打架）
-const isActionIntent = ACTION_INTENT_RE.test(raw);
 
 if (LOOSE_ADDR_RE.test(raw)) {
   try {
