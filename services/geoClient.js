@@ -1,111 +1,72 @@
 // services/geoClient.js
-// 功能：把地址丟給 Google Geocoding API，解析「市、區、里/次分區、社區/大樓名稱」
-// 依據「區」判斷是否屬於免費收送範圍
-
 const fetch = require('node-fetch');
 
-const FREE_PICKUP_AREAS = ['板橋區', '中和區', '永和區', '新莊區', '土城區', '萬華區']; // 雙和→中和/永和已涵蓋
-
-function getComp(components, type) {
-  const c = components.find((x) => x.types.includes(type));
-  return c ? c.long_name : '';
-}
-function getAnyComp(components, types = []) {
-  for (const t of types) {
-    const v = getComp(components, t);
-    if (v) return v;
-  }
-  return '';
-}
-
-function parseAddressComponents(components = []) {
-  const country = getComp(components, 'country'); // 台灣
-  const admin1 = getComp(components, 'administrative_area_level_1'); // 直轄市/縣市（臺北市/新北市）
-  // 行政區（district）：有時在 administrative_area_level_2、有時在 locality
-  const district = getAnyComp(components, ['administrative_area_level_2', 'locality', 'postal_town']);
-  // 次分區（里/鄰/地區）可能出現在 sublocality 或 neighborhood
-  const sublocality = getAnyComp(components, ['sublocality_level_2', 'sublocality_level_1', 'sublocality', 'neighborhood']);
-  // 社區/大樓名稱（若有資料會在 premise / establishment / neighborhood 之類）
-  const community = getAnyComp(components, ['premise', 'establishment', 'point_of_interest', 'neighborhood']);
-
-  const route = getComp(components, 'route'); // 路名
-  const streetNumber = getComp(components, 'street_number'); // 門牌
-  const postalCode = getComp(components, 'postal_code');
-
-  return {
-    country,
-    city: admin1 || '',
-    district: district || '',
-    sublocality: sublocality || '',
-    community: community || '',
-    route,
-    streetNumber,
-    postalCode,
-  };
-}
-
-function makeFullCityDistrict(city, district) {
-  if (city && district) return `${city}${district}`;
-  if (city) return city;
-  return district || '';
-}
-
-function isFreePickup(district) {
-  return FREE_PICKUP_AREAS.includes(district);
-}
-
 /**
- * 以地址文字呼叫 Geocoding API
- * @param {string} address 使用者輸入地址
- * @returns {Promise<{ ok:boolean, reason?:string, data?:object }>}
+ * 同步呼叫 Google Maps Geocoding API，回傳行政區、大樓/社區與是否屬於免費收送範圍
+ * 並搭配 Places API 抓出大樓或社區名稱。
  */
 async function geocodeAddress(address) {
-  if (!address) return { ok: false, reason: 'EMPTY_ADDRESS' };
-  const key = process.env.GOOGLE_MAPS_API_KEY;
-  if (!key) return { ok: false, reason: 'NO_API_KEY' };
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+  if (!apiKey) return { ok: false, error: '缺少 GOOGLE_MAPS_API_KEY' };
 
-  const url = new URL('https://maps.googleapis.com/maps/api/geocode/json');
-  url.searchParams.set('address', address);
-  url.searchParams.set('language', 'zh-TW');
-  url.searchParams.set('region', 'tw');
-  url.searchParams.set('key', key);
+  try {
+    // 1️⃣ 先使用 Geocoding 解析地址
+    const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&language=zh-TW&key=${apiKey}`;
+    const geoRes = await fetch(geoUrl);
+    const geoData = await geoRes.json();
 
-  const resp = await fetch(url.toString(), { timeout: 15000 });
-  if (!resp.ok) return { ok: false, reason: `HTTP_${resp.status}` };
+    if (geoData.status !== 'OK' || !geoData.results?.length) {
+      return { ok: false, error: `Geocode失敗: ${geoData.status}` };
+    }
 
-  const json = await resp.json();
-  if (json.status !== 'OK' || !json.results?.length) {
-    return { ok: false, reason: json.status || 'NO_RESULTS' };
+    const result = geoData.results[0];
+    const components = result.address_components;
+    const formattedAddress = result.formatted_address;
+    const location = result.geometry?.location || {};
+
+    // 2️⃣ 萃取行政區
+    const find = type => (components.find(c => c.types.includes(type)) || {}).long_name || '';
+    const fullCityDistrict = `${find('administrative_area_level_1')}${find('administrative_area_level_2')}${find('locality')}${find('sublocality_level_1')}`;
+    const sublocality = find('sublocality_level_2') || find('neighborhood') || '';
+
+    // 3️⃣ 嘗試從 Geocoding 結果裡直接找出 place_id
+    const placeId = result.place_id;
+
+    // 4️⃣ 再用 Places API 查詢該地點（可能是大樓或社區名稱）
+    let community = '';
+    if (placeId) {
+      const placeUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=name,types&language=zh-TW&key=${apiKey}`;
+      const placeRes = await fetch(placeUrl);
+      const placeData = await placeRes.json();
+
+      if (placeData.status === 'OK' && placeData.result?.name) {
+        const name = placeData.result.name.trim();
+        // 過濾掉純地名（例如「板橋區」、「台北市」）
+        if (!/市|區|鄉|鎮|里|村$/.test(name)) {
+          community = name;
+        }
+      }
+    }
+
+    // 5️⃣ 判斷是否屬於 C.H 精緻洗衣免費收送範圍
+    const isFreePickup = /板橋|中和|永和|新莊|土城|萬華|雙和/.test(fullCityDistrict);
+
+    return {
+      ok: true,
+      data: {
+        formattedAddress,
+        fullCityDistrict,
+        community,
+        sublocality,
+        latitude: location.lat,
+        longitude: location.lng,
+        isFreePickup
+      }
+    };
+  } catch (err) {
+    console.error('[Geocode Error]', err);
+    return { ok: false, error: err.message };
   }
-
-  const best = json.results[0]; // 最匹配結果
-  const components = best.address_components || [];
-  const parsed = parseAddressComponents(components);
-
-  const fullCityDistrict = makeFullCityDistrict(parsed.city, parsed.district);
-  const free = isFreePickup(parsed.district);
-
-  return {
-    ok: true,
-    data: {
-      input: address,
-      formattedAddress: best.formatted_address || '',
-      location: best.geometry?.location || null, // { lat, lng }
-      placeId: best.place_id || '',
-      city: parsed.city,
-      district: parsed.district,
-      sublocality: parsed.sublocality,
-      community: parsed.community,
-      route: parsed.route,
-      streetNumber: parsed.streetNumber,
-      postalCode: parsed.postalCode,
-      fullCityDistrict,
-      isFreePickup: free,
-    },
-  };
 }
 
-module.exports = {
-  geocodeAddress,
-  isFreePickup,
-};
+module.exports = { geocodeAddress };
