@@ -307,16 +307,43 @@ let handledAddress = false;
   // 🔍 檢查是否包含收件 / 送件 / 還衣等動作
 const isActionIntent = ACTION_INTENT_RE.test(raw);
 
-    // ---------- Google Maps 地址解析開始 ----------
+   // ---------- Google Maps 地址解析（放在 rawClean 之前） ----------
+let handledAddress = false;
+
+// 🔍 是否包含收件/送回等動作（有動作就不要在這裡回覆，避免和你原本流程打架）
+const isActionIntent = ACTION_INTENT_RE.test(raw);
+
 if (LOOSE_ADDR_RE.test(raw)) {
   try {
     const geo = await geocodeAddress(raw);
     if (geo.ok && geo.data) {
       const d = geo.data;
       const lines = [];
+
+      // 不顯示「行政區」三個字，但保留「市 + 區」
       if (d.fullCityDistrict) lines.push(`📍 ${d.fullCityDistrict}`);
+      // 社區 / 大樓（盡量顯示）
       if (d.community || d.sublocality) lines.push(`🏢 社區/大樓：${d.community || d.sublocality}`);
+      // 標準地址
       if (d.formattedAddress) lines.push(`📫 地址：${d.formattedAddress}`);
+      // 樓層（有才顯示）
+      if (d.floor) lines.push(`🏷 樓層：${d.floor}`);
+
+      if (!isActionIntent) {
+        // ✅ 純地址：只回一則整合好的文字
+        await client.pushMessage(userId, { type: 'text', text: lines.join('\n') });
+        handledAddress = true;
+        return;
+      }
+      // 有收/送動作 → 不在這裡回，交給原有的收件/送回邏輯處理
+      logger.logToFile(`偵測到地址含收件/送件關鍵字，交由原邏輯處理: ${raw}`);
+    }
+  } catch (err) {
+    console.error('[Geocode Error]', err);
+  }
+}
+// ---------- Google Maps 地址解析結束 ----------
+
 
        
      // 📦 根據內容判斷要不要回覆
