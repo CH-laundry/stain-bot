@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>地址自動完成（含社區/大樓）</title>
+  <style>
+    body { font-family: system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; padding: 24px; }
+    label { display:block; margin: 12px 0 6px; font-weight:600; }
+    input { width:100%; padding:10px; font-size:16px; }
+    .row { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+    .muted { color:#666; font-size:14px; }
+    .box { margin-top:16px; padding:12px; border:1px solid #ddd; border-radius:8px; }
+  </style>
+</head>
+<body>
+  <h2>地址輸入（自動完成 & 社區/大樓名稱）</h2>
+
+  <label for="address-input">地址</label>
+  <input id="address-input" type="text" placeholder="請輸入地址、社區或大樓名稱…" autocomplete="off" />
+
+  <div class="row">
+    <div>
+      <label>社區 / 大樓</label>
+      <input id="community-name" type="text" placeholder="（會自動帶入）" readonly />
+    </div>
+    <div>
+      <label>城市 + 區</label>
+      <input id="city-district" type="text" placeholder="（例：新北市板橋區）" readonly />
+    </div>
+  </div>
+
+  <div class="row">
+    <div>
+      <label>完整地址</label>
+      <input id="full-address" type="text" placeholder="（會自動帶入）" readonly />
+    </div>
+    <div>
+      <label>Place ID</label>
+      <input id="place-id" type="text" placeholder="（會自動帶入）" readonly />
+    </div>
+  </div>
+
+  <div class="row">
+    <div>
+      <label>緯度 (lat)</label>
+      <input id="lat" type="text" readonly />
+    </div>
+    <div>
+      <label>經度 (lng)</label>
+      <input id="lng" type="text" readonly />
+    </div>
+  </div>
+
+  <div class="box muted">
+    提示：正式上線前，請在 GCP 將此 API 金鑰設「HTTP 來源限制」為你的網域。
+  </div>
+
+  <script>
+    const PLACE_FIELDS = ["name","formatted_address","address_components","geometry","place_id","types"];
+
+    function buildCityDistrict(components = []) {
+      const pick = t => (components.find(c => c.types.includes(t))||{}).long_name || "";
+      const city = pick("administrative_area_level_1") || pick("administrative_area_level_2");
+      const district = pick("administrative_area_level_2") || pick("administrative_area_level_3");
+      return (city && district && city !== district) ? (city + district) : (city || district || "");
+    }
+
+    function isLikelyCommunityName(name = "", route = "") {
+      if (!name) return false;
+      if (/[市區鄉鎮里村]$/.test(name)) return false;               // 避免把行政層級當社區
+      if (/^(.*)(路|街|大道|巷|弄)$/.test(name)) return false;        // 避免把路名當社區
+      if (route && name.replace(/\s/g,"") === route.replace(/\s/g,"")) return false;
+      return /(社區|大樓|廣場|園區|花園|天廈|帝景|苑|城|園|峰|莊|會館|名人|首席|御|官邸|國宅|社宅|之森|世界|悅|馥|璽|晶華|凱旋|御品|首府|國際|中心|商業|百貨)/.test(name) || name.length >= 3;
+    }
+
+    function initAutocomplete() {
+      const input = document.getElementById("address-input");
+      const communityEl = document.getElementById("community-name");
+      const fullEl = document.getElementById("full-address");
+      const cityDistEl = document.getElementById("city-district");
+      const placeIdEl = document.getElementById("place-id");
+      const latEl = document.getElementById("lat");
+      const lngEl = document.getElementById("lng");
+
+      const ac = new google.maps.places.Autocomplete(input, {
+        componentRestrictions: { country: "tw" },
+        fields: PLACE_FIELDS,
+        // types: ["establishment","geocode"], // 可選，偏向建築/地點
+      });
+
+      ac.addListener("place_changed", () => {
+        const place = ac.getPlace();
+        if (!place) return;
+
+        const comps = place.address_components || [];
+        const route = (comps.find(c => c.types.includes("route"))||{}).long_name || "";
+
+        // 決定社區/大樓名稱
+        let community = "";
+        if (place.name && isLikelyCommunityName(place.name, route)) {
+          community = place.name;
+        }
+
+        // 填值
+        cityDistEl.value = buildCityDistrict(comps) || "";
+        fullEl.value = place.formatted_address || input.value || "";
+        placeIdEl.value = place.place_id || "";
+        communityEl.value = community || "";
+        latEl.value = place.geometry?.location?.lat?.() ?? "";
+        lngEl.value = place.geometry?.location?.lng?.() ?? "";
+
+        // TODO: 如需送後端建檔，可直接 fetch POST 到你的 API
+        // fetch('/api/save-address', { method:'POST', headers:{'Content-Type':'application/json'},
+        //   body: JSON.stringify({ fullAddress: fullEl.value, community, cityDistrict: cityDistEl.value, placeId: placeIdEl.value, lat: latEl.value, lng: lngEl.value }) });
+      });
+    }
+
+    window.initAutocomplete = initAutocomplete;
+  </script>
+
+  AIzaSyCcrR_iwUDNHDjP9CH86A5RzGTPqzOBQ2k
+  <script async
+    src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&libraries=places&language=zh-TW&region=TW&callback=initAutocomplete">
+  </script>
+</body>
+</html>
