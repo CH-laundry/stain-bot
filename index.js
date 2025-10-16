@@ -334,8 +334,10 @@ app.get('/payment/linepay/confirm', async (req, res) => {
         const result = await response.json();
         if (result.returnCode === '0000') {
             if (order) {
-                orderManager.updateOrderStatus(orderId, 'paid');
+                orderManager.updateOrderStatus(orderId, 'paid', 'LINE Pay');
             }
+            const updated = orderManager.updateOrderStatusByUserId(userId, 'paid', 'LINE Pay');
+            logger.logToFile(`✅ LINE Pay 付款成功,已標記 ${updated} 筆訂單為已付款`);
             const ADMIN_USER_ID = process.env.ADMIN_USER_ID;
             if (ADMIN_USER_ID) {
                 await client.pushMessage(ADMIN_USER_ID, {
@@ -444,11 +446,10 @@ app.post('/api/orders/send-reminders', async (req, res) => {
     const baseURL = process.env.RAILWAY_PUBLIC_DOMAIN || 'https://stain-bot-production-0fac.up.railway.app';
     for (const order of ordersNeedingReminder) {
         try {
-            const remainingHours = Math.floor((order.expiryTime - Date.now()) / (1000 * 60 * 60));
             const paymentLink = `${baseURL}/payment/linepay/pay/${order.orderId}`;
             await client.pushMessage(order.userId, {
                 type: 'text',
-                text: `⏰ 付款提醒\n\n您好 ${order.userName},\n\n您的訂單即將過期!\n訂單編號: ${order.orderId}\n金額: NT$ ${order.amount.toLocaleString()}\n剩餘時間: ${remainingHours} 小時\n\n請盡快完成付款:\n💙 ${paymentLink}\n\n如有任何問題請聯繫我們\n感謝您的支持 💙`
+                text: `😊 付款提醒 😊\n\n💙 親愛的 ${order.userName},您好\n\n您於本次的洗衣服務訂單尚未完成付款\n\n金額: NT$ ${order.amount.toLocaleString()}\n\n麻煩您了 💙 C.H 精緻洗衣 謝謝您\n\n付款連結:\n${paymentLink}`
             });
             orderManager.markReminderSent(order.orderId);
             sent++;
@@ -471,7 +472,7 @@ app.post('/api/orders/clean-expired', (req, res) => {
 });
 app.post('/send-payment', async (req, res) => {
     const { userId, userName, amount, paymentType, customMessage } = req.body;
-    logger.logToFile(`收到付款請求: userId=${userId}, userName=${userName}, amount=${amount}, type=${paymentType}, customMessage=${customMessage}`);
+    logger.logToFile(`收到付款請求: userId=${userId}, userName=${userName}, amount=${amount}, type=${paymentType}`);
     if (!userId || !userName || !amount) {
         logger.logToFile(`❌ 參數驗證失敗`);
         return res.status(400).json({ error: '缺少必要參數', required: ['userId', 'userName', 'amount'] });
@@ -543,6 +544,8 @@ app.post('/payment/ecpay/callback', async (req, res) => {
         logger.logToFile(`收到綠界回調: ${JSON.stringify(req.body)}`);
         const { MerchantTradeNo, RtnCode, RtnMsg, TradeAmt, PaymentDate, PaymentType, CustomField1: userId, CustomField2: userName } = req.body;
         if (RtnCode === '1') {
+            const updated = orderManager.updateOrderStatusByUserId(userId, 'paid', '綠界支付');
+            logger.logToFile(`✅ 綠界付款成功,已標記 ${updated} 筆訂單為已付款`);
             const ADMIN_USER_ID = process.env.ADMIN_USER_ID;
             if (ADMIN_USER_ID) {
                 await client.pushMessage(ADMIN_USER_ID, {
@@ -600,11 +603,10 @@ app.listen(PORT, async () => {
         const baseURL = process.env.RAILWAY_PUBLIC_DOMAIN || 'https://stain-bot-production-0fac.up.railway.app';
         for (const order of ordersNeedingReminder) {
             try {
-                const remainingHours = Math.floor((order.expiryTime - Date.now()) / (1000 * 60 * 60));
                 const paymentLink = `${baseURL}/payment/linepay/pay/${order.orderId}`;
                 await client.pushMessage(order.userId, {
                     type: 'text',
-                    text: `⏰ 付款提醒\n\n您好 ${order.userName},\n\n您的訂單即將過期!\n訂單編號: ${order.orderId}\n金額: NT$ ${order.amount.toLocaleString()}\n剩餘時間: ${remainingHours} 小時\n\n請盡快完成付款:\n💙 ${paymentLink}\n\n如有任何問題請聯繫我們\n感謝您的支持 💙`
+                    text: `😊 付款提醒 😊\n\n💙 親愛的 ${order.userName},您好\n\n您於本次的洗衣服務訂單尚未完成付款\n\n金額: NT$ ${order.amount.toLocaleString()}\n\n麻煩您了 💙 C.H 精緻洗衣 謝謝您\n\n付款連結:\n${paymentLink}`
                 });
                 orderManager.markReminderSent(order.orderId);
                 logger.logToFile(`✅ 自動發送付款提醒: ${order.orderId}`);
