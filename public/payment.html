@@ -149,6 +149,12 @@
                 <button class="btn btn-secondary btn-small" onclick="cleanExpired()">🧹 清理過期訂單</button>
             </div>
             <div id="orderStats" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:15px; margin-bottom:20px;"></div>
+            
+            <div class="form-group">
+                <label>🔍 快速搜尋訂單</label>
+                <input type="text" id="orderSearchInput" placeholder="輸入訂單編號或客戶姓名" oninput="searchOrders()">
+            </div>
+            
             <div style="margin-bottom:15px;">
                 <label style="font-size:14px; color:#666;">篩選狀態:</label>
                 <select id="orderStatusFilter" onchange="filterOrders()" style="padding:8px; border-radius:8px; border:2px solid #e0e0e0;">
@@ -159,6 +165,14 @@
                 </select>
             </div>
             <div id="orderList"><p style="text-align:center; color:#999;">載入中...</p></div>
+            
+            <div id="customerHistoryModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; padding:20px; overflow:auto;">
+                <div style="background:white; max-width:800px; margin:50px auto; border-radius:20px; padding:30px; position:relative;">
+                    <button onclick="closeCustomerHistory()" style="position:absolute; top:15px; right:15px; background:#dc3545; color:white; border:none; padding:8px 15px; border-radius:5px; cursor:pointer; font-size:16px;">✕</button>
+                    <h3 style="color:#667eea; margin-bottom:20px;">👤 客戶付款歷史</h3>
+                    <div id="customerHistoryContent"></div>
+                </div>
+            </div>
         </div>
 
         <div id="customers-tab" class="tab-content">
@@ -312,7 +326,8 @@
 
         async function loadOrders() {
             const orderListDiv = document.getElementById('orderList');
-            orderListDiv.innerHTML = '<p style="text-align:center; color:#999;">載入中...</p>';
+            orderListDiv.
+                innerHTML = '<p style="text-align:center; color:#999;">載入中...</p>';
             try {
                 const response = await fetch('/api/orders');
                 const data = await response.json();
@@ -383,7 +398,7 @@
                     <div class="user-item" style="display:block;">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                             <div>
-                                <strong style="font-size:16px;">${order.userName}</strong>
+                                <strong style="font-size:16px; cursor:pointer; color:#667eea;" onclick="showCustomerHistory('${order.userId}', '${order.userName}')" title="點擊查看付款歷史">${order.userName}</strong>
                                 ${statusBadge}
                             </div>
                             <div style="font-size:18px; font-weight:bold; color:#667eea;">NT$ ${order.amount.toLocaleString()}</div>
@@ -393,6 +408,7 @@
                             <div>建立時間: ${createdDate}</div>
                             <div>過期時間: ${expiryDate}</div>
                             ${order.retryCount > 0 ? `<div>重試次數: ${order.retryCount}</div>` : ''}
+                            ${order.paymentMethod ? `<div>付款方式: <span style="color:#28a745; font-weight:bold;">${order.paymentMethod}</span></div>` : ''}
                         </div>
                         <div style="display:flex; gap:10px; flex-wrap:wrap;">
                             ${actionButtons}
@@ -402,6 +418,106 @@
             });
             orderListDiv.innerHTML = html;
         }
+
+        function searchOrders() {
+            const searchInput = document.getElementById('orderSearchInput').value.toLowerCase().trim();
+            if (!searchInput) {
+                filterOrders();
+                return;
+            }
+            const filtered = allOrders.filter(order => {
+                return order.orderId.toLowerCase().includes(searchInput) || 
+                       order.userName.toLowerCase().includes(searchInput);
+            });
+            displayOrders(filtered);
+            if (filtered.length === 0) {
+                document.getElementById('orderList').innerHTML = '<p style="text-align:center; color:#999;">找不到符合的訂單</p>';
+            }
+        }
+
+        async function showCustomerHistory(userId, userName) {
+            const modal = document.getElementById('customerHistoryModal');
+            const content = document.getElementById('customerHistoryContent');
+            modal.style.display = 'block';
+            content.innerHTML = '<p style="text-align:center; color:#999;">載入中...</p>';
+            try {
+                const customerOrders = allOrders.filter(order => order.userId === userId);
+                if (customerOrders.length === 0) {
+                    content.innerHTML = `<p style="text-align:center; color:#999;">客戶 ${userName} 尚無訂單記錄</p>`;
+                    return;
+                }
+                const totalOrders = customerOrders.length;
+                const paidOrders = customerOrders.filter(o => o.status === 'paid').length;
+                const pendingOrders = customerOrders.filter(o => o.status === 'pending' && !o.isExpired).length;
+                const totalAmount = customerOrders.filter(o => o.status === 'paid').reduce((sum, o) => sum + o.amount, 0);
+                let html = `
+                    <div style="background:#f0f4ff; padding:20px; border-radius:10px; margin-bottom:20px;">
+                        <h4 style="color:#667eea; margin-bottom:15px;">客戶: ${userName}</h4>
+                        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(120px, 1fr)); gap:15px;">
+                            <div style="text-align:center;">
+                                <div style="font-size:24px; font-weight:bold; color:#667eea;">${totalOrders}</div>
+                                <div style="font-size:14px; color:#666;">總訂單數</div>
+                            </div>
+                            <div style="text-align:center;">
+                                <div style="font-size:24px; font-weight:bold; color:#28a745;">${paidOrders}</div>
+                                <div style="font-size:14px; color:#666;">已付款</div>
+                            </div>
+                            <div style="text-align:center;">
+                                <div style="font-size:24px; font-weight:bold; color:#ffc107;">${pendingOrders}</div>
+                                <div style="font-size:14px; color:#666;">待付款</div>
+                            </div>
+                            <div style="text-align:center;">
+                                <div style="font-size:24px; font-weight:bold; color:#667eea;">NT$ ${totalAmount.toLocaleString()}</div>
+                                <div style="font-size:14px; color:#666;">累計金額</div>
+                            </div>
+                        </div>
+                    </div>
+                    <h4 style="color:#667eea; margin-bottom:15px;">訂單記錄</h4>
+                `;
+                customerOrders.forEach(order => {
+                    const createdDate = new Date(order.createdAt).toLocaleString('zh-TW');
+                    const paidDate = order.paidAt ? new Date(order.paidAt).toLocaleString('zh-TW') : '-';
+                    let statusBadge = '';
+                    if (order.status === 'paid') {
+                        statusBadge = '<span style="background:#28a745; color:white; padding:5px 10px; border-radius:5px; font-size:12px;">✅ 已付款</span>';
+                    } else if (order.isExpired) {
+                        statusBadge = '<span style="background:#dc3545; color:white; padding:5px 10px; border-radius:5px; font-size:12px;">❌ 已過期</span>';
+                    } else {
+                        statusBadge = '<span style="background:#ffc107; color:white; padding:5px 10px; border-radius:5px; font-size:12px;">⏰ 待付款</span>';
+                    }
+                    html += `
+                        <div style="background:#f8f9fa; padding:15px; margin-bottom:10px; border-radius:8px; border-left:4px solid ${order.status === 'paid' ? '#28a745' : '#ffc107'};">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                                <div>
+                                    <strong style="font-size:16px;">訂單編號: ${order.orderId}</strong>
+                                    ${statusBadge}
+                                </div>
+                                <div style="font-size:18px; font-weight:bold; color:#667eea;">NT$ ${order.amount.toLocaleString()}</div>
+                            </div>
+                            <div style="font-size:13px; color:#666;">
+                                <div>建立時間: ${createdDate}</div>
+                                ${order.status === 'paid' ? `<div>付款時間: ${paidDate}</div>` : ''}
+                                ${order.paymentMethod ? `<div>付款方式: <span style="color:#28a745; font-weight:bold;">${order.paymentMethod}</span></div>` : ''}
+                            </div>
+                        </div>
+                    `;
+                });
+                content.innerHTML = html;
+            } catch (error) {
+                content.innerHTML = `<p style="color:#dc3545; text-align:center;">載入失敗: ${error.message}</p>`;
+            }
+        }
+
+        function closeCustomerHistory() {
+            document.getElementById('customerHistoryModal').style.display = 'none';
+        }
+
+        document.addEventListener('click', function(event) {
+            const modal = document.getElementById('customerHistoryModal');
+            if (event.target === modal) {
+                closeCustomerHistory();
+            }
+        });
 
         function filterOrders() {
             const filter = document.getElementById('orderStatusFilter').value;
@@ -471,7 +587,6 @@
             try {
                 const baseURL = window.location.origin;
                 const paymentLink = `${baseURL}/payment/linepay/pay/${orderId}`;
-                const remainingHours = Math.floor((order.expiryTime - Date.now()) / (1000 * 60 * 60));
                 const response = await fetch('/send-payment', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -480,7 +595,7 @@
                         userName: order.userName,
                         amount: order.amount,
                         paymentType: 'linepay',
-                        customMessage: `⏰ 付款提醒\n\n您的訂單即將過期!\n訂單編號: ${orderId}\n剩餘時間: ${remainingHours} 小時\n\n請盡快完成付款,感謝!`
+                        customMessage: `😊 付款提醒 😊\n\n💙 親愛的 ${order.userName},您好\n\n您於本次的洗衣服務訂單尚未完成付款\n\n金額: NT$ ${order.amount.toLocaleString()}\n\n麻煩您了 💙 C.H 精緻洗衣 謝謝您`
                     })
                 });
                 const data = await response.json();
