@@ -442,22 +442,24 @@ app.post('/api/orders/send-reminders', async (req, res) => {
     if (ordersNeedingReminder.length === 0) {
         return res.json({ success: true, message: '目前沒有需要提醒的訂單', sent: 0 });
     }
+
     let sent = 0;
     const baseURL = process.env.RAILWAY_PUBLIC_DOMAIN || 'https://stain-bot-production-0fac.up.railway.app';
-    
+
     for (const order of ordersNeedingReminder) {
         try {
             const linePayResult = await createLinePayPayment(order.userId, order.userName, order.amount);
-            
+
             if (linePayResult.success) {
                 const newOrder = orderManager.createOrder(linePayResult.orderId, {
                     userId: order.userId,
                     userName: order.userName,
                     amount: order.amount
                 });
+
                 orderManager.updatePaymentInfo(linePayResult.orderId, linePayResult.transactionId, linePayResult.paymentUrl);
                 orderManager.deleteOrder(order.orderId);
-                
+
                 const persistentUrl = `${baseURL}/payment/linepay/pay/${linePayResult.orderId}`;
                 let shortUrl = persistentUrl;
                 try {
@@ -469,15 +471,28 @@ app.post('/api/orders/send-reminders', async (req, res) => {
                 } catch (error) {
                     logger.logToFile(`⚠️ 短網址生成失敗,使用原網址`);
                 }
-                
+
                 await client.pushMessage(order.userId, {
                     type: 'text',
                     text: `😊 付款提醒 😊\n\n💙 親愛的 ${order.userName},您好\n\n您於本次的洗衣服務訂單尚未完成付款\n\n金額: NT$ ${order.amount.toLocaleString()}\n\n麻煩您了 💙 C.H 精緻洗衣 謝謝您\n\n付款連結 (7天內有效):\n${shortUrl}`
                 });
-                
+
                 sent++;
                 logger.logToFile(`✅ 已發送付款提醒並重新生成連結: ${order.orderId} -> ${linePayResult.orderId}`);
             } else {
                 logger.logToFile(`❌ 重新生成付款連結失敗: ${order.orderId}`);
             }
-        } catch
+        } catch (error) {
+            logger.logError('發送付款提醒流程失敗', error, order.userId);
+        }
+    }
+
+    return res.json({ success: true, message: `已發送 ${sent} 筆提醒`, sent });
+});
+
+// ✅ 最後加上這段
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+});
+
