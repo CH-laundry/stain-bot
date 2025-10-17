@@ -1,4 +1,3 @@
-<script>
 (async () => {
   try {
     const res = await fetch('/agents/manifest.json', { cache: 'no-cache' });
@@ -13,10 +12,29 @@
       document.head.appendChild(s);
     }
 
-    // 可在這裡加載完畢後的 callback
-    console.log('Agents loaded:', files);
+    console.log('✅ Agents loaded:', files);
+
+    // 📢 顯示畫面提示
+    const tip = document.createElement('div');
+    tip.textContent = '✅ C.H 精緻洗衣 AI 小鎮角色載入成功';
+    Object.assign(tip.style, {
+      position: 'fixed',
+      bottom: '20px',
+      right: '20px',
+      background: '#3B5F8F',
+      color: '#fff',
+      padding: '10px 16px',
+      borderRadius: '8px',
+      fontWeight: '600',
+      boxShadow: '0 3px 10px rgba(0,0,0,0.2)',
+      zIndex: '9999',
+      fontFamily: 'Microsoft JhengHei'
+    });
+    document.body.appendChild(tip);
+    setTimeout(() => tip.remove(), 4000); // 4 秒後自動消失
+
   } catch (e) {
-    console.error('載入 agents 失敗：', e);
+    console.error('🚫 載入 agents 失敗：', e);
+    alert('🚫 載入失敗，請檢查 manifest.json 或檔名是否正確！');
   }
 })();
-</script>
