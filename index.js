@@ -402,8 +402,7 @@ app.get('/api/order/:orderId', (req, res) => {
 app.post('/api/order/:orderId/renew', async (req, res) => {
     const { orderId } = req.params;
     const order = orderManager.renewOrder(orderId);
-    if (!order)
-        {
+    if (!order) {
         return res.status(404).json({ success: false, error: '找不到此訂單' });
     }
     try {
@@ -445,223 +444,40 @@ app.post('/api/orders/send-reminders', async (req, res) => {
     }
     let sent = 0;
     const baseURL = process.env.RAILWAY_PUBLIC_DOMAIN || 'https://stain-bot-production-0fac.up.railway.app';
+    
     for (const order of ordersNeedingReminder) {
         try {
-            const paymentLink = `${baseURL}/payment/linepay/pay/${order.orderId}`;
-            await client.pushMessage(order.userId, {
-                type: 'text',
-                text: `😊 付款提醒 😊\n\n💙 親愛的 ${order.userName},您好\n\n您於本次的洗衣服務訂單尚未完成付款\n\n金額: NT$ ${order.amount.toLocaleString()}\n\n麻煩您了 💙 C.H 精緻洗衣 謝謝您\n\n付款連結:\n${paymentLink}`
-            });
-            orderManager.markReminderSent(order.orderId);
-            sent++;
-            logger.logToFile(`✅ 已發送付款提醒: ${order.orderId}`);
-        } catch (error) {
-            logger.logError(`發送提醒失敗: ${order.orderId}`, error);
-        }
-    }
-    res.json({ success: true, message: `已發送 ${sent} 筆付款提醒`, sent: sent });
-});
-app.get('/api/orders/statistics', (req, res) => {
-    res.json({
-        success: true,
-        statistics: orderManager.getStatistics()
-    });
-});
-app.post('/api/orders/clean-expired', (req, res) => {
-    const cleaned = orderManager.cleanExpiredOrders();
-    res.json({ success: true, message: `已清理 ${cleaned} 筆過期訂單`, cleaned: cleaned });
-});
-app.post('/send-payment', async (req, res) => {
-    const { userId, userName, amount, paymentType, customMessage } = req.body;
-    logger.logToFile(`收到付款請求: userId=${userId}, userName=${userName}, amount=${amount}, type=${paymentType}`);
-    if (!userId || !userName || !amount) {
-        logger.logToFile(`❌ 參數驗證失敗`);
-        return res.status(400).json({ error: '缺少必要參數', required: ['userId', 'userName', 'amount'] });
-    }
-    const numAmount = parseInt(amount);
-    if (isNaN(numAmount) || numAmount <= 0) {
-        return res.status(400).json({ error: '金額必須是正整數' });
-    }
-    try {
-        const { createECPayPaymentLink } = require('./services/openai');
-        const type = paymentType || 'both';
-        let finalMessage = '';
-        let ecpayLink = '';
-        let linepayLink = '';
-        let ecpayOrderId = '';
-        let linePayOrderId = '';
-        
-        // 綠界也建立訂單
-        if (type === 'ecpay' || type === 'both') {
-            ecpayOrderId = `EC${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
-            orderManager.createOrder(ecpayOrderId, { userId: userId, userName: userName, amount: numAmount });
-            logger.logToFile(`✅ 建立綠界訂單: ${ecpayOrderId}`);
+            const linePayResult = await createLinePayPayment(order.userId, order.userName, order.amount);
             
-            ecpayLink = createECPayPaymentLink(userId, userName, numAmount);
-            try {
-                const response = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(ecpayLink)}`);
-                const result = await response.text();
-                if (result && result.startsWith('http')) {
-                    ecpayLink = result;
-                    logger.logToFile(`✅ 已縮短綠界付款網址`);
-                }
-            } catch (error) {
-                logger.logToFile(`⚠️ 短網址生成失敗,使用原網址`);
-            }
-        }
-        
-        // LINE Pay 建立訂單
-        if (type === 'linepay' || type === 'both') {
-            const linePayResult = await createLinePayPayment(userId, userName, numAmount);
             if (linePayResult.success) {
-                linePayOrderId = linePayResult.orderId;
-                orderManager.createOrder(linePayResult.orderId, { userId: userId, userName: userName, amount: numAmount });
+                const newOrder = orderManager.createOrder(linePayResult.orderId, {
+                    userId: order.userId,
+                    userName: order.userName,
+                    amount: order.amount
+                });
                 orderManager.updatePaymentInfo(linePayResult.orderId, linePayResult.transactionId, linePayResult.paymentUrl);
-                logger.logToFile(`✅ 建立 LINE Pay 訂單: ${linePayOrderId}`);
+                orderManager.deleteOrder(order.orderId);
                 
-                const persistentUrl = `${process.env.RAILWAY_PUBLIC_DOMAIN || 'https://stain-bot-production-0fac.up.railway.app'}/payment/linepay/pay/${linePayResult.orderId}`;
-                linepayLink = persistentUrl;
+                const persistentUrl = `${baseURL}/payment/linepay/pay/${linePayResult.orderId}`;
+                let shortUrl = persistentUrl;
                 try {
                     const response = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(persistentUrl)}`);
                     const result = await response.text();
                     if (result && result.startsWith('http')) {
-                        linepayLink = result;
-                        logger.logToFile(`✅ 已縮短 LINE Pay 持續付款網址`);
+                        shortUrl = result;
                     }
                 } catch (error) {
-                    logger.logToFile(`⚠️ LINE Pay 短網址生成失敗,使用原網址`);
+                    logger.logToFile(`⚠️ 短網址生成失敗,使用原網址`);
                 }
-            } else {
-                logger.logToFile(`❌ LINE Pay 付款請求失敗`);
-            }
-        }
-        
-        const userMessage = customMessage || '';
-        if (type === 'both' && ecpayLink && linepayLink) {
-            finalMessage = userMessage ? `${userMessage}\n\n💙 付款連結如下:\n\n【信用卡付款】\n💙 ${ecpayLink}\n\n【LINE Pay】\n💙 ${linepayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙` : `💙 您好,${userName}\n\n您的專屬付款連結已生成\n金額:NT$ ${numAmount.toLocaleString()}\n\n請選擇付款方式:\n\n【信用卡付款】\n💙 ${ecpayLink}\n\n【LINE Pay】\n💙 ${linepayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
-        } else if (type === 'ecpay' && ecpayLink) {
-            finalMessage = userMessage ? `${userMessage}\n\n💙 付款連結如下:\n💙 ${ecpayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙` : `💙 您好,${userName}\n\n您的專屬付款連結已生成\n付款方式:信用卡\n金額:NT$ ${numAmount.toLocaleString()}\n\n請點擊以下連結完成付款:\n💙 ${ecpayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
-        } else if (type === 'linepay' && linepayLink) {
-            finalMessage = userMessage ? `${userMessage}\n\n💙 付款連結如下:\n💙 ${linepayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙` : `💙 您好,${userName}\n\n您的專屬付款連結已生成\n付款方式:LINE Pay\n金額:NT$ ${numAmount.toLocaleString()}\n\n請點擊以下連結完成付款:\n💙 ${linepayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
-        } else {
-            return res.status(500).json({ error: '付款連結生成失敗' });
-        }
-        
-        await client.pushMessage(userId, { type: 'text', text: finalMessage });
-        logger.logToFile(`✅ 已發送付款連結: ${userName} - ${numAmount}元 (${type})`);
-        
-        res.json({ 
-            success: true, 
-            message: '付款連結已發送', 
-            data: { 
-                userId, 
-                userName, 
-                amount: numAmount, 
-                paymentType: type, 
-                ecpayLink: ecpayLink || null, 
-                linepayLink: linepayLink || null,
-                ecpayOrderId: ecpayOrderId || null,
-                linePayOrderId: linePayOrderId || null,
-                customMessage: userMessage 
-            } 
-        });
-    } catch (err) {
-        logger.logError('發送付款連結失敗', err);
-        res.status(500).json({ error: '發送失敗', details: err.message });
-    }
-});
-app.post('/payment/ecpay/callback', async (req, res) => {
-    try {
-        logger.logToFile(`收到綠界回調: ${JSON.stringify(req.body)}`);
-        const { MerchantTradeNo, RtnCode, RtnMsg, TradeAmt, PaymentDate, PaymentType, CustomField1: userId, CustomField2: userName } = req.body;
-        
-        if (RtnCode === '1') {
-            const amount = parseInt(TradeAmt);
-            
-            // 標記該用戶所有相同金額的待付款訂單為已付款
-            const updated = orderManager.updateOrderStatusByUserId(userId, 'paid', '綠界支付');
-            logger.logToFile(`✅ 綠界付款成功,已標記 ${updated} 筆訂單為已付款`);
-            
-            const ADMIN_USER_ID = process.env.ADMIN_USER_ID;
-            
-            // 通知管理員
-            if (ADMIN_USER_ID) {
-                await client.pushMessage(ADMIN_USER_ID, {
-                    type: 'text',
-                    text: `🎉 收到綠界付款通知\n\n客戶姓名: ${userName}\n付款金額: NT$ ${amount.toLocaleString()}\n付款方式: ${getPaymentTypeName(PaymentType)}\n付款時間: ${PaymentDate}\n綠界訂單: ${MerchantTradeNo}\n\n狀態: ✅ 付款成功`
-                });
-            }
-            
-            // 通知客戶
-            if (userId && userId !== 'undefined') {
-                await client.pushMessage(userId, {
-                    type: 'text',
-                    text: `✅ 付款成功\n\n感謝 ${userName} 的支付\n金額: NT$ ${amount.toLocaleString()}\n綠界訂單: ${MerchantTradeNo}\n\n我們會盡快處理您的訂單\n感謝您的支持 💙`
-                });
-            }
-            
-            logger.logToFile(`✅ 綠界付款成功: ${userName} - ${TradeAmt}元 - 訂單: ${MerchantTradeNo}`);
-        } else {
-            logger.logToFile(`❌ 綠界付款異常: ${RtnMsg}`);
-        }
-        
-        res.send('1|OK');
-    } catch (err) {
-        logger.logError('處理綠界回調失敗', err);
-        res.send('0|ERROR');
-    }
-});
-function getPaymentTypeName(code) {
-    const types = {
-        'Credit_CreditCard': '信用卡',
-        'ATM_LAND': 'ATM 轉帳',
-        'CVS_CVS': '超商代碼',
-        'BARCODE_BARCODE': '超商條碼',
-        'WebATM_TAISHIN': '網路 ATM',
-    };
-    return types[code] || code;
-}
-app.get('/payment', (req, res) => {
-    res.sendFile('payment.html', { root: './public' });
-});
-app.get('/payment/status/:orderId', async (req, res) => {
-    res.json({ message: '付款狀態查詢功能(待實作)', orderId: req.params.orderId });
-});
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, async () => {
-    console.log(`伺服器正在運行,端口:${PORT}`);
-    logger.logToFile(`伺服器正在運行,端口:${PORT}`);
-    try {
-        await customerDB.loadAllCustomers();
-        console.log('✅ 客戶資料載入完成');
-    } catch (error) {
-        console.error('❌ 客戶資料載入失敗:', error.message);
-    }
-    
-    // 每 24 小時清理過期訂單
-    setInterval(() => {
-        orderManager.cleanExpiredOrders();
-    }, 24 * 60 * 60 * 1000);
-    
-    // 每 12 小時自動發送付款提醒 (建立2天後)
-    setInterval(async () => {
-        const ordersNeedingReminder = orderManager.getOrdersNeedingReminder();
-        const baseURL = process.env.RAILWAY_PUBLIC_DOMAIN || 'https://stain-bot-production-0fac.up.railway.app';
-        
-        for (const order of ordersNeedingReminder) {
-            try {
-                const paymentLink = `${baseURL}/payment/linepay/pay/${order.orderId}`;
                 
                 await client.pushMessage(order.userId, {
                     type: 'text',
-                    text: `😊 付款提醒 😊\n\n💙 親愛的 ${order.userName},您好\n\n您於本次的洗衣服務訂單尚未完成付款\n\n金額: NT$ ${order.amount.toLocaleString()}\n\n麻煩您了 💙 C.H 精緻洗衣 謝謝您\n\n付款連結:\n${paymentLink}`
+                    text: `😊 付款提醒 😊\n\n💙 親愛的 ${order.userName},您好\n\n您於本次的洗衣服務訂單尚未完成付款\n\n金額: NT$ ${order.amount.toLocaleString()}\n\n麻煩您了 💙 C.H 精緻洗衣 謝謝您\n\n付款連結 (7天內有效):\n${shortUrl}`
                 });
                 
-                orderManager.markReminderSent(order.orderId);
-                logger.logToFile(`✅ 自動發送付款提醒: ${order.orderId}`);
-            } catch (error) {
-                logger.logError(`自動提醒失敗: ${order.orderId}`, error);
+                sent++;
+                logger.logToFile(`✅ 已發送付款提醒並重新生成連結: ${order.orderId} -> ${linePayResult.orderId}`);
+            } else {
+                logger.logToFile(`❌ 重新生成付款連結失敗: ${order.orderId}`);
             }
-        }
-    }, 12 * 60 * 60 * 1000); // 每 12 小時執行一次
-});
+        } catch
