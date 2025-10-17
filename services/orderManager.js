@@ -56,7 +56,8 @@ class OrderManager {
             transactionId: null,
             paymentUrl: null,
             lastReminderSent: null,
-            retryCount: 0
+            retryCount: 0,
+            paymentMethod: null
         };
         this.orders.set(orderId, order);
         this.saveOrders();
@@ -82,11 +83,11 @@ class OrderManager {
 
     getOrdersNeedingReminder() {
         const now = Date.now();
-        const oneDayBeforeExpiry = 24 * 60 * 60 * 1000;
+        const twoDaysAfterCreation = 2 * 24 * 60 * 60 * 1000; // 2天
         
         return this.getPendingOrders().filter(order => {
-            const timeUntilExpiry = order.expiryTime - now;
-            const shouldRemind = timeUntilExpiry <= oneDayBeforeExpiry && timeUntilExpiry > 0;
+            const timeSinceCreation = now - order.createdAt;
+            const shouldRemind = timeSinceCreation >= twoDaysAfterCreation;
             const noRecentReminder = !order.lastReminderSent || (now - order.lastReminderSent) > 12 * 60 * 60 * 1000;
             return shouldRemind && noRecentReminder;
         });
@@ -103,16 +104,36 @@ class OrderManager {
         }
     }
 
-    updateOrderStatus(orderId, status) {
+    updateOrderStatus(orderId, status, paymentMethod = null) {
         const order = this.orders.get(orderId);
         if (order) {
             order.status = status;
             if (status === 'paid') {
                 order.paidAt = Date.now();
+                order.paymentMethod = paymentMethod;
             }
             this.saveOrders();
-            logger.logToFile(`✅ 更新訂單狀態: ${orderId} -> ${status}`);
+            logger.logToFile(`✅ 更新訂單狀態: ${orderId} -> ${status} (${paymentMethod || '未知'})`);
         }
+    }
+
+    updateOrderStatusByUserId(userId, status, paymentMethod = null) {
+        let updated = 0;
+        for (const [orderId, order] of this.orders.entries()) {
+            if (order.userId === userId && order.status === 'pending') {
+                order.status = status;
+                if (status === 'paid') {
+                    order.paidAt = Date.now();
+                    order.paymentMethod = paymentMethod;
+                }
+                updated++;
+                logger.logToFile(`✅ 更新訂單狀態 (通過 userId): ${orderId} -> ${status} (${paymentMethod || '未知'})`);
+            }
+        }
+        if (updated > 0) {
+            this.saveOrders();
+        }
+        return updated;
     }
 
     markReminderSent(orderId) {
@@ -168,6 +189,15 @@ class OrderManager {
             this.saveOrders();
             logger.logToFile(`🔄 續約訂單: ${orderId} (新過期時間: 7天後)`);
             return order;
+        }
+        return null;
+    }
+
+    getOrderByUserIdAndAmount(userId, amount) {
+        for (const [orderId, order] of this.orders.entries()) {
+            if (order.userId === userId && order.amount === amount && order.status === 'pending') {
+                return order;
+            }
         }
         return null;
     }
