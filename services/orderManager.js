@@ -84,12 +84,24 @@ class OrderManager {
     getOrdersNeedingReminder() {
         const now = Date.now();
         const twoDaysAfterCreation = 2 * 24 * 60 * 60 * 1000; // 2天
+        const twoDaysInterval = 2 * 24 * 60 * 60 * 1000; // 每2天提醒一次
         
         return this.getPendingOrders().filter(order => {
             const timeSinceCreation = now - order.createdAt;
-            const shouldRemind = timeSinceCreation >= twoDaysAfterCreation;
-            const noRecentReminder = !order.lastReminderSent || (now - order.lastReminderSent) > 12 * 60 * 60 * 1000;
-            return shouldRemind && noRecentReminder;
+            
+            // 建立後至少2天才開始提醒
+            if (timeSinceCreation < twoDaysAfterCreation) {
+                return false;
+            }
+            
+            // 如果從未提醒過,應該提醒
+            if (!order.lastReminderSent) {
+                return true;
+            }
+            
+            // 距離上次提醒已經超過2天,應該再次提醒
+            const timeSinceLastReminder = now - order.lastReminderSent;
+            return timeSinceLastReminder >= twoDaysInterval;
         });
     }
 
