@@ -1,3 +1,4 @@
+const axios = require('axios');
 const customerDB = require('./services/customerDatabase');
 const fs = require('fs');
 const express = require('express');
@@ -677,6 +678,47 @@ app.get('/payment', (req, res) => {
 app.get('/payment/status/:orderId', async (req, res) => {
     res.json({ message: '付款狀態查詢功能(待實作)', orderId: req.params.orderId });
 });
+// LINE Login 相關路由
+app.get('/auth/line', (req, res) => {
+    const state = Math.random().toString(36).substring(7);
+    const lineAuthUrl = `https://access.line.me/oauth2/v2.1/authorize?response_type=code&client_id=${process.env.LINE_LOGIN_CHANNEL_ID}&redirect_uri=${encodeURIComponent('https://stain-bot-production-2593.up.railway.app/auth/line/callback')}&state=${state}&scope=profile%20openid`;
+    res.redirect(lineAuthUrl);
+});
+
+app.get('/auth/line/callback', async (req, res) => {
+    const { code } = req.query;
+    
+    try {
+        // 取得 Access Token
+        const tokenResponse = await axios.post('https://api.line.me/oauth2/v2.1/token', 
+            new URLSearchParams({
+                grant_type: 'authorization_code',
+                code: code,
+                redirect_uri: 'https://stain-bot-production-2593.up.railway.app/auth/line/callback',
+                client_id: process.env.LINE_LOGIN_CHANNEL_ID,
+                client_secret: process.env.LINE_LOGIN_CHANNEL_SECRET
+            }),
+            {
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+            }
+        );
+
+        const accessToken = tokenResponse.data.access_token;
+
+        // 取得用戶資料
+        const profileResponse = await axios.get('https://api.line.me/v2/profile', {
+            headers: { Authorization: `Bearer ${accessToken}` }
+        });
+
+        const profile = profileResponse.data;
+
+        // 重定向到付款頁面,帶上用戶資訊
+        res.redirect(`/payment?userId=${profile.userId}&userName=${encodeURIComponent(profile.displayName)}`);
+    } catch (error) {
+        logger.logError('LINE Login 錯誤', error);
+        res.redirect('/payment?error=login_failed');
+    }
+});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
@@ -733,6 +775,7 @@ app.listen(PORT, async () => {
         }
     }, 12 * 60 * 60 * 1000);
 });
+
 
 
 
