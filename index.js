@@ -304,7 +304,7 @@ app.get('/payment/ecpay/pay/:orderId', async (req, res) => {
     if (!order) {
         return res.status(404).send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>訂單不存在</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#f093fb,#f5576c);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}</style></head><body><div class="container"><h1>❌ 訂單不存在</h1><p>找不到此訂單</p></div></body></html>');
     }
-    if (orderManager.isExpired(orderId)) {
+    if (await orderManager.isExpired(orderId)) {
         const hoursPassed = (Date.now() - order.createdAt) / (1000 * 60 * 60);
         logger.logToFile(`❌ 訂單已過期: ${orderId} (已過 ${hoursPassed.toFixed(1)} 小時)`);
         return res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>訂單已過期</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#f093fb,#f5576c);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}h1{font-size:28px;margin-bottom:20px}p{font-size:16px;margin:15px 0}</style></head><body><div class="container"><h1>⏰ 訂單已過期</h1><p>此訂單已超過 7 天(168 小時)</p><p>已過時間: ' + Math.floor(hoursPassed) + ' 小時</p><p>訂單編號: ' + orderId + '</p><p>請聯繫 C.H 精緻洗衣客服重新取得訂單</p></div></body></html>');
@@ -330,7 +330,7 @@ app.get('/payment/linepay/pay/:orderId', async (req, res) => {
     if (!order) {
         return res.status(404).send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>訂單不存在</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#f093fb,#f5576c);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}</style></head><body><div class="container"><h1>❌ 訂單不存在</h1><p>找不到此訂單</p></div></body></html>');
     }
-    if (orderManager.isExpired(orderId)) {
+    if (await orderManager.isExpired(orderId)) {
         const hoursPassed = (Date.now() - order.createdAt) / (1000 * 60 * 60);
         logger.logToFile(`❌ 訂單已過期: ${orderId} (已過 ${hoursPassed.toFixed(1)} 小時)`);
         return res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>訂單已過期</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#f093fb,#f5576c);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}h1{font-size:28px;margin-bottom:20px}p{font-size:16px;margin:15px 0}</style></head><body><div class="container"><h1>⏰ 訂單已過期</h1><p>此訂單已超過 7 天(168 小時)</p><p>已過時間: ' + Math.floor(hoursPassed) + ' 小時</p><p>訂單編號: ' + orderId + '</p><p>請聯繫 C.H 精緻洗衣客服重新取得訂單</p></div></body></html>');
@@ -357,7 +357,7 @@ app.get('/payment/linepay/pay/:orderId', async (req, res) => {
 app.get('/payment/linepay/confirm', async (req, res) => {
     const { transactionId, orderId, userId, userName, amount } = req.query;
     const order = orderManager.getOrder(orderId);
-    if (order && orderManager.isExpired(orderId)) {
+    if (order && await orderManager.isExpired(orderId)) {
         const hoursPassed = (Date.now() - order.createdAt) / (1000 * 60 * 60);
         logger.logToFile(`❌ 訂單已過期: ${orderId} (已過 ${hoursPassed.toFixed(1)} 小時)`);
         return res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>訂單已過期</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#f093fb,#f5576c);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}</style></head><body><div class="container"><h1>⏰ 訂單已過期</h1><p>此訂單已超過 7 天</p></div></body></html>');
@@ -414,7 +414,7 @@ app.get('/api/orders', (req, res) => {
     let orders = status ? orderManager.getOrdersByStatus(status) : orderManager.getAllOrders();
     const ordersWithStatus = orders.map(order => ({
         ...order,
-        isExpired: orderManager.isExpired(order.orderId),
+        isExpired: await orderManager.isExpired(order.orderId),
         remainingTime: Math.max(0, order.expiryTime - Date.now()),
         remainingHours: Math.floor(Math.max(0, order.expiryTime - Date.now()) / (1000 * 60 * 60))
     }));
@@ -433,7 +433,7 @@ app.get('/api/order/:orderId', (req, res) => {
             success: true,
             order: {
                 ...order,
-                isExpired: orderManager.isExpired(order.orderId),
+                isExpired: await orderManager.isExpired(order.orderId),
                 remainingTime: Math.max(0, order.expiryTime - Date.now()),
                 remainingHours: Math.floor(Math.max(0, order.expiryTime - Date.now()) / (1000 * 60 * 60))
             }
@@ -734,6 +734,7 @@ app.listen(PORT, async () => {
         }
     }, 12 * 60 * 60 * 1000);
 });
+
 
 
 
