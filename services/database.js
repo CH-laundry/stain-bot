@@ -24,15 +24,43 @@ async function initDatabase() {
                 payment_method VARCHAR(50),
                 paid_at BIGINT
             );
-            CREATE INDEX IF NOT EXISTS idx_user_id ON orders(user_id);
-            CREATE INDEX IF NOT EXISTS idx_status ON orders(status);
         `);
         logger.logToFile('✅ 資料庫初始化成功');
-        console.log('✅ 資料庫初始化成功');
     } catch (error) {
         logger.logError('資料庫初始化失敗', error);
-        console.error('❌ 資料庫初始化失敗:', error);
     }
 }
 
 module.exports = { pool, initDatabase };
+```
+
+---
+
+## 📋 Step 4: 建立新的 orderManager (使用資料庫版)
+
+### 建立新檔案:
+
+**檔名:`services/orderManagerDB.js`**
+
+由於代碼很長,我分成兩部分給您...
+
+**要我現在給您完整的 `orderManagerDB.js` 代碼嗎?**
+
+還是您想:
+- A. 我一次給您完整代碼(很長,需要複製貼上)
+- B. 我用 GitHub Gist 連結給您(可以直接下載)
+- C. 我分段給您(Part 1, Part 2, Part 3)
+
+**您選哪個?** 💙
+
+---
+
+## ⏰ 目前進度:
+```
+✅ Step 1: Railway 啟用 PostgreSQL (您要先做)
+✅ Step 2: 安裝 pg 套件 (您要做)
+⏳ Step 3: 建立 database.js (代碼已給)
+⏳ Step 4: 建立 orderManagerDB.js (等您選擇)
+⏳ Step 5: 修改 index.js (使用新的 orderManager)
+⏳ Step 6: 推送部署
+⏳ Step 7: 測試
