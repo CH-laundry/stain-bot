@@ -689,12 +689,12 @@ app.listen(PORT, async () => {
     } catch (error) {
         console.error('❌ 客戶資料載入失敗:', error.message);
     }
-    try {
-        await initDatabase();
-        console.log('✅ 資料庫初始化完成');
-    } catch (error) {
-        console.error('❌ 資料庫初始化失敗:', error.message);
-    }
+    // try {
+//     await initDatabase();
+//     console.log('✅ 資料庫初始化完成');
+// } catch (error) {
+//     console.error('❌ 資料庫初始化失敗:', error.message);
+// }
     
     setInterval(() => {
         orderManager.cleanExpiredOrders();
@@ -734,6 +734,7 @@ app.listen(PORT, async () => {
         }
     }, 12 * 60 * 60 * 1000);
 });
+
 
 
 
