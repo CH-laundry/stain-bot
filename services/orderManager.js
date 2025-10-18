@@ -1,297 +1,220 @@
-const { pool } = require('./database');
+const fs = require('fs');
+const path = require('path');
 const logger = require('./logger');
 
+const ORDERS_FILE = path.join(__dirname, '../data/orders.json');
 const EXPIRY_TIME = 7 * 24 * 60 * 60 * 1000;
 
-function convertOrder(dbOrder) {
-    if (!dbOrder) return null;
-    return {
-        orderId: dbOrder.order_id,
-        userId: dbOrder.user_id,
-        userName: dbOrder.user_name,
-        amount: dbOrder.amount,
-        status: dbOrder.status,
-        createdAt: dbOrder.created_at,
-        expiryTime: dbOrder.expiry_time,
-        transactionId: dbOrder.transaction_id,
-        paymentUrl: dbOrder.payment_url,
-        lastReminderSent: dbOrder.last_reminder_sent,
-        retryCount: dbOrder.retry_count,
-        paymentMethod: dbOrder.payment_method,
-        paidAt: dbOrder.paid_at
-    };
-}
-
-class OrderManagerDB {
+class OrderManager {
     constructor() {
-        console.log('✅ OrderManagerDB 初始化');
+        this.orders = new Map();
+        this.ensureDataDirectory();
+        this.loadOrders();
     }
 
-    async createOrder(orderId, orderData) {
-        try {
-            const now = Date.now();
-            const query = `
-                INSERT INTO orders (
-                    order_id, user_id, user_name, amount, status,
-                    created_at, expiry_time, transaction_id, payment_url,
-                    last_reminder_sent, retry_count, payment_method
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-                RETURNING *
-            `;
-            const values = [
-                orderId,
-                orderData.userId,
-                orderData.userName,
-                orderData.amount,
-                'pending',
-                now,
-                now + EXPIRY_TIME,
-                null,
-                null,
-                null,
-                0,
-                null
-            ];
-            const result = await pool.query(query, values);
-            logger.logToFile(`✅ 建立訂單: ${orderId} - ${orderData.userName} - NT$ ${orderData.amount}`);
-            return convertOrder(result.rows[0]);
-        } catch (error) {
-            logger.logError('建立訂單失敗', error);
-            throw error;
+    ensureDataDirectory() {
+        const dataDir = path.join(__dirname, '../data');
+        if (!fs.existsSync(dataDir)) {
+            fs.mkdirSync(dataDir, { recursive: true });
         }
     }
 
-    async getOrder(orderId) {
+    loadOrders() {
         try {
-            const result = await pool.query('SELECT * FROM orders WHERE order_id = $1', [orderId]);
-            return convertOrder(result.rows[0]);
+            if (fs.existsSync(ORDERS_FILE)) {
+                const data = fs.readFileSync(ORDERS_FILE, 'utf8');
+                const ordersArray = JSON.parse(data);
+                ordersArray.forEach(order => {
+                    this.orders.set(order.orderId, order);
+                });
+                logger.logToFile(`✅ 載入 ${ordersArray.length} 筆訂單`);
+            }
         } catch (error) {
-            logger.logError('取得訂單失敗', error);
-            return null;
+            logger.logError('載入訂單失敗', error);
         }
     }
 
-    async getAllOrders() {
+    saveOrders() {
         try {
-            const result = await pool.query('SELECT * FROM orders ORDER BY created_at DESC');
-            return result.rows.map(convertOrder);
+            const ordersArray = Array.from(this.orders.values());
+            fs.writeFileSync(ORDERS_FILE, JSON.stringify(ordersArray, null, 2), 'utf8');
         } catch (error) {
-            logger.logError('取得所有訂單失敗', error);
-            return [];
+            logger.logError('儲存訂單失敗', error);
         }
     }
 
-    async getPendingOrders() {
-        try {
-            const now = Date.now();
-            const result = await pool.query(
-                'SELECT * FROM orders WHERE status = $1 AND expiry_time > $2 ORDER BY created_at DESC',
-                ['pending', now]
-            );
-            return result.rows.map(convertOrder);
-        } catch (error) {
-            logger.logError('取得待付款訂單失敗', error);
-            return [];
-        }
+    createOrder(orderId, orderData) {
+        const now = Date.now();
+        const order = {
+            orderId,
+            userId: orderData.userId,
+            userName: orderData.userName,
+            amount: orderData.amount,
+            status: 'pending',
+            createdAt: now,
+            expiryTime: now + EXPIRY_TIME,
+            transactionId: null,
+            paymentUrl: null,
+            lastReminderSent: null,
+            retryCount: 0,
+            paymentMethod: null
+        };
+        this.orders.set(orderId, order);
+        this.saveOrders();
+        logger.logToFile(`✅ 建立訂單: ${orderId} - ${orderData.userName} - NT$ ${orderData.amount}`);
+        return order;
     }
 
-    async getOrdersByStatus(status) {
-        try {
-            const result = await pool.query(
-                'SELECT * FROM orders WHERE status = $1 ORDER BY created_at DESC',
-                [status]
-            );
-            return result.rows.map(convertOrder);
-        } catch (error) {
-            logger.logError('按狀態取得訂單失敗', error);
-            return [];
-        }
+    getOrder(orderId) {
+        return this.orders.get(orderId);
     }
 
-    async getOrdersNeedingReminder() {
-        try {
-            const now = Date.now();
-            const twoDaysAfterCreation = 2 * 24 * 60 * 60 * 1000;
-            const twoDaysInterval = 2 * 24 * 60 * 60 * 1000;
-            
-            const result = await pool.query(`
-                SELECT * FROM orders 
-                WHERE status = 'pending' 
-                AND expiry_time > $1
-                AND (created_at + $2) <= $1
-                AND (
-                    last_reminder_sent IS NULL 
-                    OR (last_reminder_sent + $3) <= $1
-                )
-                ORDER BY created_at ASC
-            `, [now, twoDaysAfterCreation, twoDaysInterval]);
-            
-            return result.rows.map(convertOrder);
-        } catch (error) {
-            logger.logError('取得需提醒訂單失敗', error);
-            return [];
-        }
+    getAllOrders() {
+        return Array.from(this.orders.values()).sort((a, b) => b.createdAt - a.createdAt);
     }
 
-    async updatePaymentInfo(orderId, transactionId, paymentUrl) {
-        try {
-            const query = `
-                UPDATE orders 
-                SET transaction_id = $1, payment_url = $2, retry_count = retry_count + 1
-                WHERE order_id = $3
-                RETURNING *
-            `;
-            const result = await pool.query(query, [transactionId, paymentUrl, orderId]);
+    getPendingOrders() {
+        return this.getAllOrders().filter(order => order.status === 'pending' && !this.isExpired(order.orderId));
+    }
+
+    getOrdersByStatus(status) {
+        return this.getAllOrders().filter(order => order.status === status);
+    }
+
+    getOrdersNeedingReminder() {
+        const now = Date.now();
+        const twoDaysAfterCreation = 2 * 24 * 60 * 60 * 1000;
+        const twoDaysInterval = 2 * 24 * 60 * 60 * 1000;
+        
+        return this.getPendingOrders().filter(order => {
+            const timeSinceCreation = now - order.createdAt;
+            if (timeSinceCreation < twoDaysAfterCreation) {
+                return false;
+            }
+            if (!order.lastReminderSent) {
+                return true;
+            }
+            const timeSinceLastReminder = now - order.lastReminderSent;
+            return timeSinceLastReminder >= twoDaysInterval;
+        });
+    }
+
+    updatePaymentInfo(orderId, transactionId, paymentUrl) {
+        const order = this.orders.get(orderId);
+        if (order) {
+            order.transactionId = transactionId;
+            order.paymentUrl = paymentUrl;
+            order.retryCount++;
+            this.saveOrders();
             logger.logToFile(`✅ 更新訂單付款資訊: ${orderId}`);
-            return convertOrder(result.rows[0]);
-        } catch (error) {
-            logger.logError('更新付款資訊失敗', error);
-            throw error;
         }
     }
 
-    async updateOrderStatus(orderId, status, paymentMethod = null) {
-        try {
-            const paidAt = status === 'paid' ? Date.now() : null;
-            const query = `
-                UPDATE orders 
-                SET status = $1, payment_method = $2, paid_at = $3
-                WHERE order_id = $4
-                RETURNING *
-            `;
-            const result = await pool.query(query, [status, paymentMethod, paidAt, orderId]);
+    updateOrderStatus(orderId, status, paymentMethod = null) {
+        const order = this.orders.get(orderId);
+        if (order) {
+            order.status = status;
+            if (status === 'paid') {
+                order.paidAt = Date.now();
+                order.paymentMethod = paymentMethod;
+            }
+            this.saveOrders();
             logger.logToFile(`✅ 更新訂單狀態: ${orderId} -> ${status} (${paymentMethod || '未知'})`);
-            return convertOrder(result.rows[0]);
-        } catch (error) {
-            logger.logError('更新訂單狀態失敗', error);
-            throw error;
         }
     }
 
-    async updateOrderStatusByUserId(userId, status, paymentMethod = null) {
-        try {
-            const paidAt = status === 'paid' ? Date.now() : null;
-            const query = `
-                UPDATE orders 
-                SET status = $1, payment_method = $2, paid_at = $3
-                WHERE user_id = $4 AND status = 'pending'
-                RETURNING *
-            `;
-            const result = await pool.query(query, [status, paymentMethod, paidAt, userId]);
-            logger.logToFile(`✅ 更新訂單狀態 (通過 userId): ${result.rowCount} 筆訂單 -> ${status} (${paymentMethod || '未知'})`);
-            return result.rowCount;
-        } catch (error) {
-            logger.logError('批量更新訂單狀態失敗', error);
-            return 0;
+    updateOrderStatusByUserId(userId, status, paymentMethod = null) {
+        let updated = 0;
+        for (const [orderId, order] of this.orders.entries()) {
+            if (order.userId === userId && order.status === 'pending') {
+                order.status = status;
+                if (status === 'paid') {
+                    order.paidAt = Date.now();
+                    order.paymentMethod = paymentMethod;
+                }
+                updated++;
+                logger.logToFile(`✅ 更新訂單狀態 (通過 userId): ${orderId} -> ${status} (${paymentMethod || '未知'})`);
+            }
         }
+        if (updated > 0) {
+            this.saveOrders();
+        }
+        return updated;
     }
 
-    async markReminderSent(orderId) {
-        try {
-            const now = Date.now();
-            await pool.query(
-                'UPDATE orders SET last_reminder_sent = $1 WHERE order_id = $2',
-                [now, orderId]
-            );
-        } catch (error) {
-            logger.logError('標記提醒失敗', error);
+    markReminderSent(orderId) {
+        const order = this.orders.get(orderId);
+        if (order) {
+            order.lastReminderSent = Date.now();
+            this.saveOrders();
         }
     }
 
     isExpired(orderId) {
-        return (async () => {
-            const order = await this.getOrder(orderId);
-            if (!order) return true;
-            return Date.now() > order.expiryTime;
-        })();
+        const order = this.orders.get(orderId);
+        if (!order) return true;
+        return Date.now() > order.expiryTime;
     }
 
-    async deleteOrder(orderId) {
-        try {
-            const result = await pool.query('DELETE FROM orders WHERE order_id = $1', [orderId]);
-            if (result.rowCount > 0) {
-                logger.logToFile(`🗑️ 刪除訂單: ${orderId}`);
-                return true;
+    deleteOrder(orderId) {
+        const deleted = this.orders.delete(orderId);
+        if (deleted) {
+            this.saveOrders();
+            logger.logToFile(`🗑️ 刪除訂單: ${orderId}`);
+        }
+        return deleted;
+    }
+
+    cleanExpiredOrders() {
+        const now = Date.now();
+        let cleaned = 0;
+        for (const [orderId, order] of this.orders.entries()) {
+            if (order.status === 'pending' && now > order.expiryTime) {
+                this.orders.delete(orderId);
+                cleaned++;
             }
-            return false;
-        } catch (error) {
-            logger.logError('刪除訂單失敗', error);
-            return false;
         }
+        if (cleaned > 0) {
+            this.saveOrders();
+            logger.logToFile(`🧹 清理 ${cleaned} 筆過期訂單`);
+        }
+        return cleaned;
     }
 
-    async cleanExpiredOrders() {
-        try {
+    renewOrder(orderId) {
+        const order = this.orders.get(orderId);
+        if (order) {
             const now = Date.now();
-            const result = await pool.query(
-                'DELETE FROM orders WHERE status = $1 AND expiry_time < $2',
-                ['pending', now]
-            );
-            if (result.rowCount > 0) {
-                logger.logToFile(`🧹 清理 ${result.rowCount} 筆過期訂單`);
+            order.expiryTime = now + EXPIRY_TIME;
+            order.status = 'pending';
+            order.retryCount = 0;
+            order.lastReminderSent = null;
+            this.saveOrders();
+            logger.logToFile(`🔄 續約訂單: ${orderId} (新過期時間: 7天後)`);
+            return order;
+        }
+        return null;
+    }
+
+    getOrderByUserIdAndAmount(userId, amount) {
+        for (const [orderId, order] of this.orders.entries()) {
+            if (order.userId === userId && order.amount === amount && order.status === 'pending') {
+                return order;
             }
-            return result.rowCount;
-        } catch (error) {
-            logger.logError('清理過期訂單失敗', error);
-            return 0;
         }
+        return null;
     }
 
-    async renewOrder(orderId) {
-        try {
-            const now = Date.now();
-            const query = `
-                UPDATE orders 
-                SET expiry_time = $1, status = 'pending', retry_count = 0, last_reminder_sent = NULL
-                WHERE order_id = $2
-                RETURNING *
-            `;
-            const result = await pool.query(query, [now + EXPIRY_TIME, orderId]);
-            if (result.rows[0]) {
-                logger.logToFile(`🔄 續約訂單: ${orderId} (新過期時間: 7天後)`);
-                return convertOrder(result.rows[0]);
-            }
-            return null;
-        } catch (error) {
-            logger.logError('續約訂單失敗', error);
-            return null;
-        }
-    }
-
-    async getOrderByUserIdAndAmount(userId, amount) {
-        try {
-            const result = await pool.query(
-                'SELECT * FROM orders WHERE user_id = $1 AND amount = $2 AND status = $3 ORDER BY created_at DESC LIMIT 1',
-                [userId, amount, 'pending']
-            );
-            return convertOrder(result.rows[0]);
-        } catch (error) {
-            logger.logError('查找訂單失敗', error);
-            return null;
-        }
-    }
-
-    async getStatistics() {
-        try {
-            const now = Date.now();
-            const total = await pool.query('SELECT COUNT(*) FROM orders');
-            const pending = await pool.query('SELECT COUNT(*) FROM orders WHERE status = $1 AND expiry_time > $2', ['pending', now]);
-            const paid = await pool.query('SELECT COUNT(*) FROM orders WHERE status = $1', ['paid']);
-            const expired = await pool.query('SELECT COUNT(*) FROM orders WHERE status = $1 AND expiry_time < $2', ['pending', now]);
-            const needReminder = await this.getOrdersNeedingReminder();
-            
-            return {
-                total: parseInt(total.rows[0].count),
-                pending: parseInt(pending.rows[0].count),
-                paid: parseInt(paid.rows[0].count),
-                expired: parseInt(expired.rows[0].count),
-                needReminder: needReminder.length
-            };
-        } catch (error) {
-            logger.logError('取得統計失敗', error);
-            return { total: 0, pending: 0, paid: 0, expired: 0, needReminder: 0 };
-        }
+    getStatistics() {
+        const all = this.getAllOrders();
+        return {
+            total: all.length,
+            pending: all.filter(o => o.status === 'pending' && !this.isExpired(o.orderId)).length,
+            paid: all.filter(o => o.status === 'paid').length,
+            expired: all.filter(o => o.status === 'pending' && this.isExpired(o.orderId)).length,
+            needReminder: this.getOrdersNeedingReminder().length
+        };
     }
 }
 
-module.exports = new OrderManagerDB();
+module.exports = new OrderManager();
