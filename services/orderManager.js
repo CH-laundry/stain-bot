@@ -1,229 +1,206 @@
-const fs = require('fs');
-const path = require('path');
+// services/orderManagerDB.js
+const { pool } = require('./database');
 const logger = require('./logger');
 
-const ORDERS_FILE = path.join(__dirname, '../data/orders.json');
-const EXPIRY_TIME = 7 * 24 * 60 * 60 * 1000; // 7 天
-
-class OrderManager {
-    constructor() {
-        this.orders = new Map();
-        this.ensureDataDirectory();
-        this.loadOrders();
-    }
-
-    ensureDataDirectory() {
-        const dataDir = path.join(__dirname, '../data');
-        if (!fs.existsSync(dataDir)) {
-            fs.mkdirSync(dataDir, { recursive: true });
-        }
-    }
-
-    loadOrders() {
-        try {
-            if (fs.existsSync(ORDERS_FILE)) {
-                const data = fs.readFileSync(ORDERS_FILE, 'utf8');
-                const ordersArray = JSON.parse(data);
-                ordersArray.forEach(order => {
-                    this.orders.set(order.orderId, order);
-                });
-                logger.logToFile(`✅ 載入 ${ordersArray.length} 筆訂單`);
-            }
-        } catch (error) {
-            logger.logError('載入訂單失敗', error);
-        }
-    }
-
-    saveOrders() {
-        try {
-            const ordersArray = Array.from(this.orders.values());
-            fs.writeFileSync(ORDERS_FILE, JSON.stringify(ordersArray, null, 2), 'utf8');
-        } catch (error) {
-            logger.logError('儲存訂單失敗', error);
-        }
-    }
-
-    createOrder(orderId, orderData) {
-        const now = Date.now();
-        const order = {
-            orderId,
-            userId: orderData.userId,
-            userName: orderData.userName,
-            amount: orderData.amount,
-            status: 'pending',
-            createdAt: now,
-            expiryTime: now + EXPIRY_TIME,
-            transactionId: null,
-            paymentUrl: null,
-            lastReminderSent: null,
-            retryCount: 0,
-            paymentMethod: null
-        };
-        this.orders.set(orderId, order);
-        this.saveOrders();
-        logger.logToFile(`✅ 建立訂單: ${orderId} - ${orderData.userName} - NT$ ${orderData.amount}`);
-        return order;
-    }
-
-    getOrder(orderId) {
-        return this.orders.get(orderId);
-    }
-
-    getAllOrders() {
-        return Array.from(this.orders.values()).sort((a, b) => b.createdAt - a.createdAt);
-    }
-
-    getPendingOrders() {
-        return this.getAllOrders().filter(order => order.status === 'pending' && !this.isExpired(order.orderId));
-    }
-
-    getOrdersByStatus(status) {
-        return this.getAllOrders().filter(order => order.status === status);
-    }
-
-    getOrdersNeedingReminder() {
-        const now = Date.now();
-        const twoDaysAfterCreation = 2 * 24 * 60 * 60 * 1000; // 2天
-        const twoDaysInterval = 2 * 24 * 60 * 60 * 1000; // 每2天提醒一次
-        
-        return this.getPendingOrders().filter(order => {
-            const timeSinceCreation = now - order.createdAt;
-            
-            // 建立後至少2天才開始提醒
-            if (timeSinceCreation < twoDaysAfterCreation) {
-                return false;
-            }
-            
-            // 如果從未提醒過,應該提醒
-            if (!order.lastReminderSent) {
-                return true;
-            }
-            
-            // 距離上次提醒已經超過2天,應該再次提醒
-            const timeSinceLastReminder = now - order.lastReminderSent;
-            return timeSinceLastReminder >= twoDaysInterval;
-        });
-    }
-
-    updatePaymentInfo(orderId, transactionId, paymentUrl) {
-        const order = this.orders.get(orderId);
-        if (order) {
-            order.transactionId = transactionId;
-            order.paymentUrl = paymentUrl;
-            order.retryCount++;
-            this.saveOrders();
-            logger.logToFile(`✅ 更新訂單付款資訊: ${orderId}`);
-        }
-    }
-
-    updateOrderStatus(orderId, status, paymentMethod = null) {
-        const order = this.orders.get(orderId);
-        if (order) {
-            order.status = status;
-            if (status === 'paid') {
-                order.paidAt = Date.now();
-                order.paymentMethod = paymentMethod;
-            }
-            this.saveOrders();
-            logger.logToFile(`✅ 更新訂單狀態: ${orderId} -> ${status} (${paymentMethod || '未知'})`);
-        }
-    }
-
-    updateOrderStatusByUserId(userId, status, paymentMethod = null) {
-        let updated = 0;
-        for (const [orderId, order] of this.orders.entries()) {
-            if (order.userId === userId && order.status === 'pending') {
-                order.status = status;
-                if (status === 'paid') {
-                    order.paidAt = Date.now();
-                    order.paymentMethod = paymentMethod;
-                }
-                updated++;
-                logger.logToFile(`✅ 更新訂單狀態 (通過 userId): ${orderId} -> ${status} (${paymentMethod || '未知'})`);
-            }
-        }
-        if (updated > 0) {
-            this.saveOrders();
-        }
-        return updated;
-    }
-
-    markReminderSent(orderId) {
-        const order = this.orders.get(orderId);
-        if (order) {
-            order.lastReminderSent = Date.now();
-            this.saveOrders();
-        }
-    }
-
-    isExpired(orderId) {
-        const order = this.orders.get(orderId);
-        if (!order) return true;
-        return Date.now() > order.expiryTime;
-    }
-
-    deleteOrder(orderId) {
-        const deleted = this.orders.delete(orderId);
-        if (deleted) {
-            this.saveOrders();
-            logger.logToFile(`🗑️ 刪除訂單: ${orderId}`);
-        }
-        return deleted;
-    }
-
-    cleanExpiredOrders() {
-        const now = Date.now();
-        let cleaned = 0;
-        
-        for (const [orderId, order] of this.orders.entries()) {
-            if (order.status === 'pending' && now > order.expiryTime) {
-                this.orders.delete(orderId);
-                cleaned++;
-            }
-        }
-        
-        if (cleaned > 0) {
-            this.saveOrders();
-            logger.logToFile(`🧹 清理 ${cleaned} 筆過期訂單`);
-        }
-        
-        return cleaned;
-    }
-
-    renewOrder(orderId) {
-        const order = this.orders.get(orderId);
-        if (order) {
-            const now = Date.now();
-            order.expiryTime = now + EXPIRY_TIME;
-            order.status = 'pending';
-            order.retryCount = 0;
-            order.lastReminderSent = null;
-            this.saveOrders();
-            logger.logToFile(`🔄 續約訂單: ${orderId} (新過期時間: 7天後)`);
-            return order;
-        }
-        return null;
-    }
-
-    getOrderByUserIdAndAmount(userId, amount) {
-        for (const [orderId, order] of this.orders.entries()) {
-            if (order.userId === userId && order.amount === amount && order.status === 'pending') {
-                return order;
-            }
-        }
-        return null;
-    }
-
-    getStatistics() {
-        const all = this.getAllOrders();
-        return {
-            total: all.length,
-            pending: all.filter(o => o.status === 'pending' && !this.isExpired(o.orderId)).length,
-            paid: all.filter(o => o.status === 'paid').length,
-            expired: all.filter(o => o.status === 'pending' && this.isExpired(o.orderId)).length,
-            needReminder: this.getOrdersNeedingReminder().length
-        };
-    }
+/** 工具：將 Date.now() 以 ms 傳入，回傳是否過期（expiry_time 也是 ms） */
+function isExpired(expiryTimeMs) {
+  return typeof expiryTimeMs === 'number' && Date.now() > expiryTimeMs;
 }
 
-module.exports = new OrderManager();
+/** 建議：啟動時先呼叫，確保索引存在（CREATE IF NOT EXISTS 不支援，用 DO blocks 或 try/catch 忽略重複） */
+async function ensureIndexes() {
+  try {
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at);`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_orders_expiry_time ON orders(expiry_time);`);
+  } catch (err) {
+    // 舊版 PG 可能不支援 IF NOT EXISTS，重複建立報錯可忽略
+    if (String(err.message).includes('already exists')) return;
+    logger.logError('建立索引失敗', err);
+  }
+}
+
+/** 新增訂單（若 order_id 已存在會報錯） */
+async function createOrder({
+  order_id,
+  user_id,
+  user_name,
+  amount,
+  status = 'pending',
+  created_at = Date.now(),
+  expiry_time,               // 建議：現在時間 + 20 * 60 * 1000（或你自訂）
+  transaction_id = null,
+  payment_url = null,
+  last_reminder_sent = null,
+  retry_count = 0,
+  payment_method = null,
+  paid_at = null
+}) {
+  const sql = `
+    INSERT INTO orders (
+      order_id, user_id, user_name, amount, status, created_at, expiry_time,
+      transaction_id, payment_url, last_reminder_sent, retry_count, payment_method, paid_at
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+    RETURNING *;
+  `;
+  const params = [
+    order_id, user_id, user_name, amount, status, created_at, expiry_time,
+    transaction_id, payment_url, last_reminder_sent, retry_count, payment_method, paid_at
+  ];
+  const { rows } = await pool.query(sql, params);
+  logger.logToFile(`✅ 建立訂單成功 ${order_id}（user:${user_id}, amount:${amount}）`);
+  return rows[0];
+}
+
+/** 以 order_id 取得訂單 */
+async function getOrderById(order_id) {
+  const { rows } = await pool.query(`SELECT * FROM orders WHERE order_id = $1 LIMIT 1;`, [order_id]);
+  return rows[0] || null;
+}
+
+/** 以 transaction_id 取得訂單（例如金流回調用） */
+async function getOrderByTransactionId(transaction_id) {
+  const { rows } = await pool.query(`SELECT * FROM orders WHERE transaction_id = $1 LIMIT 1;`, [transaction_id]);
+  return rows[0] || null;
+}
+
+/** 更新狀態 */
+async function updateOrderStatus(order_id, status) {
+  const { rows } = await pool.query(
+    `UPDATE orders SET status = $2 WHERE order_id = $1 RETURNING *;`,
+    [order_id, status]
+  );
+  logger.logToFile(`🔁 訂單 ${order_id} 狀態改為 ${status}`);
+  return rows[0] || null;
+}
+
+/** 設定付款網址與金流交易編號（建立付款連結後呼叫） */
+async function setPaymentLink(order_id, { payment_url, transaction_id }) {
+  const { rows } = await pool.query(
+    `UPDATE orders
+     SET payment_url = $2, transaction_id = $3
+     WHERE order_id = $1
+     RETURNING *;`,
+    [order_id, payment_url || null, transaction_id || null]
+  );
+  logger.logToFile(`🔗 訂單 ${order_id} 設定 payment_url/transaction_id`);
+  return rows[0] || null;
+}
+
+/** 標記為已付款 */
+async function markAsPaid(order_id, { paid_at = Date.now(), payment_method = null, transaction_id = null } = {}) {
+  const { rows } = await pool.query(
+    `UPDATE orders
+     SET status = 'paid',
+         paid_at = $2,
+         payment_method = COALESCE($3, payment_method),
+         transaction_id = COALESCE($4, transaction_id)
+     WHERE order_id = $1
+     RETURNING *;`,
+    [order_id, paid_at, payment_method, transaction_id]
+  );
+  logger.logToFile(`💰 訂單 ${order_id} 已付款`);
+  return rows[0] || null;
+}
+
+/** 取消訂單（例如付款逾時或用戶取消） */
+async function cancelOrder(order_id, reason = 'canceled') {
+  const { rows } = await pool.query(
+    `UPDATE orders SET status = $2 WHERE order_id = $1 RETURNING *;`,
+    [order_id, reason]
+  );
+  logger.logToFile(`🛑 訂單 ${order_id} 已取消（${reason}）`);
+  return rows[0] || null;
+}
+
+/** 設定最後提醒時間（ms） */
+async function setLastReminderSent(order_id, tsMs = Date.now()) {
+  const { rows } = await pool.query(
+    `UPDATE orders SET last_reminder_sent = $2 WHERE order_id = $1 RETURNING *;`,
+    [order_id, tsMs]
+  );
+  return rows[0] || null;
+}
+
+/** 增加重試次數（用於重新送連結/重試拉金流） */
+async function incrementRetryCount(order_id) {
+  const { rows } = await pool.query(
+    `UPDATE orders SET retry_count = COALESCE(retry_count,0) + 1 WHERE order_id = $1 RETURNING *;`,
+    [order_id]
+  );
+  return rows[0] || null;
+}
+
+/** 列出尚未付款且已過期的訂單（批次處理逾時取消/提醒） */
+async function listExpiredUnpaid(nowMs = Date.now()) {
+  const { rows } = await pool.query(
+    `SELECT * FROM orders
+     WHERE status = 'pending'
+       AND expiry_time <= $1
+     ORDER BY created_at ASC
+     LIMIT 200;`,
+    [nowMs]
+  );
+  return rows;
+}
+
+/** 依 user 查詢最近 N 筆（預設 20） */
+async function listOrdersByUser(user_id, limit = 20) {
+  const { rows } = await pool.query(
+    `SELECT * FROM orders WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2;`,
+    [user_id, limit]
+  );
+  return rows;
+}
+
+/** 刪除訂單（謹慎使用） */
+async function deleteOrder(order_id) {
+  await pool.query(`DELETE FROM orders WHERE order_id = $1;`, [order_id]);
+  logger.logToFile(`🧹 刪除訂單 ${order_id}`);
+  return true;
+}
+
+/** 便捷：建立或覆蓋（有就更新，無就新建） */
+async function upsertOrder(order) {
+  const sql = `
+    INSERT INTO orders (
+      order_id, user_id, user_name, amount, status, created_at, expiry_time,
+      transaction_id, payment_url, last_reminder_sent, retry_count, payment_method, paid_at
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+    ON CONFLICT (order_id) DO UPDATE SET
+      user_id = EXCLUDED.user_id,
+      user_name = EXCLUDED.user_name,
+      amount = EXCLUDED.amount,
+      status = EXCLUDED.status,
+      created_at = EXCLUDED.created_at,
+      expiry_time = EXCLUDED.expiry_time,
+      transaction_id = EXCLUDED.transaction_id,
+      payment_url = EXCLUDED.payment_url,
+      last_reminder_sent = EXCLUDED.last_reminder_sent,
+      retry_count = EXCLUDED.retry_count,
+      payment_method = EXCLUDED.payment_method,
+      paid_at = EXCLUDED.paid_at
+    RETURNING *;
+  `;
+  const params = [
+    order.order_id, order.user_id, order.user_name, order.amount, order.status ?? 'pending',
+    order.created_at ?? Date.now(), order.expiry_time,
+    order.transaction_id ?? null, order.payment_url ?? null,
+    order.last_reminder_sent ?? null, order.retry_count ?? 0,
+    order.payment_method ?? null, order.paid_at ?? null
+  ];
+  const { rows } = await pool.query(sql, params);
+  return rows[0];
+}
+
+module.exports = {
+  // helpers
+  isExpired, ensureIndexes,
+  // CRUD
+  createOrder, getOrderById, getOrderByTransactionId, updateOrderStatus,
+  setPaymentLink, markAsPaid, cancelOrder,
+  setLastReminderSent, incrementRetryCount,
+  listExpiredUnpaid, listOrdersByUser,
+  deleteOrder, upsertOrder
+};
