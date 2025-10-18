@@ -414,7 +414,7 @@ app.get('/api/orders', (req, res) => {
     let orders = status ? orderManager.getOrdersByStatus(status) : orderManager.getAllOrders();
     const ordersWithStatus = orders.map(order => ({
         ...order,
-        isExpired: await orderManager.isExpired(order.orderId),
+         isExpired: Date.now() > order.expiryTime,
         remainingTime: Math.max(0, order.expiryTime - Date.now()),
         remainingHours: Math.floor(Math.max(0, order.expiryTime - Date.now()) / (1000 * 60 * 60))
     }));
@@ -433,7 +433,7 @@ app.get('/api/order/:orderId', (req, res) => {
             success: true,
             order: {
                 ...order,
-                isExpired: await orderManager.isExpired(order.orderId),
+               isExpired: Date.now() > order.expiryTime,
                 remainingTime: Math.max(0, order.expiryTime - Date.now()),
                 remainingHours: Math.floor(Math.max(0, order.expiryTime - Date.now()) / (1000 * 60 * 60))
             }
@@ -734,6 +734,7 @@ app.listen(PORT, async () => {
         }
     }, 12 * 60 * 60 * 1000);
 });
+
 
 
 
