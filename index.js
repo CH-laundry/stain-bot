@@ -10,7 +10,6 @@ const { Client } = require('@line/bot-sdk');
 const googleAuth = require('./services/googleAuth');
 const multer = require('multer');
 const orderManager = require('./services/orderManager');
-const { initDatabase } = require('./services/database');
 const upload = multer({ storage: multer.memoryStorage() });
 
 if (process.env.GOOGLE_PRIVATE_KEY) {
@@ -734,6 +733,7 @@ app.listen(PORT, async () => {
         }
     }, 12 * 60 * 60 * 1000);
 });
+
 
 
 
