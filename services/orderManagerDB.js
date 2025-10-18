@@ -3,6 +3,25 @@ const logger = require('./logger');
 
 const EXPIRY_TIME = 7 * 24 * 60 * 60 * 1000;
 
+function convertOrder(dbOrder) {
+    if (!dbOrder) return null;
+    return {
+        orderId: dbOrder.order_id,
+        userId: dbOrder.user_id,
+        userName: dbOrder.user_name,
+        amount: dbOrder.amount,
+        status: dbOrder.status,
+        createdAt: dbOrder.created_at,
+        expiryTime: dbOrder.expiry_time,
+        transactionId: dbOrder.transaction_id,
+        paymentUrl: dbOrder.payment_url,
+        lastReminderSent: dbOrder.last_reminder_sent,
+        retryCount: dbOrder.retry_count,
+        paymentMethod: dbOrder.payment_method,
+        paidAt: dbOrder.paid_at
+    };
+}
+
 class OrderManagerDB {
     constructor() {
         console.log('✅ OrderManagerDB 初始化');
@@ -35,7 +54,7 @@ class OrderManagerDB {
             ];
             const result = await pool.query(query, values);
             logger.logToFile(`✅ 建立訂單: ${orderId} - ${orderData.userName} - NT$ ${orderData.amount}`);
-            return result.rows[0];
+            return convertOrder(result.rows[0]);
         } catch (error) {
             logger.logError('建立訂單失敗', error);
             throw error;
@@ -45,7 +64,7 @@ class OrderManagerDB {
     async getOrder(orderId) {
         try {
             const result = await pool.query('SELECT * FROM orders WHERE order_id = $1', [orderId]);
-            return result.rows[0] || null;
+            return convertOrder(result.rows[0]);
         } catch (error) {
             logger.logError('取得訂單失敗', error);
             return null;
@@ -55,7 +74,7 @@ class OrderManagerDB {
     async getAllOrders() {
         try {
             const result = await pool.query('SELECT * FROM orders ORDER BY created_at DESC');
-            return result.rows;
+            return result.rows.map(convertOrder);
         } catch (error) {
             logger.logError('取得所有訂單失敗', error);
             return [];
@@ -69,7 +88,7 @@ class OrderManagerDB {
                 'SELECT * FROM orders WHERE status = $1 AND expiry_time > $2 ORDER BY created_at DESC',
                 ['pending', now]
             );
-            return result.rows;
+            return result.rows.map(convertOrder);
         } catch (error) {
             logger.logError('取得待付款訂單失敗', error);
             return [];
@@ -82,7 +101,7 @@ class OrderManagerDB {
                 'SELECT * FROM orders WHERE status = $1 ORDER BY created_at DESC',
                 [status]
             );
-            return result.rows;
+            return result.rows.map(convertOrder);
         } catch (error) {
             logger.logError('按狀態取得訂單失敗', error);
             return [];
@@ -107,13 +126,14 @@ class OrderManagerDB {
                 ORDER BY created_at ASC
             `, [now, twoDaysAfterCreation, twoDaysInterval]);
             
-            return result.rows;
+            return result.rows.map(convertOrder);
         } catch (error) {
             logger.logError('取得需提醒訂單失敗', error);
             return [];
         }
     }
-  async updatePaymentInfo(orderId, transactionId, paymentUrl) {
+
+    async updatePaymentInfo(orderId, transactionId, paymentUrl) {
         try {
             const query = `
                 UPDATE orders 
@@ -123,7 +143,7 @@ class OrderManagerDB {
             `;
             const result = await pool.query(query, [transactionId, paymentUrl, orderId]);
             logger.logToFile(`✅ 更新訂單付款資訊: ${orderId}`);
-            return result.rows[0] || null;
+            return convertOrder(result.rows[0]);
         } catch (error) {
             logger.logError('更新付款資訊失敗', error);
             throw error;
@@ -141,7 +161,7 @@ class OrderManagerDB {
             `;
             const result = await pool.query(query, [status, paymentMethod, paidAt, orderId]);
             logger.logToFile(`✅ 更新訂單狀態: ${orderId} -> ${status} (${paymentMethod || '未知'})`);
-            return result.rows[0] || null;
+            return convertOrder(result.rows[0]);
         } catch (error) {
             logger.logError('更新訂單狀態失敗', error);
             throw error;
@@ -178,9 +198,12 @@ class OrderManagerDB {
         }
     }
 
-    isExpired(order) {
-        if (!order) return true;
-        return Date.now() > order.expiry_time;
+    isExpired(orderId) {
+        return (async () => {
+            const order = await this.getOrder(orderId);
+            if (!order) return true;
+            return Date.now() > order.expiryTime;
+        })();
     }
 
     async deleteOrder(orderId) {
@@ -226,7 +249,7 @@ class OrderManagerDB {
             const result = await pool.query(query, [now + EXPIRY_TIME, orderId]);
             if (result.rows[0]) {
                 logger.logToFile(`🔄 續約訂單: ${orderId} (新過期時間: 7天後)`);
-                return result.rows[0];
+                return convertOrder(result.rows[0]);
             }
             return null;
         } catch (error) {
@@ -234,13 +257,14 @@ class OrderManagerDB {
             return null;
         }
     }
-  async getOrderByUserIdAndAmount(userId, amount) {
+
+    async getOrderByUserIdAndAmount(userId, amount) {
         try {
             const result = await pool.query(
                 'SELECT * FROM orders WHERE user_id = $1 AND amount = $2 AND status = $3 ORDER BY created_at DESC LIMIT 1',
                 [userId, amount, 'pending']
             );
-            return result.rows[0] || null;
+            return convertOrder(result.rows[0]);
         } catch (error) {
             logger.logError('查找訂單失敗', error);
             return null;
