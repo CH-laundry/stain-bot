@@ -630,5 +630,5 @@ app.listen(PORT, async () => {
                 logger.logError(`自動提醒失敗: ${order.orderId}`, error);
             }
         }
-    }, 12 * 60 * 60 * 1000);
+    }, 60 * 1000); // 測試：每 1 分鐘檢查一次有沒有該提醒的訂單
 });
