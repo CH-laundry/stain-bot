@@ -1,316 +1,532 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>C.H 精緻洗衣 - 付款管理系統</title>
-<style>
-  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:linear-gradient(135deg,#667eea,#764ba2);min-height:100vh;margin:0;padding:20px}
-  .container{max-width:900px;margin:0 auto;background:#111827;color:#e5e7eb;border-radius:18px;padding:24px;box-shadow:0 24px 60px rgba(0,0,0,.4)}
-  .tabs{display:flex;gap:16px;border-bottom:1px solid #374151;flex-wrap:wrap}
-  .tab{padding:10px 14px;border:0;background:transparent;color:#9ca3af;font-weight:600;cursor:pointer;border-bottom:3px solid transparent}
-  .tab.active{color:#60a5fa;border-bottom-color:#60a5fa}
-  .tab-content{display:none;padding-top:18px}
-  .tab-content.active{display:block}
-  label{display:block;margin:10px 0 6px}
-  input,textarea,select{width:100%;background:#111827;color:#e5e7eb;border:1px solid #374151;border-radius:10px;padding:12px}
-  textarea{min-height:120px}
-  .btn{display:inline-block;background:#2563eb;color:#fff;border:0;border-radius:10px;padding:12px 16px;font-weight:700;cursor:pointer}
-  .btn:disabled{opacity:.6;cursor:not-allowed}
-  .btn.secondary{background:#16a34a}
-  .btn.gray{background:#6b7280}
-  .btn.danger{background:#dc2626}
-  .grid{display:grid;gap:12px}
-  .grid.cols-2{grid-template-columns:repeat(2,1fr)}
-  .grid.cols-3{grid-template-columns:repeat(3,1fr)}
-  .card{background:#0b1220;border:1px solid #1f2937;border-radius:12px;padding:12px}
-  .status{margin-top:12px;display:none;border:1px solid #374151;border-radius:10px;padding:12px}
-  .status.ok{display:block;border-color:#14532d;background:#052e1a}
-  .status.err{display:block;border-color:#7f1d1d;background:#2a0e0e}
-  .pill{padding:4px 8px;border-radius:999px;font-size:12px}
-  .pill.warn{background:#92400e;color:#fff}
-  .pill.ok{background:#065f46;color:#fff}
-  .pill.bad{background:#7f1d1d;color:#fff}
-  .pay-options{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
-  .pay-tile{border:1px solid #374151;border-radius:12px;padding:14px;text-align:center;cursor:pointer;user-select:none}
-  .pay-tile .icon{font-size:26px;margin-bottom:6px}
-  .pay-tile.active{border-color:#60a5fa;background:#0f172a;box-shadow:0 0 0 2px rgba(96,165,250,.4) inset}
-  @media (max-width:768px){ .grid.cols-3{grid-template-columns:1fr} .grid.cols-2{grid-template-columns:1fr} .pay-options{grid-template-columns:1fr} }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>C.H 精緻洗衣 - 付款管理系統</title>
+  <style>
+    :root{
+      --bg1:#1e1f2a; --bg2:#2a2b3a; --card:#0f1324; --primary:#6ea8fe; --accent:#9b8cff;
+      --ok:#2ecc71; --warn:#f1c40f; --danger:#e74c3c; --muted:#9aa0ad; --ring:rgba(110,168,254,.25);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      background: radial-gradient(1200px 800px at 20% -10%, #2b2e4a 0%, #1b1d32 40%, #0c0f1f 100%),
+                  linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+      background-blend-mode: overlay;
+      color:#e6e9ef; padding:24px;
+    }
+    .shell{max-width:1100px;margin:0 auto;background:rgba(15,19,36,.7);backdrop-filter: blur(10px);border-radius:20px;box-shadow:0 30px 80px rgba(0,0,0,.4);overflow:hidden}
+    .header{padding:22px 24px;border-bottom:1px solid rgba(255,255,255,.06);display:flex;align-items:center;gap:14px}
+    .header .logo{font-size:28px}
+    .header h1{margin:0;font-size:22px;letter-spacing:.5px}
+    .tabs{display:flex;gap:18px;padding:14px 24px;border-bottom:1px solid rgba(255,255,255,.06);overflow:auto}
+    .tab{background:none;border:none;color:#b7c1d6;cursor:pointer;font-weight:700;letter-spacing:.3px;padding:10px 8px;border-bottom:3px solid transparent}
+    .tab.active{color:#fff;border-color:var(--primary)}
+    .layout{display:grid;grid-template-columns: 1.2fr .8fr;gap:18px;padding:20px}
+    @media (max-width: 900px){ .layout{grid-template-columns:1fr} }
+    .card{background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:18px}
+    .title{margin:0 0 12px;font-size:16px;color:#cbd5e1;letter-spacing:.4px}
+    .row{display:grid;gap:12px;margin-bottom:12px}
+    label{font-size:13px;color:#9aa5b1;margin-bottom:6px}
+    input,textarea,select{
+      width:100%;padding:13px 14px;border-radius:12px;border:1.5px solid rgba(255,255,255,.12);background:#0f1324;color:#e6e9ef;font-size:16px;
+      outline:none; transition:.25s border, .25s box-shadow;
+    }
+    input:focus,textarea:focus,select:focus{border-color:var(--primary);box-shadow:0 0 0 6px var(--ring)}
+    textarea{min-height:120px;resize:vertical}
+    .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+    @media (max-width: 560px){ .grid3{grid-template-columns:1fr} }
+    .paybtn{border:1.5px solid rgba(255,255,255,.12);background:#0f1324;border-radius:14px;cursor:pointer;padding:18px 10px;text-align:center}
+    .paybtn.active{border-color:var(--primary);box-shadow:0 8px 26px rgba(110,168,254,.25), inset 0 0 0 999px rgba(110,168,254,.08)}
+    .paybtn .ico{font-size:28px;margin-bottom:6px}
+    .paybtn .name{font-weight:800;letter-spacing:.5px}
+    .btn{display:inline-block;background:linear-gradient(135deg,#60a5fa,#8b5cf6);border:none;color:white;font-weight:800;
+         padding:14px 18px;border-radius:12px;cursor:pointer;box-shadow:0 12px 35px rgba(99,102,241,.35);transition:transform .1s}
+    .btn:active{transform:translateY(1px)}
+    .btn.secondary{background:linear-gradient(135deg,#22c55e,#16a34a)}
+    .muted{color:#94a3b8}
+    .result{margin-top:12px;border-radius:12px;padding:14px;display:none}
+    .result.success{background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3)}
+    .result.error{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3)}
+    .searchLine{display:grid;grid-template-columns:1fr 140px;gap:10px}
+    .kpi{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:8px}
+    .kpi .k{background:#0b0f1e;border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:14px;text-align:center}
+    .k .n{font-size:22px;font-weight:900}
+    .k .t{font-size:12px;color:#9aa5b1}
+    .templ-grid{display:grid;grid-template-columns:1fr;gap:8px}
+    .templ{background:#0b0f1e;border:1px dashed rgba(255,255,255,.14);padding:10px;border-radius:10px}
+    .list{max-height:520px;overflow:auto;display:grid;gap:10px}
+    .cust{background:#0b0f1e;border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:12px;display:flex;justify-content:space-between;align-items:center}
+    .cust .info{cursor:pointer}
+    .pill{display:inline-block;padding:4px 8px;border-radius:999px;background:#111627;border:1px solid rgba(255,255,255,.08);font-size:12px;color:#9aa5b1}
+  </style>
 </head>
 <body>
-  <div class="container">
-    <h2 style="margin:0 0 6px">💳 付款管理系統</h2>
+  <div class="shell">
+    <div class="header">
+      <div class="logo">💳</div>
+      <h1>付款管理系統</h1>
+    </div>
+
     <div class="tabs">
       <button class="tab active" data-tab="payment">發送付款</button>
       <button class="tab" data-tab="orders">訂單管理</button>
       <button class="tab" data-tab="customers">客戶編號</button>
       <button class="tab" data-tab="templates">訊息模板</button>
+      <span class="pill">手機優化 ✓</span>
     </div>
 
-    <!-- 發送付款 -->
-    <section id="payment" class="tab-content active">
+    <!-- 主要 layout：左側表單 + 右側客戶清單 -->
+    <div id="payment" class="layout">
       <div class="card">
-        <label>🔎 快速查詢（輸入「編號」或「姓名」）</label>
-        <div class="grid cols-2">
-          <input id="quickInput" placeholder="例如：755 或 王小明"/>
-          <button class="btn gray" id="btnQuick">查詢</button>
+        <h3 class="title">發送付款</h3>
+
+        <div class="row">
+          <label>🔎 快速查詢（輸入「編號」或「姓名」）</label>
+          <div class="searchLine">
+            <input id="quickSearch" placeholder="例如：625 或 王小明">
+            <button class="btn secondary" id="btnQuick">查詢</button>
+          </div>
         </div>
+
+        <form id="paymentForm">
+          <div class="row">
+            <label>客戶姓名 *</label>
+            <input id="userName" placeholder="王小明" required>
+          </div>
+
+          <div class="row">
+            <label>客戶 LINE User ID *</label>
+            <input id="userId" placeholder="Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" required>
+          </div>
+
+          <div class="row">
+            <label>金額 (NT$) *</label>
+            <input id="amount" type="number" min="1" inputmode="numeric" placeholder="1500" required>
+          </div>
+
+          <div class="row">
+            <label>付款方式 *</label>
+            <div class="grid3" id="payGrid">
+              <div class="paybtn active" data-val="both">
+                <div class="ico">💙</div>
+                <div class="name">兩者都發</div>
+              </div>
+              <div class="paybtn" data-val="ecpay">
+                <div class="ico">💳</div>
+                <div class="name">綠界信用卡</div>
+              </div>
+              <div class="paybtn" data-val="linepay">
+                <div class="ico">💚</div>
+                <div class="name">LINE Pay</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="row">
+            <label>訊息內容（可含 {amount}）</label>
+            <div style="display:grid;grid-template-columns:1fr 140px;gap:10px;align-items:start">
+              <textarea id="customMessage" placeholder="例如：您好，金額 NT$ {amount}，謝謝！"></textarea>
+              <div>
+                <button type="button" class="btn" id="btnLoadT">載入模板</button>
+                <div class="muted" style="font-size:12px;margin-top:8px">在右側有「客戶載入」清單</div>
+              </div>
+            </div>
+          </div>
+
+          <button class="btn" type="submit">發送付款連結</button>
+          <div id="result" class="result"></div>
+        </form>
       </div>
 
-      <label>客戶姓名 *</label>
-      <input id="userName" placeholder="王小明"/>
+      <!-- 右側：客戶載入 / 模板速選 -->
+      <div class="card">
+        <h3 class="title">👥 客戶載入</h3>
+        <div style="display:flex;gap:8px;margin-bottom:10px">
+          <button class="btn secondary" id="btnReloadUsers">重新載入</button>
+          <span class="muted" id="usersCount">—</span>
+        </div>
+        <div id="userList" class="list">
+          <div class="muted">尚未載入（點「重新載入」）</div>
+        </div>
 
-      <label>客戶 LINE User ID *</label>
-      <input id="userId" placeholder="Uxxxxxxxxxxxxxxxxxxxx"/>
-
-      <label>金額 (NT$) *</label>
-      <input id="amount" type="number" min="1" placeholder="1500"/>
-
-      <label>付款方式 *</label>
-      <div class="pay-options" id="payOptions">
-        <div class="pay-tile active" data-val="both"><div class="icon">💙</div><div>兩者都發</div></div>
-        <div class="pay-tile" data-val="ecpay"><div class="icon">💳</div><div>綠界信用卡</div></div>
-        <div class="pay-tile" data-val="linepay"><div class="icon">💚</div><div>LINE Pay</div></div>
+        <h3 class="title" style="margin-top:18px">📝 常用模板</h3>
+        <div id="templList" class="templ-grid"></div>
       </div>
+    </div>
 
-      <label>訊息內容（可含 {amount}）</label>
-      <textarea id="customMessage" placeholder="例如：您好，金額 NT$ {amount}，謝謝！"></textarea>
-
-      <div style="margin-top:14px">
-        <button class="btn" id="sendBtn">發送付款連結</button>
+    <!-- 其它分頁：簡化骨架（可保留你原有內容） -->
+    <div id="orders" class="layout" style="display:none">
+      <div class="card">
+        <h3 class="title">訂單管理</h3>
+        <div class="kpi">
+          <div class="k"><div class="n" id="kTotal">0</div><div class="t">總訂單</div></div>
+          <div class="k"><div class="n" id="kPending">0</div><div class="t">待付款</div></div>
+          <div class="k"><div class="n" id="kPaid">0</div><div class="t">已付款</div></div>
+          <div class="k"><div class="n" id="kExpired">0</div><div class="t">已過期</div></div>
+          <div class="k"><div class="n" id="kNeed">0</div><div class="t">需提醒</div></div>
+        </div>
+        <div id="orderList" class="list"></div>
       </div>
-
-      <div id="status" class="status"></div>
-    </section>
-
-    <!-- 訂單管理 -->
-    <section id="orders" class="tab-content">
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
-        <button class="btn secondary" id="btnReload">重新整理</button>
+      <div class="card">
+        <h3 class="title">群組動作</h3>
+        <button class="btn" id="btnRefreshOrders">重新整理</button>
         <button class="btn secondary" id="btnRemind">發送付款提醒</button>
-        <button class="btn secondary" id="btnClean">清理過期訂單</button>
+        <button class="btn" id="btnClean">清理過期訂單</button>
       </div>
-      <div id="orderStats" class="grid cols-3"></div>
-      <div id="orderList" style="margin-top:12px"></div>
-    </section>
+    </div>
 
-    <!-- 客戶編號 -->
-    <section id="customers" class="tab-content">
-      <div class="grid cols-3">
-        <div>
-          <label>編號</label><input id="newCustomerNumber" placeholder="例如：755"/>
-        </div>
-        <div>
-          <label>姓名</label><input id="newCustomerName" placeholder="例如：王小明"/>
-        </div>
-        <div>
-          <label>User ID</label><input id="newCustomerUserId" placeholder="Uxxxxxxxx"/>
-        </div>
+    <div id="customers" class="layout" style="display:none">
+      <div class="card">
+        <h3 class="title">新增/更新 客戶編號</h3>
+        <div class="row"><label>編號</label><input id="newNo" placeholder="如 625"></div>
+        <div class="row"><label>姓名</label><input id="newName" placeholder="王小明"></div>
+        <div class="row"><label>LINE User ID</label><input id="newUid" placeholder="Uxxxxxxxxxx"></div>
+        <button class="btn secondary" id="btnSaveNo">儲存</button>
       </div>
-      <div style="margin:12px 0"><button class="btn secondary" id="btnSaveCustomer">儲存</button></div>
-      <div id="savedCustomers"></div>
-    </section>
+      <div class="card">
+        <h3 class="title">已儲存</h3>
+        <div id="savedCustomers" class="list"></div>
+      </div>
+    </div>
 
-    <!-- 模板 -->
-    <section id="templates" class="tab-content">
-      <label>新增模板（{amount} 代表金額）</label>
-      <textarea id="newTemplateContent"></textarea>
-      <div style="margin-top:10px"><button class="btn secondary" id="btnSaveTpl">儲存模板</button></div>
-      <div id="templateList" style="margin-top:12px"></div>
-    </section>
+    <div id="templates" class="layout" style="display:none">
+      <div class="card">
+        <h3 class="title">新增模板</h3>
+        <div class="row"><textarea id="newTpl" placeholder="您好，金額 NT$ {amount}，謝謝！"></textarea></div>
+        <button class="btn secondary" id="btnSaveTpl">儲存模板</button>
+      </div>
+      <div class="card">
+        <h3 class="title">我的模板</h3>
+        <div id="tplManage" class="list"></div>
+      </div>
+    </div>
   </div>
 
-<script>
-  const API_BASE = location.origin;          // 確保永遠打到同網域（手機/電腦一致）
-  const $ = s => document.querySelector(s);
-  const $$ = s => Array.from(document.querySelectorAll(s));
-  const ok = (html)=>showStatus(html,true);
-  const err= (html)=>showStatus(html,false);
-  function showStatus(html, isOk){
-    const el = $('#status');
-    el.className = 'status ' + (isOk ? 'ok' : 'err');
-    el.innerHTML = html;
-    el.style.display = 'block';
-  }
-  async function getJSON(url){ const r = await fetch(API_BASE+url, { credentials:'same-origin' }); return r.json(); }
-  async function postJSON(url, body){
-    const r = await fetch(API_BASE+url, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body||{}) });
-    const txt = await r.text();            // 先讀文字，防止不是 JSON 時直接爆掉
-    try { return JSON.parse(txt); } 
-    catch { throw new Error(txt || `HTTP ${r.status}`); }
-  }
+  <script>
+    // ===== 狀態 =====
+    const API_BASE = location.origin;
+    let savedCustomers = {};
+    let savedTemplates = [];
+    let allOrders = [];
+    let allUsers = [];
 
-  // ====== tabs ======
-  $$('.tab').forEach(b=>{
-    b.addEventListener('click', ()=>{
-      $$('.tab').forEach(t=>t.classList.remove('active'));
-      $$('.tab-content').forEach(p=>p.classList.remove('active'));
-      b.classList.add('active'); document.getElementById(b.dataset.tab).classList.add('active');
-      if (b.dataset.tab==='orders') loadOrders();
-      if (b.dataset.tab==='customers') renderCustomers();
-      if (b.dataset.tab==='templates') renderTemplates();
-    });
-  });
-
-  // ====== 付款方式圖塊 ======
-  let paymentType = 'both';
-  $$('#payOptions .pay-tile').forEach(tile=>{
-    tile.addEventListener('click', ()=>{
-      $$('#payOptions .pay-tile').forEach(t=>t.classList.remove('active'));
-      tile.classList.add('active'); paymentType = tile.dataset.val;
-    });
-  });
-
-  // ====== 快速查詢：編號 / 姓名 ======
-  let savedCustomers = {};
-  async function syncCustomers(){
-    try{
-      const d = await getJSON('/api/customer-meta');
-      if (d.success && d.map){ savedCustomers = d.map; localStorage.setItem('customerNumbers', JSON.stringify(savedCustomers)); }
-      else { savedCustomers = JSON.parse(localStorage.getItem('customerNumbers')||'{}'); }
-    }catch{ savedCustomers = JSON.parse(localStorage.getItem('customerNumbers')||'{}'); }
-  }
-  $('#btnQuick').addEventListener('click', ()=>{
-    const q = $('#quickInput').value.trim();
-    if (!q){ err('請輸入編號或姓名'); return; }
-    // 1) 先用編號查
-    if (savedCustomers[q]){
-      const c = savedCustomers[q];
-      $('#userName').value = c.name || '';
-      $('#userId').value   = c.userId || '';
-      ok(`✅ 已帶入：#${q} ${c.name}`);
-      return;
+    // ===== 小工具 =====
+    const $ = sel => document.querySelector(sel);
+    const $all = sel => Array.from(document.querySelectorAll(sel));
+    function showResult(type, msg){
+      const el = $('#result');
+      el.className = 'result ' + (type==='success'?'success':'error');
+      el.innerHTML = msg;
+      el.style.display = 'block';
+      el.scrollIntoView({behavior:'smooth', block:'center'});
     }
-    // 2) 再用姓名模糊查
-    const found = Object.entries(savedCustomers).find(([no,c])=> (c.name||'').includes(q));
-    if (found){
-      const [no, c] = found;
-      $('#userName').value = c.name || '';
-      $('#userId').value   = c.userId || '';
-      ok(`✅ 已帶入：#${no} ${c.name}`);
-    }else{
-      err('找不到此客戶');
-    }
-  });
+    async function getJSON(u){ const r=await fetch(u); if(!r.ok) throw new Error(await r.text()); return r.json(); }
+    async function postJSON(u,b){ const r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b||{})}); let t=''; try{t=await r.text()}catch{}; try{const j=JSON.parse(t); if(!r.ok) throw new Error(j.error||t); return j;}catch{ if(!r.ok) throw new Error(t||'HTTP '+r.status); return {success:false, raw:t}; } }
+    async function putJSON(u,b){ const r=await fetch(u,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(b||{})}); return r.json(); }
+    async function del(u){ const r=await fetch(u,{method:'DELETE'}); return r.json(); }
 
-  // ====== 發送付款（重點：手機錯誤改良） ======
-  $('#sendBtn').addEventListener('click', async ()=>{
-    const userId   = $('#userId').value.trim();
-    const userName = $('#userName').value.trim();
-    const amount   = parseInt($('#amount').value,10);
-    const customMessage = ($('#customMessage').value||'').replace('{amount}', (amount||0).toLocaleString());
+    // ===== 分頁 =====
+    $all('.tab').forEach(btn=>{
+      btn.addEventListener('click',()=>{
+        $all('.tab').forEach(b=>b.classList.remove('active')); btn.classList.add('active');
+        const id = btn.dataset.tab;
+        ['payment','orders','customers','templates'].forEach(t => { document.getElementById(t).style.display = (t===id?'grid':'none'); });
+        if(id==='orders') loadOrders();
+        if(id==='customers') renderSavedCustomers();
+        if(id==='templates') renderTplManage();
+      });
+    });
 
-    if (!userId || !userName || !amount) return err('請完整填寫「姓名 / User ID / 金額」');
+    // ===== 支付選擇 =====
+    let paymentType = 'both';
+    $('#payGrid').addEventListener('click', e=>{
+      const card = e.target.closest('.paybtn'); if(!card) return;
+      $all('.paybtn').forEach(x=>x.classList.remove('active'));
+      card.classList.add('active');
+      paymentType = card.dataset.val;
+    });
 
-    $('#sendBtn').disabled = true;
-    try{
-      const data = await postJSON('/send-payment', { userId, userName, amount, paymentType, customMessage });
-      if (data.success){
-        ok(`✅ 已發送。客戶：${userName}｜金額：NT$ ${amount.toLocaleString()}`);
-        $('#userId').value = $('#userName').value = $('#amount').value = $('#customMessage').value = '';
-      }else{
-        err('發送失敗：' + (data.error || '未知錯誤'));
+    // ===== 快速查詢（編號/姓名）→ 套入姓名 + UID（注意：姓名與 UID 已修正為正確對應）=====
+    $('#btnQuick').addEventListener('click', ()=>{
+      const q = $('#quickSearch').value.trim();
+      if(!q){ alert('請輸入編號或姓名'); return; }
+      // 先用「編號」找
+      if(savedCustomers[q]){
+        const c = savedCustomers[q];
+        $('#userName').value = c.name || '';
+        $('#userId').value = c.userId || '';
+        return;
       }
-    }catch(e){
-      // 這裡會把非 JSON 的 HTML/錯誤頁片段也顯示出來，便於你看問題
-      err('連線失敗：' + String(e.message).slice(0,300));
-    }finally{
-      $('#sendBtn').disabled = false;
-    }
-  });
+      // 再用「姓名」找
+      const found = Object.entries(savedCustomers).find(([no,c]) => (c.name||'').includes(q));
+      if(found){
+        const [, c] = found;
+        $('#userName').value = c.name || '';
+        $('#userId').value = c.userId || '';
+      }else{
+        alert('找不到此客戶');
+      }
+    });
 
-  // ====== 訂單管理（精簡） ======
-  async function loadOrders(){
-    const wrap = $('#orderList'); wrap.innerHTML = '<div class="card">載入中...</div>';
-    try{
-      const d = await getJSON('/api/orders');
-      const arr = d.success ? d.orders : [];
-      if (!arr.length){ wrap.innerHTML = '<div class="card">尚無訂單記錄</div>'; return; }
-      wrap.innerHTML = arr.map(o=>`
-        <div class="card">
-          <div style="display:flex;justify-content:space-between;align-items:center">
-            <div><b>${o.userName||'-'}</b>　NT$ ${(o.amount||0).toLocaleString()}</div>
-            <div>${o.status==='paid' ? '<span class="pill ok">已付款</span>' : (o.isExpired ? '<span class="pill bad">已過期</span>' : '<span class="pill warn">待付款</span>')}</div>
+    // ===== 送出付款 =====
+    $('#paymentForm').addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const userId = $('#userId').value.trim();
+      const userName = $('#userName').value.trim();
+      const amount = parseInt($('#amount').value,10);
+      const msg = ($('#customMessage').value||'').replace('{amount}', (amount||0).toLocaleString());
+
+      if(!userId || !userName || !amount){ showResult('error','請完整填寫：姓名、User ID、金額'); return; }
+
+      try{
+        const d = await postJSON(`${API_BASE}/api/send-payment`, { userId, userName, amount, paymentType, customMessage: msg });
+        if(d.success){
+          showResult('success', `✅ 已發送！<br>訂單：${d.orderId}<br>可重複點擊：<br>綠界信用卡、LINE Pay 按鈕`);
+          $('#paymentForm').reset(); paymentType='both'; $all('.paybtn').forEach(x=>x.classList.remove('active')); $all('.paybtn')[0].classList.add('active');
+        }else{
+          showResult('error', `❌ 失敗：${d.error||'未知錯誤'}`);
+        }
+      }catch(err){
+        showResult('error', `連線失敗：${err.message}`);
+      }
+    });
+
+    // ===== 客戶清單（右側） =====
+    async function loadUsers(){
+      $('#userList').innerHTML = '<div class="muted">載入中...</div>';
+      try{
+        const d = await getJSON(`${API_BASE}/api/users`);
+        allUsers = Array.isArray(d.users)? d.users : [];
+        $('#usersCount').textContent = `共 ${allUsers.length} 筆`;
+        if(allUsers.length===0){ $('#userList').innerHTML = '<div class="muted">尚無客戶</div>'; return; }
+        $('#userList').innerHTML = allUsers.map(u=>`
+          <div class="cust">
+            <div class="info" data-uid="${u.userId||''}" data-name="${u.name||''}">
+              <div style="font-weight:800">${u.name||'-'}</div>
+              <div class="muted" style="font-size:12px">${u.userId||''}${u.number? '｜編號 '+u.number : ''}</div>
+            </div>
+            <button class="btn" data-fill="${u.userId||''}" data-n="${u.name||''}">帶入</button>
           </div>
-          <div style="font-size:12px;opacity:.8;margin-top:6px">#${o.orderId}</div>
-          <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn secondary" onclick="renewOrder('${o.orderId}')">續期重發</button>
-            <button class="btn danger" onclick="deleteOrder('${o.orderId}')">刪除</button>
+        `).join('');
+      }catch{
+        // 後端取不到就用 meta
+        const list = Object.entries(savedCustomers).map(([no,c])=>({userId:c.userId,name:c.name,number:no}));
+        $('#usersCount').textContent = `共 ${list.length} 筆（離線）`;
+        if(list.length===0){ $('#userList').innerHTML = '<div class="muted">尚無客戶</div>'; return; }
+        $('#userList').innerHTML = list.map(u=>`
+          <div class="cust">
+            <div class="info" data-uid="${u.userId||''}" data-name="${u.name||''}">
+              <div style="font-weight:800">${u.name||'-'}</div>
+              <div class="muted" style="font-size:12px">${u.userId||''}${u.number? '｜編號 '+u.number : ''}</div>
+            </div>
+            <button class="btn" data-fill="${u.userId||''}" data-n="${u.name||''}">帶入</button>
+          </div>
+        `).join('');
+      }
+    }
+    $('#userList').addEventListener('click', e=>{
+      const info = e.target.closest('.info');
+      const btn = e.target.closest('button[data-fill]');
+      const uid = info?.dataset.uid || btn?.dataset.fill;
+      const name = info?.dataset.name || btn?.dataset.n;
+      if(uid!==undefined){
+        $('#userId').value = uid || '';
+        $('#userName').value = name || '';
+        // 切回表單分頁（若不在）
+        $all('.tab').forEach(b=>b.classList.remove('active')); document.querySelector('.tab[data-tab="payment"]').classList.add('active');
+        ['payment','orders','customers','templates'].forEach(t => { document.getElementById(t).style.display = (t==='payment'?'grid':'none'); });
+      }
+    });
+    $('#btnReloadUsers').addEventListener('click', loadUsers);
+
+    // ===== 模板 =====
+    async function fetchTemplates(){
+      try{
+        const d = await getJSON(`${API_BASE}/api/templates`);
+        if(d.success && Array.isArray(d.templates)){ savedTemplates = d.templates; }
+      }catch{}
+      if(!savedTemplates || savedTemplates.length===0){
+        savedTemplates = [
+          '您好，金額 NT$ {amount}，請儘速付款，謝謝！',
+          '衣物已完成清洗，費用 NT$ {amount}，可來店取件囉！'
+        ];
+      }
+      renderTemplates();
+      renderTplManage();
+    }
+    function renderTemplates(){
+      const box = $('#templList');
+      box.innerHTML = savedTemplates.map((t,i)=>`
+        <div class="templ">
+          <div style="white-space:pre-wrap;font-size:14px">${t}</div>
+          <div style="margin-top:8px"><button class="btn" data-usetpl="${i}">套用</button></div>
+        </div>
+      `).join('');
+    }
+    $('#templList').addEventListener('click', e=>{
+      const i = e.target.getAttribute('data-usetpl');
+      if(i!==null){
+        $('#customMessage').value = savedTemplates[Number(i)] || '';
+        $('#customMessage').focus();
+      }
+    });
+    $('#btnLoadT').addEventListener('click', renderTemplates);
+
+    function renderTplManage(){
+      const wrap = $('#tplManage');
+      wrap.innerHTML = savedTemplates.map((t,i)=>`
+        <div class="cust">
+          <div style="white-space:pre-wrap;max-width:70%">${t}</div>
+          <div style="display:flex;gap:8px">
+            <button class="btn" data-edit="${i}">編輯</button>
+            <button class="btn" data-del="${i}">刪除</button>
           </div>
         </div>
       `).join('');
-    }catch(e){ wrap.innerHTML = '<div class="card">載入失敗：'+e.message+'</div>'; }
-  }
-  async function renewOrder(id){
-    try{ const d = await postJSON(`/api/order/${id}/renew`); if (d.success) ok('✅ 已續期並重新發送'); else err('續期失敗：'+(d.error||'')); }
-    catch(e){ err('續期錯誤：'+e.message); }
-  }
-  async function deleteOrder(id){
-    if (!confirm('刪除此訂單？')) return;
-    try{
-      const d = await fetch(API_BASE+`/api/order/${id}`, { method:'DELETE' }).then(r=>r.json());
-      if (d.success){ ok('🗑️ 已刪除'); loadOrders(); } else err('刪除失敗');
-    }catch(e){ err('刪除錯誤：'+e.message); }
-  }
-  $('#btnReload').onclick = loadOrders;
-  $('#btnRemind').onclick = ()=> postJSON('/api/orders/send-reminders').then(d=>ok(d.message)).catch(e=>err(e.message));
-  $('#btnClean').onclick  = ()=> postJSON('/api/orders/clean-expired').then(d=>ok(d.message)).catch(e=>err(e.message));
+    }
+    $('#tplManage').addEventListener('click', async e=>{
+      const di = e.target.getAttribute('data-del');
+      const ei = e.target.getAttribute('data-edit');
+      if(di!==null){
+        const i = Number(di);
+        await del(`${API_BASE}/api/templates/${i}`);
+        await fetchTemplates();
+      }else if(ei!==null){
+        const i = Number(ei);
+        const nv = prompt('修改模板：', savedTemplates[i]||'');
+        if(nv===null) return;
+        await putJSON(`${API_BASE}/api/templates/${i}`, { content:nv });
+        await fetchTemplates();
+      }
+    });
+    $('#btnSaveTpl').addEventListener('click', async ()=>{
+      const c = $('#newTpl').value.trim();
+      if(!c) return alert('請輸入模板內容');
+      await postJSON(`${API_BASE}/api/templates`, { content:c });
+      $('#newTpl').value='';
+      await fetchTemplates();
+    });
 
-  // ====== 客戶編號 ======
-  function renderCustomers(){
-    const wrap = $('#savedCustomers');
-    const list = Object.entries(savedCustomers||{});
-    if (!list.length){ wrap.innerHTML='<div class="card">尚無資料</div>'; return; }
-    wrap.innerHTML = list.map(([no,c])=>`
-      <div class="card" style="display:flex;justify-content:space-between;align-items:center">
-        <div><b>#${no}</b>　${c.name}　<span style="opacity:.7">(${c.userId})</span></div>
-        <button class="btn" onclick="prefill('${c.userId}','${c.name}')">帶入</button>
-      </div>
-    `).join('');
-  }
-  window.prefill = (uid,name)=>{ $('#userId').value=uid; $('#userName').value=name; document.querySelector('.tab[data-tab="payment"]').click(); };
-  $('#btnSaveCustomer').onclick = async ()=>{
-    const number = $('#newCustomerNumber').value.trim();
-    const name   = $('#newCustomerName').value.trim();
-    const userId = $('#newCustomerUserId').value.trim();
-    if (!name || !userId) return err('請輸入 姓名 / User ID');
-    try{
-      const d = await postJSON('/api/customer-meta/save', { number:number?Number(number):undefined, name, userId });
-      if (d.success){ savedCustomers[d.number]=d.data; localStorage.setItem('customerNumbers', JSON.stringify(savedCustomers)); $('#newCustomerNumber').value=$('#newCustomerName').value=$('#newCustomerUserId').value=''; renderCustomers(); ok('✅ 已儲存'); }
-      else err('儲存失敗：'+(d.error||''));
-    }catch(e){ err('儲存錯誤：'+e.message); }
-  };
-
-  // ====== 模板 ======
-  let savedTemplates = [];
-  async function syncTemplates(){
-    try{
-      const d = await getJSON('/api/templates');
-      if (d.success && Array.isArray(d.templates)){ savedTemplates=d.templates; localStorage.setItem('messageTemplates', JSON.stringify(savedTemplates)); }
-      else { savedTemplates = JSON.parse(localStorage.getItem('messageTemplates')||'[]'); }
-    }catch{ savedTemplates = JSON.parse(localStorage.getItem('messageTemplates')||'[]'); }
-  }
-  function renderTemplates(){
-    const wrap = $('#templateList');
-    if (!savedTemplates.length){ wrap.innerHTML='<div class="card">尚無模板</div>'; return; }
-    wrap.innerHTML = savedTemplates.map((t,i)=>`
-      <div class="card">
-        <div style="white-space:pre-wrap">${t}</div>
-        <div style="margin-top:8px;display:flex;gap:8px">
-          <button class="btn" onclick="useTpl(${i})">使用</button>
-          <button class="btn danger" onclick="delTpl(${i})">刪除</button>
+    // ===== 客戶編號（後端同步） =====
+    async function fetchCustomerMeta(){
+      try{
+        const d = await getJSON(`${API_BASE}/api/customer-meta`);
+        if(d.success && d.map){ savedCustomers = d.map; }
+      }catch{}
+      renderSavedCustomers();
+    }
+    function renderSavedCustomers(){
+      const wrap = $('#savedCustomers');
+      const items = Object.entries(savedCustomers);
+      if(!wrap) return;
+      if(items.length===0){ wrap.innerHTML = '<div class="muted">尚無資料</div>'; return; }
+      wrap.innerHTML = items.map(([no,c])=>`
+        <div class="cust">
+          <div class="info" data-uid="${c.userId||''}" data-name="${c.name||''}">
+            <div style="font-weight:800">#${no} ${c.name||'-'}</div>
+            <div class="muted" style="font-size:12px">User ID：${c.userId||''}</div>
+          </div>
+          <button class="btn" data-delno="${no}">刪除</button>
         </div>
-      </div>`).join('');
-  }
-  window.useTpl = i => { const a=parseInt($('#amount').value||'0',10); $('#customMessage').value = (savedTemplates[i]||'').replace('{amount}', a.toLocaleString()); document.querySelector('.tab[data-tab="payment"]').click(); };
-  window.delTpl = async i => { if(!confirm('刪除此模板？'))return; const d = await fetch(API_BASE+`/api/templates/${i}`,{method:'DELETE'}).then(r=>r.json()); if (d.success){ savedTemplates=d.templates; localStorage.setItem('messageTemplates', JSON.stringify(savedTemplates)); renderTemplates(); } };
+      `).join('');
+    }
+    $('#savedCustomers')?.addEventListener('click', async e=>{
+      const d = e.target.getAttribute('data-delno');
+      const info = e.target.closest('.info');
+      if(d){
+        if(!confirm(`刪除編號 #${d} ?`)) return;
+        await del(`${API_BASE}/api/customer-meta/${d}`);
+        await fetchCustomerMeta();
+      }else if(info){
+        $('#userId').value = info.dataset.uid || '';
+        $('#userName').value = info.dataset.name || '';
+        // 切回表單
+        $all('.tab').forEach(b=>b.classList.remove('active')); document.querySelector('.tab[data-tab="payment"]').classList.add('active');
+        ['payment','orders','customers','templates'].forEach(t => { document.getElementById(t).style.display = (t==='payment'?'grid':'none'); });
+      }
+    });
+    $('#btnSaveNo').addEventListener('click', async ()=>{
+      const number = ($('#newNo').value||'').trim();
+      const name   = ($('#newName').value||'').trim();
+      const userId = ($('#newUid').value||'').trim();
+      if(!name || !userId){ alert('請輸入 姓名 / User ID'); return; }
+      const d = await postJSON(`${API_BASE}/api/customer-meta/save`, { number: number? Number(number):undefined, name, userId });
+      if(d.success){
+        $('#newNo').value=''; $('#newName').value=''; $('#newUid').value='';
+        await fetchCustomerMeta();
+        alert('✅ 已儲存');
+      }else alert(d.error||'儲存失敗');
+    });
 
-  // ====== 初始化 ======
-  (async function init(){
-    await syncCustomers();
-    await syncTemplates();
-  })();
-</script>
+    // ===== 訂單（簡版） =====
+    async function loadOrders(){
+      $('#orderList').innerHTML = '<div class="muted">載入中...</div>';
+      try{
+        const d = await getJSON(`${API_BASE}/api/orders`);
+        if(!d.success) throw new Error(d.error||'載入失敗');
+        allOrders = d.orders||[];
+        $('#kTotal').textContent = d.statistics?.total ?? 0;
+        $('#kPending').textContent = d.statistics?.pending ?? 0;
+        $('#kPaid').textContent = d.statistics?.paid ?? 0;
+        $('#kExpired').textContent = d.statistics?.expired ?? 0;
+        $('#kNeed').textContent = d.statistics?.needReminder ?? 0;
+        if(allOrders.length===0){ $('#orderList').innerHTML = '<div class="muted">尚無訂單</div>'; return; }
+        $('#orderList').innerHTML = allOrders.map(o=>`
+          <div class="cust">
+            <div>
+              <div style="font-weight:800">${o.userName||'-'}　<span class="muted" style="font-size:12px">${o.orderId||''}</span></div>
+              <div class="muted" style="font-size:12px">NT$ ${(o.amount||0).toLocaleString()}｜${o.status|| (o.isExpired?'expired':'pending')}</div>
+            </div>
+            <div style="display:flex;gap:8px">
+              ${o.isExpired? `<button class="btn" data-renew="${o.orderId}">續約重發</button>` :
+                              `<button class="btn" data-copy="${o.orderId}">複製連結</button>`}
+              <button class="btn" data-del="${o.orderId}">刪除</button>
+            </div>
+          </div>
+        `).join('');
+      }catch(e){
+        $('#orderList').innerHTML = `<div class="muted">載入失敗：${e.message}</div>`;
+      }
+    }
+    $('#orderList').addEventListener('click', async e=>{
+      const r = e.target.getAttribute('data-renew');
+      const d = e.target.getAttribute('data-del');
+      const c = e.target.getAttribute('data-copy');
+      if(r){
+        const j = await postJSON(`${API_BASE}/api/order/${r}/renew`, {});
+        alert(j.success? '已續約並重發' : `失敗：${j.error||'未知錯誤'}`);
+        loadOrders();
+      }else if(d){
+        if(!confirm('刪除此訂單？')) return;
+        const j = await del(`${API_BASE}/api/order/${d}`);
+        alert(j.success? '已刪除' : `失敗：${j.error||'未知錯誤'}`);
+        loadOrders();
+      }else if(c){
+        const base = location.origin;
+        const txt = `【綠界信用卡】\n${base}/pay/ec/${c}\n\n【LINE Pay】\n${base}/pay/line/${c}`;
+        try{ await navigator.clipboard.writeText(txt); alert('已複製'); }catch{ alert('複製失敗'); }
+      }
+    });
+    $('#btnRefreshOrders').addEventListener('click', loadOrders);
+    $('#btnRemind').addEventListener('click', async ()=>{
+      const j = await postJSON(`${API_BASE}/api/orders/send-reminders`, {});
+      alert(j.message||'已發送'); loadOrders();
+    });
+    $('#btnClean').addEventListener('click', async ()=>{
+      const j = await postJSON(`${API_BASE}/api/orders/clean-expired`, {});
+      alert(j.message||'已清理'); loadOrders();
+    });
+
+    // ===== 初始化 =====
+    document.addEventListener('DOMContentLoaded', async ()=>{
+      await fetchCustomerMeta();
+      await fetchTemplates();
+      await loadUsers();
+    });
+  </script>
 </body>
 </html>
