@@ -3,7 +3,7 @@ const path = require('path');
 const logger = require('./logger');
 
 const ORDERS_FILE = path.join(__dirname, '../data/orders.json');
-const EXPIRY_TIME = 7 * 24 * 60 * 60 * 1000;
+const EXPIRY_TIME = 7 * 24 * 60 * 60 * 1000; // 7 天
 
 class OrderManager {
     constructor() {
@@ -83,19 +83,13 @@ class OrderManager {
 
     getOrdersNeedingReminder() {
         const now = Date.now();
-        const twoDaysAfterCreation = 2 * 24 * 60 * 60 * 1000;
-        const twoDaysInterval = 2 * 24 * 60 * 60 * 1000;
+        const twoDaysAfterCreation = 2 * 24 * 60 * 60 * 1000; // 2天
         
         return this.getPendingOrders().filter(order => {
             const timeSinceCreation = now - order.createdAt;
-            if (timeSinceCreation < twoDaysAfterCreation) {
-                return false;
-            }
-            if (!order.lastReminderSent) {
-                return true;
-            }
-            const timeSinceLastReminder = now - order.lastReminderSent;
-            return timeSinceLastReminder >= twoDaysInterval;
+            const shouldRemind = timeSinceCreation >= twoDaysAfterCreation;
+            const noRecentReminder = !order.lastReminderSent || (now - order.lastReminderSent) > 12 * 60 * 60 * 1000;
+            return shouldRemind && noRecentReminder;
         });
     }
 
@@ -168,16 +162,19 @@ class OrderManager {
     cleanExpiredOrders() {
         const now = Date.now();
         let cleaned = 0;
+        
         for (const [orderId, order] of this.orders.entries()) {
             if (order.status === 'pending' && now > order.expiryTime) {
                 this.orders.delete(orderId);
                 cleaned++;
             }
         }
+        
         if (cleaned > 0) {
             this.saveOrders();
             logger.logToFile(`🧹 清理 ${cleaned} 筆過期訂單`);
         }
+        
         return cleaned;
     }
 
