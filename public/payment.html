@@ -695,7 +695,7 @@
         </div>
       `).join('');
     }
-    function saveCustomerNumber() {
+
       const no = document.getElementById('newCustomerNumber').value.trim();
       const name = document.getElementById('newCustomerName').value.trim();
       const userId = document.getElementById('newCustomerUserId').value.trim();
@@ -707,7 +707,7 @@
       displaySavedCustomers();
       showResult('success','✅ 已儲存客戶編號');
     }
-    function removeSavedCustomer(no) {
+   
       if (!confirm(`刪除編號 #${no} ?`)) return;
       delete savedCustomers[no];
       localStorage.setItem('customerNumbers', JSON.stringify(savedCustomers));
@@ -728,7 +728,7 @@
         </div>
       `).join('');
     }
-    function saveTemplate() {
+    
       const t = document.getElementById('newTemplateContent').value.trim();
       if (!t) return alert('請輸入模板內容');
       savedTemplates.push(t);
@@ -737,14 +737,14 @@
       if (document.getElementById('payment-tab').classList.contains('active')) loadCustomTemplates();
       showResult('success','✅ 已新增模板');
     }
-    function editTemplate(i) {
+   
       const nv = prompt('修改模板內容：', savedTemplates[i] || '');
       if (nv === null) return;
       savedTemplates[i] = nv;
       localStorage.setItem('messageTemplates', JSON.stringify(savedTemplates));
       displayTemplates(); loadCustomTemplates();
     }
-    function deleteTemplate(i) {
+   
       if (!confirm('確定刪除此模板？')) return;
       savedTemplates.splice(i,1);
       localStorage.setItem('messageTemplates', JSON.stringify(savedTemplates));
