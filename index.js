@@ -514,7 +514,7 @@ for (const order of ordersNeedingReminder) {
       await client.pushMessage(order.userId, {
         type: 'text',
         text:
-          `😊 付款提醒\n\n` +
+          `😊 自動付款提醒\n\n` +
           `親愛的 ${order.userName} 您好，您於本次洗衣服務仍待付款\n` +
           `金額：NT$ ${order.amount.toLocaleString()}\n\n` +
           `【信用卡／綠界】\n${ecpayLink}\n\n` +
