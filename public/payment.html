@@ -1,513 +1,386 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-TW">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
-<title>C.H 精緻洗衣 — 付款管理系統</title>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>C.H 精緻洗衣｜付款管理系統</title>
 <style>
   :root{
-    --bg1:#0b1020; --bg2:#1a1f36; --card:#10172b; --pri:#6ea8fe; --pri-2:#8b5cf6;
-    --ok:#22c55e; --warn:#f59e0b; --bad:#ef4444; --txt:#e5e7eb; --mut:#9ca3af;
-    --ring:rgba(110,168,254,.25)
+    --bg1:#0f172a; --bg2:#1e293b; --card:#111827; --pri:#60a5fa; --ok:#22c55e; --warn:#f59e0b; --err:#ef4444;
   }
-  *{box-sizing:border-box}
-  html,body{margin:0;height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,"Noto Sans TC","PingFang TC","Heiti TC",sans-serif;background:
-    radial-gradient(1200px 800px at 20% -10%, #3b82f6 0%, transparent 60%),
-    radial-gradient(1000px 700px at 120% 10%, #a855f7 0%, transparent 60%),
-    linear-gradient(180deg, var(--bg1), var(--bg2));
-    color:var(--txt)}
-  .wrap{max-width:1100px;margin:24px auto;padding:16px}
-  .app{background:rgba(255,255,255,.03);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.08);
-    border-radius:20px;display:grid;grid-template-columns:1fr 320px;gap:16px;padding:18px}
-  header{grid-column:1/-1;display:flex;align-items:center;gap:12px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,.08)}
-  header .logo{width:34px;height:34px;border-radius:8px;background:#ffcc00;display:grid;place-items:center;color:#0b1020;font-weight:900}
-  header h1{font-size:20px;margin:0}
-  nav{display:flex;gap:12px;margin-top:10px}
-  nav button{background:transparent;border:none;color:var(--mut);font-weight:600;padding:10px 14px;border-radius:10px;cursor:pointer}
-  nav button.active{color:#fff;background:rgba(255,255,255,.06);outline:1px solid rgba(255,255,255,.08)}
-  .grid{display:grid;gap:16px}
-  .card{background:var(--card);border:1px solid rgba(255,255,255,.06);border-radius:14px;padding:14px}
-  label{display:block;font-size:12px;color:var(--mut);margin:6px 2px}
-  input,textarea,select{width:100%;background:rgba(255,255,255,.04);color:#fff;border:1.5px solid rgba(255,255,255,.08);
-    border-radius:12px;padding:12px 14px;font-size:16px}
-  input:focus,textarea:focus,select:focus{outline:none;border-color:var(--pri);box-shadow:0 0 0 4px var(--ring)}
+  *{box-sizing:border-box} body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:radial-gradient(80vw 80vh at 10% -10%,#1f2937,#0b1020);}
+  .wrap{max-width:1180px;margin:24px auto;padding:16px}
+  .title{display:flex;gap:10px;align-items:center;color:#fff;font-weight:800;font-size:28px;margin:6px 0 14px}
+  .pane{display:grid;grid-template-columns:1fr 360px;gap:18px}
+  .card{background:linear-gradient(180deg,#0b1222,#0a0f1c);border:1px solid #22304d;border-radius:16px;padding:16px;color:#dbeafe}
+  .tabs{display:flex;gap:8px;border-bottom:1px solid #21304d;margin-bottom:12px}
+  .tab{background:transparent;border:0;color:#9bb7ff;padding:10px 14px;border-bottom:3px solid transparent;cursor:pointer;font-weight:700}
+  .tab.act{color:#fff;border-bottom-color:#60a5fa}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  label{display:block;font-size:13px;color:#94a3b8;margin:12px 4px 6px}
+  input,textarea{width:100%;padding:12px 14px;border-radius:10px;border:1px solid #263a66;background:#0d1530;color:#e5e7eb;font-size:16px}
   textarea{min-height:120px;resize:vertical}
-  .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-  .pay-opts{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
-  .opt{border-radius:16px;border:1.5px solid rgba(255,255,255,.08);padding:18px 12px;text-align:center;cursor:pointer;transition:.2s}
-  .opt.active{border-color:var(--pri);box-shadow:0 8px 26px rgba(110,168,254,.15)}
-  .opt .emo{font-size:26px;margin-bottom:6px}
-  .btn{display:inline-flex;gap:10px;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--pri),var(--pri-2));
-    border:none;border-radius:12px;padding:14px 18px;color:#fff;font-weight:700;cursor:pointer}
-  .btn:disabled{opacity:.6;cursor:not-allowed}
-  .mut{color:var(--mut);font-size:12px}
-  .result{margin-top:12px;border-radius:12px;padding:12px 14px;display:none}
-  .result.ok{display:block;background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.4)}
-  .result.err{display:block;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4)}
-  /* 右側 */
-  .side h3{margin:4px 0 10px;font-size:14px;color:#cbd5e1}
-  .list{display:flex;flex-direction:column;gap:10px;max-height:520px;overflow:auto}
-  .item{display:flex;gap:10px;align-items:center;justify-content:space-between;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:10px}
-  .item .who{cursor:pointer}
-  .tag{font-size:12px;background:rgba(255,255,255,.06);padding:4px 8px;border-radius:999px;color:#cbd5e1}
-  .danger{background:linear-gradient(135deg,#ef4444,#dc2626)}
-  .ghost{background:rgba(255,255,255,.06);color:#e5e7eb}
-  .btn.sm{padding:8px 10px;border-radius:10px;font-weight:700}
-  .pill{display:inline-block;background:rgba(59,130,246,.2);padding:2px 8px;border-radius:999px;font-size:12px;color:#cfe1ff}
-  .stat{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
-  .k{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:10px;text-align:center}
-  .k b{display:block;color:#fff;font-size:18px}
-  .k span{color:var(--mut);font-size:12px}
-  .searchRow{display:grid;grid-template-columns:1fr 90px;gap:8px}
-  @media (max-width: 980px){
-    .app{grid-template-columns:1fr}
-    .side{order:2}
-  }
+  .radio3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:8px}
+  .opt{padding:18px;border-radius:14px;border:2px solid #243558;background:#0b1222;cursor:pointer;text-align:center}
+  .opt.sel{border-color:#60a5fa;box-shadow:0 0 0 3px rgba(96,165,250,.15)}
+  .btn{padding:14px 18px;border:0;border-radius:12px;background:linear-gradient(135deg,#60a5fa,#7c3aed);color:#fff;font-weight:800;cursor:pointer}
+  .btn.small{padding:8px 12px;border-radius:10px}
+  .btn.green{background:linear-gradient(135deg,#22c55e,#16a34a)}
+  .btn.red{background:linear-gradient(135deg,#ef4444,#b91c1c)}
+  .row{display:flex;gap:10px;align-items:center}
+  .side h4{margin:.2rem 0 10px;color:#9cc2ff}
+  .list{display:flex;flex-direction:column;gap:10px;max-height:560px;overflow:auto}
+  .item{padding:10px 12px;border:1px solid #243558;border-radius:12px;background:#0b1222;color:#dbeafe;display:flex;justify-content:space-between;gap:8px}
+  .muted{color:#94a3b8;font-size:12px}
+  .pill{padding:4px 8px;border-radius:9999px;font-size:12px;font-weight:700}
+  .pill.ok{background:#052f18;color:#86efac;border:1px solid #14532d}
+  .result{margin-top:12px;padding:12px;border-radius:10px;display:none}
+  .result.ok{background:#052f18;border:1px solid #14532d;color:#86efac}
+  .result.err{background:#3b0b10;border:1px solid #7f1d1d;color:#fecaca}
+  @media (max-width:960px){ .pane{grid-template-columns:1fr} }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="app">
-    <header>
-      <div class="logo">洗</div>
-      <div>
-        <h1>付款管理系統</h1>
-        <nav>
-          <button class="tab active" data-tab="send">發送付款</button>
+  <div class="wrap">
+    <div class="title">🧾 付款管理系統</div>
+
+    <div class="pane">
+      <!-- 左：主操作 -->
+      <div class="card">
+        <div class="tabs">
+          <button class="tab act" data-tab="send">發送付款</button>
           <button class="tab" data-tab="orders">訂單管理</button>
           <button class="tab" data-tab="meta">客戶編號</button>
           <button class="tab" data-tab="tpl">訊息模板</button>
-        </nav>
-      </div>
-    </header>
-
-    <!-- 主區 -->
-    <div id="main" class="grid">
-      <!-- 發送付款 -->
-      <section class="card tabpane" id="pane-send">
-        <div class="searchRow">
-          <div>
-            <label>🔎 快速查詢（輸入「編號」或「姓名」）</label>
-            <input id="quickSearch" placeholder="例如：625 或 王小明" />
-          </div>
-          <button class="btn ghost" id="btnQuick">查詢</button>
         </div>
 
-        <div class="row" style="margin-top:10px">
-          <div>
-            <label>客戶姓名 *</label>
-            <input id="userName" placeholder="王小明" />
+        <!-- 發送付款 -->
+        <section id="tab-send">
+          <label>🔍 快速查詢（輸入「編號」或「姓名」）</label>
+          <div class="row">
+            <input id="q" placeholder="例如 625 或 王小明"/>
+            <button class="btn small" id="btnQ">查詢</button>
           </div>
-          <div>
-            <label>客戶 LINE User ID *</label>
-            <input id="userId" placeholder="Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" />
-          </div>
-        </div>
 
-        <div class="row">
-          <div>
-            <label>金額（NT$） *</label>
-            <input id="amount" type="number" min="1" placeholder="1500" />
-          </div>
-          <div>
-            <label class="mut">　</label>
-            <div class="pay-opts" id="payOpts">
-              <div class="opt active" data-v="both"><div class="emo">💙</div>兩者都發</div>
-              <div class="opt" data-v="ecpay"><div class="emo">💳</div>綠界信用卡</div>
-              <div class="opt" data-v="linepay"><div class="emo">💚</div>LINE Pay</div>
+          <div class="grid2">
+            <div>
+              <label>客戶姓名 *</label>
+              <input id="userName" placeholder="王小明"/>
+            </div>
+            <div>
+              <label>客戶 LINE User ID *</label>
+              <input id="userId" placeholder="Uxxxxxxxxxxxxxxxxxxxxxx"/>
             </div>
           </div>
-        </div>
 
-        <div class="row">
-          <div>
-            <label>訊息內容（可含 {amount}）</label>
-            <textarea id="customMessage" placeholder="例如：您好，金額 NT$ {amount}，請儘速付款，謝謝！"></textarea>
-            <div class="mut">點選右側「客戶載入」可直接帶入客戶；{amount} 會自動替換金額。</div>
+          <label>金額（NT$） *</label>
+          <input id="amount" type="number" min="1" placeholder="1500"/>
+
+          <label>付款方式 *</label>
+          <div class="radio3" id="payType">
+            <div class="opt sel" data-v="both">💙 兩者都發</div>
+            <div class="opt" data-v="ecpay">💳 綠界信用卡</div>
+            <div class="opt" data-v="linepay">💚 LINE Pay</div>
           </div>
-          <div>
-            <label class="mut">　</label>
-            <button class="btn" id="btnSend">💙 發送付款連結</button>
-            <div id="result" class="result"></div>
+
+          <label>訊息內容（可含 {amount}）</label>
+          <textarea id="msg" placeholder="例如：您好，金額 NT$ {amount}，謝謝！"></textarea>
+
+          <div class="row" style="margin-top:12px;gap:12px">
+            <button class="btn" id="btnSend">發送付款連結</button>
+            <button class="btn green small" id="btnLoadTpl">載入模板</button>
           </div>
-        </div>
-      </section>
 
-      <!-- 訂單管理（簡版統計，維持原後端 API） -->
-      <section class="card tabpane" id="pane-orders" hidden>
-        <div class="row">
-          <button class="btn ghost" id="btnReloadOrders">重新整理</button>
-          <button class="btn ghost" id="btnRemind">發送付款提醒</button>
-          <button class="btn ghost" id="btnClean">清理過期訂單</button>
-        </div>
-        <div id="stats" class="stat" style="margin-top:10px"></div>
-        <div id="ordersWrap" style="margin-top:10px"></div>
-      </section>
+          <div class="result" id="tip"></div>
+        </section>
 
-      <!-- 客戶編號 -->
-      <section class="card tabpane" id="pane-meta" hidden>
-        <div class="row">
-          <div>
-            <label>編號（可空白自動遞增）</label>
-            <input id="metaNo" placeholder="例如：625" />
+        <!-- 訂單管理 -->
+        <section id="tab-orders" style="display:none">
+          <div class="row" style="gap:8px;margin:4px 0 10px">
+            <button class="btn green small" id="btnReloadOrders">重新整理</button>
+            <button class="btn green small" id="btnRemind">發送付款提醒</button>
           </div>
-          <div>
-            <label>姓名 *</label>
-            <input id="metaName" placeholder="王小明" />
+          <div id="orderList" class="list"></div>
+        </section>
+
+        <!-- 客戶編號 -->
+        <section id="tab-meta" style="display:none">
+          <div class="grid2">
+            <div>
+              <label>編號（可空白自動遞增）</label>
+              <input id="mNo" placeholder="例如 625"/>
+            </div>
+            <div>
+              <label>姓名 *</label>
+              <input id="mName" placeholder="王小明"/>
+            </div>
           </div>
-        </div>
-        <label>LINE User ID *</label>
-        <input id="metaUid" placeholder="Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" />
-        <div style="margin-top:10px;display:flex;gap:10px">
-          <button class="btn" id="btnSaveMeta">💾 儲存</button>
-          <span class="mut">儲存成功後會同步到後端與本機</span>
-        </div>
+          <label>LINE User ID *</label>
+          <input id="mUid" placeholder="Uxxxxxxxxxxxxxxxxxxxx"/>
 
-        <div class="card" style="margin-top:14px">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-            <h3>已儲存</h3>
-            <button class="btn ghost sm" id="btnReloadMeta">重新載入</button>
+          <div class="row" style="margin-top:12px;gap:8px">
+            <button class="btn green" id="btnSaveMeta">儲存</button>
           </div>
-          <div id="metaList" class="list"></div>
-        </div>
-      </section>
 
-      <!-- 模板 -->
-      <section class="card tabpane" id="pane-tpl" hidden>
-        <label>新增模板（使用 {amount} 代表金額）</label>
-        <textarea id="tplNew" placeholder="例如：您好，金額 NT$ {amount}，謝謝！"></textarea>
-        <div style="margin-top:10px"><button class="btn" id="btnSaveTpl">💾 儲存模板</button></div>
+          <h4 style="margin-top:16px">已儲存</h4>
+          <div id="savedMeta" class="list"></div>
+          <div class="muted" id="metaNone">尚無資料</div>
+        </section>
 
-        <div class="card" style="margin-top:14px">
-          <h3>我的模板</h3>
+        <!-- 模板 -->
+        <section id="tab-tpl" style="display:none">
+          <label>新增模板</label>
+          <textarea id="newTpl" placeholder="您好，金額 NT$ {amount}，請儘速付款，謝謝！"></textarea>
+          <div class="row" style="margin-top:12px">
+            <button class="btn green" id="btnSaveTpl">儲存模板</button>
+          </div>
+          <h4 style="margin-top:16px">我的模板</h4>
           <div id="tplList" class="list"></div>
-        </div>
-      </section>
-    </div>
+        </section>
+      </div>
 
-    <!-- 側欄：客戶載入 -->
-    <aside class="side">
-      <div class="card">
-        <div style="display:flex;align-items:center;justify-content:space-between">
-          <h3>👥 客戶載入 <span id="sideCount" class="pill">0</span></h3>
-          <button class="btn ghost sm" id="btnSideReload">重新載入</button>
+      <!-- 右：客戶載入 -->
+      <aside class="card side">
+        <div class="row" style="justify-content:space-between">
+          <h4>👥 客戶載入</h4>
+          <button class="btn small green" id="btnReloadUsers">重新載入</button>
         </div>
-        <div class="mut">點一下帶入「姓名＋User ID」。右邊可刪除。</div>
-        <div id="sideList" class="list" style="margin-top:10px"></div>
-      </div>
-      <div class="card">
-        <h3>📝 常用模板</h3>
+        <div class="muted">點一下「姓名」即可帶入到發送區。</div>
+        <div id="userList" class="list"></div>
+        <div class="muted" id="userNone">尚無客戶</div>
+
+        <h4 style="margin-top:16px">📌 常用模板</h4>
         <div id="quickTpls" class="list"></div>
-      </div>
-    </aside>
+      </aside>
+    </div>
   </div>
-</div>
 
 <script>
-/* ========= 共用工具 ========= */
-const API = location.origin;
-async function getJSON(url){
-  const r = await fetch(API + url, { headers:{'Accept':'application/json'}});
-  const ct = r.headers.get('content-type')||'';
-  if (!ct.includes('application/json')) {
-    const t = await r.text();
-    throw new Error(t || ('HTTP '+r.status));
+const $ = (id)=>document.getElementById(id);
+const API = (p)=>p; // 同網域
+let savedTemplates = [];
+let meta = { nextNo:1, map:{} };
+let allOrders = [];
+
+// tabs
+document.querySelectorAll('.tab').forEach(t=>{
+  t.onclick = ()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('act'));
+    t.classList.add('act');
+    const k = t.dataset.tab;
+    ['send','orders','meta','tpl'].forEach(s=>{
+      $('tab-'+s).style.display = (s===k?'block':'none');
+    });
+    if (k==='orders') loadOrders();
+    if (k==='tpl')    renderTpls();
+    if (k==='meta')   renderMeta();
+  };
+});
+
+// pay type
+let payType = 'both';
+document.querySelectorAll('#payType .opt').forEach(x=>{
+  x.onclick = ()=>{
+    document.querySelectorAll('#payType .opt').forEach(y=>y.classList.remove('sel'));
+    x.classList.add('sel'); payType = x.dataset.v;
+  };
+});
+
+// 快速查詢
+$('btnQ').onclick = ()=>{
+  const q = $('q').value.trim();
+  if (!q) return alert('請輸入編號或姓名');
+  // 先編號
+  if (meta.map[q]) {
+    const c = meta.map[q];
+    $('userName').value = c.name||'';
+    $('userId').value = c.userId||'';
+    return;
   }
-  const d = await r.json();
-  if (r.ok) return d;
-  throw new Error(d.error||'未知錯誤');
-}
-async function postJSON(url, body){
-  const r = await fetch(API + url, { method:'POST', headers:{'Content-Type':'application/json','Accept':'application/json'}, body: JSON.stringify(body||{})});
-  const ct = r.headers.get('content-type')||'';
-  if (!ct.includes('application/json')) { const t = await r.text(); throw new Error(t || ('HTTP '+r.status)); }
-  const d = await r.json();
-  if (r.ok) return d;
-  throw new Error(d.error||'未知錯誤');
-}
-async function putJSON(url, body){
-  const r = await fetch(API + url, { method:'PUT', headers:{'Content-Type':'application/json','Accept':'application/json'}, body: JSON.stringify(body||{})});
-  const ct = r.headers.get('content-type')||'';
-  if (!ct.includes('application/json')) { const t = await r.text(); throw new Error(t || ('HTTP '+r.status)); }
-  const d = await r.json();
-  if (r.ok) return d;
-  throw new Error(d.error||'未知錯誤');
-}
-async function del(url){
-  const r = await fetch(API + url, { method:'DELETE', headers:{'Accept':'application/json'}});
-  const ct = r.headers.get('content-type')||'';
-  if (!ct.includes('application/json')) { const t = await r.text(); throw new Error(t || ('HTTP '+r.status)); }
-  const d = await r.json();
-  if (r.ok) return d;
-  throw new Error(d.error||'未知錯誤');
-}
-function showMsg(ok, html){
-  const el = document.getElementById('result');
-  el.className='result ' + (ok?'ok':'err');
-  el.innerHTML = html;
-  el.style.display='block';
+  // 模糊姓名
+  const hit = Object.values(meta.map).find(v=> (v.name||'').includes(q));
+  if (hit) {
+    $('userName').value = hit.name||'';
+    $('userId').value = hit.userId||'';
+  } else alert('找不到');
+};
+
+// 發送
+$('btnSend').onclick = async ()=>{
+  const userId = $('userId').value.trim();
+  const userName = $('userName').value.trim();
+  const amount = parseInt($('amount').value,10);
+  const customMessage = ($('msg').value||'').replace('{amount}', (amount||0).toLocaleString());
+  if (!userId || !userName || !amount) return tip('err','請把姓名、UserID、金額填好');
+
+  try{
+    $('btnSend').disabled = true;
+    const r = await fetch(API('/api/send-payment'),{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ userId, userName, amount, paymentType:payType, customMessage })
+    });
+    const d = await r.json();
+    if (!d.success) throw new Error(d.error||'發送失敗');
+    tip('ok','✅ 已發送付款連結'); $('msg').value='';
+  }catch(e){ tip('err','❌ '+e.message); }
+  finally{ $('btnSend').disabled = false; }
+};
+
+function tip(type, msg){
+  const el = $('tip');
+  el.className = 'result '+(type==='ok'?'ok':'err');
+  el.textContent = msg; el.style.display='block';
   el.scrollIntoView({behavior:'smooth',block:'center'});
 }
 
-/* ========= 標籤切換 ========= */
-document.querySelectorAll('.tab').forEach(btn=>{
-  btn.addEventListener('click',()=>{
-    document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
-    btn.classList.add('active');
-    const tab = btn.dataset.tab;
-    document.querySelectorAll('.tabpane').forEach(p=>p.hidden=true);
-    document.getElementById('pane-'+tab).hidden=false;
-
-    if(tab==='orders') reloadOrders();
-    if(tab==='meta')   reloadMeta();
-    if(tab==='tpl')    renderTplList();
-  });
-});
-
-/* ========= 付款方式選擇 ========= */
-let paymentType='both';
-document.getElementById('payOpts').addEventListener('click',e=>{
-  const box = e.target.closest('.opt'); if(!box) return;
-  document.querySelectorAll('.opt').forEach(o=>o.classList.remove('active'));
-  box.classList.add('active');
-  paymentType = box.dataset.v;
-});
-
-/* ========= 快速查詢：正確帶入（姓名 -> #userName、UserID -> #userId） ========= */
-async function quickSearch(){
-  const q = document.getElementById('quickSearch').value.trim();
-  if(!q){ alert('請輸入編號或姓名'); return; }
-  // 先用 /api/customer-meta（持久化名單）
-  try {
-    const meta = await getJSON('/api/customer-meta'); // {success, nextNo, map}
-    const map = meta.map || {};
-    // 1) 直接以編號查
-    if(map[q]){
-      const c = map[q];
-      document.getElementById('userName').value = c.name || '';
-      document.getElementById('userId').value   = c.userId || '';
-      return;
-    }
-    // 2) 以姓名模糊
-    const hit = Object.entries(map).find(([no,c]) => (c.name||'').includes(q));
-    if(hit){
-      const c = hit[1];
-      document.getElementById('userName').value = c.name || '';
-      document.getElementById('userId').value   = c.userId || '';
-      return;
-    }
-  }catch(_){}
-
-  // 後備：/api/users
-  try{
-    const d = await getJSON('/api/users'); // {users:[{userId,name}]}
-    const found = (d.users||[]).find(u=> (u.number===q) || (u.name||'').includes(q));
-    if(found){
-      document.getElementById('userName').value = found.name || '';
-      document.getElementById('userId').value   = found.userId || '';
-      return;
-    }
-  }catch(_){}
-  alert('找不到此客戶');
-}
-document.getElementById('btnQuick').addEventListener('click',quickSearch);
-
-/* ========= 發送付款（固定呼叫 /send-payment） ========= */
-document.getElementById('btnSend').addEventListener('click', async ()=>{
-  const userId   = document.getElementById('userId').value.trim();
-  const userName = document.getElementById('userName').value.trim();
-  const amount   = parseInt(document.getElementById('amount').value,10);
-  let customMessage = (document.getElementById('customMessage').value||'').trim();
-  if(!userId || !userName || !amount || amount<=0){
-    showMsg(false,'請完整輸入「姓名、User ID、金額」'); return;
-  }
-  customMessage = customMessage.replace('{amount}', amount.toLocaleString());
-  const btn = document.getElementById('btnSend'); btn.disabled=true;
-
-  try{
-    const d = await postJSON('/send-payment',{ userId, userName, amount, paymentType, customMessage });
-    const lab = paymentType==='both' ? '綠界信用卡＋LINE Pay' : (paymentType==='ecpay'?'綠界信用卡':'LINE Pay');
-    showMsg(true, `✅ 已發送給 <b>${userName}</b><br>金額：NT$ ${amount.toLocaleString()}<br>方式：${lab}`);
-    document.getElementById('customMessage').value='';
-  }catch(e){
-    showMsg(false,'❌ 發送失敗：<pre style="white-space:pre-wrap">'+(e.message||e)+'</pre>');
-  }finally{ btn.disabled=false; }
-});
-
-/* ========= 側欄：客戶載入（讀 /api/customer-meta） ========= */
-async function loadSide(){
-  const box = document.getElementById('sideList');
-  box.innerHTML = '<div class="mut">載入中…</div>';
-  try{
-    const meta = await getJSON('/api/customer-meta');
-    const entries = Object.entries(meta.map||{});
-    document.getElementById('sideCount').innerText = entries.length;
-    if(!entries.length){ box.innerHTML = '<div class="mut">尚無客戶資料</div>'; return; }
-    box.innerHTML = entries.map(([no,c])=>`
-      <div class="item">
-        <div class="who" onclick="window.prefill('${(c.userId||'').replace(/'/g,'\\\'')}', '${(c.name||'').replace(/'/g,'\\\'')}')">
-          <div><b>${c.name||'-'}</b> <span class="tag">#${no}</span></div>
-          <div class="mut" style="font-size:12px">${c.userId||'-'}</div>
-        </div>
-        <button class="btn danger sm" onclick="window.delMeta('${no}')">刪除</button>
-      </div>
-    `).join('');
-  }catch(e){
-    box.innerHTML = '<div class="mut">載入失敗：'+(e.message||e)+'</div>';
-  }
-}
-window.prefill = (uid, name)=>{
-  document.getElementById('userId').value   = uid||'';
-  document.getElementById('userName').value = name||'';
+// 模板
+$('btnLoadTpl').onclick = ()=> renderQuickTpls();
+$('btnSaveTpl').onclick = async ()=>{
+  const t = $('newTpl').value.trim(); if (!t) return alert('請輸入內容');
+  const r = await fetch(API('/api/templates'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:t})});
+  const d = await r.json(); if (!d.success) return alert(d.error||'失敗');
+  savedTemplates = d.templates; $('newTpl').value=''; renderTpls(); renderQuickTpls();
 };
-window.delMeta = async (no)=>{
-  if(!confirm('刪除編號 #'+no+' ？')) return;
-  try{ await del('/api/customer-meta/'+encodeURIComponent(no)); loadSide(); reloadMeta(); }
-  catch(e){ alert('刪除失敗：'+(e.message||e)); }
-};
-document.getElementById('btnSideReload').addEventListener('click',loadSide);
 
-/* ========= 客戶編號頁（新增/列表） ========= */
-async function reloadMeta(){
-  const list = document.getElementById('metaList');
-  list.innerHTML = '<div class="mut">載入中…</div>';
-  try{
-    const d = await getJSON('/api/customer-meta');
-    const entries = Object.entries(d.map||{});
-    if(!entries.length){ list.innerHTML = '<div class="mut">尚無資料</div>'; return; }
-    list.innerHTML = entries.map(([no,c])=>`
-      <div class="item">
-        <div>
-          <div><b>#${no}</b>　${c.name||'-'}</div>
-          <div class="mut" style="font-size:12px">${c.userId||''}</div>
-        </div>
-        <div style="display:flex;gap:8px">
-          <button class="btn ghost sm" onclick="window.prefill('${(c.userId||'').replace(/'/g,'\\\'')}','${(c.name||'').replace(/'/g,'\\\'')}')">帶入</button>
-          <button class="btn danger sm" onclick="window.delMeta('${no}')">刪除</button>
-        </div>
-      </div>
-    `).join('');
-  }catch(e){
-    list.innerHTML = '<div class="mut">載入失敗：'+(e.message||e)+'</div>';
-  }
+async function fetchTpls(){
+  const r = await fetch(API('/api/templates')); const d = await r.json();
+  if (d.success) savedTemplates = d.templates;
 }
-document.getElementById('btnSaveMeta').addEventListener('click', async ()=>{
-  const number = document.getElementById('metaNo').value.trim();
-  const name   = document.getElementById('metaName').value.trim();
-  const userId = document.getElementById('metaUid').value.trim();
-  if(!name || !userId){ alert('請輸入「姓名、LINE User ID」'); return; }
-  try{
-    const payload = { name, userId };
-    if(number) payload.number = Number(number);
-    const d = await postJSON('/api/customer-meta/save', payload);
-    alert('已儲存：#'+d.number+' '+(d.data?.name||'')); 
-    document.getElementById('metaNo').value='';
-    document.getElementById('metaName').value='';
-    document.getElementById('metaUid').value='';
-    reloadMeta(); loadSide();
-  }catch(e){ alert('儲存失敗：'+(e.message||e)); }
-});
-document.getElementById('btnReloadMeta').addEventListener('click', reloadMeta);
-
-/* ========= 模板 ========= */
-let savedTemplates = JSON.parse(localStorage.getItem('messageTemplates') || '[]');
-async function fetchTemplates(){
-  try{
-    const d = await getJSON('/api/templates');
-    if(d.success && Array.isArray(d.templates)){
-      savedTemplates = d.templates;
-      localStorage.setItem('messageTemplates', JSON.stringify(savedTemplates));
-    }
-  }catch(_){}
-}
-function renderQuickTpls(){
-  const box = document.getElementById('quickTpls');
-  if(!savedTemplates.length){ box.innerHTML = '<div class="mut">尚無模板</div>'; return; }
-  box.innerHTML = savedTemplates.map((t,i)=>`
-    <button class="btn ghost sm" onclick="(function(){
-      const el=document.getElementById('customMessage');
-      el.value = ${JSON.stringify(t)}; 
-    })()">${(t.length>14?t.slice(0,14)+'…':t)}</button>
-  `).join('');
-}
-function renderTplList(){
-  const box = document.getElementById('tplList');
-  if(!savedTemplates.length){ box.innerHTML = '<div class="mut">尚無模板</div>'; return; }
+function renderTpls(){
+  const box = $('tplList');
+  if (!savedTemplates.length) { box.innerHTML = '<div class="muted">尚無模板</div>'; return; }
   box.innerHTML = savedTemplates.map((t,i)=>`
     <div class="item">
       <div style="white-space:pre-wrap">${t}</div>
-      <div style="display:flex;gap:8px">
-        <button class="btn ghost sm" onclick="window._editTpl(${i})">編輯</button>
-        <button class="btn danger sm" onclick="window._delTpl(${i})">刪除</button>
+      <div class="row">
+        <button class="btn small green" onclick="editTpl(${i})">編輯</button>
+        <button class="btn small red" onclick="delTpl(${i})">刪除</button>
       </div>
-    </div>
-  `).join('');
+    </div>`).join('');
 }
-window._editTpl = async (i)=>{
-  const nv = prompt('修改模板內容：', savedTemplates[i]||''); if(nv===null) return;
-  try{
-    const d = await putJSON('/api/templates/'+i, { content:nv });
-    savedTemplates = d.templates; localStorage.setItem('messageTemplates', JSON.stringify(savedTemplates));
-    renderTplList(); renderQuickTpls();
-  }catch(e){ alert('更新失敗：'+(e.message||e)); }
-};
-window._delTpl = async (i)=>{
-  if(!confirm('確定刪除這個模板？')) return;
-  try{
-    const d = await del('/api/templates/'+i);
-    savedTemplates = d.templates; localStorage.setItem('messageTemplates', JSON.stringify(savedTemplates));
-    renderTplList(); renderQuickTpls();
-  }catch(e){ alert('刪除失敗：'+(e.message||e)); }
-};
-document.getElementById('btnSaveTpl').addEventListener('click', async ()=>{
-  const val = document.getElementById('tplNew').value.trim(); if(!val){ alert('請輸入內容'); return; }
-  try{
-    const d = await postJSON('/api/templates', { content: val });
-    savedTemplates = d.templates; localStorage.setItem('messageTemplates', JSON.stringify(savedTemplates));
-    document.getElementById('tplNew').value=''; renderTplList(); renderQuickTpls();
-  }catch(e){ alert('儲存失敗：'+(e.message||e)); }
-});
+function renderQuickTpls(){
+  const box = $('quickTpls');
+  if (!savedTemplates.length){ box.innerHTML='<div class="muted">尚無模板</div>'; return; }
+  box.innerHTML = savedTemplates.map((t)=>`
+    <div class="item" style="cursor:pointer" onclick="setMsg(${JSON.stringify(t).replace(/"/g,'&quot;')})">
+      <div>📝 ${t.length>38?t.slice(0,38)+'…':t}</div>
+    </div>`).join('');
+}
+function setMsg(t){ $('msg').value = t; }
 
-/* ========= 訂單（沿用你的後端） ========= */
-async function reloadOrders(){
-  const statsEl = document.getElementById('stats');
-  const wrap = document.getElementById('ordersWrap');
-  statsEl.innerHTML = ''; wrap.innerHTML = '<div class="mut">載入中…</div>';
-  try{
-    const d = await getJSON('/api/orders');
-    const s = d.statistics || { total:0,pending:0,paid:0,expired:0,needReminder:0 };
-    statsEl.innerHTML = `
-      <div class="k"><b>${s.total}</b><span>總訂單</span></div>
-      <div class="k"><b>${s.pending}</b><span>待付款</span></div>
-      <div class="k"><b>${s.paid}</b><span>已付款</span></div>
-      <div class="k"><b>${s.expired}</b><span>已過期</span></div>
-      <div class="k"><b>${s.needReminder}</b><span>需提醒</span></div>`;
-    if(!d.orders?.length){ wrap.innerHTML='<div class="mut">尚無訂單</div>'; return; }
-    wrap.innerHTML = d.orders.map(o=>`
-      <div class="item">
-        <div>
-          <div><b>${o.userName||'-'}</b> <span class="tag">NT$ ${(o.amount||0).toLocaleString()}</span></div>
-          <div class="mut" style="font-size:12px">#${o.orderId||'-'}｜狀態：${o.status}${o.isExpired?'｜已過期':''}</div>
-        </div>
+async function editTpl(i){
+  const nv = prompt('修改模板內容：', savedTemplates[i]||''); if (nv===null) return;
+  const r = await fetch(API('/api/templates/'+i),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:nv})});
+  const d = await r.json(); if (!d.success) return alert(d.error||'失敗');
+  savedTemplates = d.templates; renderTpls(); renderQuickTpls();
+}
+async function delTpl(i){
+  if(!confirm('確定刪除此模板？')) return;
+  const r = await fetch(API('/api/templates/'+i),{method:'DELETE'});
+  const d = await r.json(); if (!d.success) return alert(d.error||'失敗');
+  savedTemplates = d.templates; renderTpls(); renderQuickTpls();
+}
+
+// 客戶編號
+$('btnSaveMeta').onclick = async ()=>{
+  const number = $('mNo').value.trim();
+  const name = $('mName').value.trim();
+  const userId = $('mUid').value.trim();
+  if (!name || !userId) return alert('請輸入 姓名 與 LINE User ID');
+  const r = await fetch(API('/api/customer-meta/save'),{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ number: number?Number(number):undefined, name, userId })
+  });
+  const d = await r.json(); if (!d.success) return alert('儲存失敗：'+(d.error||''));
+  await fetchMeta(); renderMeta();
+  $('mNo').value=''; $('mName').value=''; $('mUid').value='';
+};
+
+async function fetchMeta(){
+  const r = await fetch(API('/api/customer-meta')); const d = await r.json();
+  if (d.success) meta = { nextNo:d.nextNo, map:d.map||{} };
+}
+function renderMeta(){
+  const keys = Object.keys(meta.map||{});
+  const box = $('savedMeta');
+  $('metaNone').style.display = keys.length? 'none':'block';
+  if (!keys.length) { box.innerHTML=''; return; }
+  box.innerHTML = keys.sort((a,b)=>a-b).map(no=>{
+    const c = meta.map[no];
+    return `<div class="item">
+      <div style="cursor:pointer" onclick="prefill('${c.userId}','${c.name}')">
+        <div>#${no}　${c.name}</div>
+        <div class="muted">User ID：${c.userId}</div>
       </div>
-    `).join('');
-  }catch(e){ wrap.innerHTML = '<div class="mut">載入失敗：'+(e.message||e)+'</div>'; }
+      <button class="btn small red" onclick="delMeta('${no}')">刪除</button>
+    </div>`;
+  }).join('');
 }
-document.getElementById('btnReloadOrders').addEventListener('click',reloadOrders);
-document.getElementById('btnRemind').addEventListener('click', async ()=>{
-  try{ const d = await postJSON('/api/orders/send-reminders'); alert(d.message||('已發送 '+(d.sent||0))); reloadOrders(); }
-  catch(e){ alert('失敗：'+(e.message||e)); }
-});
-document.getElementById('btnClean').addEventListener('click', async ()=>{
-  try{ const d = await postJSON('/api/orders/clean-expired'); alert(d.message||'已清理'); reloadOrders(); }
-  catch(e){ alert('失敗：'+(e.message||e)); }
-});
+async function delMeta(no){
+  if(!confirm(`刪除編號 #${no} ？`)) return;
+  const r = await fetch(API('/api/customer-meta/'+no),{method:'DELETE'});
+  const d = await r.json(); if (!d.success) return alert(d.error||'刪除失敗');
+  await fetchMeta(); renderMeta();
+}
+function prefill(uid,name){
+  $('userId').value = uid||''; $('userName').value=name||'';
+  document.querySelector('.tab[data-tab="send"]').click();
+}
 
-/* ========= 啟動時 ========= */
-(async ()=>{
-  try{ await fetchTemplates(); }catch(_){}
-  renderQuickTpls(); renderTplList();
-  await loadSide();
+// 右側載入客戶
+$('btnReloadUsers').onclick = loadUsers;
+async function loadUsers(){
+  const r = await fetch(API('/api/users')); const d = await r.json();
+  const box = $('userList');
+  if (!d.success || !d.users?.length){ box.innerHTML=''; $('userNone').style.display='block'; return; }
+  $('userNone').style.display='none';
+  box.innerHTML = d.users.map(u=>`
+    <div class="item">
+      <div style="cursor:pointer" onclick="prefill('${u.userId}','${u.name}')">
+        <div>${u.name||'-'}</div>
+        <div class="muted">User ID：${u.userId||'-'}${u.number? '｜編號：'+u.number:''}</div>
+      </div>
+      <button class="btn small green" onclick="prefill('${u.userId}','${u.name}')">帶入</button>
+    </div>`).join('');
+}
+
+// 訂單
+$('btnReloadOrders').onclick = loadOrders;
+$('btnRemind').onclick = async ()=>{
+  const r = await fetch(API('/api/orders/send-reminders'),{method:'POST'});
+  const d = await r.json(); alert(d.success? d.message : d.error||'失敗');
+};
+async function loadOrders(){
+  const r = await fetch(API('/api/orders')); const d = await r.json();
+  const box = $('orderList');
+  if (!d.success){ box.innerHTML='<div class="muted">載入失敗</div>'; return; }
+  allOrders = d.orders||[];
+  if (!allOrders.length){ box.innerHTML='<div class="muted">尚無訂單</div>'; return; }
+  box.innerHTML = allOrders.map(o=>{
+    const badge = o.status==='paid'
+      ? '<span class="pill ok">已付款</span>'
+      : (o.isExpired? '<span class="pill" style="background:#2b0d10;color:#fecaca;border:1px solid #7f1d1d">已過期</span>'
+                    : `<span class="pill" style="background:#221805;color:#fde68a;border:1px solid #92400e">剩餘 ${o.remainingHours} 小時</span>`);
+    return `<div class="item">
+      <div>
+        <div style="font-weight:700">${o.userName}　${badge}</div>
+        <div class="muted">#${o.orderId}｜NT$ ${(o.amount||0).toLocaleString()}</div>
+      </div>
+      <div class="row">
+        ${o.status==='paid'?'':`<button class="btn small green" onclick="renew('${o.orderId}')">續約重發</button>`}
+      </div>
+    </div>`;
+  }).join('');
+}
+async function renew(id){
+  const r = await fetch(API('/api/order/'+id+'/renew'),{method:'POST'});
+  const d = await r.json(); alert(d.success? d.message : d.error||'失敗'); loadOrders();
+}
+
+// 初始化
+(async function init(){
+  await Promise.all([fetchTpls(), fetchMeta(), loadUsers()]);
+  renderTpls(); renderQuickTpls(); renderMeta();
 })();
 </script>
 </body>
