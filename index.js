@@ -31,8 +31,6 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 // ====== 同步儲存：客戶編號 + 訊息模板 ======
-const path = require('path');
-const fs = require('fs');
 
 const DATA_DIR = path.join(__dirname, 'data');
 const META_FILE = path.join(DATA_DIR, 'customerMeta.json');
