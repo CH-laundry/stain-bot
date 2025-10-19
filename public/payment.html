@@ -111,24 +111,15 @@
           <div class="payment-options">
             <div class="payment-option">
               <input type="radio" id="both" name="paymentType" value="both" checked>
-              <label for="both">
-                <div class="payment-icon">💙</div>
-                <div class="payment-name">兩者都發</div>
-              </label>
+              <label for="both"><div class="payment-icon">💙</div><div class="payment-name">兩者都發</div></label>
             </div>
             <div class="payment-option">
               <input type="radio" id="ecpay" name="paymentType" value="ecpay">
-              <label for="ecpay">
-                <div class="payment-icon">💳</div>
-                <div class="payment-name">綠界支付</div>
-              </label>
+              <label for="ecpay"><div class="payment-icon">💳</div><div class="payment-name">綠界支付</div></label>
             </div>
             <div class="payment-option">
               <input type="radio" id="linepay" name="paymentType" value="linepay">
-              <label for="linepay">
-                <div class="payment-icon">💚</div>
-                <div class="payment-name">LINE Pay</div>
-              </label>
+              <label for="linepay"><div class="payment-icon">💚</div><div class="payment-name">LINE Pay</div></label>
             </div>
           </div>
         </div>
@@ -240,7 +231,6 @@
     let allUsers = [];
     let allOrders = [];
 
-    // 預設模板
     if (savedTemplates.length === 0) {
       savedTemplates = [
         '您好,已收回衣物,金額 NT$ {amount},請儘速付款,謝謝!',
@@ -251,24 +241,22 @@
       localStorage.setItem('messageTemplates', JSON.stringify(savedTemplates));
     }
 
-    // ====== 分頁切換（修正：需傳入 event） ======
+    // ====== 分頁切換 ======
     function switchTab(evt, tabName) {
       document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
       document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-
       if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
       const pane = document.getElementById(`${tabName}-tab`);
       if (pane) pane.classList.add('active');
 
-      // 需要時動態載入
-      if (tabName === 'payment') loadCustomTemplates();
+      if (tabName === 'payment')  loadCustomTemplates();
       if (tabName === 'customers') displaySavedCustomers();
       if (tabName === 'templates') displayTemplates();
-      if (tabName === 'users') loadUsers();
-      if (tabName === 'orders') loadOrders();
+      if (tabName === 'users')     loadUsers();
+      if (tabName === 'orders')    loadOrders();
     }
 
-    // ====== 模板（修正：需傳入 event） ======
+    // ====== 模板 ======
     function loadCustomTemplates() {
       const container = document.getElementById('customTemplates');
       let html = '';
@@ -278,7 +266,6 @@
       });
       container.innerHTML = html;
     }
-
     function selectTemplate(evt, index) {
       const el = document.getElementById('customMessage');
       if (el) el.value = savedTemplates[index] || '';
@@ -286,7 +273,7 @@
       if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
     }
 
-    // ====== 快速查詢（依編號或姓名） ======
+    // ====== 快速查詢 ======
     function quickSearchCustomer() {
       const query = document.getElementById('quickSearch').value.trim();
       if (!query) { alert('請輸入編號或姓名'); return; }
@@ -308,7 +295,6 @@
       }
       alert('找不到此客戶');
     }
-
     function showCustomerCard(number, name, userId) {
       document.getElementById('cardNumber').textContent = number;
       document.getElementById('cardName').textContent = name;
@@ -375,10 +361,9 @@
         displayOrderStats(data.statistics || { total:0, pending:0, paid:0, expired:0, needReminder:0 });
         displayOrders(allOrders);
       } catch (err) {
-        // 後端不在時，用空集合避免整段壞掉
         allOrders = [];
         displayOrderStats({ total:0, pending:0, paid:0, expired:0, needReminder:0 });
-        orderListDiv.innerHTML = `<p style="color:#dc3545; text-align:center;">載入失敗：${err.message}（若剛部署，請先啟動後端 /api/orders）</p>`;
+        orderListDiv.innerHTML = `<p style="color:#dc3545; text-align:center;">載入失敗：${err.message}</p>`;
       }
     }
 
@@ -472,7 +457,6 @@
         document.getElementById('orderList').innerHTML = '<p style="text-align:center; color:#999;">找不到符合的訂單</p>';
       }
     }
-
     function filterOrders() {
       const status = document.getElementById('orderStatusFilter').value;
       if (!status) { displayOrders(allOrders); return; }
@@ -483,78 +467,62 @@
       displayOrders(filtered);
     }
 
-    // 下面幾個操作會呼叫後端；若後端不在，給出提示避免整段 JS 中斷
+    // ====== 與後端互動 ======
     async function sendReminders() {
       try {
-        const r = await fetch('/api/orders/remind', { method:'POST' });
+        const r = await fetch('/api/orders/send-reminders', { method:'POST' });
         const d = await r.json();
-        if (d.success) showResult('success', `✅ 已發送提醒：${d.count||0} 筆`);
+        if (d.success) { showResult('success', d.message || `✅ 已發送提醒：${d.sent||0} 筆`); loadOrders(); }
         else showResult('error', `❌ 發送失敗：${d.error||'未知錯誤'}`);
       } catch (e) {
         showResult('error', `❌ 無法連線提醒 API：${e.message}`);
       }
     }
-
     async function cleanExpired() {
       try {
         const r = await fetch('/api/orders/clean-expired', { method:'POST' });
         const d = await r.json();
-        if (d.success) { showResult('success', `🧹 已清理 ${d.cleaned||0} 筆過期訂單`); loadOrders(); }
+        if (d.success) { showResult('success', d.message || `🧹 已清理 ${d.cleaned||0} 筆過期訂單`); loadOrders(); }
         else showResult('error', `❌ 清理失敗：${d.error||'未知錯誤'}`);
       } catch (e) {
         showResult('error', `❌ 無法連線清理 API：${e.message}`);
       }
     }
-
     async function renewOrder(orderId) {
       if (!orderId) return alert('找不到訂單編號');
       try {
-        const r = await fetch(`/api/orders/${orderId}/renew`, { method:'POST' });
+        const r = await fetch(`/api/order/${orderId}/renew`, { method:'POST' });
         const d = await r.json();
-        if (d.success) { showResult('success', '🔄 已續約重發'); loadOrders(); }
+        if (d.success) { showResult('success', '🔄 已續約並重新發送付款連結'); loadOrders(); }
         else showResult('error', `❌ 續約失敗：${d.error||'未知錯誤'}`);
       } catch (e) {
         showResult('error', `❌ 無法連線續約 API：${e.message}`);
       }
     }
-
-    async function copyPaymentLink(orderId) {
-      try {
-        const r = await fetch(`/api/orders/${orderId}/link`);
-        const d = await r.json();
-        const link = d.link || '';
-        if (!link) throw new Error('後端未回傳連結');
-        await navigator.clipboard.writeText(link);
-        showResult('success', '📋 已複製付款連結');
-      } catch (e) {
-        showResult('error', `❌ 複製失敗：${e.message}`);
-      }
+    function copyPaymentLink(orderId) {
+      const url = `${location.origin}/payment/linepay/pay/${orderId}`;
+      navigator.clipboard.writeText(url).then(
+        () => showResult('success','📋 已複製付款連結'),
+        () => showResult('error','❌ 複製失敗，請手動複製：<br>'+url)
+      );
     }
-
-    async function sendSingleReminder(orderId) {
-      try {
-        const r = await fetch(`/api/orders/${orderId}/remind`, { method:'POST' });
-        const d = await r.json();
-        if (d.success) showResult('success', '⏰ 已發送提醒');
-        else showResult('error', `❌ 提醒失敗：${d.error||'未知錯誤'}`);
-      } catch (e) {
-        showResult('error', `❌ 無法連線提醒 API：${e.message}`);
-      }
+    function sendSingleReminder(orderId) {
+      // 單筆提醒 = 直接續約重發
+      return renewOrder(orderId);
     }
-
     async function deleteOrder(orderId) {
-      if (!confirm('確定要刪除此訂單？')) return;
+      if (!confirm(`確定要刪除訂單：${orderId} 嗎？`)) return;
       try {
-        const r = await fetch(`/api/orders/${orderId}`, { method:'DELETE' });
+        const r = await fetch(`/api/order/${orderId}`, { method:'DELETE' });
         const d = await r.json();
-        if (d.success) { showResult('success', '🗑️ 已刪除'); loadOrders(); }
+        if (d.success) { showResult('success', '🗑️ 訂單已刪除'); loadOrders(); }
         else showResult('error', `❌ 刪除失敗：${d.error||'未知錯誤'}`);
       } catch (e) {
         showResult('error', `❌ 無法連線刪除 API：${e.message}`);
       }
     }
 
-    // 客戶付款歷史（若後端不在，就用記憶中的 allOrders 過濾）
+    // 客戶付款歷史（後端沒提供 userId 查詢就用前端過濾）
     async function showCustomerHistory(userId, userName) {
       const modal = document.getElementById('customerHistoryModal');
       const content = document.getElementById('customerHistoryContent');
@@ -562,21 +530,12 @@
       content.innerHTML = '<p style="text-align:center; color:#999;">載入中...</p>';
 
       try {
-        let hist = [];
-        try {
-          const r = await fetch(`/api/orders?userId=${encodeURIComponent(userId)}`);
-          const d = await r.json();
-          if (d.success && Array.isArray(d.orders)) hist = d.orders;
-        } catch {
-          // fallback
-          hist = (allOrders||[]).filter(o => o.userId === userId);
-        }
-
+        // 前端以現有 allOrders 過濾
+        const hist = (allOrders||[]).filter(o => o.userId === userId);
         if (!hist || hist.length === 0) {
           content.innerHTML = `<p style="text-align:center; color:#999;">客戶 ${userName} 尚無訂單記錄</p>`;
           return;
         }
-
         let html = `<div class="customer-card"><h4>${userName}</h4><p>User ID：${userId}</p></div>`;
         hist.forEach(o => {
           const created = o.createdAt ? new Date(o.createdAt).toLocaleString('zh-TW') : '-';
@@ -612,7 +571,6 @@
         </div>
       `).join('');
     }
-
     function saveCustomerNumber() {
       const no = document.getElementById('newCustomerNumber').value.trim();
       const name = document.getElementById('newCustomerName').value.trim();
@@ -621,13 +579,10 @@
 
       savedCustomers[no] = { name, userId };
       localStorage.setItem('customerNumbers', JSON.stringify(savedCustomers));
-      document.getElementById('newCustomerNumber').value='';
-      document.getElementById('newCustomerName').value='';
-      document.getElementById('newCustomerUserId').value='';
+      document.getElementById('newCustomerNumber').value=''; document.getElementById('newCustomerName').value=''; document.getElementById('newCustomerUserId').value='';
       displaySavedCustomers();
       showResult('success','✅ 已儲存客戶編號');
     }
-
     function removeSavedCustomer(no) {
       if (!confirm(`刪除編號 #${no} ?`)) return;
       delete savedCustomers[no];
@@ -649,18 +604,15 @@
         </div>
       `).join('');
     }
-
     function saveTemplate() {
       const t = document.getElementById('newTemplateContent').value.trim();
       if (!t) return alert('請輸入模板內容');
       savedTemplates.push(t);
       localStorage.setItem('messageTemplates', JSON.stringify(savedTemplates));
-      document.getElementById('newTemplateContent').value='';
-      displayTemplates();
+      document.getElementById('newTemplateContent').value=''; displayTemplates();
       if (document.getElementById('payment-tab').classList.contains('active')) loadCustomTemplates();
       showResult('success','✅ 已新增模板');
     }
-
     function editTemplate(i) {
       const nv = prompt('修改模板內容：', savedTemplates[i] || '');
       if (nv === null) return;
@@ -682,13 +634,10 @@
       try {
         const r = await fetch('/api/users');
         const d = await r.json();
-        if (!d.success) throw new Error(d.error||'載入失敗');
+        // 後端回傳 { total, users }
         allUsers = Array.isArray(d.users) ? d.users : [];
       } catch {
-        // 沒有後端時，用 savedCustomers 略顯示
-        allUsers = Object.entries(savedCustomers).map(([no, c]) => ({
-          userId: c.userId, name: c.name, number: no
-        }));
+        allUsers = Object.entries(savedCustomers).map(([no, c]) => ({ userId: c.userId, name: c.name, number: no }));
       }
 
       if (allUsers.length === 0) {
@@ -706,8 +655,7 @@
       `).join('');
     }
     function prefillCustomer(uid, name){
-      document.getElementById('userId').value = uid||'';
-      document.getElementById('userName').value = name||'';
+      document.getElementById('userId').value = uid||''; document.getElementById('userName').value = name||'';
       switchTab({currentTarget:document.querySelector('.tab')}, 'payment');
     }
 
@@ -720,7 +668,6 @@
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
-    // 初始載入
     document.addEventListener('DOMContentLoaded', () => {
       loadCustomTemplates();
     });
