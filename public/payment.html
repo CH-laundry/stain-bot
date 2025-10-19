@@ -230,6 +230,131 @@
     let savedTemplates = JSON.parse(localStorage.getItem('messageTemplates') || '[]');
     let allUsers = [];
     let allOrders = [];
+      /* ====== API 同步工具 ====== */
+  // 若前後端同網域，用相對路徑最保險（手機、電腦一致）
+  const API_BASE = location.origin;
+
+  async function getJSON(url){ const r=await fetch(`${API_BASE}${url}`); return r.json(); }
+  async function postJSON(url, body){
+    const r = await fetch(`${API_BASE}${url}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(body||{})
+    });
+    return r.json();
+  }
+  async function del(url){
+    const r = await fetch(`${API_BASE}${url}`, { method:'DELETE' });
+    return r.json();
+  }
+  async function putJSON(url, body){
+    const r = await fetch(`${API_BASE}${url}`, {
+      method:'PUT',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(body||{})
+    });
+    return r.json();
+  }
+
+  /* ====== 模板：優先用後端，並同步到 localStorage ====== */
+  async function fetchTemplates(){
+    try{
+      const d = await getJSON('/api/templates');
+      if (d.success && Array.isArray(d.templates)) {
+        savedTemplates = d.templates;
+        localStorage.setItem('messageTemplates', JSON.stringify(savedTemplates));
+      }
+    }catch(e){}
+  }
+  async function saveTemplate(){
+    const t = document.getElementById('newTemplateContent').value.trim();
+    if (!t) return alert('請輸入模板內容');
+    const d = await postJSON('/api/templates', { content: t });
+    if (d.success){
+      savedTemplates = d.templates;
+      localStorage.setItem('messageTemplates', JSON.stringify(savedTemplates));
+      displayTemplates();
+      loadCustomTemplates();
+      document.getElementById('newTemplateContent').value='';
+      showResult('success','✅ 已新增模板');
+    }else{
+      showResult('error', d.error||'儲存失敗');
+    }
+  }
+  async function editTemplate(i){
+    const nv = prompt('修改模板內容：', savedTemplates[i]||''); if (nv===null) return;
+    const d = await putJSON(`/api/templates/${i}`, { content: nv });
+    if (d.success){
+      savedTemplates = d.templates;
+      localStorage.setItem('messageTemplates', JSON.stringify(savedTemplates));
+      displayTemplates(); loadCustomTemplates();
+    }else{
+      showResult('error', d.error||'更新失敗');
+    }
+  }
+  async function deleteTemplate(i){
+    if (!confirm('確定刪除此模板？')) return;
+    const d = await del(`/api/templates/${i}`);
+    if (d.success){
+      savedTemplates = d.templates;
+      localStorage.setItem('messageTemplates', JSON.stringify(savedTemplates));
+      displayTemplates(); loadCustomTemplates();
+    }else{
+      showResult('error', d.error||'刪除失敗');
+    }
+  }
+
+  /* ====== 客戶編號：優先用後端，並同步到 localStorage ====== */
+  async function fetchCustomerMeta(){
+    try{
+      const d = await getJSON('/api/customer-meta');
+      if (d.success && d.map) {
+        savedCustomers = d.map;
+        localStorage.setItem('customerNumbers', JSON.stringify(savedCustomers));
+      }
+    }catch(e){}
+  }
+  async function saveCustomerNumber(){
+    const no = document.getElementById('newCustomerNumber').value.trim();
+    const name = document.getElementById('newCustomerName').value.trim();
+    const userId = document.getElementById('newCustomerUserId').value.trim();
+    if (!name || !userId) return alert('請完整輸入 姓名 / User ID');
+
+    const payload = { number: no ? Number(no) : undefined, name, userId };
+    const d = await postJSON('/api/customer-meta/save', payload);
+
+    if (d.success){
+      // 後端會回傳最終 number（避免重複）
+      savedCustomers[d.number] = d.data;
+      localStorage.setItem('customerNumbers', JSON.stringify(savedCustomers));
+      document.getElementById('newCustomerNumber').value='';
+      document.getElementById('newCustomerName').value='';
+      document.getElementById('newCustomerUserId').value='';
+      displaySavedCustomers();
+      showResult('success','✅ 已儲存客戶編號');
+    }else{
+      showResult('error', d.error||'儲存失敗');
+    }
+  }
+  async function removeSavedCustomer(no){
+    if (!confirm(`刪除編號 #${no} ?`)) return;
+    const d = await del(`/api/customer-meta/${no}`);
+    if (d.success){
+      delete savedCustomers[no];
+      localStorage.setItem('customerNumbers', JSON.stringify(savedCustomers));
+      displaySavedCustomers();
+    }else{
+      showResult('error', d.error||'刪除失敗');
+    }
+  }
+
+  /* 頁面載入時：先同步後端再畫面 */
+  document.addEventListener('DOMContentLoaded', () => {
+    fetchTemplates();
+    fetchCustomerMeta();
+    loadCustomTemplates(); // 保留你的原本呼叫
+  });
+
 
     if (savedTemplates.length === 0) {
       savedTemplates = [
