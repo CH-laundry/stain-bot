@@ -1,4 +1,5 @@
 const { createECPayPaymentLink } = require('./services/openai'); // 綠界付款連結產生器
+const path = require('path'); // ← 新增
 const customerDB = require('./services/customerDatabase');
 const fs = require('fs');
 const express = require('express');
@@ -22,6 +23,10 @@ if (process.env.GOOGLE_PRIVATE_KEY) {
 }
 
 const app = express();
+// 讓瀏覽器(含手機)可以對 API 發 POST
+const cors = require('cors');
+app.use(cors());
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
