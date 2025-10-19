@@ -36,8 +36,7 @@ function must(name, value) {
 must('LINE_CHANNEL_ACCESS_TOKEN', LINE_CHANNEL_ACCESS_TOKEN);
 must('LINE_CHANNEL_SECRET', LINE_CHANNEL_SECRET);
 
-// 3) 初始化 LINE SDK（請務必用這兩個名稱）
-const line = require('@line/bot-sdk');
+// 3) 初始化 LINE SDK（使用上面已匯入的 line）
 const client = new line.Client({
   channelAccessToken: LINE_CHANNEL_ACCESS_TOKEN,
   channelSecret: LINE_CHANNEL_SECRET
