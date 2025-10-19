@@ -3,6 +3,7 @@ const line = require('@line/bot-sdk');
 const express = require('express');
 const crypto = require('crypto');
 const axios = require('axios');
+const fs = require('fs');
 const path = require('path');
 const orderManager = require('./services/orderManager');
 const customerDB = require('./services/customerDB');
@@ -14,7 +15,6 @@ const config = {
 };
 
 const client = new line.Client(config);
-
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -322,14 +322,17 @@ app.get('/payment/linepay/confirm', async (req, res) => {
         });
 
         if (response.data.returnCode === '0000') {
+            // 標記該用戶的所有待付款訂單為已付款
             orderManager.updateOrderStatusByUserId(order.userId, 'paid', 'LINE Pay');
             logger.logToFile(`✅ LINE Pay 付款成功 - 訂單: ${orderId}`);
 
+            // 通知客戶
             await client.pushMessage(order.userId, [{
                 type: 'text',
                 text: `✅ 付款成功!\n\n訂單編號: ${orderId}\n金額: NT$ ${order.amount}\n付款方式: LINE Pay\n\n感謝您的支付!`
             }]);
 
+            // 通知店家
             if (process.env.OWNER_USER_ID) {
                 await client.pushMessage(process.env.OWNER_USER_ID, [{
                     type: 'text',
@@ -374,7 +377,6 @@ app.get('/payment/linepay/confirm', async (req, res) => {
         res.status(500).send('付款確認失敗');
     }
 });
-
 // 綠界 ECPay 付款路由
 app.get('/payment/ecpay/pay/:orderId', async (req, res) => {
     try {
@@ -488,6 +490,7 @@ app.get('/payment/ecpay/pay/:orderId', async (req, res) => {
         res.status(500).send('付款處理失敗');
     }
 });
+
 app.post('/payment/ecpay/callback', async (req, res) => {
     try {
         logger.logToFile('收到綠界回調: ' + JSON.stringify(req.body));
@@ -498,14 +501,17 @@ app.post('/payment/ecpay/callback', async (req, res) => {
             const order = orderManager.getOrder(MerchantTradeNo);
             
             if (order) {
+                // 標記該用戶的所有待付款訂單為已付款
                 orderManager.updateOrderStatusByUserId(order.userId, 'paid', 'ECPay');
                 logger.logToFile(`✅ 綠界付款成功 - 訂單: ${MerchantTradeNo}`);
 
+                // 通知客戶
                 await client.pushMessage(order.userId, [{
                     type: 'text',
                     text: `✅ 付款成功!\n\n訂單編號: ${MerchantTradeNo}\n金額: NT$ ${order.amount}\n付款方式: 綠界 ECPay\n\n感謝您的支付!`
                 }]);
 
+                // 通知店家
                 if (process.env.OWNER_USER_ID) {
                     await client.pushMessage(process.env.OWNER_USER_ID, [{
                         type: 'text',
@@ -565,7 +571,9 @@ app.post('/payment/ecpay/return', async (req, res) => {
     }
 });
 
-// API 路由
+// ==================== API 路由 ====================
+
+// 客戶管理 API
 app.get('/api/customers', (req, res) => {
     const customers = customerDB.getAllCustomers();
     res.json(customers);
@@ -580,11 +588,7 @@ app.get('/api/customer/search', (req, res) => {
     const customers = customerDB.getAllCustomers();
     const found = customers.filter(c => c.phone && c.phone.includes(phone));
     
-    if (found.length > 0) {
-        res.json({ success: true, customers: found });
-    } else {
-        res.json({ success: false, message: '查無客戶資料' });
-    }
+    res.json(found.length > 0 ? { success: true, customers: found } : { success: false, message: '查無客戶資料' });
 });
 
 app.get('/api/customer/:userId', (req, res) => {
@@ -614,8 +618,8 @@ app.get('/api/customer/:userId', (req, res) => {
 app.post('/api/customer/update', async (req, res) => {
     try {
         const { userId, phone, email, address, notes } = req.body;
-        
         const customer = customerDB.getCustomer(userId);
+        
         if (!customer) {
             return res.json({ success: false, message: '客戶不存在' });
         }
@@ -630,7 +634,6 @@ app.post('/api/customer/update', async (req, res) => {
         };
         
         await customerDB.addOrUpdateCustomer(updatedCustomer);
-        
         res.json({ success: true, customer: updatedCustomer });
     } catch (error) {
         logger.logError('更新客戶失敗', error);
@@ -638,6 +641,7 @@ app.post('/api/customer/update', async (req, res) => {
     }
 });
 
+// 訂單管理 API
 app.get('/api/orders', (req, res) => {
     const orders = orderManager.getAllOrders();
     const ordersWithStatus = orders.map(order => ({
@@ -668,20 +672,12 @@ app.get('/api/order/:orderId', (req, res) => {
 
 app.post('/api/order/:orderId/renew', (req, res) => {
     const renewedOrder = orderManager.renewOrder(req.params.orderId);
-    if (renewedOrder) {
-        res.json({ success: true, order: renewedOrder });
-    } else {
-        res.json({ success: false, message: '續約失敗' });
-    }
+    res.json(renewedOrder ? { success: true, order: renewedOrder } : { success: false, message: '續約失敗' });
 });
 
 app.delete('/api/order/:orderId', (req, res) => {
     const deleted = orderManager.deleteOrder(req.params.orderId);
-    if (deleted) {
-        res.json({ success: true, message: '訂單已刪除' });
-    } else {
-        res.json({ success: false, message: '刪除失敗' });
-    }
+    res.json(deleted ? { success: true, message: '訂單已刪除' } : { success: false, message: '刪除失敗' });
 });
 
 app.get('/api/stats', (req, res) => {
@@ -689,56 +685,455 @@ app.get('/api/stats', (req, res) => {
     res.json(stats);
 });
 
-app.post('/api/send-message', async (req, res) => {
+// 🆕 停止/開始提醒功能
+app.post('/api/order/:orderId/toggle-reminder', (req, res) => {
+    const order = orderManager.getOrder(req.params.orderId);
+    if (!order) {
+        return res.json({ success: false, message: '訂單不存在' });
+    }
+    
+    // 切換提醒狀態
+    order.reminderPaused = !order.reminderPaused;
+    orderManager.saveOrders();
+    
+    res.json({ 
+        success: true, 
+        reminderPaused: order.reminderPaused,
+        message: order.reminderPaused ? '已停止提醒' : '已開啟提醒'
+    });
+});
+// ==================== 訊息模板功能 ====================
+
+const TEMPLATES_FILE = path.join(__dirname, 'data', 'messageTemplates.json');
+
+function ensureTemplatesFile() {
+    const dataDir = path.join(__dirname, 'data');
+    if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+    }
+    if (!fs.existsSync(TEMPLATES_FILE)) {
+        const defaultTemplates = [
+            { id: 1, name: '付款提醒', content: '親愛的客戶,您有一筆待付款訂單,請盡快完成付款。感謝您!' },
+            { id: 2, name: '衣物已送達', content: '您好!您的衣物已送達門市,歡迎取件。營業時間:週一至週日 09:00-21:00' },
+            { id: 3, name: '衣物清洗完成', content: '您的衣物已清洗完成!請於三日內取件,謝謝!' },
+            { id: 4, name: '節慶優惠', content: '🎉 限時優惠!本週洗衣服務全面 8 折!歡迎預約!' },
+            { id: 5, name: '感謝訊息', content: '感謝您的支持!期待再次為您服務 ❤️' }
+        ];
+        fs.writeFileSync(TEMPLATES_FILE, JSON.stringify(defaultTemplates, null, 2));
+    }
+}
+
+ensureTemplatesFile();
+
+// 取得所有訊息模板
+app.get('/api/templates', (req, res) => {
     try {
-        const { userId, message } = req.body;
-        
-        if (!userId || !message) {
-            return res.json({ success: false, message: '請提供用戶 ID 和訊息內容' });
+        const templates = JSON.parse(fs.readFileSync(TEMPLATES_FILE, 'utf8'));
+        res.json({ success: true, templates });
+    } catch (error) {
+        res.json({ success: false, message: error.message });
+    }
+});
+
+// 新增訊息模板
+app.post('/api/template/add', (req, res) => {
+    try {
+        const { name, content } = req.body;
+        if (!name || !content) {
+            return res.json({ success: false, message: '請提供模板名稱和內容' });
         }
         
-        await client.pushMessage(userId, [{ type: 'text', text: message }]);
+        const templates = JSON.parse(fs.readFileSync(TEMPLATES_FILE, 'utf8'));
+        const newTemplate = {
+            id: Date.now(),
+            name: name,
+            content: content,
+            createdAt: Date.now()
+        };
         
-        logger.logToFile(`📤 發送自訂訊息給 ${userId}: ${message}`);
+        templates.push(newTemplate);
+        fs.writeFileSync(TEMPLATES_FILE, JSON.stringify(templates, null, 2));
+        
+        logger.logToFile(`✅ 新增訊息模板: ${name}`);
+        res.json({ success: true, template: newTemplate });
+    } catch (error) {
+        res.json({ success: false, message: error.message });
+    }
+});
+
+// 更新訊息模板
+app.put('/api/template/:id', (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, content } = req.body;
+        
+        let templates = JSON.parse(fs.readFileSync(TEMPLATES_FILE, 'utf8'));
+        const index = templates.findIndex(t => t.id === parseInt(id));
+        
+        if (index === -1) {
+            return res.json({ success: false, message: '模板不存在' });
+        }
+        
+        templates[index] = {
+            ...templates[index],
+            name: name || templates[index].name,
+            content: content || templates[index].content,
+            updatedAt: Date.now()
+        };
+        
+        fs.writeFileSync(TEMPLATES_FILE, JSON.stringify(templates, null, 2));
+        res.json({ success: true, template: templates[index] });
+    } catch (error) {
+        res.json({ success: false, message: error.message });
+    }
+});
+
+// 刪除訊息模板
+app.delete('/api/template/:id', (req, res) => {
+    try {
+        const { id } = req.params;
+        let templates = JSON.parse(fs.readFileSync(TEMPLATES_FILE, 'utf8'));
+        templates = templates.filter(t => t.id !== parseInt(id));
+        fs.writeFileSync(TEMPLATES_FILE, JSON.stringify(templates, null, 2));
+        
+        logger.logToFile(`🗑️ 刪除訊息模板: ${id}`);
+        res.json({ success: true, message: '模板已刪除' });
+    } catch (error) {
+        res.json({ success: false, message: error.message });
+    }
+});
+
+// 發送自訂訊息 (可使用模板或自訂文字)
+app.post('/api/send-message', async (req, res) => {
+    try {
+        const { userId, message, templateId, additionalText } = req.body;
+        
+        if (!userId) {
+            return res.json({ success: false, message: '請提供用戶 ID' });
+        }
+        
+        let finalMessage = message;
+        
+        // 如果使用模板
+        if (templateId) {
+            const templates = JSON.parse(fs.readFileSync(TEMPLATES_FILE, 'utf8'));
+            const template = templates.find(t => t.id === parseInt(templateId));
+            
+            if (template) {
+                finalMessage = template.content;
+                
+                // 如果有額外文字,加在後面
+                if (additionalText) {
+                    finalMessage += '\n\n' + additionalText;
+                }
+            }
+        }
+        
+        if (!finalMessage) {
+            return res.json({ success: false, message: '請提供訊息內容' });
+        }
+        
+        await client.pushMessage(userId, [{ type: 'text', text: finalMessage }]);
+        
+        logger.logToFile(`📤 發送自訂訊息給 ${userId}: ${finalMessage}`);
         res.json({ success: true, message: '訊息已發送' });
     } catch (error) {
         logger.logError('發送訊息失敗', error);
         res.json({ success: false, message: error.message });
     }
 });
-// 定時任務
-setInterval(async () => {
+
+// 批量發送訊息
+app.post('/api/broadcast/pending', async (req, res) => {
     try {
-        const ordersNeedingReminder = orderManager.getOrdersNeedingReminder();
+        const { message, templateId, additionalText } = req.body;
         
-        for (const order of ordersNeedingReminder) {
+        let finalMessage = message;
+        
+        if (templateId) {
+            const templates = JSON.parse(fs.readFileSync(TEMPLATES_FILE, 'utf8'));
+            const template = templates.find(t => t.id === parseInt(templateId));
+            
+            if (template) {
+                finalMessage = template.content;
+                if (additionalText) {
+                    finalMessage += '\n\n' + additionalText;
+                }
+            }
+        }
+        
+        if (!finalMessage) {
+            return res.json({ success: false, message: '請提供訊息內容' });
+        }
+        
+        const pendingOrders = orderManager.getPendingOrders();
+        const uniqueUsers = [...new Set(pendingOrders.map(o => o.userId))];
+        
+        let sentCount = 0;
+        for (const userId of uniqueUsers) {
+            try {
+                await client.pushMessage(userId, [{ type: 'text', text: finalMessage }]);
+                sentCount++;
+                await new Promise(resolve => setTimeout(resolve, 500));
+            } catch (error) {
+                logger.logError(`發送給 ${userId} 失敗`, error);
+            }
+        }
+        
+        logger.logToFile(`📢 批量發送訊息完成,共發送 ${sentCount} 則`);
+        res.json({ success: true, message: `已發送給 ${sentCount} 位客戶` });
+    } catch (error) {
+        res.json({ success: false, message: error.message });
+    }
+});
+
+app.post('/api/broadcast/all', async (req, res) => {
+    try {
+        const { message, templateId, additionalText } = req.body;
+        
+        let finalMessage = message;
+        
+        if (templateId) {
+            const templates = JSON.parse(fs.readFileSync(TEMPLATES_FILE, 'utf8'));
+            const template = templates.find(t => t.id === parseInt(templateId));
+            
+            if (template) {
+                finalMessage = template.content;
+                if (additionalText) {
+                    finalMessage += '\n\n' + additionalText;
+                }
+            }
+        }
+        
+        if (!finalMessage) {
+            return res.json({ success: false, message: '請提供訊息內容' });
+        }
+        
+        const customers = customerDB.getAllCustomers();
+        let sentCount = 0;
+        
+        for (const customer of customers) {
+            try {
+                await client.pushMessage(customer.userId, [{ type: 'text', text: finalMessage }]);
+                sentCount++;
+                await new Promise(resolve => setTimeout(resolve, 500));
+            } catch (error) {
+                logger.logError(`發送給 ${customer.userId} 失敗`, error);
+            }
+        }
+        
+        logger.logToFile(`📢 群發訊息完成,共發送 ${sentCount} 則`);
+        res.json({ success: true, message: `已發送給 ${sentCount} 位客戶` });
+    } catch (error) {
+        res.json({ success: false, message: error.message });
+    }
+});
+
+// 快速操作
+app.post('/api/orders/cleanup', (req, res) => {
+    const cleaned = orderManager.cleanExpiredOrders();
+    res.json({ success: true, message: `已清理 ${cleaned} 筆過期訂單` });
+});
+
+app.post('/api/orders/remind-all', async (req, res) => {
+    try {
+        const pendingOrders = orderManager.getPendingOrders().filter(o => !o.reminderPaused);
+        let remindedCount = 0;
+        
+        for (const order of pendingOrders) {
             const remainingHours = Math.floor((order.expiryTime - Date.now()) / (1000 * 60 * 60));
             
             await client.pushMessage(order.userId, [{
                 type: 'text',
                 text: `⏰ 付款提醒\n\n您有一筆待付款訂單:\n訂單編號: ${order.orderId}\n金額: NT$ ${order.amount}\n剩餘時間: ${remainingHours} 小時\n\n請盡快完成付款 🙏`
             }]);
-
+            
             orderManager.markReminderSent(order.orderId);
-            logger.logToFile(`📧 已發送付款提醒 - 訂單: ${order.orderId}`);
+            remindedCount++;
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+        
+        logger.logToFile(`📧 一鍵提醒完成,共提醒 ${remindedCount} 筆訂單`);
+        res.json({ success: true, message: `已提醒 ${remindedCount} 位客戶` });
+    } catch (error) {
+        res.json({ success: false, message: error.message });
+    }
+});
+
+app.get('/api/today-summary', (req, res) => {
+    const orders = orderManager.getAllOrders();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const todayOrders = orders.filter(o => o.createdAt >= today.getTime());
+    const todayPaid = todayOrders.filter(o => o.status === 'paid');
+    const todayPending = todayOrders.filter(o => o.status === 'pending' && !orderManager.isExpired(o.orderId));
+    
+    const revenue = todayPaid.reduce((sum, o) => sum + o.amount, 0);
+    const pendingAmount = todayPending.reduce((sum, o) => sum + o.amount, 0);
+    
+    res.json({
+        success: true,
+        summary: {
+            date: today.toLocaleDateString('zh-TW'),
+            totalOrders: todayOrders.length,
+            paidOrders: todayPaid.length,
+            pendingOrders: todayPending.length,
+            revenue: revenue,
+            pendingAmount: pendingAmount,
+            customers: [...new Set(todayOrders.map(o => o.userName))]
+        }
+    });
+});
+
+app.get('/api/revenue/stats', (req, res) => {
+    const orders = orderManager.getAllOrders();
+    const paidOrders = orders.filter(o => o.status === 'paid');
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const thisMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    const thisYear = new Date(today.getFullYear(), 0, 1);
+    
+    const todayRevenue = paidOrders.filter(o => o.paidAt >= today.getTime()).reduce((sum, o) => sum + o.amount, 0);
+    const monthRevenue = paidOrders.filter(o => o.paidAt >= thisMonth.getTime()).reduce((sum, o) => sum + o.amount, 0);
+    const yearRevenue = paidOrders.filter(o => o.paidAt >= thisYear.getTime()).reduce((sum, o) => sum + o.amount, 0);
+    const totalRevenue = paidOrders.reduce((sum, o) => sum + o.amount, 0);
+    
+    res.json({
+        success: true,
+        revenue: {
+            today: todayRevenue,
+            month: monthRevenue,
+            year: yearRevenue,
+            total: totalRevenue,
+            paidOrdersCount: paidOrders.length
+        }
+    });
+});
+// ==================== 定時任務 ====================
+
+// 每小時自動提醒待付款訂單 (每2天提醒一次)
+setInterval(async () => {
+    try {
+        const ordersNeedingReminder = orderManager.getOrdersNeedingReminder();
+        
+        for (const order of ordersNeedingReminder) {
+            // 檢查是否已暫停提醒
+            if (order.reminderPaused) {
+                logger.logToFile(`⏸️ 訂單 ${order.orderId} 已暫停提醒,跳過`);
+                continue;
+            }
+            
+            const remainingHours = Math.floor((order.expiryTime - Date.now()) / (1000 * 60 * 60));
+            
+            // 重新發送付款連結
+            const messages = [];
+            
+            // 綠界連結
+            if (order.orderId.startsWith('EC')) {
+                const ecpayUrl = `https://stain-bot-production-2593.up.railway.app/payment/ecpay/pay/${order.orderId}`;
+                messages.push({
+                    type: 'text',
+                    text: `⏰ 付款提醒\n\n您有一筆待付款訂單:\n訂單編號: ${order.orderId}\n金額: NT$ ${order.amount}\n剩餘時間: ${remainingHours} 小時\n\n💳 綠界付款連結:\n${ecpayUrl}`
+                });
+            }
+            
+            // LINE Pay 連結
+            if (order.orderId.startsWith('LP')) {
+                const linepayUrl = `https://stain-bot-production-2593.up.railway.app/payment/linepay/pay/${order.orderId}`;
+                messages.push({
+                    type: 'text',
+                    text: `⏰ 付款提醒\n\n您有一筆待付款訂單:\n訂單編號: ${order.orderId}\n金額: NT$ ${order.amount}\n剩餘時間: ${remainingHours} 小時\n\n💚 LINE Pay 付款連結:\n${linepayUrl}`
+                });
+            }
+            
+            if (messages.length > 0) {
+                await client.pushMessage(order.userId, messages);
+                orderManager.markReminderSent(order.orderId);
+                logger.logToFile(`📧 已發送付款提醒 - 訂單: ${order.orderId}`);
+            }
         }
     } catch (error) {
         logger.logError('付款提醒失敗', error);
     }
-}, 60 * 60 * 1000);
+}, 60 * 60 * 1000); // 每小時執行一次
 
+// 每天自動清理過期訂單
 setInterval(() => {
     const cleaned = orderManager.cleanExpiredOrders();
     if (cleaned > 0) {
         logger.logToFile(`🧹 自動清理了 ${cleaned} 筆過期訂單`);
     }
-}, 24 * 60 * 60 * 1000);
+}, 24 * 60 * 60 * 1000); // 每天執行一次
 
-// 啟動伺服器
+// 每小時自動備份客戶資料
+setInterval(() => {
+    try {
+        const customers = customerDB.getAllCustomers();
+        const backupPath = path.join(__dirname, 'data', `customers_backup_${Date.now()}.json`);
+        fs.writeFileSync(backupPath, JSON.stringify(customers, null, 2));
+        logger.logToFile(`💾 自動備份客戶資料: ${customers.length} 位客戶`);
+        
+        // 只保留最近 7 天的備份
+        const backupDir = path.join(__dirname, 'data');
+        const files = fs.readdirSync(backupDir);
+        const backupFiles = files.filter(f => f.startsWith('customers_backup_'));
+        const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+        
+        backupFiles.forEach(file => {
+            const timestamp = parseInt(file.match(/\d+/)[0]);
+            if (timestamp < sevenDaysAgo) {
+                fs.unlinkSync(path.join(backupDir, file));
+            }
+        });
+    } catch (error) {
+        logger.logError('自動備份失敗', error);
+    }
+}, 60 * 60 * 1000); // 每小時執行一次
+
+// 每天早上 9:00 發送營收報表給店家
+setInterval(async () => {
+    const now = new Date();
+    if (now.getHours() === 9 && now.getMinutes() === 0) {
+        try {
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            yesterday.setHours(0, 0, 0, 0);
+            
+            const orders = orderManager.getAllOrders();
+            const yesterdayOrders = orders.filter(o => 
+                o.createdAt >= yesterday.getTime() && 
+                o.createdAt < yesterday.getTime() + 24 * 60 * 60 * 1000
+            );
+            
+            const paidOrders = yesterdayOrders.filter(o => o.status === 'paid');
+            const revenue = paidOrders.reduce((sum, o) => sum + o.amount, 0);
+            
+            const reportMessage = `📊 昨日營收報表\n\n` +
+                `日期: ${yesterday.toLocaleDateString('zh-TW')}\n` +
+                `總訂單: ${yesterdayOrders.length} 筆\n` +
+                `已付款: ${paidOrders.length} 筆\n` +
+                `營收: NT$ ${revenue}\n` +
+                `客戶數: ${[...new Set(yesterdayOrders.map(o => o.userName))].length} 位\n\n` +
+                `祝您今天生意興隆! 💰`;
+            
+            if (process.env.OWNER_USER_ID) {
+                await client.pushMessage(process.env.OWNER_USER_ID, [{ type: 'text', text: reportMessage }]);
+                logger.logToFile('📊 已發送每日營收報表');
+            }
+        } catch (error) {
+            logger.logError('發送營收報表失敗', error);
+        }
+    }
+}, 60 * 1000); // 每分鐘檢查一次
+
+// ==================== 啟動伺服器 ====================
+
 app.listen(PORT, async () => {
     console.log(`
     ╔══════════════════════════════════════════════╗
-    ║   🧺 C.H 精緻洗衣 - 付款系統啟動中...       ║
+    ║   🧺 C.H 精緻洗衣 - 智能付款系統啟動中...   ║
     ╚══════════════════════════════════════════════╝
     `);
     
@@ -770,22 +1165,23 @@ app.listen(PORT, async () => {
         logger.logToFile(`📊 系統狀態 - 總訂單: ${stats.total}, 待付款: ${stats.pending}, 已付款: ${stats.paid}, 已過期: ${stats.expired}`);
     }, 60 * 60 * 1000);
 
-    logger.logToFile('✅ 系統啟動完成');
+    logger.logToFile('✅ 系統啟動完成 - 所有功能已就緒');
     
     console.log(`
-    🎉 功能已啟用:
+    🎉 完整功能已啟用:
     ✓ LINE Bot 訊息處理
-    ✓ 綠界 ECPay 付款
-    ✓ LINE Pay 付款
-    ✓ 持續付款連結 (7天有效)
+    ✓ 綠界 + LINE Pay 雙付款方式
+    ✓ 持續付款連結 (168小時有效)
     ✓ 自動付款提醒 (每2天)
+    ✓ 付款成功自動停止提醒
+    ✓ 可暫停/開啟提醒功能
     ✓ 客戶資料管理
-    ✓ 訂單管理系統
-    ✓ 付款成功通知
+    ✓ 訊息模板系統
+    ✓ 自訂訊息 + 額外文字
+    ✓ 批量發送訊息
+    ✓ 營收統計分析
+    ✓ 每日營收報表
+    ✓ 自動資料備份
     
-    💡 設定環境變數:
-    OWNER_USER_ID=您的LINE用戶ID (接收付款通知)
-    
-    🚀 系統已準備就緒!
     `);
 });
