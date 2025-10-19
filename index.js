@@ -33,6 +33,16 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+// —— NEW: 統一 /api 為 JSON 回應，避免平台把錯誤頁變成 HTML —— //
+app.use('/api', (req, res, next) => {
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  next();
+});
+
+// —— NEW: 健檢路由，確認新程式已部署 —— //
+app.get('/api/health', (_req, res) => {
+  res.json({ ok: true, time: new Date().toISOString() });
+});
 
 // 靜態檔（前端 UI）
 app.use(express.static(path.join(__dirname, 'public')));
