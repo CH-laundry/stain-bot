@@ -83,8 +83,9 @@ class OrderManager {
 
     getOrdersNeedingReminder() {
         const now = Date.now();
-        const twoDaysAfterCreation = 1 * 60 * 1000; // 測試：建立後1分鐘就可提醒
-        const twoDaysInterval = 1 * 60 * 1000; // 測試：每1分鐘提醒一次
+        const twoDaysAfterCreation = 0;         // 建立後立刻就可提醒
+        const twoDaysInterval      = 60 * 1000; // 每 1 分鐘提醒一次
+
 
         
         return this.getPendingOrders().filter(order => {
