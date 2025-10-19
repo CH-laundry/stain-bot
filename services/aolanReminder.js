@@ -91,8 +91,14 @@ async function main() {
     `件數：${count} 件\n\n前5筆：\n` +
     lines.join('\n');
 
+  // 測試模式：只發給自己，不發給客人
+const TEST_MODE = true;
+if (TEST_MODE) {
+  await sendLineMessage("🧪 測試模式：這是給自己的通知\n\n" + message);
+} else {
   await sendLineMessage(message);
 }
+
 
 // 執行
 main();
