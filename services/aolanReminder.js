@@ -12,7 +12,7 @@ const LINE_USER_ID = process.env.LINE_USER_ID;
 
 // =============== 查詢超過7天未取衣物 ===============
 async function fetchOverdueOrders() {
-  const toDueDate = dayjs().subtract(7, 'day').format('YYYY-MM-DDTHH:mm:ss.SSSZZ');
+ const toDueDate = dayjs().format('YYYY-MM-DDTHH:mm:ss.SSSZZ');
   const url = `${AOLAN_HOST}/xiyi-yidanyuan1/ReceivingOrder/SearchReceivingItemDetailPage`;
 
   const body = [
