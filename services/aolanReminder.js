@@ -1,96 +1,119 @@
-// =============== aolanReminder.js ===============
+// aolanReminder.js —— 查「到今天為止」的提醒清單，只推給自己
 require('dotenv').config();
 const axios = require('axios');
 const dayjs = require('dayjs');
 
-// =============== 常數設定 ===============
-const AOLAN_HOST = 'https://hk2.aolan.cn'; // ✅ 修正為正確主機（不要有連字號）
-const AOLAN_TOKEN = process.env.AOLAN_BEARER;
-const BRANCH_ID = process.env.BRANCH_ID;
-const LINE_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
-const LINE_USER_ID = process.env.LINE_USER_ID;
+const AOLAN_BASE  = process.env.AOLAN_BASE || 'https://hk2.aolan.cn'; // 若你用 www.aolan.net 就改 .env
+const AOLAN_TOKEN = process.env.AOLAN_BEARER;       // 你剛複製的 Bearer（很長那串）
+const BRANCH_ID   = process.env.BRANCH_ID;          // 你門市的 BranchID
+const LINE_TOKEN  = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+const LINE_USER   = process.env.LINE_USER_ID;       // 你的 userId
 
-// =============== 查詢今天以前的清潔完成未取衣物 ===============
-async function fetchOrders() {
-  // 改成「查今天以前」的所有資料
-  const toDueDate = dayjs().format('YYYY-MM-DDTHH:mm:ss.SSSZZ');
-  const url = `${AOLAN_HOST}/xiyi-yidanyuan1/ReceivingOrder/SearchReceivingItemDetailPage`;
+// 👉 改成「今天」：查到今天為止（包含今天的單）
+const toDueDateToday = () => dayjs().format('YYYY-MM-DDTHH:mm:ss.SSSZZ');
 
-  const body = [
-    { Key: 'IsSuit', Value: 'false' },
-    { Key: 'Remind', Value: 'Remind' },
-    { Key: 'ToDueDate', Value: toDueDate },
-    { Key: 'BranchID', Value: BRANCH_ID },
-    { Key: 'PageIndex', Value: 1 },
-    { Key: 'PageSize', Value: 100 },
-    { Key: 'PageSummary', Value: true }
+// 這支就是你在 Fiddler 看到的批次查詢 API
+const API = `${AOLAN_BASE}/xiyi-yidanyuan1/ReceivingOrder/SearchReceivingItemDetailPage`;
+
+// 做一頁查詢的 payload（照你抓到的 Key/Value）
+function buildPayload(pageIndex = 1, pageSize = 100) {
+  return [
+    { Key: 'IsSuit',    Value: 'false' },
+    { Key: 'Remind',    Value: 'Remind' },                      // 只要提醒清單（清潔完成未取）
+    { Key: 'ToDueDate', Value: toDueDateToday() },              // ✅ 到今天為止
+    { Key: 'BranchID',  Value: BRANCH_ID },
+    { Key: 'PageIndex', Value: pageIndex },
+    { Key: 'PageSize',  Value: pageSize },
+    { Key: 'PageSummary', Value: pageIndex === 1 ? 'true' : 'false' }
   ];
+}
 
+// 將回應轉成陣列（不同版本結構容錯）
+function normalizeList(resData) {
+  if (Array.isArray(resData?.Data)) return resData.Data;
+  if (Array.isArray(resData?.Data?.List)) return resData.Data.List;
+  if (Array.isArray(resData)) return resData;
+  if (Array.isArray(resData?.Message)) return resData.Message;
+  return [];
+}
+
+async function fetchTodayList() {
   const headers = {
     Authorization: `Bearer ${AOLAN_TOKEN}`,
     'Content-Type': 'application/json; charset=utf-8'
   };
 
-  console.log('[AOLAN] 查詢網址：', url);
-  console.log('[AOLAN] 查詢時間條件：', toDueDate);
+  let page = 1;
+  const pageSize = 100;
+  const all = [];
 
-  try {
-    const res = await axios.post(url, body, { headers });
-    const data = res.data.Data?.List || res.data.Data || [];
+  while (true) {
+    const body = buildPayload(page, pageSize);
+    console.log('[AOLAN] URL:', API, 'Page:', page);
 
-    console.log(`[AOLAN] 查到 ${data.length} 筆資料`);
-    return data;
-  } catch (err) {
-    console.error('[AOLAN] 查詢失敗:', err.response?.data || err.message);
-    return [];
-  }
-}
-
-// =============== 傳送 LINE 通知（只發給自己） ===============
-async function sendLineMessage(text) {
-  try {
-    await axios.post(
-      'https://api.line.me/v2/bot/message/push',
-      {
-        to: LINE_USER_ID,
-        messages: [{ type: 'text', text }]
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${LINE_TOKEN}`,
-          'Content-Type': 'application/json'
-        }
+    let res;
+    try {
+      res = await axios.post(API, body, { headers });
+    } catch (e) {
+      // 有些空結果會回 404 HTML；直接當成空頁
+      const txt = e?.response?.data;
+      const isHtml404 = typeof txt === 'string' && txt.includes('<title>404');
+      if (isHtml404) {
+        console.log('[AOLAN] 空頁（404 HTML）');
+        break;
       }
-    );
-    console.log('✅ 成功發送 LINE 通知');
-  } catch (err) {
-    console.error('❌ LINE 發送失敗:', err.response?.data || err.message);
+      throw e;
+    }
+
+    const list = normalizeList(res.data);
+    if (!list.length) break;
+
+    all.push(...list);
+    if (list.length < pageSize) break;
+    page++;
   }
+
+  return all;
 }
 
-// =============== 主執行程式 ===============
-async function main() {
-  console.log('🔍 正在查詢今天以前（含今天）的清潔完成未取衣物...');
-  const list = await fetchOrders();
-  const count = list.length;
-
-  const message = 
-    `📣 C.H 精緻洗衣《測試模式》提醒\n` +
-    `時間：${dayjs().format('YYYY/MM/DD HH:mm')}\n` +
-    `件數：${count} 件\n` +
-    (count > 0 ? `\n前幾筆資料：\n` + 
-      list.slice(0, 5).map((item, i) => {
-        const name = item.CustomerName || '未知';
-        const phone = item.Mobile || '';
-        const masked = phone.length > 6 ? phone.slice(0, 4) + '****' + phone.slice(-3) : phone;
-        const due = item.DueDate || '未知';
-        const order = item.ReceivingOrderNumber || '無單號';
-        return `${i + 1}. ${name} ${masked} #${order} 到期：${due}`;
-      }).join('\n')
-    : `\n🟢 沒有符合條件的衣物。`);
-
-  await sendLineMessage(message);
+async function pushToMe(text) {
+  await axios.post(
+    'https://api.line.me/v2/bot/message/push',
+    { to: LINE_USER, messages: [{ type: 'text', text }] },
+    { headers: { Authorization: `Bearer ${LINE_TOKEN}`, 'Content-Type': 'application/json' } }
+  );
 }
 
-// 執行
-main();
+function maskPhone(p) {
+  if (!p || typeof p !== 'string') return '';
+  return p.length >= 10 ? p.slice(0, 4) + '****' + p.slice(-3) : p;
+}
+
+(async () => {
+  try {
+    console.log('🔍 查詢「到今天為止」的清潔完成未取清單（只推給自己）...');
+    const list = await fetchTodayList();
+
+    const count = list.length;
+    const preview = list.slice(0, 5).map((x, i) => {
+      const name  = x.CustomerName || x.Customer || '未提供';
+      const phone = maskPhone(x.Mobile || x.ContactMobile || x.Phone || '');
+      const order = x.ReceivingOrderNumber || x.ReceivingOrderNo || x.OrderNumber || '-';
+      const due   = (x.DueDate || x.LocationDate || x.CreatedDate || '').toString().replace('T',' ').slice(0,16);
+      const goods = x.GoodsName || x.SpecificationName || '';
+      return `${i+1}. ${name} ${phone} #${order} ${goods ? '品項:'+goods+' ' : ''}日期:${due}`;
+    });
+
+    const message =
+      `📣 C.H 精緻洗衣〈到今天為止的清單〉\n` +
+      `時間：${dayjs().format('YYYY/MM/DD HH:mm')}\n` +
+      `門市：${BRANCH_ID}\n` +
+      `件數：${count} 件` +
+      (preview.length ? `\n\n前5筆：\n${preview.join('\n')}` : '');
+
+    await pushToMe(message);
+    console.log('✅ 已發送到你的 LINE（只推你，不推客人）');
+  } catch (err) {
+    console.error('❌ 執行失敗：', err?.response?.data || err.message);
+  }
+})();
