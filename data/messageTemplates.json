@@ -1,0 +1,124 @@
+// ===== 訊息模板 API =====
+const TEMPLATES_FILE = path.join(__dirname, 'data', 'messageTemplates.json');
+
+function ensureTemplatesFile() {
+  const dataDir = path.join(__dirname, 'data');
+  if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+  if (!fs.existsSync(TEMPLATES_FILE)) {
+    const defaults = [
+      { id: 1, name: '付款提醒', content: '親愛的客戶，您有一筆待付款訂單，請盡快完成付款，感謝您！' },
+      { id: 2, name: '衣物已送達', content: '您好！您的衣物已送達門市，歡迎取件。營業時間：週一至週日 09:00–21:00' },
+      { id: 3, name: '衣物清洗完成', content: '您的衣物已清洗完成！請於三日內取件，謝謝！' },
+      { id: 4, name: '節慶優惠', content: '🎉 限時優惠！本週洗衣服務全面 8 折！歡迎預約！' },
+      { id: 5, name: '感謝訊息', content: '感謝您的支持！期待再次為您服務 ❤️' }
+    ];
+    fs.writeFileSync(TEMPLATES_FILE, JSON.stringify(defaults, null, 2));
+  }
+}
+ensureTemplatesFile();
+
+app.get('/api/templates', (_req, res) => {
+  try {
+    const templates = JSON.parse(fs.readFileSync(TEMPLATES_FILE, 'utf8'));
+    res.json({ success: true, templates });
+  } catch (e) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+app.post('/api/template', (req, res) => {
+  try {
+    const { name, content } = req.body || {};
+    if (!name || !content) return res.status(400).json({ success: false, message: '請提供 name 與 content' });
+    const templates = JSON.parse(fs.readFileSync(TEMPLATES_FILE, 'utf8'));
+    const tpl = { id: Date.now(), name, content, createdAt: Date.now() };
+    templates.push(tpl);
+    fs.writeFileSync(TEMPLATES_FILE, JSON.stringify(templates, null, 2));
+    logger.logToFile(`✅ 新增模板: ${name}`);
+    res.json({ success: true, template: tpl });
+  } catch (e) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+app.put('/api/template/:id', (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const { name, content } = req.body || {};
+    let templates = JSON.parse(fs.readFileSync(TEMPLATES_FILE, 'utf8'));
+    const i = templates.findIndex(t => t.id === id);
+    if (i === -1) return res.status(404).json({ success: false, message: '模板不存在' });
+    templates[i] = { ...templates[i], name: name ?? templates[i].name, content: content ?? templates[i].content, updatedAt: Date.now() };
+    fs.writeFileSync(TEMPLATES_FILE, JSON.stringify(templates, null, 2));
+    res.json({ success: true, template: templates[i] });
+  } catch (e) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+app.delete('/api/template/:id', (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    let templates = JSON.parse(fs.readFileSync(TEMPLATES_FILE, 'utf8'));
+    const before = templates.length;
+    templates = templates.filter(t => t.id !== id);
+    fs.writeFileSync(TEMPLATES_FILE, JSON.stringify(templates, null, 2));
+    logger.logToFile(`🗑️ 刪除模板: ${id}`);
+    res.json({ success: true, deleted: before - templates.length });
+  } catch (e) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+// 發送自訂訊息（可用模板 + 附加文字）
+app.post('/api/send-message', async (req, res) => {
+  try {
+    const { userId, message, templateId, additionalText } = req.body || {};
+    if (!userId) return res.status(400).json({ success: false, message: '缺少 userId' });
+
+    let final = message?.trim() || '';
+    if (templateId) {
+      const templates = JSON.parse(fs.readFileSync(TEMPLATES_FILE, 'utf8'));
+      const tpl = templates.find(t => t.id === Number(templateId));
+      if (tpl) final = (tpl.content || '') + (additionalText ? '\n\n' + additionalText : '');
+    }
+    if (!final) return res.status(400).json({ success: false, message: '沒有可發送內容' });
+
+    await client.pushMessage(userId, { type: 'text', text: final });
+    logger.logToFile(`📤 已發送自訂訊息給 ${userId}`);
+    res.json({ success: true });
+  } catch (e) {
+    logger.logError('發送自訂訊息失敗', e);
+    res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+// 以模板群發（傳待付款或全部可自行擴充條件）
+app.post('/api/broadcast', async (req, res) => {
+  try {
+    const { templateId, additionalText, scope = 'all' } = req.body || {};
+    const templates = JSON.parse(fs.readFileSync(TEMPLATES_FILE, 'utf8'));
+    const tpl = templates.find(t => t.id === Number(templateId));
+    if (!tpl) return res.status(400).json({ success: false, message: '模板不存在' });
+
+    const baseMsg = (tpl.content || '') + (additionalText ? '\n\n' + additionalText : '');
+    const targets =
+      scope === 'pending'
+        ? [...new Set(orderManager.getPendingOrders().map(o => o.userId))]
+        : customerDB.getAllCustomers().map(c => c.userId);
+
+    let sent = 0;
+    for (const uid of targets) {
+      try {
+        await client.pushMessage(uid, { type: 'text', text: baseMsg });
+        sent++;
+        await new Promise(r => setTimeout(r, 400));
+      } catch (err) {
+        logger.logError(`群發失敗 ${uid}`, err);
+      }
+    }
+    res.json({ success: true, sent, scope });
+  } catch (e) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+});
