@@ -2,280 +2,411 @@
 <html lang="zh-TW">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>C.H 精緻洗衣 – 付款管理</title>
+<title>C.H 精緻洗衣 - 付款管理系統</title>
 <style>
-  *{box-sizing:border-box} body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#f6f7fb;margin:0}
-  .wrap{max-width:1100px;margin:0 auto;padding:16px}
-  .grid{display:grid;grid-template-columns:1.2fr .8fr;gap:16px}
-  @media (max-width:900px){.grid{grid-template-columns:1fr}}
-  .card{background:#fff;border-radius:16px;box-shadow:0 8px 30px rgba(0,0,0,.06);padding:16px}
-  h2{margin:0 0 12px;color:#334}
-  label{font-size:14px;color:#445;margin-top:10px;display:block}
-  input,textarea,select{width:100%;padding:12px;border:2px solid #e5e7eb;border-radius:10px;font-size:16px}
-  textarea{min-height:110px}
-  .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-  .btn{display:inline-flex;align-items:center;justify-content:center;padding:12px 18px;border-radius:10px;border:none;color:#fff;background:#6366f1;font-weight:600;cursor:pointer;transition:all .2s}
-  .btn:hover{opacity:.9;transform:translateY(-1px)}
-  .btn:disabled{opacity:.6;cursor:not-allowed;transform:none}
-  .btn-sec{background:#10b981}
-  .btn-danger{background:#ef4444}
-  .list{display:grid;gap:10px;max-height:60vh;overflow:auto}
-  .item{border:1px solid #e5e7eb;border-radius:10px;padding:10px;display:flex;justify-content:space-between;align-items:center}
-  .pill{display:inline-block;padding:2px 8px;border-radius:999px;background:#eef;color:#445;font-size:12px}
-  .mt{margin-top:12px}
-  .flex{display:flex;gap:8px;flex-wrap:wrap}
-  .hint{font-size:12px;color:#6b7280}
-  .rightHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
-  .status-badge{display:inline-block;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600}
-  .status-pending{background:#fef3c7;color:#92400e}
-  .status-paid{background:#d1fae5;color:#065f46}
-  .status-expired{background:#fee2e2;color:#7f1d1d}
+* { box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #e2e8f0; margin: 0; padding: 0; }
+.header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; text-align: center; }
+.header h1 { margin: 0; font-size: 28px; color: #fff; }
+.container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+@media (max-width: 1024px) { .grid { grid-template-columns: 1fr; } }
+.card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 20px; }
+.card h2 { margin: 0 0 16px; font-size: 18px; color: #f1f5f9; border-bottom: 2px solid #667eea; padding-bottom: 8px; }
+label { display: block; margin-top: 12px; font-size: 13px; color: #cbd5e1; font-weight: 600; }
+input, select, textarea { width: 100%; padding: 10px; margin-top: 6px; border: 1px solid #475569; background: #0f172a; color: #e2e8f0; border-radius: 6px; font-size: 14px; }
+input:focus, select:focus, textarea:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1); }
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.col-full { grid-column: 1 / -1; }
+.btn { padding: 10px 16px; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 14px; transition: all 0.2s; }
+.btn-primary { background: #667eea; color: #fff; }
+.btn-primary:hover { background: #5568d3; transform: translateY(-1px); }
+.btn-success { background: #10b981; color: #fff; }
+.btn-success:hover { background: #059669; }
+.btn-danger { background: #ef4444; color: #fff; }
+.btn-danger:hover { background: #dc2626; }
+.btn-secondary { background: #64748b; color: #fff; }
+.btn-secondary:hover { background: #475569; }
+.btn-small { padding: 6px 12px; font-size: 12px; }
+.flex { display: flex; gap: 8px; flex-wrap: wrap; }
+.flex-between { display: flex; justify-content: space-between; align-items: center; }
+.status-msg { padding: 10px; border-radius: 6px; margin-top: 8px; font-size: 13px; }
+.status-success { background: #10b981; color: #fff; }
+.status-error { background: #ef4444; color: #fff; }
+.list { margin-top: 12px; }
+.item { background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 10px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+.item-info { flex: 1; }
+.item-name { font-weight: 600; color: #f1f5f9; }
+.item-meta { font-size: 12px; color: #94a3b8; margin-top: 4px; }
+.pill { display: inline-block; background: #334155; color: #cbd5e1; padding: 3px 8px; border-radius: 12px; font-size: 12px; margin-right: 4px; }
+.stat { background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 12px; text-align: center; }
+.stat-number { font-size: 24px; font-weight: 700; color: #667eea; }
+.stat-label { font-size: 12px; color: #94a3b8; margin-top: 4px; }
+.tabs { display: flex; gap: 0; border-bottom: 1px solid #334155; margin-bottom: 16px; }
+.tab { padding: 10px 16px; cursor: pointer; border-bottom: 2px solid transparent; color: #94a3b8; font-weight: 600; transition: all 0.2s; }
+.tab.active { border-bottom-color: #667eea; color: #667eea; }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+textarea { min-height: 80px; resize: vertical; font-family: inherit; }
+.payment-options { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 12px; }
+.payment-btn { padding: 12px; border: 2px solid #334155; background: transparent; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; }
+.payment-btn:hover { border-color: #667eea; background: rgba(102, 126, 234, 0.1); }
+.payment-btn.selected { border-color: #667eea; background: rgba(102, 126, 234, 0.2); }
 </style>
 
-<div class="wrap">
-  <div class="grid">
-    <!-- 左：發送 / 模板 / 編號 -->
-    <div class="card">
-      <h2>📤 發送付款</h2>
+<div class="header">
+  <h1>💳 C.H 精緻洗衣 - 付款管理系統</h1>
+</div>
 
+<div class="container">
+  <div class="grid">
+    <!-- 左側：發送付款 -->
+    <div class="card">
+      <h2>📤 發送付款連結</h2>
+      
       <div class="row">
         <div>
           <label>客戶姓名 *</label>
-          <input id="userName" placeholder="王小明">
+          <input id="userName" placeholder="輸入客戶姓名">
         </div>
         <div>
-          <label>LINE User ID *</label>
-          <input id="userId" placeholder="Uxxxxxxxxxxxxxxxxxxxx">
+          <label>客戶編號</label>
+          <input id="customerNo" placeholder="如 625（可選）">
         </div>
       </div>
 
-      <div class="row">
-        <div>
-          <label>金額 (NT$) *</label>
-          <input id="amount" type="number" min="1" placeholder="1500">
-        </div>
-        <div>
-          <label>付款方式</label>
-          <select id="paymentType">
-            <option value="both">兩者都發</option>
-            <option value="ecpay">綠界信用卡</option>
-            <option value="linepay">LINE Pay</option>
-          </select>
-        </div>
+      <label>LINE User ID *</label>
+      <input id="userId" placeholder="Uxxxxxxxxxxxxxxxxxxxxxxx">
+
+      <label>金額 (NT$) *</label>
+      <input id="amount" type="number" min="1" placeholder="1500">
+
+      <label>付款方式選擇 *</label>
+      <div class="payment-options">
+        <button class="payment-btn selected" data-type="both">
+          💙 兩者都發<br><small>綠界 + LINE Pay</small>
+        </button>
+        <button class="payment-btn" data-type="ecpay">
+          💳 只發綠界<br><small>信用卡</small>
+        </button>
+        <button class="payment-btn" data-type="linepay">
+          🟢 只發 LINE Pay
+        </button>
       </div>
 
-      <label class="mt">訊息模板</label>
-      <div id="tplBtns" class="flex"></div>
-      <label class="mt">訊息內容（{amount} 會換成金額）</label>
+      <label style="margin-top: 16px;">訊息內容</label>
       <textarea id="customMessage" placeholder="您好，金額 NT$ {amount}，請點擊付款，謝謝！"></textarea>
+      <small style="color: #94a3b8; display: block; margin-top: 4px;">提示：{amount} 會自動替換成金額</small>
 
-      <div class="mt flex">
-        <button class="btn" id="sendBtn">💙 發送付款連結</button>
-        <span id="status" class="hint"></span>
-      </div>
+      <button class="btn btn-primary" id="sendBtn" style="width: 100%; margin-top: 16px; padding: 12px;">
+        🚀 發送付款連結
+      </button>
+      <div id="sendStatus"></div>
 
-      <hr class="mt">
+      <hr style="border: none; border-top: 1px solid #334155; margin: 20px 0;">
 
-      <h2>🗂️ 客戶編號</h2>
+      <h2>🗂️ 客戶管理</h2>
       <div class="row">
-        <div>
-          <label>編號（可留空自動遞增）</label>
-          <input id="newNo" placeholder="如 755">
-        </div>
-        <div>
-          <label>姓名 *</label>
-          <input id="newName" placeholder="王小明">
-        </div>
+        <input id="newNo" placeholder="編號（留空自動遞增）">
+        <input id="newName" placeholder="姓名 *">
       </div>
-      <div class="row">
-        <div>
-          <label>LINE User ID *</label>
-          <input id="newUid" placeholder="Uxxxxxxxxxxxxxxxxxxxx">
-        </div>
-        <div class="mt" style="display:flex;align-items:end">
-          <button id="saveNoBtn" class="btn-sec btn" style="width:100%">💾 儲存客戶</button>
-        </div>
+      <input id="newUid" placeholder="LINE User ID *" style="grid-column: 1 / -1;">
+      
+      <div class="flex" style="margin-top: 12px;">
+        <button class="btn btn-success" id="saveCustomerBtn">💾 儲存客戶</button>
+        <button class="btn btn-secondary" id="loadCustomersBtn">🔄 重新載入</button>
       </div>
 
-      <div class="mt">
-        <label>快速查詢（編號或姓名）</label>
-        <div class="row">
-          <input id="q" placeholder="輸入編號或姓名">
-          <button id="qBtn" class="btn">查詢 / 帶入</button>
-        </div>
+      <label style="margin-top: 16px;">快速查詢</label>
+      <div class="row">
+        <input id="searchInput" placeholder="編號或姓名">
+        <button class="btn btn-primary" id="searchBtn" style="padding: 10px;">🔍 查詢</button>
       </div>
     </div>
 
-    <!-- 右：客戶清單 + 模板管理 + 訂單查詢 -->
+    <!-- 右側：統計和清單 -->
     <div class="card">
-      <div class="rightHead">
-        <h2>👥 客戶清單</h2>
-        <button id="reloadUsers" class="btn" style="padding:8px 12px;font-size:13px">重新載入</button>
+      <h2>📊 系統統計</h2>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div class="stat">
+          <div class="stat-number" id="stat-total">0</div>
+          <div class="stat-label">總訂單</div>
+        </div>
+        <div class="stat">
+          <div class="stat-number" id="stat-pending">0</div>
+          <div class="stat-label">待付款</div>
+        </div>
+        <div class="stat">
+          <div class="stat-number" id="stat-paid">0</div>
+          <div class="stat-label">已付款</div>
+        </div>
+        <div class="stat">
+          <div class="stat-number" id="stat-remind">0</div>
+          <div class="stat-label">待提醒</div>
+        </div>
       </div>
-      <div id="userList" class="list"><div class="hint">尚無資料</div></div>
 
-      <hr class="mt">
+      <hr style="border: none; border-top: 1px solid #334155; margin: 20px 0;">
 
-      <h2>📝 模板管理</h2>
+      <h2>👥 客戶清單</h2>
+      <div id="customerList" class="list">
+        <div style="color: #94a3b8; text-align: center; padding: 20px;">尚無客戶資料</div>
+      </div>
+
+      <hr style="border: none; border-top: 1px solid #334155; margin: 20px 0;">
+
+      <h2>📝 訊息模板</h2>
       <div class="row">
-        <input id="newTpl" placeholder="輸入模板，例：您好，金額 NT$ {amount}">
-        <button id="addTplBtn" class="btn-sec btn">新增模板</button>
+        <input id="newTemplate" placeholder="輸入新模板" style="grid-column: 1 / -1;">
       </div>
-      <div id="tplList" class="list mt"></div>
-
-      <hr class="mt">
-
-      <h2>📊 訂單統計</h2>
-      <div id="stats" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px">
-        <div><strong>總訂單</strong>: <span id="stat-total">0</span></div>
-        <div><strong>待付</strong>: <span id="stat-pending">0</span></div>
-        <div><strong>已付</strong>: <span id="stat-paid">0</span></div>
-        <div><strong>待提醒</strong>: <span id="stat-remind">0</span></div>
+      <button class="btn btn-success" id="addTemplateBtn" style="width: 100%; margin-top: 8px;">➕ 新增模板</button>
+      
+      <div id="templateList" class="list" style="margin-top: 12px;">
+        <div style="color: #94a3b8; text-align: center; padding: 20px;">尚無模板</div>
       </div>
     </div>
   </div>
 </div>
 
 <script>
-const $ = (id)=>document.getElementById(id);
+const $ = id => document.getElementById(id);
+let selectedPaymentType = 'both';
+let customers = {};
+let templates = [];
 
-// API helpers
-async function getJSON(url){ const r=await fetch(url); return r.json(); }
-async function postJSON(url, body){
-  const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})});
-  return r.json();
-}
-async function del(url){ const r=await fetch(url,{method:'DELETE'}); return r.json(); }
-
-// ===== 模板 =====
-let templates=[];
-async function loadTemplates(){
-  try{
-    const d = await getJSON('/api/templates');
-    if (d.success) templates = d.templates || [];
-  }catch{ templates = []; }
-  drawTplButtons(); drawTplList();
-}
-function drawTplButtons(){
-  const box = $('tplBtns'); box.innerHTML='';
-  templates.forEach((t,i)=>{
-    const b=document.createElement('button');
-    b.className='btn';
-    b.style.fontSize='13px';
-    b.style.padding='8px 12px';
-    b.textContent = (t.length>16? t.slice(0,16)+'…':t);
-    b.onclick=()=>{ $('customMessage').value = t; };
-    box.appendChild(b);
-  });
-}
-function drawTplList(){
-  const box = $('tplList'); box.innerHTML='';
-  if (!templates.length){ box.innerHTML='<div class="hint">尚無模板</div>'; return; }
-  templates.forEach((t,i)=>{
-    const div=document.createElement('div'); div.className='item';
-    div.innerHTML = `<div style="white-space:pre-wrap;max-width:70%;font-size:13px">${t}</div>`;
-    const r=document.createElement('div'); r.className='flex';
-    const delBtn=document.createElement('button'); delBtn.className='btn-danger btn'; delBtn.textContent='刪除'; delBtn.style.padding='6px 10px'; delBtn.style.fontSize='12px';
-    delBtn.onclick=async()=>{ const d=await del('/api/templates/'+i); if(d.success){ templates=d.templates; drawTplButtons(); drawTplList(); } };
-    r.appendChild(delBtn);
-    div.appendChild(r);
-    box.appendChild(div);
-  });
-}
-$('addTplBtn').onclick = async ()=>{
-  const t = $('newTpl').value.trim(); if (!t) return;
-  const d = await postJSON('/api/templates', { content:t });
-  if (d.success){ templates=d.templates; $('newTpl').value=''; drawTplButtons(); drawTplList(); }
-};
-
-// ===== 客戶編號 =====
-let customerMap = {};
-async function loadCustomerMeta(){
-  const d = await getJSON('/api/customer-meta');
-  if (d.success){ customerMap = d.map||{}; drawUsers(); }
-}
-$('saveNoBtn').onclick = async ()=>{
-  const number = $('newNo').value.trim();
-  const name   = $('newName').value.trim();
-  const userId = $('newUid').value.trim();
-  if (!name || !userId){ alert('請填姓名與 User ID'); return; }
-  const d = await postJSON('/api/customer-meta/save',{ number: number?Number(number):undefined, name, userId });
-  if (d.success){
-    customerMap[d.number] = d.data;
-    $('newNo').value=''; $('newName').value=''; $('newUid').value='';
-    drawUsers();
-  } else alert('儲存失敗：'+(d.error||''));
-};
-function drawUsers(){
-  const box = $('userList'); box.innerHTML='';
-  const entries = Object.entries(customerMap);
-  if (!entries.length){ box.innerHTML='<div class="hint">尚無客戶</div>'; return; }
-  entries.sort((a,b)=> Number(a[0])-Number(b[0]));
-  entries.forEach(([no, c])=>{
-    const row = document.createElement('div'); row.className='item';
-    const left = document.createElement('div');
-    left.innerHTML = `<div><strong>#${no}</strong>　<span class="pill">${c.name||'-'}</span></div><div class="hint" style="margin-top:2px">${(c.userId||'-').slice(0,20)}…</div>`;
-    const right = document.createElement('div'); right.className='flex';
-    const fill = document.createElement('button'); fill.className='btn'; fill.textContent='帶入'; fill.style.padding='6px 10px'; fill.style.fontSize='12px';
-    fill.onclick=()=>{ $('userName').value=c.name||''; $('userId').value=c.userId||''; window.scrollTo({top:0,behavior:'smooth'}); };
-    const delBtn = document.createElement('button'); delBtn.className='btn-danger btn'; delBtn.textContent='刪除'; delBtn.style.padding='6px 10px'; delBtn.style.fontSize='12px';
-    delBtn.onclick=async()=>{ if(!confirm(`刪除 #${no}?`))return; const d=await del('/api/customer-meta/'+no); if(d.success){ delete customerMap[no]; drawUsers(); } };
-    right.appendChild(fill); right.appendChild(delBtn);
-    row.appendChild(left); row.appendChild(right);
-    box.appendChild(row);
-  });
-}
-$('qBtn').onclick = ()=>{
-  const q = $('q').value.trim(); if(!q) return;
-  if (customerMap[q]) {
-    const c=customerMap[q]; $('userName').value=c.name||''; $('userId').value=c.userId||''; return;
+// API 呼叫
+async function apiCall(method, url, body = null) {
+  try {
+    const opts = {
+      method,
+      headers: { 'Content-Type': 'application/json' }
+    };
+    if (body) opts.body = JSON.stringify(body);
+    const res = await fetch(url, opts);
+    return await res.json();
+  } catch (err) {
+    console.error('API 錯誤:', err);
+    return { success: false, error: err.message };
   }
-  const found = Object.entries(customerMap).find(([no,c])=> (c.name||'').includes(q));
-  if (found){ const [,c]=found; $('userName').value=c.name||''; $('userId').value=c.userId||''; }
-  else alert('找不到此客戶');
-};
-$('reloadUsers').onclick = loadCustomerMeta;
+}
 
-// ===== 發送付款 =====
-$('sendBtn').onclick = async ()=>{
+// 付款方式選擇
+document.querySelectorAll('.payment-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.payment-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    selectedPaymentType = btn.dataset.type;
+  });
+});
+
+// 發送付款
+$('sendBtn').onclick = async () => {
   const userId = $('userId').value.trim();
   const userName = $('userName').value.trim();
-  const amount = parseInt($('amount').value,10);
-  const paymentType = $('paymentType').value;
-  const customMessage = $('customMessage').value.trim().replace('{amount}', (amount||0).toLocaleString());
-  if (!userId || !userName || !amount){ $('status').textContent='❌ 缺少必要欄位'; return; }
-  $('status').textContent='發送中…';
-  try{
-    const d = await postJSON('/api/send-payment', { userId, userName, amount, paymentType, customMessage });
-    if (d.success){ 
-      $('status').textContent='✅ 已發送到 LINE'; 
-      setTimeout(()=>{ $('status').textContent=''; }, 3000);
-      $('userName').value=''; $('userId').value=''; $('amount').value=''; $('customMessage').value='';
-      loadStats();
-    }
-    else { $('status').textContent='❌ 失敗：'+(d.error||''); }
-  }catch(e){ $('status').textContent='❌ 網路錯誤'; }
+  const amount = parseInt($('amount').value, 10);
+  
+  if (!userId || !userName || !amount) {
+    showStatus('sendStatus', '❌ 請填寫所有必填欄位', 'error');
+    return;
+  }
+
+  $('sendBtn').disabled = true;
+  showStatus('sendStatus', '⏳ 發送中...', 'success');
+
+  const customMsg = $('customMessage').value.trim() || '您好，金額 NT$ {amount}，請點擊付款，謝謝！';
+  const msg = customMsg.replace('{amount}', amount.toLocaleString());
+
+  const data = await apiCall('POST', '/send-payment', {
+    userId, userName, amount, paymentType: selectedPaymentType, customMessage: msg
+  });
+
+  $('sendBtn').disabled = false;
+  if (data.success) {
+    showStatus('sendStatus', '✅ 已發送到 LINE！', 'success');
+    $('userName').value = '';
+    $('userId').value = '';
+    $('amount').value = '';
+    $('customMessage').value = '';
+    loadStats();
+    setTimeout(() => showStatus('sendStatus', '', ''), 3000);
+  } else {
+    showStatus('sendStatus', '❌ 發送失敗: ' + (data.error || '未知錯誤'), 'error');
+  }
 };
 
-// ===== 訂單統計 =====
-async function loadStats(){
-  try{
-    const d = await getJSON('/api/orders');
-    if (d.success && d.statistics){
-      $('stat-total').textContent = d.statistics.total;
-      $('stat-pending').textContent = d.statistics.pending;
-      $('stat-paid').textContent = d.statistics.paid;
-      $('stat-remind').textContent = d.statistics.needReminder;
+// 客戶管理
+$('saveCustomerBtn').onclick = async () => {
+  const no = $('newNo').value.trim();
+  const name = $('newName').value.trim();
+  const uid = $('newUid').value.trim();
+  
+  if (!name || !uid) {
+    alert('請填寫姓名和 User ID');
+    return;
+  }
+
+  const data = await apiCall('POST', '/api/customer-meta/save', {
+    number: no ? parseInt(no) : undefined, name, userId: uid
+  });
+
+  if (data.success) {
+    customers[data.number] = data.data;
+    $('newNo').value = '';
+    $('newName').value = '';
+    $('newUid').value = '';
+    drawCustomers();
+    alert('✅ 客戶已儲存');
+  } else {
+    alert('❌ 儲存失敗: ' + (data.error || '未知錯誤'));
+  }
+};
+
+$('loadCustomersBtn').onclick = loadCustomers;
+
+$('searchBtn').onclick = () => {
+  const q = $('searchInput').value.trim();
+  if (!q) return;
+  
+  if (customers[q]) {
+    const c = customers[q];
+    $('userName').value = c.name;
+    $('userId').value = c.userId;
+    $('customerNo').value = q;
+  } else {
+    const found = Object.entries(customers).find(([_, c]) => c.name.includes(q));
+    if (found) {
+      $('userName').value = found[1].name;
+      $('userId').value = found[1].userId;
+      $('customerNo').value = found[0];
+    } else {
+      alert('找不到客戶');
     }
-  }catch(e){ console.error('載入統計失敗', e); }
+  }
+};
+
+async function loadCustomers() {
+  const data = await apiCall('GET', '/api/customer-meta');
+  if (data.success) {
+    customers = data.map || {};
+    drawCustomers();
+  }
 }
 
-// ===== 初次載入 + 定期更新 =====
-(async ()=>{
+function drawCustomers() {
+  const list = $('customerList');
+  const items = Object.entries(customers);
+  if (items.length === 0) {
+    list.innerHTML = '<div style="color: #94a3b8; text-align: center; padding: 20px;">尚無客戶</div>';
+    return;
+  }
+  
+  list.innerHTML = items.sort((a, b) => Number(a[0]) - Number(b[0]))
+    .map(([no, c]) => `
+      <div class="item">
+        <div class="item-info">
+          <div class="item-name">#${no} ${c.name}</div>
+          <div class="item-meta">${c.userId.substring(0, 20)}...</div>
+        </div>
+        <div class="flex">
+          <button class="btn btn-primary btn-small" onclick="fillCustomer('${no}', '${c.name}', '${c.userId}')">帶入</button>
+          <button class="btn btn-danger btn-small" onclick="delCustomer('${no}')">刪除</button>
+        </div>
+      </div>
+    `).join('');
+}
+
+async function fillCustomer(no, name, uid) {
+  $('customerNo').value = no;
+  $('userName').value = name;
+  $('userId').value = uid;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+async function delCustomer(no) {
+  if (!confirm(`確定刪除 #${no}?`)) return;
+  const data = await apiCall('DELETE', '/api/customer-meta/' + no);
+  if (data.success) {
+    delete customers[no];
+    drawCustomers();
+  }
+}
+
+// 模板管理
+$('addTemplateBtn').onclick = async () => {
+  const tpl = $('newTemplate').value.trim();
+  if (!tpl) return;
+  
+  const data = await apiCall('POST', '/api/templates', { content: tpl });
+  if (data.success) {
+    templates = data.templates;
+    $('newTemplate').value = '';
+    drawTemplates();
+  }
+};
+
+async function loadTemplates() {
+  const data = await apiCall('GET', '/api/templates');
+  if (data.success) {
+    templates = data.templates || [];
+    drawTemplates();
+  }
+}
+
+function drawTemplates() {
+  const list = $('templateList');
+  if (templates.length === 0) {
+    list.innerHTML = '<div style="color: #94a3b8; text-align: center; padding: 20px;">尚無模板</div>';
+    return;
+  }
+  
+  list.innerHTML = templates.map((t, i) => `
+    <div class="item">
+      <div class="item-info" style="font-size: 13px;">${t}</div>
+      <div class="flex">
+        <button class="btn btn-primary btn-small" onclick="useTemplate('${t.replace(/'/g, "\\'")}')">使用</button>
+        <button class="btn btn-danger btn-small" onclick="delTemplate(${i})">刪除</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function useTemplate(t) {
+  $('customMessage').value = t;
+}
+
+async function delTemplate(idx) {
+  const data = await apiCall('DELETE', '/api/templates/' + idx);
+  if (data.success) {
+    templates = data.templates;
+    drawTemplates();
+  }
+}
+
+// 統計
+async function loadStats() {
+  const data = await apiCall('GET', '/api/orders');
+  if (data.success && data.statistics) {
+    $('stat-total').textContent = data.statistics.total;
+    $('stat-pending').textContent = data.statistics.pending;
+    $('stat-paid').textContent = data.statistics.paid;
+    $('stat-remind').textContent = data.statistics.needReminder;
+  }
+}
+
+function showStatus(elemId, msg, type) {
+  const el = $(elemId);
+  if (!msg) {
+    el.innerHTML = '';
+    return;
+  }
+  el.innerHTML = '<div class="status-msg status-' + type + '">' + msg + '</div>';
+}
+
+// 初始化
+(async () => {
+  await loadCustomers();
   await loadTemplates();
-  await loadCustomerMeta();
   await loadStats();
-  // 每 30 秒更新一次統計
   setInterval(loadStats, 30000);
 })();
 </script>
