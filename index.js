@@ -17,14 +17,14 @@ const googleAuth = require('./services/googleAuth');
 const orderManager = require('./services/orderManager');
 const customerDB = require('./services/customerDatabase');
 
-// 你原本的：綠界付款連結產生器
+// 綠界付款連結產生器（你的原本服務）
 const { createECPayPaymentLink } = require('./services/openai');
 
 // ===== App 基本設定 =====
 const app = express();
 app.set('trust proxy', 1);
 
-// CORS：手機/不同網域也能打 API
+// CORS（手機/跨網域可打）
 app.use(cors());
 app.options('*', cors());
 
@@ -35,7 +35,7 @@ app.use(express.urlencoded({ extended: true }));
 // 靜態檔
 app.use(express.static('public'));
 
-// =====（可選）Railway 會給公開網域；固定入口會用它當 host =====
+// 公開網址（固定入口會用這個 host）
 const PUBLIC_BASE =
   process.env.RAILWAY_PUBLIC_DOMAIN || 'https://stain-bot-production-0fac.up.railway.app';
 
@@ -114,8 +114,7 @@ function generateLinePaySignature(uri, body, nonce) {
     .digest('base64');
 }
 
-// 生成 LINE Pay 付款頁（有效 20 分鐘）
-// ※ 我們會把它「綁在同一個 orderId 的固定入口上」，而不是每次發新 orderId
+// 即時生成 LINE Pay 付款頁（有效 20 分鐘）
 async function createLinePayPayment(userId, userName, amount) {
   try {
     const orderId = `LP${Date.now()}${Math.random()
@@ -137,7 +136,6 @@ async function createLinePayPayment(userId, userName, amount) {
         },
       ],
       redirectUrls: {
-        // 固定入口最後還是會回到你的服務端 confirm
         confirmUrl: `${PUBLIC_BASE}/payment/linepay/confirm?orderId=${orderId}&userId=${userId}&userName=${encodeURIComponent(
           userName
         )}&amount=${amount}`,
@@ -251,77 +249,6 @@ app.get('/auth/status', (req, res) => {
   res.json({ authorized: isAuthorized, message: isAuthorized ? '已授權' : '未授權' });
 });
 
-app.get('/test-sheets', async (req, res) => {
-  try {
-    const { google } = require('googleapis');
-    if (!googleAuth.isAuthorized()) {
-      return res.send('❌ 尚未完成 OAuth 授權!<br><a href="/auth">點此進行授權</a>');
-    }
-    const auth = googleAuth.getOAuth2Client();
-    const sheets = google.sheets({ version: 'v4', auth });
-    const spreadsheetId = process.env.GOOGLE_SHEETS_ID_CUSTOMER;
-    if (!spreadsheetId) return res.send('❌ 請在 .env 中設定 GOOGLE_SHEETS_ID_CUSTOMER');
-
-    const timestamp = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
-    await sheets.spreadsheets.values.append({
-      spreadsheetId,
-      range: 'A:E',
-      valueInputOption: 'USER_ENTERED',
-      resource: { values: [[timestamp, 'OAuth 測試客戶', 'test@example.com', '測試地址', 'OAuth 2.0 寫入測試成功! ✅']] }
-    });
-    logger.logToFile('✅ Google Sheets OAuth 測試成功');
-    res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>測試成功</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:600px;margin:0 auto}h1{font-size:32px;margin-bottom:20px}a{color:#fff;text-decoration:underline}</style></head><body><div class="container"><h1>✅ Google Sheets 寫入測試成功!</h1><p>已成功使用 OAuth 2.0 寫入資料到試算表</p><p>寫入時間: ' + timestamp + '</p><p><a href="https://docs.google.com/spreadsheets/d/' + spreadsheetId + '" target="_blank">點此查看試算表</a></p><p><a href="/">返回首頁</a></p></div></body></html>');
-  } catch (error) {
-    logger.logError('Google Sheets 測試失敗', error);
-    res.status(500).send(`測試失敗: ${error.message}<br><a href="/auth">重新授權</a>`);
-  }
-});
-
-app.get('/test-upload', (req, res) => {
-  res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>測試上傳</title></head><body><h1>測試上傳功能已停用</h1></body></html>');
-});
-
-app.post('/api/test-upload-image', upload.single('image'), async (req, res) => {
-  try {
-    if (!req.file) return res.status(400).json({ success: false, error: '沒有收到圖片' });
-    const type = req.body.type || 'before';
-    const { customerLogService } = require('./services/multiSheets');
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const typeLabel = type === 'after' ? '洗後' : '洗前';
-    const filename = `${typeLabel}_test_${timestamp}.jpg`;
-    const result = await customerLogService.uploadImageToDrive(req.file.buffer, filename, type);
-    if (result.success) {
-      logger.logToFile(`✅ ${typeLabel}測試上傳成功: ${filename}`);
-      res.json({ success: true, fileId: result.fileId, viewLink: result.viewLink, downloadLink: result.downloadLink });
-    } else {
-      res.status(500).json({ success: false, error: result.error });
-    }
-  } catch (error) {
-    logger.logError('測試上傳失敗', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.get('/log', (req, res) => {
-  res.download(logger.getLogFilePath(), 'logs.txt', (err) => {
-    if (err) {
-      logger.logError('下載日誌文件出錯', err);
-      res.status(500).send('下載文件失敗');
-    }
-  });
-});
-
-app.get('/test-push', async (req, res) => {
-  const userId = process.env.ADMIN_USER_ID || 'Uxxxxxxxxxxxxxxxxxxxx';
-  try {
-    await client.pushMessage(userId, { type: 'text', text: '✅ 測試推播成功!這是一則主動訊息 🚀' });
-    res.send('推播成功,請查看 LINE Bot 訊息');
-  } catch (err) {
-    console.error('推播錯誤', err);
-    res.status(500).send(`推播失敗: ${err.message}`);
-  }
-});
-
 // ====== 付款相關（綠界轉頁）======
 app.get('/payment/redirect', (req, res) => {
   const { data } = req.query;
@@ -346,7 +273,7 @@ app.get('/payment/linepay/cancel', (req, res) => {
   res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>付款取消</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#f093fb 0%,#f5576c 100%);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}</style></head><body><div class="container"><h1>❌ 付款已取消</h1><p>您已取消此次付款</p><p>如需協助請聯繫客服</p></div></body></html>');
 });
 
-// ====== 固定入口（永遠不失效）：點擊時即時生成 20 分鐘 LINE Pay 付款頁 ======
+// ====== LINE Pay「固定入口」（不失效）======
 app.get('/payment/linepay/pay/:orderId', async (req, res) => {
   const { orderId } = req.params;
   let order = orderManager.getOrder(orderId);
@@ -359,10 +286,10 @@ app.get('/payment/linepay/pay/:orderId', async (req, res) => {
 </head><body><div class="box"><h1>❌ 訂單不存在</h1><p>請聯繫 C.H 精緻洗衣客服</p></div></body></html>`);
   }
 
-  // 若訂單過期，先續期（維持相同 orderId）
+  // 過期自動續期（維持相同 orderId）
   if (orderManager.isExpired(orderId)) {
     order = orderManager.renewOrder(orderId);
-    logger.logToFile(`🔄 訂單過期時自動續期: ${orderId}`);
+    logger.logToFile(`🔄 LINE Pay 訂單過期時自動續期: ${orderId}`);
   }
 
   if (order.status === 'paid') {
@@ -393,6 +320,56 @@ app.get('/payment/linepay/pay/:orderId', async (req, res) => {
 </body></html>`);
   } catch (err) {
     logger.logError('重新生成 LINE Pay 連結失敗', err);
+    res.status(500).send('系統錯誤，請稍後再試');
+  }
+});
+
+// ====== 綠界「固定入口」（不失效）======
+// 每次點這條網址，就即時產出新的綠界付款頁（用同一個 orderId）
+app.get('/payment/ecpay/pay/:orderId', async (req, res) => {
+  const { orderId } = req.params;
+  let order = orderManager.getOrder(orderId);
+
+  if (!order) {
+    return res
+      .status(404)
+      .send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>訂單不存在</title>
+<style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#f093fb,#f5576c);color:white}.box{background:rgba(255,255,255,.1);border-radius:16px;padding:28px;max-width:520px;margin:0 auto}</style>
+</head><body><div class="box"><h1>❌ 訂單不存在</h1><p>請聯繫 C.H 精緻洗衣客服</p></div></body></html>`);
+  }
+
+  // 過期自動續期（維持相同 orderId）
+  if (orderManager.isExpired(orderId)) {
+    order = orderManager.renewOrder(orderId);
+    logger.logToFile(`🔄 綠界訂單過期時自動續期: ${orderId}`);
+  }
+
+  if (order.status === 'paid') {
+    return res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>訂單已付款</title>
+<style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#667eea,#764ba2);color:white}.box{background:rgba(255,255,255,.1);border-radius:16px;padding:28px;max-width:520px;margin:0 auto}</style>
+</head><body><div class="box"><h1>✅ 訂單已付款</h1><p>訂單編號：${orderId}</p></div></body></html>`);
+  }
+
+  try {
+    // 這裡每次產生新的綠界付款資料（createECPayPaymentLink 會給你 /payment/redirect?data=xxx）
+    const ecpayUrl = createECPayPaymentLink(order.userId, order.userName, order.amount);
+
+    // 顯示提示頁，1 秒自動跳綠界
+    const remainingHours = Math.floor((order.expiryTime - Date.now()) / (1000 * 60 * 60));
+    res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>前往綠界付款</title>
+<style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#52c41a,#389e0d);color:white}.box{background:rgba(255,255,255,.1);border-radius:16px;padding:28px;max-width:560px;margin:0 auto}.btn{display:inline-block;padding:14px 28px;margin-top:16px;background:#fff;color:#2a7b19;text-decoration:none;border-radius:10px;font-weight:700}</style>
+</head><body><div class="box">
+<h1>💳 前往綠界付款</h1>
+<p><b>訂單編號：</b>${orderId}</p>
+<p><b>金額：</b>NT$ ${order.amount.toLocaleString()}</p>
+<p><b>訂單仍有效：</b>${remainingHours} 小時</p>
+<p>將自動帶您前往綠界付款頁面...</p>
+<a class="btn" href="${ecpayUrl}">若未自動跳轉，請點此</a>
+</div>
+<script>setTimeout(function(){location.href=${JSON.stringify(ecpayUrl)}},800);</script>
+</body></html>`);
+  } catch (err) {
+    logger.logError('生成綠界連結失敗', err);
     res.status(500).send('系統錯誤，請稍後再試');
   }
 });
@@ -497,20 +474,19 @@ app.get('/api/order/:orderId', (req, res) => {
   });
 });
 
-// 續期 + 重發（單筆）
+// 續期 + 重發（單筆）— 兩個固定入口一併回傳
 app.post('/api/order/:orderId/renew', async (req, res) => {
   const { orderId } = req.params;
   const order = orderManager.renewOrder(orderId); // 若不存在回 null
   if (!order) return res.status(404).json({ success: false, error: '找不到此訂單' });
 
   try {
-    // 先生一張 20 分鐘 LINE Pay 付款頁（資訊存回同一 orderId）
     const linePayResult = await createLinePayPayment(order.userId, order.userName, order.amount);
     if (!linePayResult.success) throw new Error('重新生成 LINE Pay 連結失敗');
     orderManager.updatePaymentInfo(orderId, linePayResult.transactionId, linePayResult.paymentUrl);
 
-    const persistentUrl = `${PUBLIC_BASE}/payment/linepay/pay/${orderId}`;
-    let ecpayLink = createECPayPaymentLink(order.userId, order.userName, order.amount);
+    const linepayPersistent = `${PUBLIC_BASE}/payment/linepay/pay/${orderId}`;
+    const ecpayPersistent = `${PUBLIC_BASE}/payment/ecpay/pay/${orderId}`;
 
     await client.pushMessage(order.userId, {
       type: 'text',
@@ -520,19 +496,19 @@ app.post('/api/order/:orderId/renew', async (req, res) => {
         `客戶姓名: ${order.userName}\n` +
         `金額: NT$ ${order.amount.toLocaleString()}\n\n` +
         `— 請選擇付款方式 —\n` +
-        `【信用卡／綠界】\n${ecpayLink}\n\n` +
-        `【LINE Pay（固定入口）】\n${persistentUrl}\n\n` +
-        `備註：固定入口可重複點擊；LINE Pay 官方頁面每次開啟 20 分鐘內有效，過時再回來點同一條即可。\n` +
+        `【信用卡／綠界（固定入口）】\n${ecpayPersistent}\n\n` +
+        `【LINE Pay（固定入口）】\n${linepayPersistent}\n\n` +
+        `備註：固定入口可重複點擊；官方頁面每次開啟都有時效，過時再回來點同一條即可。\n` +
         `✅ 付款後系統會自動通知我們`
     });
 
     orderManager.markReminderSent(orderId);
-    logger.logToFile(`✅ 單筆續約重發（綠界+LINE Pay 固定入口）：${orderId}`);
+    logger.logToFile(`✅ 單筆續約重發（兩大固定入口）：${orderId}`);
     res.json({
       success: true,
-      message: '訂單已續約並重新發送付款連結（含綠界 + LINE Pay 固定入口）',
+      message: '訂單已續約並重新發送付款連結（綠界 + LINE Pay 固定入口）',
       order,
-      links: { ecpay: ecpayLink, linepay: persistentUrl },
+      links: { ecpay: ecpayPersistent, linepay: linepayPersistent },
     });
   } catch (error) {
     logger.logError('續約訂單失敗', error);
@@ -546,7 +522,7 @@ app.delete('/api/order/:orderId', (req, res) => {
   res.json({ success: true, message: '訂單已刪除' });
 });
 
-// ====== 2 天提醒：維持同一個 orderId，不換連結 ======
+// ====== 2 天提醒：保留同一 orderId，發送兩個固定入口 ======
 app.post('/api/orders/send-reminders', async (req, res) => {
   const targets = orderManager.getOrdersNeedingReminder();
   if (targets.length === 0)
@@ -564,8 +540,8 @@ app.post('/api/orders/send-reminders', async (req, res) => {
       }
       orderManager.updatePaymentInfo(order.orderId, result.transactionId, result.paymentUrl);
 
-      const persistentUrl = `${PUBLIC_BASE}/payment/linepay/pay/${order.orderId}`;
-      const ecpayLink = createECPayPaymentLink(order.userId, order.userName, order.amount);
+      const linepayPersistent = `${PUBLIC_BASE}/payment/linepay/pay/${order.orderId}`;
+      const ecpayPersistent = `${PUBLIC_BASE}/payment/ecpay/pay/${order.orderId}`;
 
       await client.pushMessage(order.userId, {
         type: 'text',
@@ -575,18 +551,18 @@ app.post('/api/orders/send-reminders', async (req, res) => {
 親愛的 ${order.userName} 您好，您於本次洗衣服務仍待付款
 金額：NT$ ${order.amount.toLocaleString()}
 
-【信用卡／綠界】
-${ecpayLink}
+【信用卡／綠界（固定入口）】
+${ecpayPersistent}
 
 【LINE Pay（固定入口）】
-${persistentUrl}
+${linepayPersistent}
 
-備註：固定入口可重複點擊；LINE Pay 官方頁面每次開啟 20 分鐘內有效，過時再回來點同一條即可。`
+備註：固定入口可重複點擊；官方付款頁面每次開啟都有時效，過時再回來點同一條即可。`
       });
 
       orderManager.markReminderSent(order.orderId);
       sent++;
-      logger.logToFile(`✅ 已發送付款提醒（保留同一 orderId）：${order.orderId}`);
+      logger.logToFile(`✅ 已發送付款提醒（兩大固定入口）：${order.orderId}`);
     } catch (e) {
       logger.logError(`發送提醒失敗: ${order.orderId}`, e);
     }
@@ -604,7 +580,8 @@ app.post('/api/orders/clean-expired', (req, res) => {
   res.json({ success: true, message: `已清理 ${cleaned} 筆過期訂單`, cleaned });
 });
 
-// ====== 客製 API：發送付款（從前端表單呼叫）======
+// ====== 客製 API：發送付款（前端表單）======
+// 這裡改成建立一個「入口訂單」（ENT...），同一個 orderId 同時作為兩個固定入口的 ID
 app.post('/send-payment', async (req, res) => {
   const { userId, userName, amount, paymentType, customMessage } = req.body;
   logger.logToFile(`收到付款請求: userId=${userId}, userName=${userName}, amount=${amount}, type=${paymentType}`);
@@ -619,65 +596,66 @@ app.post('/send-payment', async (req, res) => {
 
   try {
     const type = paymentType || 'both';
-    let finalMessage = '';
-    let ecpayLink = '';
-    let linepayLink = '';
-    let ecpayOrderId = '';
-    let linePayOrderId = '';
+    const entranceOrderId = `ENT${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
+    orderManager.createOrder(entranceOrderId, { userId, userName, amount: numAmount });
 
-    // 綠界
-    if (type === 'ecpay' || type === 'both') {
-      ecpayOrderId = `EC${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
-      orderManager.createOrder(ecpayOrderId, { userId, userName, amount: numAmount });
-      logger.logToFile(`✅ 建立綠界訂單: ${ecpayOrderId}`);
-      ecpayLink = createECPayPaymentLink(userId, userName, numAmount);
+    // 先即時產一張 LINE Pay 付款頁，將交易資訊存回（這樣從固定入口點過去更快）
+    let linepayPersistent = null;
+    if (type === 'both' || type === 'linepay') {
+      const lp = await createLinePayPayment(userId, userName, numAmount);
+      if (lp.success) {
+        orderManager.updatePaymentInfo(entranceOrderId, lp.transactionId, lp.paymentUrl);
+      }
+      linepayPersistent = `${PUBLIC_BASE}/payment/linepay/pay/${entranceOrderId}`;
     }
 
-    // LINE Pay 固定入口：建立一張「入口訂單」，讓之後都用 /pay/:orderId
-    if (type === 'linepay' || type === 'both') {
-      // 新建「入口訂單」：此 orderId 是固定入口（不是 LINE 20 分鐘那個）
-      const entranceOrderId = `ENT${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
-      orderManager.createOrder(entranceOrderId, { userId, userName, amount: numAmount });
-      linePayOrderId = entranceOrderId;
+    // 綠界的固定入口網址（即點即生）
+    const ecpayPersistent =
+      (type === 'both' || type === 'ecpay')
+        ? `${PUBLIC_BASE}/payment/ecpay/pay/${entranceOrderId}`
+        : null;
 
-      // 提供固定入口 URL
-      linepayLink = `${PUBLIC_BASE}/payment/linepay/pay/${entranceOrderId}`;
-      logger.logToFile(`✅ 建立 LINE Pay 固定入口訂單: ${entranceOrderId}`);
-    }
+    // 組訊息
+    const msg = (customMessage || '').trim();
+    let finalText = '';
 
-    const userMsg = (customMessage || '').trim();
-    if (type === 'both' && ecpayLink && linepayLink) {
-      finalMessage = userMsg
-        ? `${userMsg}\n\n💙 付款連結如下:\n\n【信用卡／綠界】\n${ecpayLink}\n\n【LINE Pay（固定入口）】\n${linepayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`
-        : `💙 您好,${userName}\n\n您的專屬付款連結已生成\n金額:NT$ ${numAmount.toLocaleString()}\n\n請選擇付款方式:\n\n【信用卡／綠界】\n${ecpayLink}\n\n【LINE Pay（固定入口）】\n${linepayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
-    } else if (type === 'ecpay' && ecpayLink) {
-      finalMessage = userMsg
-        ? `${userMsg}\n\n💙 付款連結如下:\n${ecpayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`
-        : `💙 您好,${userName}\n\n您的專屬付款連結已生成\n付款方式:信用卡\n金額:NT$ ${numAmount.toLocaleString()}\n\n請點擊以下連結完成付款:\n${ecpayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
-    } else if (type === 'linepay' && linepayLink) {
-      finalMessage = userMsg
-        ? `${userMsg}\n\n💙 付款連結如下（固定入口）:\n${linepayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`
-        : `💙 您好,${userName}\n\n您的專屬付款連結已生成\n付款方式:LINE Pay\n金額:NT$ ${numAmount.toLocaleString()}\n\n請點擊以下連結完成付款（固定入口）:\n${linepayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
+    if (type === 'both') {
+      finalText =
+        (msg ? `${msg}\n\n` : `💙 您好,${userName}\n\n`) +
+        `金額:NT$ ${numAmount.toLocaleString()}\n\n` +
+        `請選擇付款方式：\n\n` +
+        `【信用卡／綠界（固定入口）】\n${ecpayPersistent}\n\n` +
+        `【LINE Pay（固定入口）】\n${linepayPersistent}\n\n` +
+        `✅ 付款後系統會自動通知我們`;
+    } else if (type === 'ecpay') {
+      finalText =
+        (msg ? `${msg}\n\n` : `💙 您好,${userName}\n\n`) +
+        `付款方式：信用卡／綠界\n金額:NT$ ${numAmount.toLocaleString()}\n\n` +
+        `${ecpayPersistent}\n\n` +
+        `✅ 付款後系統會自動通知我們`;
     } else {
-      return res.status(500).json({ error: '付款連結生成失敗' });
+      finalText =
+        (msg ? `${msg}\n\n` : `💙 您好,${userName}\n\n`) +
+        `付款方式：LINE Pay\n金額:NT$ ${numAmount.toLocaleString()}\n\n` +
+        `${linepayPersistent}\n\n` +
+        `✅ 付款後系統會自動通知我們`;
     }
 
-    await client.pushMessage(userId, { type: 'text', text: finalMessage });
-    logger.logToFile(`✅ 已發送付款連結: ${userName} - ${numAmount}元 (${type})`);
+    await client.pushMessage(userId, { type: 'text', text: finalText });
+    logger.logToFile(`✅ 已發送付款固定入口: ${userName} - ${numAmount}元 (${type})`);
 
     res.json({
       success: true,
-      message: '付款連結已發送',
+      message: '付款連結已發送（固定入口）',
       data: {
         userId,
         userName,
         amount: numAmount,
         paymentType: type,
-        ecpayLink: ecpayLink || null,
-        linepayLink: linepayLink || null,
-        ecpayOrderId: ecpayOrderId || null,
-        linePayOrderId: linePayOrderId || null,
-        customMessage: userMsg,
+        entranceOrderId,
+        ecpayPersistent,
+        linepayPersistent,
+        customMessage: msg,
       },
     });
   } catch (err) {
@@ -898,8 +876,7 @@ app.listen(PORT, async () => {
     orderManager.cleanExpiredOrders();
   }, 24 * 60 * 60 * 1000);
 
-  // 每 12 小時掃描一次，對「需提醒」的訂單發送提醒（每單至少隔 2 天）
-  // 固定入口不會失效，點了就即時生成新的 20 分鐘 LINE Pay 付款頁
+  // 每 12 小時掃描一次，對「需提醒」的訂單發送提醒
   setInterval(async () => {
     try {
       const targets = orderManager.getOrdersNeedingReminder();
@@ -917,8 +894,8 @@ app.listen(PORT, async () => {
 
           orderManager.updatePaymentInfo(order.orderId, result.transactionId, result.paymentUrl);
 
-          const persistentUrl = `${PUBLIC_BASE}/payment/linepay/pay/${order.orderId}`;
-          const ecpayLink = createECPayPaymentLink(order.userId, order.userName, order.amount);
+          const linepayPersistent = `${PUBLIC_BASE}/payment/linepay/pay/${order.orderId}`;
+          const ecpayPersistent = `${PUBLIC_BASE}/payment/ecpay/pay/${order.orderId}`;
 
           await client.pushMessage(order.userId, {
             type: 'text',
@@ -928,17 +905,17 @@ app.listen(PORT, async () => {
 親愛的 ${order.userName} 您好，您於本次洗衣服務仍待付款
 金額：NT$ ${order.amount.toLocaleString()}
 
-【信用卡／綠界】
-${ecpayLink}
+【信用卡／綠界（固定入口）】
+${ecpayPersistent}
 
 【LINE Pay（固定入口）】
-${persistentUrl}
+${linepayPersistent}
 
-備註：固定入口可重複點擊；LINE Pay 官方頁面每次開啟 20 分鐘內有效，過時再回來點同一條即可。`
+備註：固定入口可重複點擊；官方付款頁面每次開啟都有時效，過時再回來點同一條即可。`
           });
 
           orderManager.markReminderSent(order.orderId);
-          logger.logToFile(`✅ 排程付款提醒（保留同一 orderId）：${order.orderId}`);
+          logger.logToFile(`✅ 排程付款提醒（固定入口）：${order.orderId}`);
         } catch (err) {
           logger.logError(`排程提醒失敗: ${order.orderId}`, err);
         }
