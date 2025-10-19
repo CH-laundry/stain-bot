@@ -447,6 +447,9 @@ app.post('/api/orders/send-reminders', async (req, res) => {
                 }
                 await client.pushMessage(order.userId, { type: 'text', text: `😊 付款提醒 😊\n\n💙 親愛的 ${order.userName},您好\n\n您於本次的洗衣服務訂單尚未完成付款\n\n金額: NT$ ${order.amount.toLocaleString()}\n\n麻煩您了 💙 C.H 精緻洗衣 謝謝您\n\n付款連結 (7天內有效):\n${shortUrl}` });
                 sent++;
+
+                // ★ 新增：紀錄這次提醒時間，確保下次要滿 48 小時才再提醒
+                orderManager.markReminderSent(linePayResult.orderId);
                 logger.logToFile(`✅ 已發送付款提醒並重新生成連結: ${order.orderId} -> ${linePayResult.orderId}`);
             } else {
                 logger.logToFile(`❌ 重新生成付款連結失敗: ${order.orderId}`);
@@ -617,6 +620,9 @@ app.listen(PORT, async () => {
                     }
                     await client.pushMessage(order.userId, { type: 'text', text: `😊 付款提醒 😊\n\n💙 親愛的 ${order.userName},您好\n\n您於本次的洗衣服務訂單尚未完成付款\n\n金額: NT$ ${order.amount.toLocaleString()}\n\n麻煩您了 💙 C.H 精緻洗衣 謝謝您\n\n付款連結 (7天內有效):\n${shortUrl}` });
                     logger.logToFile(`✅ 自動發送付款提醒並重新生成連結: ${order.orderId} -> ${linePayResult.orderId}`);
+
+                    // ★ 新增：自動提醒也紀錄一次，下一次一定等滿 48 小時才會再發
+                    orderManager.markReminderSent(linePayResult.orderId);
                 } else {
                     logger.logToFile(`❌ 自動提醒失敗,無法生成付款連結: ${order.orderId}`);
                 }
