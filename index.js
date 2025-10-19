@@ -30,6 +30,102 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
+// ====== 同步儲存：客戶編號 + 訊息模板 ======
+const path = require('path');
+const fs = require('fs');
+
+const DATA_DIR = path.join(__dirname, 'data');
+const META_FILE = path.join(DATA_DIR, 'customerMeta.json');
+const TPL_FILE  = path.join(DATA_DIR, 'messageTemplates.json');
+
+function ensureDataFiles() {
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  if (!fs.existsSync(META_FILE)) fs.writeFileSync(META_FILE, JSON.stringify({ nextNo: 1, map: {} }, null, 2));
+  if (!fs.existsSync(TPL_FILE))  fs.writeFileSync(TPL_FILE, JSON.stringify([
+    '您好,已收回衣物,金額 NT$ {amount},請儘速付款,謝謝!',
+    '您的衣物已清洗完成,金額 NT$ {amount},可付款取件',
+    '衣物處理中,預付金額 NT$ {amount}',
+    '訂金收訖 NT$ {amount},感謝您的支持!'
+  ], null, 2));
+}
+ensureDataFiles();
+
+function readJSON(fp){ return JSON.parse(fs.readFileSync(fp, 'utf8')); }
+function writeJSON(fp, obj){ fs.writeFileSync(fp, JSON.stringify(obj, null, 2)); }
+
+// 取得全部客戶編號
+app.get('/api/customer-meta', (_req, res) => {
+  try { res.json({ success:true, ...readJSON(META_FILE) }); }
+  catch (e) { res.status(500).json({ success:false, error:e.message }); }
+});
+
+// 儲存/更新單筆客戶編號 { number?, name, userId }
+app.post('/api/customer-meta/save', async (req, res) => {
+  try {
+    const { number, name, userId } = req.body || {};
+    if (!name || !userId) return res.json({ success:false, error:'缺少 name 或 userId' });
+
+    const meta = readJSON(META_FILE);
+    let no = String(number || meta.nextNo++);
+    meta.map[no] = { name, userId };
+    writeJSON(META_FILE, meta);
+    res.json({ success:true, number:no, data:meta.map[no] });
+  } catch (e) {
+    res.status(500).json({ success:false, error:e.message });
+  }
+});
+
+// 刪除單筆客戶編號
+app.delete('/api/customer-meta/:number', (req, res) => {
+  try {
+    const no = String(req.params.number);
+    const meta = readJSON(META_FILE);
+    if (!meta.map[no]) return res.json({ success:false, error:'不存在' });
+    delete meta.map[no];
+    writeJSON(META_FILE, meta);
+    res.json({ success:true });
+  } catch (e) {
+    res.status(500).json({ success:false, error:e.message });
+  }
+});
+
+// 取得模板
+app.get('/api/templates', (_req, res) => {
+  try { res.json({ success:true, templates: readJSON(TPL_FILE) }); }
+  catch (e) { res.status(500).json({ success:false, error:e.message }); }
+});
+
+// 新增模板 { content }
+app.post('/api/templates', (req, res) => {
+  try {
+    const { content } = req.body || {};
+    if (!content) return res.json({ success:false, error:'缺少 content' });
+    const arr = readJSON(TPL_FILE); arr.push(content); writeJSON(TPL_FILE, arr);
+    res.json({ success:true, templates: arr });
+  } catch (e) { res.status(500).json({ success:false, error:e.message }); }
+});
+
+// 更新模板 / 刪除模板
+app.put('/api/templates/:idx', (req, res) => {
+  try {
+    const idx = parseInt(req.params.idx, 10);
+    const { content } = req.body || {};
+    const arr = readJSON(TPL_FILE);
+    if (!(idx >=0 && idx < arr.length)) return res.json({ success:false, error:'索引錯誤' });
+    arr[idx] = content || arr[idx]; writeJSON(TPL_FILE, arr);
+    res.json({ success:true, templates: arr });
+  } catch (e) { res.status(500).json({ success:false, error:e.message }); }
+});
+app.delete('/api/templates/:idx', (req, res) => {
+  try {
+    const idx = parseInt(req.params.idx, 10);
+    const arr = readJSON(TPL_FILE);
+    if (!(idx >=0 && idx < arr.length)) return res.json({ success:false, error:'索引錯誤' });
+    arr.splice(idx,1); writeJSON(TPL_FILE, arr);
+    res.json({ success:true, templates: arr });
+  } catch (e) { res.status(500).json({ success:false, error:e.message }); }
+});
+
 
 const client = new Client({
     channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
