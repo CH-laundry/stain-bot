@@ -199,6 +199,45 @@ app.post('/send-payment', async (req, res) => {
   }
 });
 
+// ---- 通用付款落地頁（處理取消 / 一般提示）----
+app.get('/payment', (req, res) => {
+  const { cancelled, msg } = req.query;
+
+  const title = cancelled ? '付款已取消' : '付款資訊';
+  const info  = cancelled
+    ? '您已取消此次付款。若非您本人操作，請聯繫客服。'
+    : (msg || '請使用我們提供的付款連結完成支付。');
+
+  res.status(200).send(`
+    <!doctype html>
+    <html>
+    <head>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <title>${title}</title>
+      <style>
+        body { font-family: Arial, "Noto Sans TC", sans-serif; background:#f6f7fb; margin:0; }
+        .wrap { max-width:560px; margin:60px auto; background:#fff; border-radius:12px; padding:36px;
+                box-shadow:0 10px 30px rgba(0,0,0,.08); text-align:center; }
+        h1 { margin:0 0 12px; font-size:28px; color:#222; }
+        p { margin:8px 0; color:#555; line-height:1.7; }
+        a.btn { display:inline-block; margin-top:18px; padding:10px 16px; border-radius:8px; text-decoration:none; }
+        .primary { background:#6366f1; color:#fff; }
+        .muted { color:#888; font-size:13px; margin-top:16px; }
+      </style>
+    </head>
+    <body>
+      <div class="wrap">
+        <h1>${title}</h1>
+        <p>${info}</p>
+        <a class="btn primary" href="/">回首頁</a>
+        <div class="muted">若需要新的付款連結，請在 LINE 對話輸入「付款說明」或聯繫客服。</div>
+      </div>
+    </body>
+    </html>
+  `);
+});
+
 // ============== LINE Pay 付款路由 ==============
 app.get('/payment/linepay/pay/:orderId', async (req, res) => {
   try {
