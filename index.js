@@ -14,10 +14,37 @@ const config = {
     channelSecret: process.env.CHANNEL_SECRET
 };
 
-const client = new line.Client(config);
-const app = express();
-const PORT = process.env.PORT || 3000;
+// ============== LINE Bot 初始化區塊（請直接整段貼上） ==============
 
+// 1) 先載入 .env（本機測試用；Railway 會從環境讀）
+require('dotenv').config();
+
+// 2) 讀取並校驗必要環境變數
+const {
+  LINE_CHANNEL_ACCESS_TOKEN,
+  LINE_CHANNEL_SECRET,
+  PORT = 3000,
+  NODE_ENV
+} = process.env;
+
+function must(name, value) {
+  if (!value || String(value).trim() === '') {
+    console.error(`[BOOT] Missing ENV ${name}.`);
+    process.exit(1);
+  }
+}
+must('LINE_CHANNEL_ACCESS_TOKEN', LINE_CHANNEL_ACCESS_TOKEN);
+must('LINE_CHANNEL_SECRET', LINE_CHANNEL_SECRET);
+
+// 3) 初始化 LINE SDK（請務必用這兩個名稱）
+const line = require('@line/bot-sdk');
+const client = new line.Client({
+  channelAccessToken: LINE_CHANNEL_ACCESS_TOKEN,
+  channelSecret: LINE_CHANNEL_SECRET
+});
+
+// 4) 啟動時輸出遮罩資訊，便於你在 Logs 快速比對是否有讀到
+console.log(`[BOOT] ENV OK. tokenLen=${LINE_CHANNEL_ACCESS_TOKEN.length}, secretLen=${LINE_CHANNEL_SECRET.length}, node=${process.version}, env=${NODE_ENV}`);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
