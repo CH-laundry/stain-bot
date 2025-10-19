@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="zh-TW">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>C.H 精緻洗衣 – 付款管理</title>
+<style>
+  *{box-sizing:border-box} body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#f6f7fb;margin:0}
+  .wrap{max-width:1100px;margin:0 auto;padding:16px}
+  .grid{display:grid;grid-template-columns:1.2fr .8fr;gap:16px}
+  @media (max-width:900px){.grid{grid-template-columns:1fr}}
+  .card{background:#fff;border-radius:16px;box-shadow:0 8px 30px rgba(0,0,0,.06);padding:16px}
+  h2{margin:0 0 12px;color:#334}
+  label{font-size:14px;color:#445;margin-top:10px;display:block}
+  input,textarea,select{width:100%;padding:12px;border:2px solid #e5e7eb;border-radius:10px;font-size:16px}
+  textarea{min-height:110px}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .btn{display:inline-flex;align-items:center;justify-content:center;padding:12px 18px;border-radius:10px;border:none;color:#fff;background:#6366f1;font-weight:600;cursor:pointer;transition:all .2s}
+  .btn:hover{opacity:.9;transform:translateY(-1px)}
+  .btn:disabled{opacity:.6;cursor:not-allowed;transform:none}
+  .btn-sec{background:#10b981}
+  .btn-danger{background:#ef4444}
+  .list{display:grid;gap:10px;max-height:60vh;overflow:auto}
+  .item{border:1px solid #e5e7eb;border-radius:10px;padding:10px;display:flex;justify-content:space-between;align-items:center}
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;background:#eef;color:#445;font-size:12px}
+  .mt{margin-top:12px}
+  .flex{display:flex;gap:8px;flex-wrap:wrap}
+  .hint{font-size:12px;color:#6b7280}
+  .rightHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+  .status-badge{display:inline-block;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600}
+  .status-pending{background:#fef3c7;color:#92400e}
+  .status-paid{background:#d1fae5;color:#065f46}
+  .status-expired{background:#fee2e2;color:#7f1d1d}
+</style>
+
+<div class="wrap">
+  <div class="grid">
+    <!-- 左：發送 / 模板 / 編號 -->
+    <div class="card">
+      <h2>📤 發送付款</h2>
+
+      <div class="row">
+        <div>
+          <label>客戶姓名 *</label>
+          <input id="userName" placeholder="王小明">
+        </div>
+        <div>
+          <label>LINE User ID *</label>
+          <input id="userId" placeholder="Uxxxxxxxxxxxxxxxxxxxx">
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>金額 (NT$) *</label>
+          <input id="amount" type="number" min="1" placeholder="1500">
+        </div>
+        <div>
+          <label>付款方式</label>
+          <select id="paymentType">
+            <option value="both">兩者都發</option>
+            <option value="ecpay">綠界信用卡</option>
+            <option value="linepay">LINE Pay</option>
+          </select>
+        </div>
+      </div>
+
+      <label class="mt">訊息模板</label>
+      <div id="tplBtns" class="flex"></div>
+      <label class="mt">訊息內容（{amount} 會換成金額）</label>
+      <textarea id="customMessage" placeholder="您好，金額 NT$ {amount}，請點擊付款，謝謝！"></textarea>
+
+      <div class="mt flex">
+        <button class="btn" id="sendBtn">💙 發送付款連結</button>
+        <span id="status" class="hint"></span>
+      </div>
+
+      <hr class="mt">
+
+      <h2>🗂️ 客戶編號</h2>
+      <div class="row">
+        <div>
+          <label>編號（可留空自動遞增）</label>
+          <input id="newNo" placeholder="如 755">
+        </div>
+        <div>
+          <label>姓名 *</label>
+          <input id="newName" placeholder="王小明">
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>LINE User ID *</label>
+          <input id="newUid" placeholder="Uxxxxxxxxxxxxxxxxxxxx">
+        </div>
+        <div class="mt" style="display:flex;align-items:end">
+          <button id="saveNoBtn" class="btn-sec btn" style="width:100%">💾 儲存客戶</button>
+        </div>
+      </div>
+
+      <div class="mt">
+        <label>快速查詢（編號或姓名）</label>
+        <div class="row">
+          <input id="q" placeholder="輸入編號或姓名">
+          <button id="qBtn" class="btn">查詢 / 帶入</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 右：客戶清單 + 模板管理 + 訂單查詢 -->
+    <div class="card">
+      <div class="rightHead">
+        <h2>👥 客戶清單</h2>
+        <button id="reloadUsers" class="btn" style="padding:8px 12px;font-size:13px">重新載入</button>
+      </div>
+      <div id="userList" class="list"><div class="hint">尚無資料</div></div>
+
+      <hr class="mt">
+
+      <h2>📝 模板管理</h2>
+      <div class="row">
+        <input id="newTpl" placeholder="輸入模板，例：您好，金額 NT$ {amount}">
+        <button id="addTplBtn" class="btn-sec btn">新增模板</button>
+      </div>
+      <div id="tplList" class="list mt"></div>
+
+      <hr class="mt">
+
+      <h2>📊 訂單統計</h2>
+      <div id="stats" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px">
+        <div><strong>總訂單</strong>: <span id="stat-total">0</span></div>
+        <div><strong>待付</strong>: <span id="stat-pending">0</span></div>
+        <div><strong>已付</strong>: <span id="stat-paid">0</span></div>
+        <div><strong>待提醒</strong>: <span id="stat-remind">0</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = (id)=>document.getElementById(id);
+
+// API helpers
+async function getJSON(url){ const r=await fetch(url); return r.json(); }
+async function postJSON(url, body){
+  const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})});
+  return r.json();
+}
+async function del(url){ const r=await fetch(url,{method:'DELETE'}); return r.json(); }
+
+// ===== 模板 =====
+let templates=[];
+async function loadTemplates(){
+  try{
+    const d = await getJSON('/api/templates');
+    if (d.success) templates = d.templates || [];
+  }catch{ templates = []; }
+  drawTplButtons(); drawTplList();
+}
+function drawTplButtons(){
+  const box = $('tplBtns'); box.innerHTML='';
+  templates.forEach((t,i)=>{
+    const b=document.createElement('button');
+    b.className='btn';
+    b.style.fontSize='13px';
+    b.style.padding='8px 12px';
+    b.textContent = (t.length>16? t.slice(0,16)+'…':t);
+    b.onclick=()=>{ $('customMessage').value = t; };
+    box.appendChild(b);
+  });
+}
+function drawTplList(){
+  const box = $('tplList'); box.innerHTML='';
+  if (!templates.length){ box.innerHTML='<div class="hint">尚無模板</div>'; return; }
+  templates.forEach((t,i)=>{
+    const div=document.createElement('div'); div.className='item';
+    div.innerHTML = `<div style="white-space:pre-wrap;max-width:70%;font-size:13px">${t}</div>`;
+    const r=document.createElement('div'); r.className='flex';
+    const delBtn=document.createElement('button'); delBtn.className='btn-danger btn'; delBtn.textContent='刪除'; delBtn.style.padding='6px 10px'; delBtn.style.fontSize='12px';
+    delBtn.onclick=async()=>{ const d=await del('/api/templates/'+i); if(d.success){ templates=d.templates; drawTplButtons(); drawTplList(); } };
+    r.appendChild(delBtn);
+    div.appendChild(r);
+    box.appendChild(div);
+  });
+}
+$('addTplBtn').onclick = async ()=>{
+  const t = $('newTpl').value.trim(); if (!t) return;
+  const d = await postJSON('/api/templates', { content:t });
+  if (d.success){ templates=d.templates; $('newTpl').value=''; drawTplButtons(); drawTplList(); }
+};
+
+// ===== 客戶編號 =====
+let customerMap = {};
+async function loadCustomerMeta(){
+  const d = await getJSON('/api/customer-meta');
+  if (d.success){ customerMap = d.map||{}; drawUsers(); }
+}
+$('saveNoBtn').onclick = async ()=>{
+  const number = $('newNo').value.trim();
+  const name   = $('newName').value.trim();
+  const userId = $('newUid').value.trim();
+  if (!name || !userId){ alert('請填姓名與 User ID'); return; }
+  const d = await postJSON('/api/customer-meta/save',{ number: number?Number(number):undefined, name, userId });
+  if (d.success){
+    customerMap[d.number] = d.data;
+    $('newNo').value=''; $('newName').value=''; $('newUid').value='';
+    drawUsers();
+  } else alert('儲存失敗：'+(d.error||''));
+};
+function drawUsers(){
+  const box = $('userList'); box.innerHTML='';
+  const entries = Object.entries(customerMap);
+  if (!entries.length){ box.innerHTML='<div class="hint">尚無客戶</div>'; return; }
+  entries.sort((a,b)=> Number(a[0])-Number(b[0]));
+  entries.forEach(([no, c])=>{
+    const row = document.createElement('div'); row.className='item';
+    const left = document.createElement('div');
+    left.innerHTML = `<div><strong>#${no}</strong>　<span class="pill">${c.name||'-'}</span></div><div class="hint" style="margin-top:2px">${(c.userId||'-').slice(0,20)}…</div>`;
+    const right = document.createElement('div'); right.className='flex';
+    const fill = document.createElement('button'); fill.className='btn'; fill.textContent='帶入'; fill.style.padding='6px 10px'; fill.style.fontSize='12px';
+    fill.onclick=()=>{ $('userName').value=c.name||''; $('userId').value=c.userId||''; window.scrollTo({top:0,behavior:'smooth'}); };
+    const delBtn = document.createElement('button'); delBtn.className='btn-danger btn'; delBtn.textContent='刪除'; delBtn.style.padding='6px 10px'; delBtn.style.fontSize='12px';
+    delBtn.onclick=async()=>{ if(!confirm(`刪除 #${no}?`))return; const d=await del('/api/customer-meta/'+no); if(d.success){ delete customerMap[no]; drawUsers(); } };
+    right.appendChild(fill); right.appendChild(delBtn);
+    row.appendChild(left); row.appendChild(right);
+    box.appendChild(row);
+  });
+}
+$('qBtn').onclick = ()=>{
+  const q = $('q').value.trim(); if(!q) return;
+  if (customerMap[q]) {
+    const c=customerMap[q]; $('userName').value=c.name||''; $('userId').value=c.userId||''; return;
+  }
+  const found = Object.entries(customerMap).find(([no,c])=> (c.name||'').includes(q));
+  if (found){ const [,c]=found; $('userName').value=c.name||''; $('userId').value=c.userId||''; }
+  else alert('找不到此客戶');
+};
+$('reloadUsers').onclick = loadCustomerMeta;
+
+// ===== 發送付款 =====
+$('sendBtn').onclick = async ()=>{
+  const userId = $('userId').value.trim();
+  const userName = $('userName').value.trim();
+  const amount = parseInt($('amount').value,10);
+  const paymentType = $('paymentType').value;
+  const customMessage = $('customMessage').value.trim().replace('{amount}', (amount||0).toLocaleString());
+  if (!userId || !userName || !amount){ $('status').textContent='❌ 缺少必要欄位'; return; }
+  $('status').textContent='發送中…';
+  try{
+    const d = await postJSON('/api/send-payment', { userId, userName, amount, paymentType, customMessage });
+    if (d.success){ 
+      $('status').textContent='✅ 已發送到 LINE'; 
+      setTimeout(()=>{ $('status').textContent=''; }, 3000);
+      $('userName').value=''; $('userId').value=''; $('amount').value=''; $('customMessage').value='';
+      loadStats();
+    }
+    else { $('status').textContent='❌ 失敗：'+(d.error||''); }
+  }catch(e){ $('status').textContent='❌ 網路錯誤'; }
+};
+
+// ===== 訂單統計 =====
+async function loadStats(){
+  try{
+    const d = await getJSON('/api/orders');
+    if (d.success && d.statistics){
+      $('stat-total').textContent = d.statistics.total;
+      $('stat-pending').textContent = d.statistics.pending;
+      $('stat-paid').textContent = d.statistics.paid;
+      $('stat-remind').textContent = d.statistics.needReminder;
+    }
+  }catch(e){ console.error('載入統計失敗', e); }
+}
+
+// ===== 初次載入 + 定期更新 =====
+(async ()=>{
+  await loadTemplates();
+  await loadCustomerMeta();
+  await loadStats();
+  // 每 30 秒更新一次統計
+  setInterval(loadStats, 30000);
+})();
+</script>
