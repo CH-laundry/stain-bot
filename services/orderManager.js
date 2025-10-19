@@ -65,6 +65,7 @@ class OrderManager {
       lastReminderSent: null,
       retryCount: 0,
       paymentMethod: null,
+      paidAt: null
     };
     this.orders.set(orderId, order);
     this.saveOrders();
@@ -81,7 +82,7 @@ class OrderManager {
   }
 
   getPendingOrders() {
-    // 只拿還沒過期的 pending
+    // 只拿還沒過期且未付款的訂單
     return this.getAllOrders().filter(order => order.status === 'pending' && !this.isExpired(order.orderId));
   }
 
@@ -121,7 +122,7 @@ class OrderManager {
       if (status === 'paid') {
         order.paidAt = Date.now();
         order.paymentMethod = paymentMethod;
-        order.lastReminderSent = Date.now(); // ✅ 付款後防止排程誤抓
+        order.lastReminderSent = Date.now(); // 付款後防止排程誤抓
       }
       this.saveOrders();
       logger.logToFile(`✅ 更新訂單狀態: ${orderId} -> ${status} (${paymentMethod || '未知'})`);
@@ -136,7 +137,7 @@ class OrderManager {
         if (status === 'paid') {
           order.paidAt = Date.now();
           order.paymentMethod = paymentMethod;
-          order.lastReminderSent = Date.now(); // ✅ 付款後防止排程誤抓
+          order.lastReminderSent = Date.now(); // 付款後防止排程誤抓
         }
         updated++;
         logger.logToFile(`✅ 更新訂單狀態 (通過 userId): ${orderId} -> ${status} (${paymentMethod || '未知'})`);
