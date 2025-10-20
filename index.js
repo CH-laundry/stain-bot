@@ -787,5 +787,43 @@ app.listen(PORT, async () => {
                         linepayPaymentUrl: linePayResult.paymentUrl
                     };
                     orderManager.updatePaymentInfo(line
+                                                   orderManager.updatePaymentInfo(linePayResult.orderId, paymentData);
+                    orderManager.deleteOrder(order.orderId);
+
+                    const persistentUrl = `${baseURL}/payment/linepay/pay/${linePayResult.orderId}`;
+                    let linepayShort = persistentUrl;
+                    try {
+                        const response = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(persistentUrl)}`);
+                        const result = await response.text();
+                        if (result && result.startsWith('http')) linepayShort = result;
+                    } catch (error) {
+                        logger.logToFile(`⚠️ LINE Pay 短網址生成失敗,使用原網址`);
+                    }
+
+                    let ecpayLink = createECPayPaymentLink(order.userId, order.userName, order.amount);
+                    try {
+                        const r2 = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(ecpayLink)}`);
+                        const t2 = await r2.text();
+                        if (t2 && t2.startsWith('http')) ecpayLink = t2;
+                    } catch {
+                        logger.logToFile(`⚠️ 綠界短網址失敗，使用原網址`);
+                    }
+
+                    await client.pushMessage(order.userId, {
+                        type: 'text',
+                        text: `😊 付款提醒\n\n親愛的 ${order.userName} 您好，您於本次洗衣服務仍待付款\n金額：NT$ ${order.amount.toLocaleString()}\n\n【信用卡／綠界】\n${ecpayLink}\n\n【LINE Pay】\n${linepayShort}\n\n備註：以上連結可重複點擊；LINE Pay 官方頁面每次開啟 20 分鐘內有效，過時再回來點同一條即可。`
+                    });
+
+                    logger.logToFile(`✅ 自動發送付款提醒（綠界+LINE Pay）：${order.orderId} -> ${linePayResult.orderId}`);
+                    orderManager.markReminderSent(linePayResult.orderId);
+                } else {
+                    logger.logToFile(`❌ 自動提醒失敗,無法生成付款連結: ${order.orderId}`);
+                }
+            } catch (error) {
+                logger.logError(`自動提醒失敗: ${order.orderId}`, error);
+            }
+        }
+    }, 12 * 60 * 60 * 1000);
+});
 
 // 繼續下一部分...
