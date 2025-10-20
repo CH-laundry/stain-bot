@@ -281,6 +281,60 @@ app.get('/payment/redirect', (req, res) => {
   if (!data) {
     return res.status(400).send('缺少付款資料');
   }
+  // ✅ 固定入口：綠界付款 - 永久有效（每次點都重新產生新表單再自動送出）
+app.get('/payment/ecpay/pay/:orderId', async (req, res) => {
+  const { orderId } = req.params;
+  const order = orderManager.getOrder(orderId);
+  if (!order) {
+    return res.status(404).send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>訂單不存在</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:#f5576c;color:#fff}</style></head><body><h1>❌ 訂單不存在</h1></body></html>');
+  }
+  if (order.status === 'paid') {
+    return res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>訂單已付款</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:#667eea;color:#fff}</style></head><body><h1>✅ 訂單已付款</h1></body></html>');
+  }
+
+  try {
+    // 重新即時產生一組綠界表單（新的 MerchantTradeNo）
+    const url = createECPayPaymentLink(order.userId, order.userName, order.amount);
+
+    // 你的 createECPayPaymentLink 目前回傳的是 /payment/redirect?data=...（我們自己的中繼頁）
+    // 這個 URL 每次點都會重新產生「新」表單，等於永久有效入口
+    if (url.includes('/payment/redirect')) {
+      return res.redirect(url);
+    }
+
+    // 如果未來你改成直接回綠界 Aio URL，保險做法：我們用一個頁面引導與自動跳轉
+    return res.send(`
+      <!DOCTYPE html>
+      <html lang="zh-Hant">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+        <title>前往綠界付款</title>
+        <style>
+          body { font-family: -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,PingFang TC,Microsoft JhengHei,sans-serif;
+                 text-align:center; padding:48px; color:#333 }
+          a.btn { display:inline-block; padding:12px 24px; border-radius:8px; background:#2d6cdf; color:#fff; text-decoration:none; font-weight:700 }
+          p.hint { color:#666; margin-top:12px }
+        </style>
+      </head>
+      <body>
+        <h3>正在為您建立綠界付款頁面…</h3>
+        <a class="btn" href="${url}">立即前往付款</a>
+        <p class="hint">若未自動跳轉，請點擊上方按鈕。</p>
+        <script>
+          // 自動導向
+          window.location.href = ${JSON.stringify(url)};
+        </script>
+      </body>
+      </html>
+    `);
+  } catch (e) {
+    logger.logError('重新生成綠界連結失敗', e);
+    return res.status(500).send('系統錯誤，請稍候再試');
+  }
+
+});
+
   try {
     const paymentData = JSON.parse(Buffer.from(decodeURIComponent(data), 'base64').toString());
     const formHTML = '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>跳轉到綠界付款</title><style>body{font-family:sans-serif;text-align:center;padding:50px}.loading{font-size:18px;color:#666}</style></head><body><h3 class="loading">正在跳轉到付款頁面...</h3><p>請稍候,若未自動跳轉請點擊下方按鈕</p><form id="ecpayForm" action="https://payment.ecpay.com.tw/Cashier/AioCheckOut/V5" method="post">' + Object.keys(paymentData).map(key => `<input type="hidden" name="${key}" value="${paymentData[key]}">`).join('\n') + '<button type="submit" style="padding:10px 20px;font-size:16px;cursor:pointer">前往付款</button></form><script>setTimeout(function(){document.getElementById("ecpayForm").submit()},500)</script></body></html>';
