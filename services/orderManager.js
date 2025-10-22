@@ -5,9 +5,9 @@ const logger = require('./logger');
 const ORDERS_FILE = path.join(__dirname, '../data/orders.json');
 const CUSTOMERS_FILE = path.join(__dirname, '../data/customers.json');
 const TEMPLATES_FILE = path.join(__dirname, '../data/templates.json');
-const EXPIRY_TIME =5 * 60 * 1000;           // ✅ 5 分鐘)
-const REMINDER_INTERVAL = 2 * 24 * 60 * 60 * 1000; // 2 天提醒一次
-const FIRST_REMINDER_DELAY = 2 * 24 * 60 * 60 * 1000; // 建立後 2 天才開始提醒
+const EXPIRY_TIME = 7 * 24 * 60 * 60 * 1000; // 🔥 7 天過期 (168小時)
+const REMINDER_INTERVAL = 2 * 60 * 1000; // 🔥 每 2 分鐘提醒一次
+const FIRST_REMINDER_DELAY = 5 * 60 * 1000; // 🔥 建立後 5 分鐘開始提醒
 
 class OrderManager {
   constructor() {
@@ -107,14 +107,17 @@ class OrderManager {
 
       const timeSinceCreation = now - order.createdAt;
 
+      // 🔥 建立後 5 分鐘才開始提醒
       if (timeSinceCreation < FIRST_REMINDER_DELAY) {
         return false;
       }
 
+      // 🔥 如果從未提醒過，立即提醒
       if (!order.lastReminderSent) {
         return true;
       }
 
+      // 🔥 距離上次提醒超過 2 分鐘，再次提醒
       const timeSinceLastReminder = now - order.lastReminderSent;
       return timeSinceLastReminder >= REMINDER_INTERVAL;
     });
@@ -235,7 +238,7 @@ class OrderManager {
       order.reminderCount = 0;
       order.reminderEnabled = true;
       this.saveOrders();
-      logger.logToFile(`🔄 續約訂單: ${orderId} (新過期時間: 2天後)`);
+      logger.logToFile(`🔄 續約訂單: ${orderId} (新過期時間: 7天後)`);
       return order;
     }
     return null;
