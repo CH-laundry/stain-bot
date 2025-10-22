@@ -9,44 +9,6 @@ const EXPIRY_TIME = 2 * 24 * 60 * 60 * 1000; // 🔥 改為 2 天 (48小時)
 const REMINDER_INTERVAL = 2 * 24 * 60 * 60 * 1000; // 2 天提醒一次
 const FIRST_REMINDER_DELAY = 2 * 24 * 60 * 60 * 1000; // 建立後 2 天才開始提醒
 
-// ... 其他代碼保持不變 ...
-```
-
----
-
-## 3. 關於 Railway 睡眠 + Cron 方案
-
-### 是否需要外部 Cron？
-
-**建議：需要！** 理由如下：
-
-1. **Railway 免費方案**會在 5 分鐘無流量後進入睡眠
-2. 內部的 `setInterval` 在睡眠期間**不會執行**
-3. 外部 Cron 可以定期 ping，確保伺服器保持活躍
-
-### 推薦方案：使用 **Cron-job.org**
-
-#### 步驟 1：註冊 Cron-job.org
-前往 https://cron-job.org 免費註冊
-
-#### 步驟 2：新增兩個 Cron Job
-
-**Job 1：防止睡眠（每 5 分鐘）**
-- URL: `https://你的網域.up.railway.app/health`
-- 頻率: `*/5 * * * *` (每 5 分鐘)
-- 用途：保持伺服器活躍
-
-**Job 2：自動提醒（每 12 小時）**
-- URL: `https://你的網域.up.railway.app/api/orders/send-reminders`
-- 頻率: `0 */12 * * *` (每 12 小時)
-- 用途：觸發付款提醒
-
-#### Cron 表達式說明
-```
-*/5 * * * *  → 每 5 分鐘執行一次
-0 */12 * * * → 每 12 小時執行一次 (0:00, 12:00)
-0 9,21 * * * → 每天 9:00 和 21:00 執行
-
 class OrderManager {
   constructor() {
     this.orders = new Map();
@@ -215,6 +177,7 @@ class OrderManager {
       order.lastReminderSent = Date.now();
       order.reminderCount = (order.reminderCount || 0) + 1;
       this.saveOrders();
+      logger.logToFile(`✅ 標記提醒已發送: ${orderId} (第 ${order.reminderCount} 次)`);
     }
   }
 
@@ -272,7 +235,7 @@ class OrderManager {
       order.reminderCount = 0;
       order.reminderEnabled = true;
       this.saveOrders();
-      logger.logToFile(`🔄 續約訂單: ${orderId} (新過期時間: 7天後)`);
+      logger.logToFile(`🔄 續約訂單: ${orderId} (新過期時間: 2天後)`);
       return order;
     }
     return null;
@@ -427,7 +390,7 @@ class OrderManager {
 
   deleteTemplate(index) {
     if (index >= 0 && index < this.templates.length) {
-      this.templates.splice(index, 1); // ← 修正：合併斷行
+      this.templates.splice(index, 1);
       this.saveTemplates();
       logger.logToFile(`🗑️ 刪除訊息模板 #${index}`);
       return true;
