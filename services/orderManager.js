@@ -5,7 +5,7 @@ const logger = require('./logger');
 const ORDERS_FILE = path.join(__dirname, '../data/orders.json');
 const CUSTOMERS_FILE = path.join(__dirname, '../data/customers.json');
 const TEMPLATES_FILE = path.join(__dirname, '../data/templates.json');
-const EXPIRY_TIME = 2 * 24 * 60 * 60 * 1000; // 🔥 改為 2 天 (48小時)
+const EXPIRY_TIME =5 * 60 * 1000;           // ✅ 5 分鐘)
 const REMINDER_INTERVAL = 2 * 24 * 60 * 60 * 1000; // 2 天提醒一次
 const FIRST_REMINDER_DELAY = 2 * 24 * 60 * 60 * 1000; // 建立後 2 天才開始提醒
 
