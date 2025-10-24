@@ -11,6 +11,7 @@
     "inspect:storage": "node scripts/inspectStorage.js",
     "write:test": "node scripts/writeTest.js"
   }
+}
 
   },
   "engines": {
