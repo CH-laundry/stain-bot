@@ -1,15 +1,16 @@
 // bootstrap/storageBridge.js
-// 作用：在啟動時，將 repo 內的 ./data 目錄「橋接」到可持久化的存放處。
-// - 若 Railway 有 Volume：使用 <RAILWAY_VOLUME_MOUNT_PATH>/stain-bot
-// - 若尚未開 Volume：暫用 /app/data/stain-bot
-// - 自動建立 backup 目錄
-// - 第一次會把現有 data/ 內的 customers.json、orders.json 等檔案複製到持久化目錄
-// - 嘗試用 symlink 讓原本程式不用改路徑；若 symlink 失敗，仍會備份並提示你微調常數（備有訊息）
+// v2: 修復 ELOOP（避免 data/ 指向自己的子目錄）
+// 策略：
+// - 有 Volume: 使用 <RAILWAY_VOLUME_MOUNT_PATH>/stain-bot
+// - 無 Volume: 使用 /app/.persist/stain-bot  (不放到 /app/data/ 裡，以免自我參照)
+// - 若偵測到 data/ 是指向 data/* 的壞連結 -> 直接刪除並重建正確連結
+// - 啟動時自動備份 repo 內 data/*.json 至 persistentRoot/backup/
 
 const fs = require('fs');
 const path = require('path');
 
 function ensureDir(dir) {
+  // 若 dir 是壞 symlink，mkdir 會噴 ELOOP；這裡先處理在外層。
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
@@ -22,108 +23,117 @@ function copyFileIfNewerOrMissing(src, dest) {
     }
     const s = fs.statSync(src);
     const d = fs.statSync(dest);
-    if (s.mtimeMs > d.mtimeMs || s.size !== d.size) {
-      fs.copyFileSync(src, dest);
-    }
+    if (s.mtimeMs > d.mtimeMs || s.size !== d.size) fs.copyFileSync(src, dest);
   } catch (e) {
-    console.warn('⚠️ copyFileIfNewerOrMissing error:', e.message);
+    console.warn('⚠️ copyFileIfNewerOrMissing:', e.message);
   }
 }
 
 function safeBackup(filePath, backupDir) {
   try {
     if (!fs.existsSync(filePath)) return;
-    const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    const ts = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
     const base = path.basename(filePath);
     const dest = path.join(backupDir, `${base}.${ts}.bak`);
     fs.copyFileSync(filePath, dest);
   } catch (e) {
-    console.warn('⚠️ backup error:', e.message);
+    console.warn('⚠️ backup:', e.message);
   }
 }
 
 (function bridgeDataDir() {
   try {
     const projectRoot = process.cwd();
-    const repoDataDir = path.join(projectRoot, 'data'); // 你原本的資料夾（大多數檔案都用 ../data/... 指到這）
+    const repoDataDir = path.join(projectRoot, 'data'); // 你的原始資料夾（程式都用 ../data）
     const volumeRoot = process.env.RAILWAY_VOLUME_MOUNT_PATH || null;
 
-    // ① 選擇最終持久化根目錄
-    const persistentRoot = volumeRoot
+    // ★ 新的「安全」預設持久路徑（不在 /app/data 底下，避免循環）
+    let persistentRoot = volumeRoot
       ? path.join(volumeRoot, 'stain-bot')
-      : path.join('/app', 'data', 'stain-bot');
+      : path.join('/app', '.persist', 'stain-bot');
 
-    const backupDir = path.join(persistentRoot, 'backup');
+    // 安全守門員：如果不小心把 persistent 設到 repoDataDir 裡，直接改到 /app/.persist
+    const resolvedRepoDataDir = path.resolve(repoDataDir);
+    const resolvedPersistent = path.resolve(persistentRoot);
+    if (resolvedPersistent.startsWith(resolvedRepoDataDir + path.sep)) {
+      // 這代表 persistent 指到 data/ 的子目錄 → 會造成 ELOOP；改用 /app/.persist
+      persistentRoot = path.join('/app', '.persist', 'stain-bot');
+    }
 
+    // 先處理 data/ 如果是壞 symlink（指向 data/* 本身）
+    let dataIsSymlink = false;
+    try {
+      const st = fs.lstatSync(repoDataDir);
+      dataIsSymlink = st.isSymbolicLink();
+      if (dataIsSymlink) {
+        const target = fs.readlinkSync(repoDataDir);
+        const absTarget = path.resolve(path.dirname(repoDataDir), target);
+
+        // 如果目標在 data/ 之下，就刪掉，避免循環
+        if (absTarget.startsWith(resolvedRepoDataDir + path.sep)) {
+          fs.rmSync(repoDataDir, { recursive: true, force: true });
+          dataIsSymlink = false;
+          console.warn('🧹 已移除循環 symlink: data/ -> data/*');
+        }
+      }
+    } catch { /* data/ 不存在也沒關係 */ }
+
+    // 建立持久路徑與 backup
     ensureDir(persistentRoot);
+    const backupDir = path.join(persistentRoot, 'backup');
     ensureDir(backupDir);
 
-    // ② 把 repoDataDir 內常見檔案備份到 backup，並複製到 persistentRoot
-    const candidates = [
-      'customers.json',
-      'orders.json',
-      'templates.json',
-      // 你有其它自訂檔就加進來
-    ];
+    // 先準備一個臨時「真實」資料夾（若 data/ 還不存在）
+    if (!fs.existsSync(repoDataDir)) {
+      fs.mkdirSync(repoDataDir, { recursive: true });
+    }
 
-    ensureDir(repoDataDir); // 若不存在，先建起來避免錯誤
-    candidates.forEach((name) => {
+    // 備份 repoDataDir 裡常見資料
+    const candidates = ['customers.json', 'orders.json', 'templates.json'];
+    candidates.forEach(name => {
       const src = path.join(repoDataDir, name);
-      const dst = path.join(persistentRoot, name);
-      if (fs.existsSync(src)) {
-        // 先備份一份 repo 內檔案
-        safeBackup(src, backupDir);
-        // 再把較新的（或不存在的）同步到持久化目錄
-        copyFileIfNewerOrMissing(src, dst);
-      }
+      if (fs.existsSync(src)) safeBackup(src, backupDir);
     });
 
-    // ③ 若持久化目錄有較新檔案，也同步回 repoDataDir（確保你本地讀起來有資料）
-    candidates.forEach((name) => {
+    // 同步 repo -> persistent（第一次啟動把既有資料帶過去）
+    candidates.forEach(name => {
+      const src = path.join(repoDataDir, name);
+      const dst = path.join(persistentRoot, name);
+      copyFileIfNewerOrMissing(src, dst);
+    });
+
+    // 同步 persistent -> repo（確保本地讀也有資料）
+    candidates.forEach(name => {
       const src = path.join(persistentRoot, name);
       const dst = path.join(repoDataDir, name);
       copyFileIfNewerOrMissing(src, dst);
     });
 
-    // ④ 嘗試用 symlink：讓 ./data 指向 persistentRoot
-    //    這樣你既有程式用 ../data/*.json 的路徑完全不必改。
-    let needSymlink = true;
+    // 建立正確的 symlink：讓 ./data 指向 persistentRoot（注意：persistentRoot 不在 data/ 裡）
+    // 先把現有的 data/（可能是真資料夾）移掉（已經備份與同步）
     try {
-      const stat = fs.lstatSync(repoDataDir);
-      if (stat.isSymbolicLink()) {
-        const target = fs.readlinkSync(repoDataDir);
-        if (path.resolve(target) === path.resolve(persistentRoot)) {
-          needSymlink = false; // 已經是正確連結
-        } else {
-          fs.rmSync(repoDataDir, { recursive: true, force: true });
-        }
-      } else {
-        // 真實資料夾，先移除（已備份與同步過）
+      const st = fs.lstatSync(repoDataDir);
+      if (st.isSymbolicLink() || st.isDirectory()) {
         fs.rmSync(repoDataDir, { recursive: true, force: true });
+      } else {
+        fs.rmSync(repoDataDir, { force: true });
       }
-    } catch {
-      // 不存在就繼續
+    } catch { /* ignore */ }
+
+    try {
+      fs.symlinkSync(persistentRoot, repoDataDir, 'dir');
+      console.log(`🔗 data/ → ${persistentRoot}`);
+    } catch (e) {
+      console.warn('⚠️ 無法建立 symlink，將直接使用持久路徑：', e.message);
+      process.env.DATA_DIR_FALLBACK = persistentRoot;
+      // 若你的程式有 ensureDataDirectory() 會 mkdir ../data，因為此時 data/ 可能不存在，
+      // 請把常數改成使用 DATA_DIR_FALLBACK（見先前說明）。大多數情況 symlink 能成功，就不必改。
     }
 
-    if (needSymlink) {
-      try {
-        fs.symlinkSync(persistentRoot, repoDataDir, 'dir');
-        console.log(`🔗 data/ 已連結到持久化目錄：${persistentRoot}`);
-      } catch (e) {
-        // 有些環境（極少數）不允許建立 symlink
-        console.warn('⚠️ 無法建立 symlink，改為直接使用持久化目錄。原因：', e.message);
-        // 提供一個環境變數給你在常數中切換（若你願意稍改常數定義）
-        process.env.DATA_DIR_FALLBACK = persistentRoot;
-        console.warn('ℹ️ 請將常數中的 ../data 改為使用 process.env.DATA_DIR_FALLBACK（見下方註解）。');
-      }
-    }
-
-    // ⑤ 額外：在每次寫入前你若用到原本的檔案路徑，因為 symlink，實際會寫到 persistentRoot
-    //    如 symlink 失敗且你不想改程式，也至少已經把最新檔同步與備份到 persistentRoot。
     console.log('✅ Storage bridge ready.');
     console.log('📦 PERSISTENT_ROOT =', persistentRoot);
     if (volumeRoot) console.log('🗄️ 使用 Railway Volume：', volumeRoot);
-    else console.log('🗂️ 暫用容器內路徑（無 Volume）：/app/data/stain-bot');
+    else console.log('🗂️ 暫用容器內路徑（無 Volume）：/app/.persist/stain-bot');
   } catch (err) {
     console.error('❌ storageBridge 初始化失敗：', err);
   }
