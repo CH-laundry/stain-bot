@@ -416,7 +416,7 @@ app.get('/payment/linepay/confirm', async (req, res) => {
             if (userId && userId !== 'undefined') {
                 await client.pushMessage(userId, { 
                     type: 'text', 
-                    text: `✅ LINE Pay 付款成功\n\n感謝 ${decodeURIComponent(userName)} 的支付\n金額:NT$ ${parseInt(amount).toLocaleString()}\n訂單編號:${orderId}\n\n我們會盡快處理您的訂單\n感謝您的支持 💙` 
+                    text: `✅ LINE Pay 付款成功\n\n感謝 ${decodeURIComponent(userName)} 的支付\n金額:NT$ ${parseInt(amount).toLocaleString()}\n訂單編號:${orderId}\n\n非常謝謝您\n感謝您的支持 💙` 
                 });
             }
             
@@ -882,7 +882,7 @@ app.post('/payment/ecpay/callback', async (req, res) => {
             if (userId && userId !== 'undefined') {
                 await client.pushMessage(userId, { 
                     type: 'text', 
-                    text: `✅ 付款成功\n\n感謝 ${userName} 的支付\n金額: NT$ ${amount.toLocaleString()}\n綠界訂單: ${MerchantTradeNo}\n\n我們會盡快處理您的訂單\n感謝您的支持 💙` 
+                    text: `✅ 付款成功\n\n感謝 ${userName} 的支付\n金額: NT$ ${amount.toLocaleString()}\n綠界訂單: ${MerchantTradeNo}\n\n非常謝謝您\n感謝您的支持 💙` 
                 });
             }
             
