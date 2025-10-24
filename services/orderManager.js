@@ -6,8 +6,9 @@ const ORDERS_FILE = path.join(__dirname, '../data/orders.json');
 const CUSTOMERS_FILE = path.join(__dirname, '../data/customers.json');
 const TEMPLATES_FILE = path.join(__dirname, '../data/templates.json');
 const EXPIRY_TIME = 7 * 24 * 60 * 60 * 1000; // 🔥 7 天過期 (168小時)
-const REMINDER_INTERVAL = 2 * 60 * 1000; // 🔥 每 2 分鐘提醒一次
-const FIRST_REMINDER_DELAY = 5 * 60 * 1000; // 🔥 建立後 5 分鐘開始提醒
+const FIRST_REMINDER_DELAY = 2 * 24 * 60 * 60 * 1000; // 2 天後開始提醒
+const REMINDER_INTERVAL = 2 * 24 * 60 * 60 * 1000; // 每兩天提醒一次
+
 
 class OrderManager {
   constructor() {
