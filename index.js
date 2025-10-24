@@ -14,7 +14,6 @@ const googleAuth = require('./services/googleAuth');
 const multer = require('multer');
 const orderManager = require('./services/orderManager');
 const upload = multer({ storage: multer.memoryStorage() });
-app.use('/debug', require('./services/debugStorage')); // ← 新增這行
 
 if (process.env.GOOGLE_PRIVATE_KEY) {
     console.log(`正在初始化 sheet.json: 成功`);
@@ -739,6 +738,7 @@ app.post('/send-payment', async (req, res) => {
         return res.status(400).json({ error: '缺少必要參數', required: ['userId', 'userName', 'amount'] });
     }
     
+    app.use('/debug', require('./services/debugStorage')); // ← 新增這行
     const numAmount = parseInt(amount);
     if (isNaN(numAmount) || numAmount <= 0) {
         return res.status(400).json({ error: '金額必須是正整數' });
