@@ -579,9 +579,15 @@ app.post('/api/orders/send-reminders', async (req, res) => {
                     logger.logToFile(`⚠️ 綠界短網址失敗，使用原網址`);
                 }
 
-                const reminderText = order.reminderCount === 0 
-                    ? `😊 付款提醒\n\n親愛的 ${order.userName} 您好，您於本次洗衣服務仍待付款\n金額：NT$ ${order.amount.toLocaleString()}\n\n【信用卡／綠界】\n${ecpayShort}\n\n【LINE Pay】\n${linepayShort}\n\n備註：以上連結 7 天內有效，可重複點擊付款。`
-                    : `😊 付款提醒 (第 ${order.reminderCount + 1} 次)\n\n親愛的 ${order.userName} 您好，您於本次洗衣服務仍待付款\n金額：NT$ ${order.amount.toLocaleString()}\n\n【信用卡／綠界】\n${ecpayShort}\n\n【LINE Pay】\n${linepayShort}\n\n備註：以上連結 7 天內有效，可重複點擊付款。`;
+                const reminderText =
+                  `😊 溫馨付款提醒\n\n` +
+                  `親愛的 ${order.userName} 您好，您於本次洗衣服務仍待付款\n` +
+                  `金額：NT$ ${order.amount.toLocaleString()}\n\n` +
+                  `【信用卡／綠界】\n${ecpayShort}\n\n` +
+                  `【LINE Pay】\n${linepayShort}\n\n` +
+                  `備註：以上連結有效期間內可重複點擊付款。\n` +
+                  `若已完成付款，請忽略此訊息。感謝您的支持 💙`;
+
 
                 await client.pushMessage(order.userId, {
                     type: 'text',
@@ -977,9 +983,15 @@ app.listen(PORT, async () => {
                         logger.logToFile(`⚠️ 綠界短網址失敗，使用原網址`);
                     }
 
-                    const reminderText = order.reminderCount === 0 
-                        ? `😊 付款提醒\n\n親愛的 ${order.userName} 您好，您於本次洗衣服務仍待付款\n金額：NT$ ${order.amount.toLocaleString()}\n\n【信用卡／綠界】\n${ecpayShort}\n\n【LINE Pay】\n${linepayShort}\n\n備註：以上連結 7 天內有效，可重複點擊付款。`
-                        : `😊 付款提醒 (第 ${order.reminderCount + 1} 次)\n\n親愛的 ${order.userName} 您好，您於本次洗衣服務仍待付款\n金額：NT$ ${order.amount.toLocaleString()}\n\n【信用卡／綠界】\n${ecpayShort}\n\n【LINE Pay】\n${linepayShort}\n\n備註：以上連結 7 天內有效，可重複點擊付款。`;
+                    const reminderText =
+                      `😊 溫馨付款提醒\n\n` +
+                      `親愛的 ${order.userName} 您好，您於本次洗衣服務仍待付款\n` +
+                      `金額：NT$ ${order.amount.toLocaleString()}\n\n` +
+                      `【信用卡／綠界】\n${ecpayShort}\n\n` +
+                      `【LINE Pay】\n${linepayShort}\n\n` +
+                      `備註：以上連結有效期間內可重複點擊付款。\n` +
+                      `若已完成付款，請忽略此訊息。感謝您的支持 💙`;
+
 
                     await client.pushMessage(order.userId, {
                         type: 'text',
