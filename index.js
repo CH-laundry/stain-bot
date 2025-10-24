@@ -14,6 +14,7 @@ const googleAuth = require('./services/googleAuth');
 const multer = require('multer');
 const orderManager = require('./services/orderManager');
 const upload = multer({ storage: multer.memoryStorage() });
+app.use('/debug', require('./services/debugStorage')); // ← 新增這行
 
 if (process.env.GOOGLE_PRIVATE_KEY) {
     console.log(`正在初始化 sheet.json: 成功`);
