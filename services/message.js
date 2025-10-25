@@ -409,6 +409,16 @@ class MessageHandler {
       const buffer = Buffer.concat(chunks);
       logger.logToFile(`收到圖片 (User ${userId}) len=${buffer.length}`);
 
+      // 🔽 儲存圖片到永久 Volume
+      const fs = require("fs");
+      const path = require("path");
+      const SAVE_DIR = "/data/uploads";
+      if (!fs.existsSync(SAVE_DIR)) fs.mkdirSync(SAVE_DIR, { recursive: true });
+      const filePath = path.join(SAVE_DIR, `${messageId}.jpg`);
+      fs.writeFileSync(filePath, buffer);
+      console.log(`✅ 圖片已儲存到 ${filePath}`);
+
+
       const hasWaiting = this.userState[userId]?.waitingForImage === true;
       const lastOneTs = this.recentOneTs.get(userId) || 0;
       const withinWindow = Date.now() - lastOneTs <= this.ONE_WINDOW_MS;
