@@ -24,6 +24,18 @@ if (process.env.GOOGLE_PRIVATE_KEY) {
 }
 
 const app = express();
+// === 靜態檔案公開路徑設定 ===
+const fs = require('fs');
+const path = require('path');
+
+// 指定 Volume 內存放可公開資料的資料夾
+const FILE_ROOT = '/data/uploads';
+
+// 確保這個資料夾存在（沒有就自動建立）
+fs.mkdirSync(FILE_ROOT, { recursive: true });
+
+// 讓網址 /files/... 能對應到 /data/uploads 裡的檔案
+app.use('/files', express.static(FILE_ROOT));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
