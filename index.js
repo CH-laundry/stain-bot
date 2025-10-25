@@ -24,9 +24,6 @@ if (process.env.GOOGLE_PRIVATE_KEY) {
 }
 
 const app = express();
-// === 靜態檔案公開路徑設定 ===
-const fs = require('fs');
-const path = require('path');
 
 // 指定 Volume 內存放可公開資料的資料夾
 const FILE_ROOT = '/data/uploads';
