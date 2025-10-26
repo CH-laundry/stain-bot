@@ -35,6 +35,15 @@ function cleanText(s = '') {
     .replace(/\s+/g, ' ') // 合併多個空白
     .trim();
 }
+// 通用正規化：NFKC → 清理 → 小寫
+function normalize(text = '') {
+  const src = String(text ?? '');
+  // 若環境支援 String.prototype.normalize，先做 Unicode 正規化（處理全半形、符號一致性）
+  const nfkc = typeof src.normalize === 'function' ? src.normalize('NFKC') : src;
+  // 你的 cleanText 會做：全形轉半形、移除 emoji、壓縮空白、trim
+  return cleanText(nfkc).toLowerCase();
+}
+
 
 // 安全取得使用者資料，若失敗不報錯
 async function safeGetProfile(userId) {
