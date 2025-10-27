@@ -592,7 +592,7 @@ app.post('/api/orders/send-reminders', async (req, res) => {
 
                 const reminderText =
                   `😊 溫馨付款提醒\n\n` +
-                  `親愛的 ${order.userName} 您好，您於本次洗衣服務仍待付款\n` +
+                  `親愛的 ${order.userName} 您好，您於本次洗衣清潔仍待付款\n` +
                   `金額：NT$ ${order.amount.toLocaleString()}\n\n` +
                   `【信用卡／綠界】\n${ecpayShort}\n\n` +
                   `【LINE Pay】\n${linepayShort}\n\n` +
@@ -997,7 +997,7 @@ app.listen(PORT, async () => {
 
                     const reminderText =
                       `😊 溫馨付款提醒\n\n` +
-                      `親愛的 ${order.userName} 您好，您於本次洗衣服務仍待付款\n` +
+                      `親愛的 ${order.userName} 您好，您於本次洗衣清潔仍待付款\n` +
                       `金額：NT$ ${order.amount.toLocaleString()}\n\n` +
                       `【信用卡／綠界】\n${ecpayShort}\n\n` +
                       `【LINE Pay】\n${linepayShort}\n\n` +
