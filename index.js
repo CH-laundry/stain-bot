@@ -886,8 +886,6 @@ app.post('/send-payment', async (req, res) => {
                 const linepayPersistentUrl = `${baseURL}/payment/linepay/pay/${linePayResult.orderId}`;
                 const appDirect = linePayResult.paymentUrlApp;
                 const webDirect = linePayResult.paymentUrlWeb;
-                linepayLink = `${appDirect}\n（電腦用）${webDirect}`;
-
                 
                 try {
                     const response = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(linepayPersistentUrl)}`);
