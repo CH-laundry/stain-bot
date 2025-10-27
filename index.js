@@ -154,7 +154,6 @@ async function createLinePayPayment(userId, userName, amount) {
         orderId,
         transactionId: result.info.transactionId,
         paymentUrlApp: result.info.paymentUrl.app,
-        paymentUrlWeb: result.info.paymentUrl.web
       };
     } else {
       logger.logToFile(`❌ LINE Pay 付款請求失敗: ${result.returnCode} - ${result.returnMessage}`);
@@ -387,7 +386,6 @@ app.get('/payment/linepay/pay/:orderId', async (req, res) => {
       const paymentData = {
         linepayTransactionId: linePayResult.transactionId,
         linepayPaymentUrlApp: linePayResult.paymentUrlApp,
-        linepayPaymentUrlWeb: linePayResult.paymentUrlWeb
       };
       orderManager.updatePaymentInfo(orderId, paymentData);
 
@@ -578,7 +576,6 @@ app.post('/api/order/:orderId/renew', async (req, res) => {
             const paymentData = {
               linepayTransactionId: linePayResult.transactionId,
               linepayPaymentUrlApp: linePayResult.paymentUrlApp,
-              linepayPaymentUrlWeb: linePayResult.paymentUrlWeb
             };
 
             orderManager.updatePaymentInfo(orderId, paymentData);
@@ -645,7 +642,6 @@ app.post('/api/orders/send-reminders', async (req, res) => {
                const paymentData = {
                  linepayTransactionId: linePayResult.transactionId,
                  linepayPaymentUrlApp: linePayResult.paymentUrlApp,
-                 linepayPaymentUrlWeb: linePayResult.paymentUrlWeb
                };
 
                 orderManager.updatePaymentInfo(order.orderId, paymentData);
