@@ -108,11 +108,32 @@ function generateLinePaySignature(uri, body, nonce) {
 }
 
 async function createLinePayPayment(userId, userName, amount) {
+  try {
+    const orderId = `LP${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
+    const nonce = crypto.randomBytes(16).toString('base64');
+
+    const requestBody = {
+      amount: amount,
+      currency: 'TWD',
+      orderId: orderId,
+      packages: [{
+        id: orderId,
+        amount: amount,
+        name: 'C.H精緻洗衣服務',
+        products: [{ name: '洗衣清潔費用', quantity: 1, price: amount }]
+      }],
+      redirectUrls: {
+        // 只帶 orderId
+        confirmUrl: `${BASE_URL}/payment/linepay/confirm?orderId=${orderId}`,
+        cancelUrl: `${BASE_URL}/payment/linepay/cancel`
+      }
+    };
 
     const uri = '/v3/payments/request';
     const signature = generateLinePaySignature(uri, requestBody, nonce);
 
     const response = await fetch(`${LINE_PAY_CONFIG.apiUrl}${uri}`, {
+
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -135,63 +156,6 @@ async function createLinePayPayment(userId, userName, amount) {
         paymentUrlApp: result.info.paymentUrl.app,
         paymentUrlWeb: result.info.paymentUrl.web
       };
-    } else {
-      logger.logToFile(`❌ LINE Pay 付款請求失敗: ${result.returnCode} - ${result.returnMessage}`);
-      return { success: false, error: result.returnMessage };
-    }
-  } catch (error) {
-    logger.logError('LINE Pay 付款請求錯誤', error);
-    return { success: false, error: error.message };
-  }
-}
-
-  try {
-    const orderId = `LP${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
-    const nonce = crypto.randomBytes(16).toString('base64');
-
-    const requestBody = {
-      amount: amount,
-      currency: 'TWD',
-      orderId: orderId,
-      packages: [{
-        id: orderId,
-        amount: amount,
-        name: 'C.H精緻洗衣服務',
-        products: [{ name: '洗衣清潔費用', quantity: 1, price: amount }]
-      }],
-      redirectUrls: {
-        // 只帶 orderId；userId/userName/amount 由伺服器用 orderId 查
-        confirmUrl: `${BASE_URL}/payment/linepay/confirm?orderId=${orderId}`,
-        cancelUrl: `${BASE_URL}/payment/linepay/cancel`
-      }
-    };
-
-    const uri = '/v3/payments/request';
-    const signature = generateLinePaySignature(uri, requestBody, nonce);
-
-    const response = await fetch(`${LINE_PAY_CONFIG.apiUrl}${uri}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-LINE-ChannelId': LINE_PAY_CONFIG.channelId,
-        'X-LINE-Authorization-Nonce': nonce,
-        'X-LINE-Authorization': signature
-      },
-      body: JSON.stringify(requestBody)
-    });
-
-    const result = await response.json();
-
-    if (result.returnCode === '0000') {
-      logger.logToFile(`✅ LINE Pay 付款請求成功: ${orderId}`);
-      return {
-        success: true,
-        orderId,
-        transactionId: result.info.transactionId,
-        paymentUrlWeb: result.info.paymentUrl.web,
-        paymentUrlApp: result.info.paymentUrl.app  // 手機用這個
-      };
-
     } else {
       logger.logToFile(`❌ LINE Pay 付款請求失敗: ${result.returnCode} - ${result.returnMessage}`);
       return { success: false, error: result.returnMessage };
@@ -612,8 +576,11 @@ app.post('/api/order/:orderId/renew', async (req, res) => {
 
         if (linePayResult.success) {
             const paymentData = {
-                linepayTransactionId: linePayResult.transactionId,
-                linepayPaymentUrl: linePayResult.paymentUrl
+              linepayTransactionId: linePayResult.transactionId,
+              linepayPaymentUrlApp: linePayResult.paymentUrlApp,
+              linepayPaymentUrlWeb: linePayResult.paymentUrlWeb
+            };
+
             };
             orderManager.updatePaymentInfo(orderId, paymentData);
 
@@ -676,10 +643,12 @@ app.post('/api/orders/send-reminders', async (req, res) => {
             const linePayResult = await createLinePayPayment(order.userId, order.userName, order.amount);
             
             if (linePayResult.success) {
-                const paymentData = {
-                    linepayTransactionId: linePayResult.transactionId,
-                    linepayPaymentUrl: linePayResult.paymentUrl
-                };
+               const paymentData = {
+                 linepayTransactionId: linePayResult.transactionId,
+                 linepayPaymentUrlApp: linePayResult.paymentUrlApp,
+                 linepayPaymentUrlWeb: linePayResult.paymentUrlWeb
+               };
+
                 orderManager.updatePaymentInfo(order.orderId, paymentData);
 
                 const linepayPersistentUrl = `${baseURL}/payment/linepay/pay/${order.orderId}`;
@@ -911,9 +880,11 @@ app.post('/send-payment', async (req, res) => {
                 });
                 
                 const paymentData = {
-                    linepayTransactionId: linePayResult.transactionId,
-                    linepayPaymentUrl: linePayResult.paymentUrl
+                  linepayTransactionId: linePayResult.transactionId,
+                  linepayPaymentUrlApp: linePayResult.paymentUrlApp,
+                  linepayPaymentUrlWeb: linePayResult.paymentUrlWeb
                 };
+
                 orderManager.updatePaymentInfo(linePayResult.orderId, paymentData);
                 logger.logToFile(`✅ 建立 LINE Pay 訂單: ${linePayOrderId}`);
                 
