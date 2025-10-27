@@ -29,8 +29,6 @@ const app = express();
 const BASE_URL = 'https://stain-bot-production-2593.up.railway.app';
 console.log('[LINE PAY] BASE_URL =', BASE_URL);
 
-}
-
 
 // 指定 Volume 內存放可公開資料的資料夾
 const FILE_ROOT = '/data/uploads';
