@@ -108,27 +108,6 @@ function generateLinePaySignature(uri, body, nonce) {
 }
 
 async function createLinePayPayment(userId, userName, amount) {
-  try {
-    const orderId = `LP${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
-    const nonce = crypto.randomBytes(16).toString('base64');
-    const baseURL = process.env.RAILWAY_PUBLIC_DOMAIN || 'https://stain-bot-production-2593.up.railway.app';
-
-    // 🔹 建立付款請求 body
-    const requestBody = {
-      amount: amount,
-      currency: 'TWD',
-      orderId: orderId,
-      packages: [{
-        id: orderId,
-        amount: amount,
-        name: 'C.H精緻洗衣服務',
-        products: [{ name: '洗衣清潔費用', quantity: 1, price: amount }]
-      }],
-      redirectUrls: {
-        confirmUrl: `${baseURL}/payment/linepay/confirm?orderId=${orderId}`,
-        cancelUrl: `${baseURL}/payment/linepay/cancel`
-      }
-    };
 
     const uri = '/v3/payments/request';
     const signature = generateLinePaySignature(uri, requestBody, nonce);
