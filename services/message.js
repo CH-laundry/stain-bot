@@ -255,6 +255,7 @@ class MessageHandler {
   async handleTextMessage(userId, text, originalMessage) {
     const raw = text || '';
     const lower = raw.toLowerCase().trim();
+    let handledAddress = null; // 🩹 保險止血（如果其他地方還殘留此變數）
 
     // 管理員指令
     const isAdminCommand = await this.handleAdminPaymentCommand(userId, raw);
@@ -293,11 +294,21 @@ class MessageHandler {
     const isActionIntent = ACTION_INTENT_RE.test(raw);
 
     
-    const rawClean = cleanText(raw);
-    if (!handledAddress && !isActionIntent && (AddressDetector.isAddress(rawClean) || LOOSE_ADDR_RE.test(rawClean))) {
-      await this.handleAddressMessage(userId, raw);
-      return;
-    }
+   const rawClean = cleanText(raw);
+let looksLikeAddress = false;
+try {
+  // 若 AddressDetector 沒有 isAddress 或拋錯，不讓整段炸掉；退回寬鬆判斷
+  looksLikeAddress = (AddressDetector?.isAddress?.(rawClean) === true) || LOOSE_ADDR_RE.test(rawClean);
+} catch (e) {
+  logger.logToFile(`[AddressDetector] isAddress 檢查失敗：${e.message}`);
+  looksLikeAddress = LOOSE_ADDR_RE.test(rawClean);
+}
+
+if (!isActionIntent && looksLikeAddress) {
+  await this.handleAddressMessage(userId, raw);
+  return;
+}
+
 
     // 進度查詢
     if (this.isProgressQuery(lower)) {
