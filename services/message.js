@@ -106,8 +106,7 @@ function maybeLaundryRelated(s='') {
 // 收件/送回/預約等動作意圖（小寫比對）
 const ACTION_INTENT_RE = /(收件|收衣|到府|上門|來收|取件|預約|約收|送回|送件|送來|取回|還衣|送返|送還)/;
 // 寬鬆地址比對：例如「遠雄江翠36號2樓」或「文化路二段182巷1號」
-const LOOSE_ADDR_RE =
-  /(新北市|臺北市|台北市|桃園市|基隆市|新竹市|新竹縣|苗栗縣|台中市|臺中市|彰化縣|南投縣|雲林縣|嘉義市|嘉義縣|台南市|臺南市|高雄市|屏東縣|宜蘭縣|花蓮縣|台東縣|澎湖縣)?\s*[\u4e00-\u9fa5]{1,5}(區|鄉|鎮)?\s*[\u4e00-\u9fa5\d]{1,10}(路|街|巷|弄)[\d\-之號樓Ff\s]*\d?號?\s*\d*樓?/;
+const LOOSE_ADDR_RE=/(新北市|臺北市|台北市|桃園市|基隆市|新竹市|新竹縣|苗栗縣|台中市|臺中市|彰化縣|南投縣|雲林縣|嘉義市|嘉義縣|台南市|臺南市|高雄市|屏東縣|宜蘭縣|花蓮縣|台東縣|澎湖縣)?\s*([\u4e00-\u9fa5]{1,6}(區|鄉|鎮))?\s*((?:[\u4e00-\u9fa5\d]{1,20})(?:路|街)?(?:段\d?)?(?:\d{1,3}巷)?(?:\d{1,3}弄)?\s*(?:\d{1,5})(?:之\d{1,3})?號?\s*(?:\d{1,2}樓(?:之\d{1,2})?)?|(?:[\u4e00-\u9fa5]{2,20})(?:社區|大樓|園區|街區|華廈)?\s*(?:\d{1,5})(?:之\d{1,3})?號?\s*(?:\d{1,2}樓(?:之\d{1,2})?)?)/;
 
 // 若未帶市區自動補上板橋區
 function autoDetectCityDistrict(input = '') {
@@ -117,6 +116,12 @@ function autoDetectCityDistrict(input = '') {
   return '';
 }
 
+// 從模板陣列隨機挑一句
+function pick(arr = []) {
+  if (!Array.isArray(arr) || arr.length === 0) return '';
+  const i = Math.floor(Math.random() * arr.length);
+  return arr[i];
+}
 
 /* ---------------- 固定模板 ---------------- */
 const TPL_BAG = [
@@ -309,17 +314,19 @@ class MessageHandler {
    const rawClean = cleanText(raw);
 let looksLikeAddress = false;
 try {
-  // 若 AddressDetector 沒有 isAddress 或拋錯，不讓整段炸掉；退回寬鬆判斷
   looksLikeAddress = (AddressDetector?.isAddress?.(rawClean) === true) || LOOSE_ADDR_RE.test(rawClean);
 } catch (e) {
   logger.logToFile(`[AddressDetector] isAddress 檢查失敗：${e.message}`);
   looksLikeAddress = LOOSE_ADDR_RE.test(rawClean);
 }
 
+// ✅ 規則：如果「只有地址」且「沒有收件/動作意圖」→ 不回覆（但記錄 log），以免吃掉其他關鍵字
 if (!isActionIntent && looksLikeAddress) {
-  await this.handleAddressMessage(userId, raw);
+  logger.logToFile(`地址訊息(僅地址，依設定不回覆):「${raw}」(User ${userId})`);
   return;
 }
+// 若有動作意圖(例如：今天可以來收嗎) → 繼續往下跑其他關鍵字/規則（不在這裡中斷）
+
 
 
     // 進度查詢
@@ -342,7 +349,7 @@ if (!isActionIntent && looksLikeAddress) {
       try {
         const rawClean2 = cleanText(raw);
         let formatted = "";
-        if (AddressDetector.isAddress(rawClean2)) {
+        if (AddressDetector?.isAddress?.(rawClean2)) {
           const r = AddressDetector.formatResponse(rawClean2) || {};
           formatted = r.formattedAddress || "";
         }
