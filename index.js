@@ -37,6 +37,19 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
+// ✅ 新增：顯示伺服器實際對外 IP（用來設白名單）
+app.get('/debug/my-ip', async (req, res) => {
+  try {
+    const r = await fetch('https://ifconfig.me/ip');
+    const ip = (await r.text()).trim();
+    logger.logToFile(`SERVER_EGRESS_IP = ${ip}`);
+    res.type('text').send(ip); // 顯示伺服器出口 IP
+  } catch (e) {
+    logger.logError('取得伺服器對外 IP 失敗', e);
+    res.status(500).send('無法取得伺服器 IP');
+  }
+});
+
 const client = new Client({
     channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
     channelSecret: process.env.LINE_CHANNEL_SECRET,
