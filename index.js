@@ -26,9 +26,9 @@ if (process.env.GOOGLE_PRIVATE_KEY) {
 const app = express();
 
 // ---- Base URL（務必與 LINE Pay 商家後台白名單一致且為 HTTPS）----
-const BASE_URL = process.env.RAILWAY_PUBLIC_DOMAIN || 'https://stain-bot-production-0fac.up.railway.app';
-if (!/^https:\/\//.test(BASE_URL)) {
-  console.warn('[LINE PAY] 警告：BASE_URL 不是 https，可能導致 LINE App 無法開啟 confirmUrl');
+const BASE_URL = 'https://stain-bot-production-2593.up.railway.app';
+console.log('[LINE PAY] BASE_URL =', BASE_URL);
+
 }
 
 
@@ -107,7 +107,6 @@ function generateLinePaySignature(uri, body, nonce) {
     return crypto.createHmac('SHA256', LINE_PAY_CONFIG.channelSecret).update(message).digest('base64');
 }
 
-async function createLinePayPayment(userId, userName, amount) {
   try {
     const orderId = `LP${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
     const nonce = crypto.randomBytes(16).toString('base64');
@@ -123,7 +122,7 @@ async function createLinePayPayment(userId, userName, amount) {
         products: [{ name: '洗衣清潔費用', quantity: 1, price: amount }]
       }],
       redirectUrls: {
-        // 只帶 orderId
+        // ✅ confirmUrl 只帶 orderId
         confirmUrl: `${BASE_URL}/payment/linepay/confirm?orderId=${orderId}`,
         cancelUrl: `${BASE_URL}/payment/linepay/cancel`
       }
@@ -133,7 +132,6 @@ async function createLinePayPayment(userId, userName, amount) {
     const signature = generateLinePaySignature(uri, requestBody, nonce);
 
     const response = await fetch(`${LINE_PAY_CONFIG.apiUrl}${uri}`, {
-
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -148,12 +146,13 @@ async function createLinePayPayment(userId, userName, amount) {
 
     if (result.returnCode === '0000') {
       logger.logToFile(`✅ LINE Pay 付款請求成功: ${orderId}`);
-      // 🔹 同時回傳 app / web 兩種連結
       return {
         success: true,
         orderId,
         transactionId: result.info.transactionId,
+        // 兩個都回傳，下面我們只用 app 版
         paymentUrlApp: result.info.paymentUrl.app,
+        paymentUrlWeb: result.info.paymentUrl.web
       };
     } else {
       logger.logToFile(`❌ LINE Pay 付款請求失敗: ${result.returnCode} - ${result.returnMessage}`);
@@ -163,6 +162,7 @@ async function createLinePayPayment(userId, userName, amount) {
     logger.logError('LINE Pay 付款請求錯誤', error);
     return { success: false, error: error.message };
   }
+
 }
 
 
