@@ -581,7 +581,6 @@ app.post('/api/order/:orderId/renew', async (req, res) => {
               linepayPaymentUrlWeb: linePayResult.paymentUrlWeb
             };
 
-            };
             orderManager.updatePaymentInfo(orderId, paymentData);
 
             const linepayPersistentUrl = `${baseURL}/payment/linepay/pay/${orderId}`;
