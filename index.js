@@ -510,6 +510,7 @@ app.post('/api/order/:orderId/renew', async (req, res) => {
 
     try {
         const baseURL = BASE_URL;
+        console.log('[LINE PAY] USING BASE_URL =', BASE_URL);
         const linePayResult = await createLinePayPayment(order.userId, order.userName, order.amount);
         
         const ecpayPersistentUrl = `${baseURL}/payment/ecpay/pay/${orderId}`;
@@ -581,7 +582,8 @@ app.post('/api/orders/send-reminders', async (req, res) => {
     
     let sent = 0;
     const baseURL = BASE_URL;
-    
+    console.log('[LINE PAY] USING BASE_URL =', BASE_URL);
+
     for (const order of ordersNeedingReminder) {
         try {
             const linePayResult = await createLinePayPayment(order.userId, order.userName, order.amount);
@@ -779,6 +781,7 @@ app.post('/send-payment', async (req, res) => {
     try {
         const type = paymentType || 'both';
         const baseURL = BASE_URL;
+        console.log('[LINE PAY] USING BASE_URL =', BASE_URL);
         let finalMessage = '';
         let ecpayLink = '';
         let linepayLink = '';
@@ -986,7 +989,8 @@ app.listen(PORT, async () => {
         logger.logToFile(`🔔 檢測到 ${ordersNeedingReminder.length} 筆訂單需要提醒`);
         
         const baseURL = BASE_URL;
-        
+        console.log('[LINE PAY] USING BASE_URL =', BASE_URL);
+
         for (const order of ordersNeedingReminder) {
             try {
                 const linePayResult = await createLinePayPayment(order.userId, order.userName, order.amount);
