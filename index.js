@@ -113,7 +113,7 @@ async function createLinePayPayment(userId, userName, amount) {
                 id: orderId,
                 amount: amount,
                 name: 'C.H精緻洗衣服務',
-                products: [{ name: '洗衣服務費用', quantity: 1, price: amount }]
+                products: [{ name: '洗衣清潔費用', quantity: 1, price: amount }]
             }],
             redirectUrls: {
                 confirmUrl: `${baseURL}/payment/linepay/confirm?orderId=${orderId}&userId=${userId}&userName=${encodeURIComponent(userName)}&amount=${amount}`,
