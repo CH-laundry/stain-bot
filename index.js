@@ -25,11 +25,26 @@ if (process.env.GOOGLE_PRIVATE_KEY) {
 
 const app = express();
 
+// （A）我們自己的偵錯端點——先宣告
+app.get('/__routes', /* 如上 */);
+app.get('/__myip',   /* 如上 */);
+
+// （B）才掛第三方 debug router，而且用 **/debug-tools**
+app.use('/debug-tools', require('./services/debugStorage'));
+
+// 其他中介與靜態檔
+const FILE_ROOT = '/data/uploads';
+fs.mkdirSync(FILE_ROOT, { recursive: true });
+app.use('/files', express.static(FILE_ROOT));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(express.static('public'));
+
 // 顶層（express() 之後、任何路由之前）
-app.use('/debug', require('./services/debugStorage')); // 只掛一次
+app.use('/debug-tools', require('./services/debugStorage')); // 改名，避免吃掉我們的 /debug/* 檢查端點
 
 // 列出所有已註冊的路由，快速確認到底有沒有 /payment/linepay/pay/:orderId
-app.get('/debug/routes', (req, res) => {
+app.get('/__routes', (req, res) => {
   const routes = [];
   app._router.stack.forEach((m) => {
     if (m.route && m.route.path) {
@@ -48,7 +63,7 @@ app.get('/debug/routes', (req, res) => {
 });
 
 // 伺服器對外 IP（可驗證你點到的是哪一台）
-app.get('/debug/my-ip', async (req, res) => {
+app.get('/__myip', async (req, res) => {
   try {
     const r = await fetch('https://ifconfig.me/ip');
     const ip = (await r.text()).trim();
@@ -59,7 +74,6 @@ app.get('/debug/my-ip', async (req, res) => {
 });
 
 
-app.use('/debug', require('./services/debugStorage'));
 
 // 指定 Volume 內存放可公開資料的資料夾
 const FILE_ROOT = '/data/uploads';
