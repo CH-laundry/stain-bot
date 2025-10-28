@@ -375,6 +375,7 @@ app.get('/payment/linepay/cancel', (req, res) => {
    放在 /payment/linepay/cancel 之後、ECpay 路由之前
 ========================== */
 // ========= LINE Pay 付款完成後的確認 =========
+// ========= LINE Pay 付款完成後的確認 =========
 app.get('/payment/linepay/confirm', async (req, res) => {
   try {
     const { transactionId, orderId, userId, userName, amount } = req.query;
@@ -459,6 +460,7 @@ app.get('/payment/linepay/confirm', async (req, res) => {
     return res.status(500).type('text').send('系統錯誤，請稍後重試');
   }
 });
+
 
 
 /* ========= ！！！修復點 ！！！ =========
