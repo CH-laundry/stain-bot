@@ -25,20 +25,58 @@ if (process.env.GOOGLE_PRIVATE_KEY) {
 
 const app = express();
 
-// （A）我們自己的偵錯端點——先宣告
-app.get('/__routes', /* 如上 */);
-app.get('/__myip',   /* 如上 */);
+/** ---------------------------
+ *  A. 我們自己的偵錯端點（不與任何 /debug 衝突）
+ * --------------------------- */
+app.get('/__routes', (req, res) => {
+  const routes = [];
+  (app._router?.stack || []).forEach((m) => {
+    if (m.route && m.route.path) {
+      const methods = Object.keys(m.route.methods).join(',').toUpperCase();
+      routes.push(`${methods} ${m.route.path}`);
+    } else if (m.name === 'router' && m.handle?.stack) {
+      m.handle.stack.forEach((h) => {
+        if (h.route) {
+          const methods = Object.keys(h.route.methods).join(',').toUpperCase();
+          routes.push(`${methods} ${h.route.path}`);
+        }
+      });
+    }
+  });
+  res.type('text').send(routes.sort().join('\n'));
+});
 
-// （B）才掛第三方 debug router，而且用 **/debug-tools**
+app.get('/__myip', async (req, res) => {
+  try {
+    const r = await fetch('https://ifconfig.me/ip');
+    const ip = (await r.text()).trim();
+    res.type('text').send(ip);
+  } catch (e) {
+    res.status(500).type('text').send('無法取得伺服器 IP');
+  }
+});
+
+/** ---------------------------
+ *  B. 第三方除錯路由（只掛一次，改名成 /debug-tools）
+ * --------------------------- */
 app.use('/debug-tools', require('./services/debugStorage'));
 
-// 其他中介與靜態檔
+/** ---------------------------
+ *  C. 靜態檔與基礎中介（只宣告一次）
+ * --------------------------- */
+// 只保留「一個」 FILE_ROOT
 const FILE_ROOT = '/data/uploads';
+
+// 確保目錄存在
 fs.mkdirSync(FILE_ROOT, { recursive: true });
+
+// 靜態檔路由（只掛一次）
 app.use('/files', express.static(FILE_ROOT));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
+
 
 // 顶層（express() 之後、任何路由之前）
 app.use('/debug-tools', require('./services/debugStorage')); // 改名，避免吃掉我們的 /debug/* 檢查端點
