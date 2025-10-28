@@ -77,7 +77,6 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
-
 const client = new Client({
     channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
     channelSecret: process.env.LINE_CHANNEL_SECRET,
@@ -192,11 +191,11 @@ async function createLinePayPayment(userId, userName, amount) {
         success: true,
         orderId,
         transactionId: info.transactionId,
-        paymentUrl: {           // ✅ 改這裡：統一回傳一個物件
-        web: webUrl,
-        app: appUrl,
-      },
-    };
+        paymentUrl: {  // ✅ 統一回傳一個物件（與下游一致）
+          web: webUrl,
+          app: appUrl
+        }
+      };
     } else {
       logger.logToFile(`❌ LINE Pay 付款請求失敗: ${result.returnCode} - ${result.returnMessage}`);
       return { success: false, error: result.returnMessage || 'LINE Pay request failed' };
@@ -206,7 +205,6 @@ async function createLinePayPayment(userId, userName, amount) {
     return { success: false, error: error.message };
   }
 }
-
 
 app.post('/webhook', async (req, res) => {
     res.status(200).end();
@@ -372,38 +370,14 @@ app.get('/payment/linepay/cancel', (req, res) => {
     res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>付款取消</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#f093fb 0%,#f5576c 100%);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}</style></head><body><div class="container"><h1>❌ 付款已取消</h1><p>您已取消此次付款</p><p>如需協助請聯繫客服</p></div></body></html>');
 });
 
+/* ========= ！！！修復點 ！！！ =========
+   這裡原本有一大段「if (!order) {...} ... catch {...} });」的孤兒區塊，
+   它其實是 ECpay 路由內文，但被放在任何 app.get 之外，且下方已有完整 ECpay 路由。
+   我已移除這段重複且錯位的區塊，避免括號數不對與語法錯誤。
+   （功能未刪減，因為正確的 ECpay 路由就在下面。）
+====================================== */
 
-    if (!order) {
-        return res.status(404).send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>訂單不存在</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#f093fb,#f5576c);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}</style></head><body><div class="container"><h1>❌ 訂單不存在</h1><p>找不到此訂單</p></div></body></html>');
-    }
-    
-    if (orderManager.isExpired(orderId)) {
-        const hoursPassed = (Date.now() - order.createdAt) / (1000 * 60 * 60);
-        logger.logToFile(`❌ 訂單已過期: ${orderId} (已過 ${hoursPassed.toFixed(1)} 小時)`);
-        return res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>訂單已過期</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#f093fb,#f5576c);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}h1{font-size:28px;margin-bottom:20px}p{font-size:16px;margin:15px 0}</style></head><body><div class="container"><h1>⏰ 訂單已過期</h1><p>此訂單已超過 7 天(168 小時)</p><p>已過時間: ' + Math.floor(hoursPassed) + ' 小時</p><p>訂單編號: ' + orderId + '</p><p>請聯繫 C.H 精緻洗衣客服重新取得訂單</p></div></body></html>');
-    }
-    
-    if (order.status === 'paid') {
-        return res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>訂單已付款</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#667eea,#764ba2);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}</style></head><body><div class="container"><h1>✅ 訂單已付款</h1><p>此訂單已完成付款</p><p>訂單編號: ' + orderId + '</p></div></body></html>');
-    }
-    
-    try {
-        logger.logToFile(`🔄 重新生成綠界付款連結: ${orderId}`);
-        const ecpayLink = createECPayPaymentLink(order.userId, order.userName, order.amount);
-        const remainingHours = Math.floor((order.expiryTime - Date.now()) / (1000 * 60 * 60));
-        res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>前往綠界付款</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#667eea,#764ba2);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}h1{font-size:28px;margin-bottom:20px}p{font-size:16px;margin:15px 0}.btn{display:inline-block;padding:15px 40px;background:#fff;color:#667eea;text-decoration:none;border-radius:10px;font-weight:bold;margin-top:20px;font-size:18px}.info{background:rgba(255,255,255,0.2);padding:15px;border-radius:10px;margin:20px 0}</style></head><body><div class="container"><h1>💳 前往綠界付款</h1><div class="info"><p><strong>訂單編號:</strong> ' + orderId + '</p><p><strong>客戶姓名:</strong> ' + order.userName + '</p><p><strong>金額:</strong> NT$ ' + order.amount.toLocaleString() + '</p><p><strong>剩餘有效時間:</strong> ' + remainingHours + ' 小時</p></div><p>⏰ 正在為您生成付款連結...</p><p>若未自動跳轉，請點擊下方按鈕</p><a href="' + ecpayLink + '" class="btn">立即前往綠界付款</a></div><script>setTimeout(function(){window.location.href="' + ecpayLink + '"},1500)</script></body></html>');
-        logger.logToFile(`✅ 綠界付款連結已重新生成: ${orderId}`);
-    } catch (error) {
-        logger.logError('重新生成綠界連結失敗', error);
-        res.status(500).send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>生成失敗</title></head><body><h1>❌ 付款連結生成失敗</h1><p>請聯繫客服處理</p></body></html>');
-    }
-});
-
-
-
-// ===== 取代整個 /payment/linepay/confirm 路由 =====
-// ✅ LINE Pay：持久連結（這條一定要放在最外層，不能包在別的路由裡）
-// ECpay：持久連結（請確保這一段是「獨立」的，不要夾任何別的路由在裡面）
+// ECpay：持久連結（獨立一段）
 app.get('/payment/ecpay/pay/:orderId', async (req, res) => {
   const { orderId } = req.params;
   const order = orderManager.getOrder(orderId);
@@ -432,8 +406,7 @@ app.get('/payment/ecpay/pay/:orderId', async (req, res) => {
     logger.logError('重新生成綠界連結失敗', error);
     res.status(500).send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>生成失敗</title></head><body><h1>❌ 付款連結生成失敗</h1><p>請聯繫客服處理</p></body></html>');
   }
-}); // ←←← 這裡是 ECpay 路由的結尾（只有一次）
-
+}); // ← ECpay 路由的結尾（只有一次）
 
 // LINE Pay：持久連結（獨立一段，不能包在別的路由裡）
 app.get('/payment/linepay/pay/:orderId', async (req, res) => {
@@ -480,7 +453,6 @@ app.get('/payment/linepay/pay/:orderId', async (req, res) => {
     res.status(500).type('text').send('系統錯誤，請稍後重試');
   }
 });
-
 
 app.delete('/api/order/:orderId', (req, res) => {
     const deleted = orderManager.deleteOrder(req.params.orderId);
@@ -540,7 +512,6 @@ app.post('/api/orders/send-reminders', async (req, res) => {
                   `【LINE Pay】\n${linepayShort}\n\n` +
                   `備註：以上連結有效期間內可重複點擊付款。\n` +
                   `若已完成付款，請忽略此訊息。感謝您的支持 💙`;
-
 
                 await client.pushMessage(order.userId, {
                     type: 'text',
@@ -944,7 +915,6 @@ app.listen(PORT, async () => {
                       `【LINE Pay】\n${linepayShort}\n\n` +
                       `備註：以上連結有效期間內可重複點擊付款。\n` +
                       `若已完成付款，請忽略此訊息。感謝您的支持 💙`;
-
 
                     await client.pushMessage(order.userId, {
                         type: 'text',
