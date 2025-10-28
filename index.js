@@ -372,10 +372,37 @@ app.get('/payment/linepay/cancel', (req, res) => {
     res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>付款取消</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#f093fb 0%,#f5576c 100%);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}</style></head><body><div class="container"><h1>❌ 付款已取消</h1><p>您已取消此次付款</p><p>如需協助請聯繫客服</p></div></body></html>');
 });
 
-app.get('/payment/ecpay/pay/:orderId', async (req, res) => {
-    const { orderId } = req.params;
-    const order = orderManager.getOrder(orderId);
-// 讓使用者點聊天中的「固定連結」時，先到這裡，我們再導向 LINE Pay 官方頁
+
+    if (!order) {
+        return res.status(404).send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>訂單不存在</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#f093fb,#f5576c);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}</style></head><body><div class="container"><h1>❌ 訂單不存在</h1><p>找不到此訂單</p></div></body></html>');
+    }
+    
+    if (orderManager.isExpired(orderId)) {
+        const hoursPassed = (Date.now() - order.createdAt) / (1000 * 60 * 60);
+        logger.logToFile(`❌ 訂單已過期: ${orderId} (已過 ${hoursPassed.toFixed(1)} 小時)`);
+        return res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>訂單已過期</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#f093fb,#f5576c);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}h1{font-size:28px;margin-bottom:20px}p{font-size:16px;margin:15px 0}</style></head><body><div class="container"><h1>⏰ 訂單已過期</h1><p>此訂單已超過 7 天(168 小時)</p><p>已過時間: ' + Math.floor(hoursPassed) + ' 小時</p><p>訂單編號: ' + orderId + '</p><p>請聯繫 C.H 精緻洗衣客服重新取得訂單</p></div></body></html>');
+    }
+    
+    if (order.status === 'paid') {
+        return res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>訂單已付款</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#667eea,#764ba2);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}</style></head><body><div class="container"><h1>✅ 訂單已付款</h1><p>此訂單已完成付款</p><p>訂單編號: ' + orderId + '</p></div></body></html>');
+    }
+    
+    try {
+        logger.logToFile(`🔄 重新生成綠界付款連結: ${orderId}`);
+        const ecpayLink = createECPayPaymentLink(order.userId, order.userName, order.amount);
+        const remainingHours = Math.floor((order.expiryTime - Date.now()) / (1000 * 60 * 60));
+        res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>前往綠界付款</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#667eea,#764ba2);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}h1{font-size:28px;margin-bottom:20px}p{font-size:16px;margin:15px 0}.btn{display:inline-block;padding:15px 40px;background:#fff;color:#667eea;text-decoration:none;border-radius:10px;font-weight:bold;margin-top:20px;font-size:18px}.info{background:rgba(255,255,255,0.2);padding:15px;border-radius:10px;margin:20px 0}</style></head><body><div class="container"><h1>💳 前往綠界付款</h1><div class="info"><p><strong>訂單編號:</strong> ' + orderId + '</p><p><strong>客戶姓名:</strong> ' + order.userName + '</p><p><strong>金額:</strong> NT$ ' + order.amount.toLocaleString() + '</p><p><strong>剩餘有效時間:</strong> ' + remainingHours + ' 小時</p></div><p>⏰ 正在為您生成付款連結...</p><p>若未自動跳轉，請點擊下方按鈕</p><a href="' + ecpayLink + '" class="btn">立即前往綠界付款</a></div><script>setTimeout(function(){window.location.href="' + ecpayLink + '"},1500)</script></body></html>');
+        logger.logToFile(`✅ 綠界付款連結已重新生成: ${orderId}`);
+    } catch (error) {
+        logger.logError('重新生成綠界連結失敗', error);
+        res.status(500).send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>生成失敗</title></head><body><h1>❌ 付款連結生成失敗</h1><p>請聯繫客服處理</p></body></html>');
+    }
+});
+
+
+
+// ===== 取代整個 /payment/linepay/confirm 路由 =====
+// ✅ LINE Pay：持久連結（這條一定要放在最外層，不能包在別的路由裡）
 app.get('/payment/linepay/pay/:orderId', async (req, res) => {
   try {
     const { orderId } = req.params;
@@ -409,7 +436,6 @@ app.get('/payment/linepay/pay/:orderId', async (req, res) => {
     const appUrl = order.linepayPaymentUrl.app;
     const webUrl = order.linepayPaymentUrl.web;
 
-    // 行動裝置或 LINE 內優先用 app 連結，否則用 web
     const target = (preferApp && appUrl) ? appUrl : webUrl;
     if (!target) {
       return res.status(500).type('text').send('付款連結缺失，請稍後重試');
@@ -418,111 +444,11 @@ app.get('/payment/linepay/pay/:orderId', async (req, res) => {
     return res.redirect(target);
   } catch (e) {
     logger.logError('導向 LINE Pay 失敗', e);
-    res.status(500).type('text').send('系統錯誤，請稍後重試');
+    return res.status(500).type('text').send('系統錯誤，請稍後重試');
   }
 });
 
-    
-    if (!order) {
-        return res.status(404).send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>訂單不存在</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#f093fb,#f5576c);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}</style></head><body><div class="container"><h1>❌ 訂單不存在</h1><p>找不到此訂單</p></div></body></html>');
-    }
-    
-    if (orderManager.isExpired(orderId)) {
-        const hoursPassed = (Date.now() - order.createdAt) / (1000 * 60 * 60);
-        logger.logToFile(`❌ 訂單已過期: ${orderId} (已過 ${hoursPassed.toFixed(1)} 小時)`);
-        return res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>訂單已過期</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#f093fb,#f5576c);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}h1{font-size:28px;margin-bottom:20px}p{font-size:16px;margin:15px 0}</style></head><body><div class="container"><h1>⏰ 訂單已過期</h1><p>此訂單已超過 7 天(168 小時)</p><p>已過時間: ' + Math.floor(hoursPassed) + ' 小時</p><p>訂單編號: ' + orderId + '</p><p>請聯繫 C.H 精緻洗衣客服重新取得訂單</p></div></body></html>');
-    }
-    
-    if (order.status === 'paid') {
-        return res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>訂單已付款</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#667eea,#764ba2);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}</style></head><body><div class="container"><h1>✅ 訂單已付款</h1><p>此訂單已完成付款</p><p>訂單編號: ' + orderId + '</p></div></body></html>');
-    }
-    
-    try {
-        logger.logToFile(`🔄 重新生成綠界付款連結: ${orderId}`);
-        const ecpayLink = createECPayPaymentLink(order.userId, order.userName, order.amount);
-        const remainingHours = Math.floor((order.expiryTime - Date.now()) / (1000 * 60 * 60));
-        res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>前往綠界付款</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#667eea,#764ba2);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}h1{font-size:28px;margin-bottom:20px}p{font-size:16px;margin:15px 0}.btn{display:inline-block;padding:15px 40px;background:#fff;color:#667eea;text-decoration:none;border-radius:10px;font-weight:bold;margin-top:20px;font-size:18px}.info{background:rgba(255,255,255,0.2);padding:15px;border-radius:10px;margin:20px 0}</style></head><body><div class="container"><h1>💳 前往綠界付款</h1><div class="info"><p><strong>訂單編號:</strong> ' + orderId + '</p><p><strong>客戶姓名:</strong> ' + order.userName + '</p><p><strong>金額:</strong> NT$ ' + order.amount.toLocaleString() + '</p><p><strong>剩餘有效時間:</strong> ' + remainingHours + ' 小時</p></div><p>⏰ 正在為您生成付款連結...</p><p>若未自動跳轉，請點擊下方按鈕</p><a href="' + ecpayLink + '" class="btn">立即前往綠界付款</a></div><script>setTimeout(function(){window.location.href="' + ecpayLink + '"},1500)</script></body></html>');
-        logger.logToFile(`✅ 綠界付款連結已重新生成: ${orderId}`);
-    } catch (error) {
-        logger.logError('重新生成綠界連結失敗', error);
-        res.status(500).send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>生成失敗</title></head><body><h1>❌ 付款連結生成失敗</h1><p>請聯繫客服處理</p></body></html>');
-    }
-});
 
-// ===== 取代整個 /payment/linepay/confirm 路由 =====
-app.get('/payment/linepay/confirm', async (req, res) => {
-  try {
-    const { transactionId: txFromQuery, orderId, userId, userName, amount } = req.query;
-    const order = orderManager.getOrder(orderId);
-    const amountNum = Number(amount);
-
-    if (order && orderManager.isExpired(orderId)) {
-      const hoursPassed = (Date.now() - order.createdAt) / (1000 * 60 * 60);
-      logger.logToFile(`❌ 訂單已過期: ${orderId} (已過 ${hoursPassed.toFixed(1)} 小時)`);
-      return res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>訂單已過期</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#f093fb,#f5576c);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}</style></head><body><div class="container"><h1>⏰ 訂單已過期</h1><p>此訂單已超過 7 天</p></div></body></html>');
-    }
-
-    // 若 query 沒帶 transactionId，就從訂單資訊補上
-    const txId = txFromQuery || (order && order.linepayTransactionId);
-    if (!txId) {
-      logger.logToFile(`❌ 缺少 transactionId，無法確認付款：orderId=${orderId}`);
-      return res
-        .status(400)
-        .send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>付款失敗</title></head><body><h1>❌ 付款失敗</h1><p>缺少交易編號，請回到聊天點擊付款連結重新付款。</p></body></html>');
-    }
-
-    const nonce = crypto.randomBytes(16).toString('base64');
-    const uri = `/v3/payments/${txId}/confirm`;
-    const requestBody = { amount: amountNum, currency: 'TWD' };
-    const signature = generateLinePaySignature(uri, requestBody, nonce);
-
-    const response = await fetch(`${LINE_PAY_CONFIG.apiUrl}${uri}`, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'X-LINE-ChannelId': LINE_PAY_CONFIG.channelId,
-        'X-LINE-Authorization-Nonce': nonce,
-        'X-LINE-Authorization': signature
-      },
-      body: JSON.stringify(requestBody)
-    });
-
-    const resultText = await response.text();
-    let result;
-    try { result = JSON.parse(resultText); } catch { result = { raw: resultText }; }
-
-    if (result && result.returnCode === '0000') {
-      if (order) {
-        orderManager.updateOrderStatus(orderId, 'paid', 'LINE Pay');
-      }
-      const updated = orderManager.updateOrderStatusByUserId(userId, 'paid', 'LINE Pay');
-      logger.logToFile(`✅ LINE Pay 付款成功，標記 ${updated} 筆訂單為已付款（orderId=${orderId}, tx=${txId}）`);
-
-      const ADMIN_USER_ID = process.env.ADMIN_USER_ID;
-      if (ADMIN_USER_ID) {
-        await client.pushMessage(ADMIN_USER_ID, { 
-          type: 'text', 
-          text: `🎉 收到 LINE Pay 付款通知\n\n客戶姓名:${decodeURIComponent(userName)}\n付款金額:NT$ ${amountNum.toLocaleString()}\n付款方式:LINE Pay\n訂單編號:${orderId}\n交易編號:${txId}\n\n狀態:✅ 付款成功` 
-        });
-      }
-      if (userId && userId !== 'undefined') {
-        await client.pushMessage(userId, { 
-          type: 'text', 
-          text: `✅ LINE Pay 付款成功\n\n感謝 ${decodeURIComponent(userName)} 的支付\n金額:NT$ ${amountNum.toLocaleString()}\n訂單編號:${orderId}\n\n非常謝謝您\n感謝您的支持 💙` 
-        });
-      }
-      return res.redirect('/payment/success');
-    } else {
-      logger.logToFile(`❌ LINE Pay 確認失敗：status=${response.status}, body=${resultText}`);
-      return res
-        .status(400)
-        .send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>付款失敗</title><style>body{font-family:sans-serif;text-align:center;padding:50px}h1{color:#e74c3c}</style></head><body><h1>❌ 付款失敗</h1><p>請稍後再試或聯繫客服。</p></body></html>');
-    }
-  } catch (error) {
-    logger.logError('LINE Pay 確認付款失敗', error);
-    res.status(500).send('付款處理失敗');
-  }
-});
 
 
 app.get('/api/orders', (req, res) => {
