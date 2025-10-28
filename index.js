@@ -80,10 +80,9 @@ app.get('/payment/linepay/confirm', async (req, res) => {
     
     logger.logToFile(`📥 收到 LINE Pay confirm 回調: transactionId=${transactionId}, orderId=${orderId}, userId=${userId}`);
     
-    // ✅ 新增參數驗證
     if (!transactionId || !orderId || !userId || !amount) {
         logger.logToFile(`❌ LINE Pay confirm 參數不完整`);
-        return res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>參數錯誤</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#f093fb,#f5576c);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}</style></head><body><div class="container"><h1>❌ 付款參數錯誤</h1><p>缺少必要參數，請重新嘗試</p></div></body></html>');
+        return res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>參數錯誤</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#f093fb,#f5576c);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}</style></head><body><div class="container"><h1>❌ 付款參數錯誤</h1><p>缺少必要參數</p></div></body></html>');
     }
     
     const order = orderManager.getOrder(orderId);
@@ -100,7 +99,6 @@ app.get('/payment/linepay/confirm', async (req, res) => {
         const requestBody = { amount: parseInt(amount), currency: 'TWD' };
         const signature = generateLinePaySignature(uri, requestBody, nonce);
         
-        // ✅ 新增詳細日誌
         logger.logToFile(`📤 LINE Pay confirm 請求: ${JSON.stringify(requestBody)}`);
         
         const response = await fetch(`${LINE_PAY_CONFIG.apiUrl}${uri}`, {
@@ -115,8 +113,6 @@ app.get('/payment/linepay/confirm', async (req, res) => {
         });
         
         const result = await response.json();
-        
-        // ✅ 新增詳細日誌
         logger.logToFile(`📥 LINE Pay confirm 回應: ${JSON.stringify(result, null, 2)}`);
         
         if (result.returnCode === '0000') {
