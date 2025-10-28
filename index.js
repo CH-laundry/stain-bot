@@ -25,6 +25,40 @@ if (process.env.GOOGLE_PRIVATE_KEY) {
 
 const app = express();
 
+// 顶層（express() 之後、任何路由之前）
+app.use('/debug', require('./services/debugStorage')); // 只掛一次
+
+// 列出所有已註冊的路由，快速確認到底有沒有 /payment/linepay/pay/:orderId
+app.get('/debug/routes', (req, res) => {
+  const routes = [];
+  app._router.stack.forEach((m) => {
+    if (m.route && m.route.path) {
+      const methods = Object.keys(m.route.methods).join(',').toUpperCase();
+      routes.push(`${methods} ${m.route.path}`);
+    } else if (m.name === 'router' && m.handle.stack) {
+      m.handle.stack.forEach((h) => {
+        if (h.route) {
+          const methods = Object.keys(h.route.methods).join(',').toUpperCase();
+          routes.push(`${methods} ${h.route.path}`);
+        }
+      });
+    }
+  });
+  res.type('text').send(routes.sort().join('\n'));
+});
+
+// 伺服器對外 IP（可驗證你點到的是哪一台）
+app.get('/debug/my-ip', async (req, res) => {
+  try {
+    const r = await fetch('https://ifconfig.me/ip');
+    const ip = (await r.text()).trim();
+    res.type('text').send(ip);
+  } catch (e) {
+    res.status(500).type('text').send('無法取得伺服器 IP');
+  }
+});
+
+
 app.use('/debug', require('./services/debugStorage'));
 
 // 指定 Volume 內存放可公開資料的資料夾
