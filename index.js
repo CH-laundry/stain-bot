@@ -403,6 +403,39 @@ app.get('/payment/linepay/cancel', (req, res) => {
 
 // ===== 取代整個 /payment/linepay/confirm 路由 =====
 // ✅ LINE Pay：持久連結（這條一定要放在最外層，不能包在別的路由裡）
+// ECpay：持久連結（請確保這一段是「獨立」的，不要夾任何別的路由在裡面）
+app.get('/payment/ecpay/pay/:orderId', async (req, res) => {
+  const { orderId } = req.params;
+  const order = orderManager.getOrder(orderId);
+
+  if (!order) {
+    return res.status(404).send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>訂單不存在</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#f093fb,#f5576c);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}</style></head><body><div class="container"><h1>❌ 訂單不存在</h1><p>找不到此訂單</p></div></body></html>');
+  }
+
+  if (orderManager.isExpired(orderId)) {
+    const hoursPassed = (Date.now() - order.createdAt) / (1000 * 60 * 60);
+    logger.logToFile(`❌ 訂單已過期: ${orderId} (已過 ${hoursPassed.toFixed(1)} 小時)`);
+    return res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>訂單已過期</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#f093fb,#f5576c);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}h1{font-size:28px;margin-bottom:20px}p{font-size:16px;margin:15px 0}</style></head><body><div class="container"><h1>⏰ 訂單已過期</h1><p>此訂單已超過 7 天(168 小時)</p><p>已過時間: ' + Math.floor(hoursPassed) + ' 小時</p><p>訂單編號: ' + orderId + '</p><p>請聯繫 C.H 精緻洗衣客服重新取得訂單</p></div></body></html>');
+  }
+
+  if (order.status === 'paid') {
+    return res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>訂單已付款</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#667eea,#764ba2);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}</style></head><body><div class="container"><h1>✅ 訂單已付款</h1><p>此訂單已完成付款</p><p>訂單編號: ' + orderId + '</p></div></body></html>');
+  }
+
+  try {
+    logger.logToFile(`🔄 重新生成綠界付款連結: ${orderId}`);
+    const ecpayLink = createECPayPaymentLink(order.userId, order.userName, order.amount);
+    const remainingHours = Math.floor((order.expiryTime - Date.now()) / (1000 * 60 * 60));
+    res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>前往綠界付款</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#667eea,#764ba2);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}h1{font-size:28px;margin-bottom:20px}p{font-size:16px;margin:15px 0}.btn{display:inline-block;padding:15px 40px;background:#fff;color:#667eea;text-decoration:none;border-radius:10px;font-weight:bold;margin-top:20px;font-size:18px}.info{background:rgba(255,255,255,0.2);padding:15px;border-radius:10px;margin:20px 0}</style></head><body><div class="container"><h1>💳 前往綠界付款</h1><div class="info"><p><strong>訂單編號:</strong> ' + orderId + '</p><p><strong>客戶姓名:</strong> ' + order.userName + '</p><p><strong>金額:</strong> NT$ ' + order.amount.toLocaleString() + '</p><p><strong>剩餘有效時間:</strong> ' + remainingHours + ' 小時</p></div><p>⏰ 正在為您生成付款連結...</p><p>若未自動跳轉，請點擊下方按鈕</p><a href="' + ecpayLink + '" class="btn">立即前往綠界付款</a></div><script>setTimeout(function(){window.location.href="' + ecpayLink + '"},1500)</script></body></html>');
+    logger.logToFile(`✅ 綠界付款連結已重新生成: ${orderId}`);
+  } catch (error) {
+    logger.logError('重新生成綠界連結失敗', error);
+    res.status(500).send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>生成失敗</title></head><body><h1>❌ 付款連結生成失敗</h1><p>請聯繫客服處理</p></body></html>');
+  }
+}); // ←←← 這裡是 ECpay 路由的結尾（只有一次）
+
+
+// LINE Pay：持久連結（獨立一段，不能包在別的路由裡）
 app.get('/payment/linepay/pay/:orderId', async (req, res) => {
   try {
     const { orderId } = req.params;
@@ -418,7 +451,7 @@ app.get('/payment/linepay/pay/:orderId', async (req, res) => {
       return res.redirect('/payment/success');
     }
 
-    // 若沒保存 LINE Pay 連結，就重新生成一組
+    // 若沒有已保存的 URL，就重新請求一組
     if (!order.linepayPaymentUrl || (!order.linepayPaymentUrl.web && !order.linepayPaymentUrl.app)) {
       const r = await createLinePayPayment(order.userId, order.userName, order.amount);
       if (!r.success) {
@@ -444,109 +477,10 @@ app.get('/payment/linepay/pay/:orderId', async (req, res) => {
     return res.redirect(target);
   } catch (e) {
     logger.logError('導向 LINE Pay 失敗', e);
-    return res.status(500).type('text').send('系統錯誤，請稍後重試');
+    res.status(500).type('text').send('系統錯誤，請稍後重試');
   }
 });
 
-
-
-
-app.get('/api/orders', (req, res) => {
-    const { status } = req.query;
-    let orders = status ? orderManager.getOrdersByStatus(status) : orderManager.getAllOrders();
-    const ordersWithStatus = orders.map(order => ({ 
-        ...order, 
-        isExpired: orderManager.isExpired(order.orderId), 
-        remainingTime: Math.max(0, order.expiryTime - Date.now()), 
-        remainingHours: Math.floor(Math.max(0, order.expiryTime - Date.now()) / (1000 * 60 * 60)) 
-    }));
-    res.json({ 
-        success: true, 
-        total: ordersWithStatus.length, 
-        orders: ordersWithStatus, 
-        statistics: orderManager.getStatistics() 
-    });
-});
-
-app.get('/api/order/:orderId', (req, res) => {
-    const order = orderManager.getOrder(req.params.orderId);
-    if (order) {
-        res.json({ 
-            success: true, 
-            order: { 
-                ...order, 
-                isExpired: orderManager.isExpired(order.orderId), 
-                remainingTime: Math.max(0, order.expiryTime - Date.now()), 
-                remainingHours: Math.floor(Math.max(0, order.expiryTime - Date.now()) / (1000 * 60 * 60)) 
-            } 
-        });
-    } else {
-        res.status(404).json({ success: false, error: '找不到此訂單' });
-    }
-});
-
-app.post('/api/order/:orderId/renew', async (req, res) => {
-    const { orderId } = req.params;
-    const order = orderManager.renewOrder(orderId);
-    
-    if (!order) {
-        return res.status(404).json({ success: false, error: '找不到此訂單' });
-    }
-
-    try {
-        const baseURL = process.env.RAILWAY_PUBLIC_DOMAIN || 'https://stain-bot-production-0fac.up.railway.app';
-        const linePayResult = await createLinePayPayment(order.userId, order.userName, order.amount);
-        
-        const ecpayPersistentUrl = `${baseURL}/payment/ecpay/pay/${orderId}`;
-        let ecpayShort = ecpayPersistentUrl;
-        try {
-            const r2 = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(ecpayPersistentUrl)}`);
-            const t2 = await r2.text();
-            if (t2 && t2.startsWith('http')) ecpayShort = t2;
-        } catch {
-            logger.logToFile(`⚠️ 綠界短網址失敗，使用原網址`);
-        }
-
-        if (linePayResult.success) {
-            const paymentData = {
-                linepayTransactionId: linePayResult.transactionId,
-                linepayPaymentUrl: linePayResult.paymentUrl
-            };
-            orderManager.updatePaymentInfo(orderId, paymentData);
-
-            const linepayPersistentUrl = `${baseURL}/payment/linepay/pay/${orderId}`;
-            let linepayShort = linepayPersistentUrl;
-            try {
-                const r1 = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(linepayPersistentUrl)}`);
-                const t1 = await r1.text();
-                if (t1 && t1.startsWith('http')) linepayShort = t1;
-            } catch {
-                logger.logToFile(`⚠️ LINE Pay 短網址失敗，使用原網址`);
-            }
-
-            await client.pushMessage(order.userId, {
-                type: 'text',
-                text: `🔄 付款連結已重新生成\n\n訂單編號: ${orderId}\n客戶姓名: ${order.userName}\n金額: NT$ ${order.amount.toLocaleString()}\n\n— 請選擇付款方式 —\n【信用卡／綠界】\n${ecpayShort}\n\n【LINE Pay】\n${linepayShort}\n\n備註：以上連結可重複點擊，隨時都可以付款。\n✅ 付款後系統會自動通知我們`
-            });
-
-            orderManager.markReminderSent(orderId);
-            logger.logToFile(`✅ 單筆續約重發（綠界+LINE Pay）：${orderId}`);
-            
-            return res.json({ 
-                success: true, 
-                message: '訂單已續約並重新發送付款連結（含綠界 + LINE Pay）', 
-                order, 
-                links: { ecpay: ecpayShort, linepay: linepayShort } 
-            });
-        } else {
-            logger.logToFile(`❌ LINE Pay 付款請求失敗（續約重發）: ${orderId}`);
-            return res.status(500).json({ success: false, error: '重新生成 LINE Pay 連結失敗' });
-        }
-    } catch (error) {
-        logger.logError('續約訂單失敗', error);
-        return res.status(500).json({ success: false, error: error.message });
-    }
-});
 
 app.delete('/api/order/:orderId', (req, res) => {
     const deleted = orderManager.deleteOrder(req.params.orderId);
