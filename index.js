@@ -17,21 +17,16 @@ async function createLinePayPayment(userId, userName, amount) {
                 id: orderId,
                 amount: amount,
                 name: 'C.H精緻洗衣服務',
-                products: [{ 
-                    name: '洗衣清潔費用', 
-                    quantity: 1, 
-                    price: amount 
-                }]
+                products: [{ name: '洗衣清潔費用', quantity: 1, price: amount }]
             }],
             redirectUrls: {
-                // ✅ 關鍵修復：confirmUrl 必須包含完整參數
                 confirmUrl: `${baseURL}/payment/linepay/confirm?orderId=${orderId}&userId=${userId}&userName=${encodeURIComponent(userName)}&amount=${amount}`,
                 cancelUrl: `${baseURL}/payment/linepay/cancel`
             },
-            // ✅ 新增：讓 LINE Pay 自動使用當前登入的 LINE 帳號
+            // ✅ 新增這部分
             options: {
                 payment: {
-                    capture: true  // 立即扣款
+                   capture: true
                 }
             }
         };
@@ -54,7 +49,7 @@ async function createLinePayPayment(userId, userName, amount) {
         
         const result = await response.json();
         logger.logToFile(`📥 LINE Pay 回應: ${JSON.stringify(result, null, 2)}`);
-        
+       
         if (result.returnCode === '0000') {
             logger.logToFile(`✅ LINE Pay 付款請求成功: ${orderId}`);
             return { 
@@ -85,47 +80,27 @@ app.get('/payment/linepay/confirm', async (req, res) => {
     
     logger.logToFile(`📥 收到 LINE Pay confirm 回調: transactionId=${transactionId}, orderId=${orderId}, userId=${userId}`);
     
-    // ✅ 參數驗證
+    // ✅ 新增參數驗證
     if (!transactionId || !orderId || !userId || !amount) {
         logger.logToFile(`❌ LINE Pay confirm 參數不完整`);
-        return res.send(`
-            <!DOCTYPE html>
-            <html><head><meta charset="UTF-8"><title>參數錯誤</title>
-            <style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#f093fb,#f5576c);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}</style>
-            </head><body><div class="container">
-            <h1>❌ 付款參數錯誤</h1>
-            <p>缺少必要參數，請重新嘗試</p>
-            <p>如有問題請聯繫客服</p>
-            </div></body></html>
-        `);
+        return res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>參數錯誤</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#f093fb,#f5576c);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}</style></head><body><div class="container"><h1>❌ 付款參數錯誤</h1><p>缺少必要參數，請重新嘗試</p></div></body></html>');
     }
     
     const order = orderManager.getOrder(orderId);
     
-    // 檢查訂單是否過期
     if (order && orderManager.isExpired(orderId)) {
         const hoursPassed = (Date.now() - order.createdAt) / (1000 * 60 * 60);
         logger.logToFile(`❌ 訂單已過期: ${orderId} (已過 ${hoursPassed.toFixed(1)} 小時)`);
-        return res.send(`
-            <!DOCTYPE html>
-            <html><head><meta charset="UTF-8"><title>訂單已過期</title>
-            <style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#f093fb,#f5576c);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}</style>
-            </head><body><div class="container">
-            <h1>⏰ 訂單已過期</h1>
-            <p>此訂單已超過 7 天</p>
-            </div></body></html>
-        `);
+        return res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>訂單已過期</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#f093fb,#f5576c);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}</style></head><body><div class="container"><h1>⏰ 訂單已過期</h1><p>此訂單已超過 7 天</p></div></body></html>');
     }
     
     try {
         const nonce = crypto.randomBytes(16).toString('base64');
         const uri = `/v3/payments/${transactionId}/confirm`;
-        const requestBody = { 
-            amount: parseInt(amount), 
-            currency: 'TWD' 
-        };
+        const requestBody = { amount: parseInt(amount), currency: 'TWD' };
         const signature = generateLinePaySignature(uri, requestBody, nonce);
         
+        // ✅ 新增詳細日誌
         logger.logToFile(`📤 LINE Pay confirm 請求: ${JSON.stringify(requestBody)}`);
         
         const response = await fetch(`${LINE_PAY_CONFIG.apiUrl}${uri}`, {
@@ -140,74 +115,42 @@ app.get('/payment/linepay/confirm', async (req, res) => {
         });
         
         const result = await response.json();
+        
+        // ✅ 新增詳細日誌
         logger.logToFile(`📥 LINE Pay confirm 回應: ${JSON.stringify(result, null, 2)}`);
         
         if (result.returnCode === '0000') {
-            // ✅ 更新訂單狀態
             if (order) {
                 orderManager.updateOrderStatus(orderId, 'paid', 'LINE Pay');
-                logger.logToFile(`✅ 訂單 ${orderId} 已標記為已付款`);
             }
             
-            // ✅ 更新該用戶所有未付款訂單
             const updated = orderManager.updateOrderStatusByUserId(userId, 'paid', 'LINE Pay');
             logger.logToFile(`✅ LINE Pay 付款成功,已標記 ${updated} 筆訂單為已付款`);
             
-            // 通知管理員
             const ADMIN_USER_ID = process.env.ADMIN_USER_ID;
             if (ADMIN_USER_ID) {
-                try {
-                    await client.pushMessage(ADMIN_USER_ID, { 
-                        type: 'text', 
-                        text: `🎉 收到 LINE Pay 付款通知\n\n客戶姓名: ${decodeURIComponent(userName || '未知')}\n付款金額: NT$ ${parseInt(amount).toLocaleString()}\n付款方式: LINE Pay\n訂單編號: ${orderId}\n交易編號: ${transactionId}\n\n狀態: ✅ 付款成功` 
-                    });
-                } catch (err) {
-                    logger.logError('通知管理員失敗', err);
-                }
+                await client.pushMessage(ADMIN_USER_ID, { 
+                    type: 'text', 
+                    text: `🎉 收到 LINE Pay 付款通知\n\n客戶姓名:${decodeURIComponent(userName)}\n付款金額:NT$ ${parseInt(amount).toLocaleString()}\n付款方式:LINE Pay\n訂單編號:${orderId}\n交易編號:${transactionId}\n\n狀態:✅ 付款成功` 
+                });
             }
             
-            // 通知客戶
             if (userId && userId !== 'undefined') {
-                try {
-                    await client.pushMessage(userId, { 
-                        type: 'text', 
-                        text: `✅ LINE Pay 付款成功\n\n感謝 ${decodeURIComponent(userName || '您')} 的支付\n金額: NT$ ${parseInt(amount).toLocaleString()}\n訂單編號: ${orderId}\n\n非常謝謝您\n感謝您的支持 💙` 
-                    });
-                } catch (err) {
-                    logger.logError('通知客戶失敗', err);
-                }
+                await client.pushMessage(userId, { 
+                    type: 'text', 
+                    text: `✅ LINE Pay 付款成功\n\n感謝 ${decodeURIComponent(userName)} 的支付\n金額:NT$ ${parseInt(amount).toLocaleString()}\n訂單編號:${orderId}\n\n非常謝謝您\n感謝您的支持 💙` 
+                });
             }
             
-            logger.logToFile(`✅ LINE Pay 付款成功: ${decodeURIComponent(userName || '未知')} - ${amount}元`);
-            
-            // 重定向到成功頁面
+            logger.logToFile(`✅ LINE Pay 付款成功: ${decodeURIComponent(userName)} - ${amount}元`);
             res.redirect('/payment/success');
         } else {
             logger.logToFile(`❌ LINE Pay 付款確認失敗: ${result.returnCode} - ${result.returnMessage}`);
-            res.send(`
-                <!DOCTYPE html>
-                <html><head><meta charset="UTF-8"><title>付款失敗</title>
-                <style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#f093fb,#f5576c);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}</style>
-                </head><body><div class="container">
-                <h1>❌ 付款失敗</h1>
-                <p>${result.returnMessage}</p>
-                <p>錯誤代碼: ${result.returnCode}</p>
-                <p>請聯繫客服處理</p>
-                </div></body></html>
-            `);
+            res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>付款失敗</title><style>body{font-family:sans-serif;text-align:center;padding:50px}h1{color:#e74c3c}</style></head><body><h1>❌ 付款失敗</h1><p>' + result.returnMessage + '</p><p>請聯繫客服處理</p></body></html>');
         }
     } catch (error) {
         logger.logError('LINE Pay 確認付款失敗', error);
-        res.status(500).send(`
-            <!DOCTYPE html>
-            <html><head><meta charset="UTF-8"><title>系統錯誤</title>
-            <style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#f093fb,#f5576c);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}</style>
-            </head><body><div class="container">
-            <h1>❌ 系統錯誤</h1>
-            <p>付款處理失敗: ${error.message}</p>
-            <p>請聯繫客服處理</p>
-            </div></body></html>
-        `);
+        res.status(500).send('付款處理失敗');
     }
 });
 
