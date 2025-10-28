@@ -78,53 +78,6 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
 
-// 顶層（express() 之後、任何路由之前）
-app.use('/debug-tools', require('./services/debugStorage')); // 改名，避免吃掉我們的 /debug/* 檢查端點
-
-// 列出所有已註冊的路由，快速確認到底有沒有 /payment/linepay/pay/:orderId
-app.get('/__routes', (req, res) => {
-  const routes = [];
-  app._router.stack.forEach((m) => {
-    if (m.route && m.route.path) {
-      const methods = Object.keys(m.route.methods).join(',').toUpperCase();
-      routes.push(`${methods} ${m.route.path}`);
-    } else if (m.name === 'router' && m.handle.stack) {
-      m.handle.stack.forEach((h) => {
-        if (h.route) {
-          const methods = Object.keys(h.route.methods).join(',').toUpperCase();
-          routes.push(`${methods} ${h.route.path}`);
-        }
-      });
-    }
-  });
-  res.type('text').send(routes.sort().join('\n'));
-});
-
-// 伺服器對外 IP（可驗證你點到的是哪一台）
-app.get('/__myip', async (req, res) => {
-  try {
-    const r = await fetch('https://ifconfig.me/ip');
-    const ip = (await r.text()).trim();
-    res.type('text').send(ip);
-  } catch (e) {
-    res.status(500).type('text').send('無法取得伺服器 IP');
-  }
-});
-
-
-
-// 指定 Volume 內存放可公開資料的資料夾
-const FILE_ROOT = '/data/uploads';
-
-// 確保這個資料夾存在（沒有就自動建立）
-fs.mkdirSync(FILE_ROOT, { recursive: true });
-
-// 讓網址 /files/... 能對應到 /data/uploads 裡的檔案
-app.use('/files', express.static(FILE_ROOT));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(express.static('public'));
-
 const client = new Client({
     channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
     channelSecret: process.env.LINE_CHANNEL_SECRET,
@@ -239,9 +192,11 @@ async function createLinePayPayment(userId, userName, amount) {
         success: true,
         orderId,
         transactionId: info.transactionId,
-        paymentUrlWeb: webUrl,
-        paymentUrlApp: appUrl
-      };
+        paymentUrl: {           // ✅ 改這裡：統一回傳一個物件
+        web: webUrl,
+        app: appUrl,
+      },
+    };
     } else {
       logger.logToFile(`❌ LINE Pay 付款請求失敗: ${result.returnCode} - ${result.returnMessage}`);
       return { success: false, error: result.returnMessage || 'LINE Pay request failed' };
@@ -420,6 +375,53 @@ app.get('/payment/linepay/cancel', (req, res) => {
 app.get('/payment/ecpay/pay/:orderId', async (req, res) => {
     const { orderId } = req.params;
     const order = orderManager.getOrder(orderId);
+// 讓使用者點聊天中的「固定連結」時，先到這裡，我們再導向 LINE Pay 官方頁
+app.get('/payment/linepay/pay/:orderId', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const order = orderManager.getOrder(orderId);
+
+    if (!order) {
+      return res.status(404).type('text').send('訂單不存在');
+    }
+    if (orderManager.isExpired(orderId)) {
+      return res.status(410).type('text').send('訂單已過期');
+    }
+    if (order.status === 'paid') {
+      return res.redirect('/payment/success');
+    }
+
+    // 若沒保存 LINE Pay 連結，就重新生成一組
+    if (!order.linepayPaymentUrl || (!order.linepayPaymentUrl.web && !order.linepayPaymentUrl.app)) {
+      const r = await createLinePayPayment(order.userId, order.userName, order.amount);
+      if (!r.success) {
+        return res.status(500).type('text').send('無法生成 LINE Pay 付款連結，請稍後重試');
+      }
+      orderManager.updatePaymentInfo(orderId, {
+        linepayTransactionId: r.transactionId,
+        linepayPaymentUrl: r.paymentUrl, // { web, app }
+      });
+      order.linepayPaymentUrl = r.paymentUrl;
+    }
+
+    const ua = (req.headers['user-agent'] || '');
+    const preferApp = /Line|Android|iPhone|iPad|iPod/i.test(ua);
+    const appUrl = order.linepayPaymentUrl.app;
+    const webUrl = order.linepayPaymentUrl.web;
+
+    // 行動裝置或 LINE 內優先用 app 連結，否則用 web
+    const target = (preferApp && appUrl) ? appUrl : webUrl;
+    if (!target) {
+      return res.status(500).type('text').send('付款連結缺失，請稍後重試');
+    }
+
+    return res.redirect(target);
+  } catch (e) {
+    logger.logError('導向 LINE Pay 失敗', e);
+    res.status(500).type('text').send('系統錯誤，請稍後重試');
+  }
+});
+
     
     if (!order) {
         return res.status(404).send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>訂單不存在</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#f093fb,#f5576c);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}</style></head><body><div class="container"><h1>❌ 訂單不存在</h1><p>找不到此訂單</p></div></body></html>');
