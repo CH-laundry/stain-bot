@@ -244,7 +244,7 @@ app.post('/webhook', async (req, res) => {
 app.get('/auth', (req, res) => {
     try {
         const authUrl = googleAuth.getAuthUrl();
-        console.log('生成授權 URL:', authUrl);
+        console.log('生成擬授權 URL:', authUrl);
         res.redirect(authUrl);
     } catch (error) {
         logger.logError('生成授權 URL 失敗', error);
@@ -368,6 +368,119 @@ app.get('/payment/success', (req, res) => {
 
 app.get('/payment/linepay/cancel', (req, res) => {
     res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>付款取消</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#f093fb 0%,#f5576c 100%);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}</style></head><body><div class="container"><h1>❌ 付款已取消</h1><p>您已取消此次付款</p><p>如需協助請聯繫客服</p></div></body></html>');
+});
+
+/* ==========================
+   ✅ 新增：LINE Pay 伺服器端 Confirm 路由
+   放在 /payment/linepay/cancel 之後、ECpay 路由之前
+========================== */
+app.get('/payment/linepay/confirm', async (req, res) => {
+  try {
+    const { transactionId, orderId, userId, userName, amount } = req.query;
+
+    if (!transactionId) {
+      logger.logToFile('❌ LINE Pay confirm 缺少 transactionId');
+      return res.status(400).type('text').send('缺少 transactionId');
+    }
+    if (!orderId) {
+      logger.logToFile('❌ LINE Pay confirm 缺少 orderId');
+      return res.status(400).type('text').send('缺少 orderId');
+    }
+
+    const order = orderManager.getOrder(orderId);
+    if (!order) {
+      logger.logToFile(`❌ LINE Pay confirm 找不到訂單: ${orderId}`);
+      return res.status(404).type('text').send('訂單不存在');
+    }
+    if (orderManager.isExpired(orderId)) {
+      logger.logToFile(`❌ LINE Pay confirm 訂單已過期: ${orderId}`);
+      return res.status(410).type('text').send('訂單已過期');
+    }
+    if (order.status === 'paid') {
+      logger.logToFile(`ℹ️ LINE Pay confirm 訂單已付款(略過重複確認): ${orderId}`);
+      return res.redirect('/payment/success');
+    }
+
+    // Confirm API body：金額需與 request 階段一致
+    const confirmBody = {
+      amount: Number(order.amount || amount || 0),
+      currency: 'TWD',
+    };
+    if (!confirmBody.amount || confirmBody.amount <= 0) {
+      logger.logToFile(`❌ LINE Pay confirm 金額異常: orderId=${orderId}, amount=${confirmBody.amount}`);
+      return res.status(400).type('text').send('確認金額無效');
+    }
+
+    const uri = `/v3/payments/${transactionId}/confirm`;
+    const nonce = crypto.randomBytes(16).toString('base64');
+    const signature = generateLinePaySignature(uri, confirmBody, nonce);
+
+    const r = await fetch(`${LINE_PAY_CONFIG.apiUrl}${uri}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-LINE-ChannelId': LINE_PAY_CONFIG.channelId,
+        'X-LINE-Authorization-Nonce': nonce,
+        'X-LINE-Authorization': signature,
+      },
+      body: JSON.stringify(confirmBody),
+    });
+
+    const json = await r.json();
+    logger.logToFile(`🔎 LINE Pay confirm 回應: ${JSON.stringify(json)}`);
+
+    if (json.returnCode === '0000') {
+      // 標記已付款 + 保存交易資訊
+      orderManager.updatePaymentInfo(orderId, {
+        linepayTransactionId: transactionId,
+        linepayConfirmedAt: Date.now(),
+        status: 'paid',
+        paidBy: 'LINE Pay',
+      });
+
+      // 推播通知（可選）
+      const ADMIN_USER_ID = process.env.ADMIN_USER_ID;
+      try {
+        if (ADMIN_USER_ID) {
+          await client.pushMessage(ADMIN_USER_ID, {
+            type: 'text',
+            text:
+              `🎉 收到 LINE Pay 付款\n\n` +
+              `客戶姓名: ${userName || order.userName}\n` +
+              `金額: NT$ ${(order.amount || confirmBody.amount).toLocaleString()}\n` +
+              `交易編號: ${transactionId}\n` +
+              `訂單: ${orderId}\n\n` +
+              `狀態: ✅ 付款成功`,
+          });
+        }
+        if (userId || order.userId) {
+          await client.pushMessage(userId || order.userId, {
+            type: 'text',
+            text:
+              `✅ 付款成功\n\n` +
+              `感謝 ${userName || order.userName} 的支付\n` +
+              `金額: NT$ ${(order.amount || confirmBody.amount).toLocaleString()}\n` +
+              `交易編號: ${transactionId}\n\n` +
+              `非常謝謝您 💙`,
+          });
+        }
+      } catch (pushErr) {
+        logger.logError('LINE Pay confirm 推播通知失敗', pushErr);
+      }
+
+      logger.logToFile(`✅ LINE Pay 付款已確認: orderId=${orderId}, tx=${transactionId}`);
+      return res.redirect('/payment/success');
+    } else {
+      const msg = `LINE Pay 確認失敗: ${json.returnCode} - ${json.returnMessage}`;
+      logger.logToFile(`❌ ${msg}`);
+      return res
+        .status(400)
+        .send(`<pre>${msg}\n\n${JSON.stringify(json, null, 2)}</pre>`);
+    }
+  } catch (e) {
+    logger.logError('LINE Pay confirm 例外錯誤', e);
+    return res.status(500).type('text').send('伺服器錯誤，請稍後重試');
+  }
 });
 
 /* ========= ！！！修復點 ！！！ =========
