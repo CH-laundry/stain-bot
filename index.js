@@ -448,36 +448,39 @@ app.get('/payment/ecpay/pay/:orderId', async (req, res) => {
   }
 });
 
-// ===== LINE Pay：持久付款頁（★ 改為 appLink 優先 & 兩秒自動跳轉）=====
+// ===== LINE Pay：持久付款頁（強制 App Link；支援手動按鈕＋自動重試）=====
 app.get('/payment/linepay/pay/:orderId', async (req, res) => {
   const { orderId } = req.params;
   const order = orderManager.getOrder(orderId);
 
   if (!order) {
-    return res
-      .status(404)
-      .send(
-        '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>訂單不存在</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#f093fb,#f5576c);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}</style></head><body><div class="container"><h1>❌ 訂單不存在</h1><p>找不到此訂單</p></div></body></html>'
-      );
+    return res.status(404).send(
+      '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>訂單不存在</title>' +
+      '<style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#f093fb,#f5576c);color:white}' +
+      '.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:520px;margin:0 auto}</style>' +
+      '</head><body><div class="container"><h1>❌ 訂單不存在</h1><p>找不到此訂單</p></div></body></html>'
+    );
   }
 
   if (orderManager.isExpired(orderId)) {
     const hoursPassed = (Date.now() - order.createdAt) / (1000 * 60 * 60);
     logger.logToFile(`❌ 訂單已過期: ${orderId} (已過 ${hoursPassed.toFixed(1)} 小時)`);
     return res.send(
-      '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>訂單已過期</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#f093fb,#f5576c);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}h1{font-size:28px;margin-bottom:20px}p{font-size:16px;margin:15px 0}</style></head><body><div class="container"><h1>⏰ 訂單已過期</h1><p>此訂單已超過 7 天(168 小時)</p><p>已過時間: ' +
-        Math.floor(hoursPassed) +
-        ' 小時</p><p>訂單編號: ' +
-        orderId +
-        '</p><p>請聯繫 C.H 精緻洗衣客服重新取得訂單</p></div></body></html>'
+      '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>訂單已過期</title>' +
+      '<style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#f093fb,#f5576c);color:white}' +
+      '.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:520px;margin:0 auto}</style>' +
+      '</head><body><div class="container"><h1>⏰ 訂單已過期</h1><p>此訂單已超過 7 天(168 小時)</p>' +
+      `<p>訂單編號: ${orderId}</p><p>請聯繫 C.H 精緻洗衣客服重新取得訂單</p></div></body></html>`
     );
   }
 
   if (order.status === 'paid') {
     return res.send(
-      '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>訂單已付款</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#667eea,#764ba2);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}</style></head><body><div class="container"><h1>✅ 訂單已付款</h1><p>此訂單已完成付款</p><p>訂單編號: ' +
-        orderId +
-        '</p></div></body></html>'
+      '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>訂單已付款</title>' +
+      '<style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#667eea,#764ba2);color:white}' +
+      '.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:520px;margin:0 auto}</style>' +
+      '</head><body><div class="container"><h1>✅ 訂單已付款</h1>' +
+      `<p>訂單編號: ${orderId}</p></div></body></html>`
     );
   }
 
@@ -485,51 +488,85 @@ app.get('/payment/linepay/pay/:orderId', async (req, res) => {
     logger.logToFile(`🔄 重新生成 LINE Pay 連結: ${orderId}`);
     const linePayResult = await createLinePayPayment(order.userId, order.userName, order.amount);
 
-    if (linePayResult.success) {
-      const paymentData = {
-        linepayTransactionId: linePayResult.transactionId,
-        linepayPaymentUrl: linePayResult.paymentUrl, // 這裡已經是 app 優先
-      };
-      orderManager.updatePaymentInfo(orderId, paymentData);
-
-      const remainingHours = Math.floor((order.expiryTime - Date.now()) / (1000 * 60 * 60));
-      const paymentUrl = linePayResult.paymentUrlApp || linePayResult.paymentUrlWeb || linePayResult.paymentUrl;
-
-      res.send(
-        '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>前往付款</title>' +
-          '<meta name="viewport" content="width=device-width, initial-scale=1.0">' +
-          // ★ 盡量避免外部瀏覽器攔截
-          '</head><body style="font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#667eea,#764ba2);color:white">' +
-          '<div style="background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto">' +
-          '<h1>💳 前往 LINE Pay 付款</h1>' +
-          '<div style="background:rgba(255,255,255,0.2);padding:15px;border-radius:10px;margin:20px 0">' +
-          '<p><strong>訂單編號:</strong> ' +
-          orderId +
-          '</p><p><strong>金額:</strong> NT$ ' +
-          order.amount.toLocaleString() +
-          '</p><p><strong>剩餘有效時間:</strong> ' +
-          remainingHours +
-          ' 小時</p></div>' +
-          '<p>⏰ 請在 <b>LINE App 內</b> 開啟此連結</p><p>若在外部瀏覽器開啟，付款可能失敗</p>' +
-          '<a href="' +
-          paymentUrl +
-          '" style="display:inline-block;padding:15px 40px;background:#fff;color:#667eea;text-decoration:none;border-radius:10px;font-weight:bold;margin-top:20px;font-size:18px">立即前往 LINE Pay 付款</a>' +
-          '</div>' +
-          '<script>setTimeout(function(){window.location.href="' +
-          paymentUrl +
-          '"}, 1500)</script>' +
-          '</body></html>'
+    if (!linePayResult.success) {
+      return res.status(500).send(
+        '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>生成失敗</title></head>' +
+        '<body><h1>❌ 付款連結生成失敗</h1><p>請稍後重試或聯繫客服。</p></body></html>'
       );
-    } else {
-      res
-        .status(500)
-        .send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>生成失敗</title></head><body><h1>❌ 付款連結生成失敗</h1><p>' + linePayResult.error + '</p></body></html>');
     }
+
+    const remainingHours = Math.floor((order.expiryTime - Date.now()) / (1000 * 60 * 60));
+    const appUrl = linePayResult.paymentUrlApp || linePayResult.paymentUrl; // 預期為 line://
+    const webUrl = linePayResult.paymentUrlWeb || '';
+
+    // 記錄便於後續排錯
+    logger.logToFile(`➡️ 導向 appUrl: ${appUrl}`);
+    if (webUrl) logger.logToFile(`➡️ 後備 webUrl: ${webUrl}`);
+
+    // 最穩：先呈現頁面 + 大按鈕（需要使用者手勢），同時嘗試自動跳轉
+    res.send(`<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>前往 LINE Pay 付款</title>
+<style>
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans TC",sans-serif;text-align:center;padding:28px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff}
+  .card{background:rgba(255,255,255,.12);border-radius:20px;padding:28px;max-width:560px;margin:0 auto;box-shadow:0 10px 30px rgba(0,0,0,.15)}
+  h1{font-size:26px;margin:0 0 10px}
+  .info{background:rgba(255,255,255,.18);padding:14px;border-radius:12px;margin:14px 0;text-align:left}
+  .row{display:flex;justify-content:space-between;margin:6px 0}
+  .btn{display:inline-block;padding:16px 22px;background:#fff;color:#4e5fe2;text-decoration:none;border-radius:12px;font-weight:700;margin-top:18px;font-size:18px}
+  .warn{font-size:14px;opacity:.9;margin-top:10px;line-height:1.6}
+  .badge{display:inline-block;background:#00000022;border:1px solid #ffffff44;border-radius:20px;padding:4px 10px;margin-top:8px;font-size:12px}
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>💳 前往 LINE Pay 付款</h1>
+    <div class="info">
+      <div class="row"><span><b>訂單編號</b></span><span>${orderId}</span></div>
+      <div class="row"><span><b>金額</b></span><span>NT$ ${order.amount.toLocaleString()}</span></div>
+      <div class="row"><span><b>剩餘有效時間</b></span><span>${remainingHours} 小時</span></div>
+    </div>
+
+    <a id="go" href="${appUrl}" class="btn">🔓 在 LINE App 內開啟並付款</a>
+    ${webUrl ? `<div class="badge">若您確定在 LINE 內，仍可改用網頁版</div>
+    <div style="margin-top:8px"><a href="${webUrl}" style="color:#fff;text-decoration:underline">改用 LINE Pay 網頁版</a></div>` : ''}
+
+    <p class="warn" id="hint">提示：請在「LINE 聊天視窗」點這個頁面，或點上方白色按鈕。若你現在是在 Chrome / Safari，請回到 LINE 再試一次。</p>
+  </div>
+
+<script>
+(function(){
+  var ua = navigator.userAgent || '';
+  var inLine = /Line\\//i.test(ua) || /FB_IAB|Instagram|FBAN/i.test(ua) ? false : false; // 僅提示，不再硬判
+  var appUrl = ${JSON.stringify(appUrl)};
+  var webUrl = ${JSON.stringify(webUrl)};
+  var go = document.getElementById('go');
+  // 自動嘗試一次（若被瀏覽器策略阻擋，仍可手動按）
+  setTimeout(function(){ window.location.href = appUrl; }, 800);
+
+  // 若 2.2 秒內沒有離開本頁，顯示更明確提示
+  setTimeout(function(){
+    var hint = document.getElementById('hint');
+    hint.innerHTML = '若未自動跳轉，請 <b>點擊上方白色按鈕</b> 以在 LINE App 內開啟付款。若你是在外部瀏覽器，請回到 LINE 聊天視窗再點一次連結。';
+  }, 2200);
+
+  // 防止部分瀏覽器阻擋自訂 URI，提供手動點擊
+  go.addEventListener('click', function(e){
+    // 讓使用者手勢觸發；不額外攔截
+  });
+})();
+</script>
+</body>
+</html>`);
   } catch (error) {
     logger.logError('重新生成 LINE Pay 連結失敗', error);
     res.status(500).send('系統錯誤');
   }
 });
+
 
 // ===== LINE Pay：付款完成確認（保留你的原本功能）=====
 app.get('/payment/linepay/confirm', async (req, res) => {
