@@ -5,7 +5,6 @@ console.log('📦 RAILWAY_VOLUME_MOUNT_PATH =', process.env.RAILWAY_VOLUME_MOUNT
 const { createECPayPaymentLink } = require('./services/openai');
 const customerDB = require('./services/customerDatabase');
 const fs = require('fs');
-const path = require('path'); // NEW
 const express = require('express');
 require('dotenv').config();
 const fetch = require('node-fetch');
@@ -35,27 +34,6 @@ const app = express();
 const FILE_ROOT = '/data/uploads';
 fs.mkdirSync(FILE_ROOT, { recursive: true });
 
-// ====== NEW: 支付流程專用 Log 目錄與工具 ======
-const PAYLOG_DIR = '/data/paylogs';
-fs.mkdirSync(PAYLOG_DIR, { recursive: true });
-
-// 遮罩工具
-function mask(val, keep = 4) {
-  if (!val || typeof val !== 'string') return val;
-  if (val.length <= keep) return '*'.repeat(val.length);
-  return val.substring(0, keep) + '*'.repeat(val.length - keep);
-}
-
-// 以 JSONL 逐行寫入，便於 tail / grep
-function logPaymentStep(orderId, payload) {
-  const file = path.join(PAYLOG_DIR, `${orderId}.log.jsonl`);
-  const line = JSON.stringify({
-    ts: new Date().toISOString(),
-    ...payload,
-  }) + '\n';
-  fs.appendFile(file, line, () => {});
-}
-
 // ====== Middleware ======
 app.use('/files', express.static(FILE_ROOT));
 app.use(express.json());
@@ -77,6 +55,10 @@ async function saveUserProfile(userId) {
     logger.logError('記錄用戶資料失敗', error, userId);
   }
 }
+
+// 小工具：訂單型別分流
+const isLP = (id) => /^LP/.test(String(id || ''));
+const isEC = (id) => /^EC/.test(String(id || ''));
 
 // ====== 使用者資料 API（保留） ======
 app.get('/api/users', (req, res) => {
@@ -116,10 +98,9 @@ const LINE_PAY_CONFIG = {
   channelId: process.env.LINE_PAY_CHANNEL_ID,
   channelSecret: process.env.LINE_PAY_CHANNEL_SECRET,
   env: process.env.LINE_PAY_ENV || 'production',
-  apiUrl: process.env.LINE_PAY_API_URL ||
-    (process.env.LINE_PAY_ENV === 'sandbox'
-      ? 'https://sandbox-api-pay.line.me'
-      : 'https://api-pay.line.me')
+  apiUrl: process.env.LINE_PAY_ENV === 'sandbox'
+    ? 'https://sandbox-api-pay.line.me'
+    : (process.env.LINE_PAY_API_URL || 'https://api-pay.line.me')
 };
 
 function generateLinePaySignature(uri, body, nonce) {
@@ -165,7 +146,7 @@ h1{font-size:26px;margin-bottom:20px;font-weight:700}
   <h1>💳 LINE Pay 付款</h1>
   <div class="info">
     <div>訂單: ${orderId}</div>
-    <div style="font-size:24px;font-weight:700;margin:12px 0">NT$ ${Number(amount).toLocaleString()}</div>
+    <div style="font-size:24px;font-weight:700;margin:12px 0">NT$ ${amount.toLocaleString()}</div>
     <div>有效期: ${remainingHours} 小時</div>
   </div>
   <div class="warning">⚠️ 點擊按鈕後將前往 LINE Pay 完成付款，完成後系統會自動通知。</div>
@@ -177,47 +158,29 @@ h1{font-size:26px;margin-bottom:20px;font-weight:700}
 
 // ====== 建立 LINE Pay 交易 ======
 async function createLinePayPayment(userId, userName, amount) {
-  // NEW: 將 orderId 先行生成，用於準確持久化追蹤
-  const orderId = `LP${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
-  const nonce = crypto.randomBytes(16).toString('base64');
-  const baseURL =
-    process.env.RAILWAY_PUBLIC_DOMAIN ||
-    process.env.BASE_URL ||
-    'https://stain-bot-production-2593.up.railway.app';
-
-  const requestBody = {
-    amount: amount,
-    currency: 'TWD',
-    orderId: orderId,
-    packages: [{
-      id: orderId,
-      amount: amount,
-      name: 'C.H精緻洗衣服務',
-      products: [{ name: '洗衣清潔費用', quantity: 1, price: amount }]
-    }],
-    redirectUrls: {
-      confirmUrl: `${baseURL}/payment/linepay/confirm`,
-      cancelUrl: `${baseURL}/payment/linepay/cancel`,
-    }
-  };
-
-  const uri = '/v3/payments/request';
-  const signature = generateLinePaySignature(uri, requestBody, nonce);
-
-  // NEW: 落檔 request
-  logPaymentStep(orderId, {
-    event: 'linepay.request.start',
-    api: `${LINE_PAY_CONFIG.apiUrl}${uri}`,
-    headers: {
-      'Content-Type': 'application/json',
-      'X-LINE-ChannelId': mask(LINE_PAY_CONFIG.channelId),
-      'X-LINE-Authorization-Nonce': mask(nonce),
-      'X-LINE-Authorization': mask(signature),
-    },
-    body: requestBody
-  });
-
   try {
+    const orderId = `LP${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
+    const nonce = crypto.randomBytes(16).toString('base64');
+    const baseURL = process.env.RAILWAY_PUBLIC_DOMAIN || 'https://stain-bot-production-2593.up.railway.app';
+
+    const requestBody = {
+      amount: Math.round(Number(amount)),
+      currency: 'TWD',
+      orderId: orderId,
+      packages: [{
+        id: orderId,
+        amount: Math.round(Number(amount)),
+        name: 'C.H精緻洗衣服務',
+        products: [{ name: '洗衣清潔費用', quantity: 1, price: Math.round(Number(amount)) }]
+      }],
+      redirectUrls: {
+        confirmUrl: `${baseURL}/payment/linepay/confirm`,
+        cancelUrl: `${baseURL}/payment/linepay/cancel`,
+      }
+    };
+
+    const uri = '/v3/payments/request';
+    const signature = generateLinePaySignature(uri, requestBody, nonce);
     const response = await fetch(`${LINE_PAY_CONFIG.apiUrl}${uri}`, {
       method: 'POST',
       headers: {
@@ -229,22 +192,7 @@ async function createLinePayPayment(userId, userName, amount) {
       body: JSON.stringify(requestBody)
     });
 
-    const status = response.status;
     const result = await response.json();
-
-    // NEW: 落檔 response
-    logPaymentStep(orderId, {
-      event: 'linepay.request.response',
-      httpStatus: status,
-      returnCode: result.returnCode,
-      returnMessage: result.returnMessage,
-      info: result.info ? {
-        transactionId: result.info.transactionId,
-        paymentUrlApp: result.info?.paymentUrl?.app,
-        paymentUrlWeb: result.info?.paymentUrl?.web,
-      } : null
-    });
-
     logger.logToFile(`📥 LINE Pay API: ${result.returnCode} - ${result.returnMessage}`);
 
     if (result.returnCode === '0000') {
@@ -252,12 +200,6 @@ async function createLinePayPayment(userId, userName, amount) {
       const paymentUrlWeb = result.info?.paymentUrl?.web || null;
       const txId = result.info?.transactionId || null;
       const pickUrl = paymentUrlApp || paymentUrlWeb;
-
-      logPaymentStep(orderId, {
-        event: 'linepay.request.success',
-        transactionId: txId,
-        pickedUrl: pickUrl
-      });
 
       logger.logToFile(`✅ LINE Pay 付款請求成功: ${orderId}`);
       return {
@@ -270,15 +212,11 @@ async function createLinePayPayment(userId, userName, amount) {
       };
     } else {
       logger.logToFile(`❌ LINE Pay 付款請求失敗: ${result.returnCode} - ${result.returnMessage}`);
-      return { success: false, error: result.returnMessage || 'LINE Pay 請求失敗', orderId };
+      return { success: false, error: result.returnMessage || 'LINE Pay 請求失敗' };
     }
   } catch (error) {
     logger.logError('LINE Pay 請求錯誤', error);
-    logPaymentStep(orderId, {
-      event: 'linepay.request.error',
-      error: error.message || String(error)
-    });
-    return { success: false, error: error.message, orderId };
+    return { success: false, error: error.message };
   }
 }
 
@@ -441,21 +379,18 @@ app.get('/payment/success', (req, res) => {
 });
 
 app.get('/payment/linepay/cancel', (req, res) => {
-  // NEW: 以 query帶回來的資訊記錄取消原因
-  const { transactionId, orderId } = req.query || {};
-  if (orderId) {
-    logPaymentStep(orderId, {
-      event: 'linepay.cancel',
-      transactionId,
-      reason: 'user_cancel_or_back'
-    });
-  }
   res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>付款取消</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#f093fb 0%,#f5576c 100%);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}</style></head><body><div class="container"><h1>❌ 付款已取消</h1><p>您已取消此次付款</p><p>如需協助請聯繫客服</p></div></body></html>');
 });
 
-// ====== 綠界持久付款頁（保留原邏輯） ======
+// ====== 綠界持久付款頁（保留原邏輯 + 分流保護） ======
 app.get('/payment/ecpay/pay/:orderId', async (req, res) => {
   const { orderId } = req.params;
+
+  // 分流保護：EC 才能走綠界
+  if (!isEC(orderId)) {
+    return res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>路徑錯誤</title></head><body style="font-family:sans-serif;text-align:center;padding:40px"><h3>❌ 不是綠界訂單</h3><p>請使用正確的連結</p></body></html>');
+  }
+
   const order = orderManager.getOrder(orderId);
 
   if (!order) {
@@ -476,7 +411,7 @@ app.get('/payment/ecpay/pay/:orderId', async (req, res) => {
     logger.logToFile(`🔄 重新生成綠界付款連結: ${orderId}`);
     const ecpayLink = createECPayPaymentLink(order.userId, order.userName, order.amount);
     const remainingHours = Math.floor((order.expiryTime - Date.now()) / (1000 * 60 * 60));
-    res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>前往綠界付款</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#667eea,#764ba2);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}h1{font-size:28px;margin-bottom:20px}p{font-size:16px;margin:15px 0}.btn{display:inline-block;padding:15px 40px;background:#fff;color:#667eea;text-decoration:none;border-radius:10px;font-weight:bold;margin-top:20px;font-size:18px}.info{background:rgba(255,255,255,0.2);padding:15px;border-radius:10px;margin:20px 0}</style></head><body><div class="container"><h1>💳 前往綠界付款</h1><div class="info"><p><strong>訂單編號:</strong> ' + orderId + '</p><p><strong>客戶姓名:</strong> ' + order.userName + '</p><p><strong>金額:</strong> NT$ ' + Number(order.amount).toLocaleString() + '</p><p><strong>剩餘有效時間:</strong> ' + remainingHours + ' 小時</p></div><p>⏰ 正在為您生成付款連結...</p><p>若未自動跳轉，請點擊下方按鈕</p><a href="' + ecpayLink + '" class="btn">立即前往綠界付款</a></div><script>setTimeout(function(){window.location.href="' + ecpayLink + '"},1500)</script></body></html>');
+    res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>前往綠界付款</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#667eea,#764ba2);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}h1{font-size:28px;margin-bottom:20px}p{font-size:16px;margin:15px 0}.btn{display:inline-block;padding:15px 40px;background:#fff;color:#667eea;text-decoration:none;border-radius:10px;font-weight:bold;margin-top:20px;font-size:18px}.info{background:rgba(255,255,255,0.2);padding:15px;border-radius:10px;margin:20px 0}</style></head><body><div class="container"><h1>💳 前往綠界付款</h1><div class="info"><p><strong>訂單編號:</strong> ' + orderId + '</p><p><strong>客戶姓名:</strong> ' + order.userName + '</p><p><strong>金額:</strong> NT$ ' + order.amount.toLocaleString() + '</p><p><strong>剩餘有效時間:</strong> ' + remainingHours + ' 小時</p></div><p>⏰ 正在為您生成付款連結...</p><p>若未自動跳轉，請點擊下方按鈕</p><a href="' + ecpayLink + '" class="btn">立即前往綠界付款</a></div><script>setTimeout(function(){window.location.href="' + ecpayLink + '"},1500)</script></body></html>');
     logger.logToFile(`✅ 綠界付款連結已重新生成: ${orderId}`);
   } catch (error) {
     logger.logError('重新生成綠界連結失敗', error);
@@ -484,25 +419,28 @@ app.get('/payment/ecpay/pay/:orderId', async (req, res) => {
   }
 });
 
-// ====== ✅ LINE Pay 持久付款頁（不自動跳轉，15 分鐘重用） ======
+// ====== ✅ LINE Pay 持久付款頁（不自動跳轉，15 分鐘重用 + 分流保護） ======
 const creatingTransactions = new Set(); // orderId 集合
 
 app.get('/payment/linepay/pay/:orderId', async (req, res) => {
   const { orderId } = req.params;
+
+  // 分流保護：LP 才能走 LINE Pay
+  if (!isLP(orderId)) {
+    return res.send(renderErrorPage('路徑錯誤', '此訂單不是 LINE Pay 訂單'));
+  }
+
   const order = orderManager.getOrder(orderId);
 
   if (!order) {
-    logPaymentStep(orderId, { event: 'linepay.pay.view', result: 'order_not_found' });
     return res.status(404).send(renderErrorPage('訂單不存在', '找不到此訂單'));
   }
   if (orderManager.isExpired(orderId)) {
     const hoursPassed = (Date.now() - order.createdAt) / (1000 * 60 * 60);
     logger.logToFile(`❌ 訂單已過期: ${orderId} (已過 ${hoursPassed.toFixed(1)} 小時)`);
-    logPaymentStep(orderId, { event: 'linepay.pay.view', result: 'expired', hoursPassed });
     return res.send(renderErrorPage('訂單已過期', `此訂單已超過 7 天<br>訂單編號: ${orderId}`));
   }
   if (order.status === 'paid') {
-    logPaymentStep(orderId, { event: 'linepay.pay.view', result: 'already_paid' });
     return res.send(renderErrorPage('訂單已付款', `此訂單已完成付款<br>訂單編號: ${orderId}`));
   }
 
@@ -512,7 +450,6 @@ app.get('/payment/linepay/pay/:orderId', async (req, res) => {
       const elapsed = Date.now() - order.lastLinePayRequestAt;
       if (elapsed < 15 * 60 * 1000) {
         logger.logToFile(`↩️ 重用既有連結: ${orderId}（${Math.floor(elapsed / 1000)} 秒前建立）`);
-        logPaymentStep(orderId, { event: 'linepay.pay.reuse', elapsedMs: elapsed });
         const remainingHours = Math.floor((order.expiryTime - Date.now()) / (1000 * 60 * 60));
         return res.send(renderLinePayPage(orderId, order.amount, remainingHours, order.linepayPaymentUrl));
       }
@@ -521,14 +458,12 @@ app.get('/payment/linepay/pay/:orderId', async (req, res) => {
     // 正在建立：等 1 秒再查一次，避免無限循環
     if (creatingTransactions.has(orderId)) {
       logger.logToFile(`⏳ 建立中: ${orderId}，等待 1 秒再查`);
-      logPaymentStep(orderId, { event: 'linepay.pay.wait_existing_create' });
       await new Promise(r => setTimeout(r, 1000));
       const fresh = orderManager.getOrder(orderId);
       if (fresh.linepayTransactionId && fresh.linepayPaymentUrl) {
         const elapsed2 = Date.now() - (fresh.lastLinePayRequestAt || 0);
         if (elapsed2 < 15 * 60 * 1000) {
           logger.logToFile(`↩️ 使用剛建立的連結: ${orderId}`);
-          logPaymentStep(orderId, { event: 'linepay.pay.reuse_after_wait', elapsedMs: elapsed2 });
           const remainingHours = Math.floor((fresh.expiryTime - Date.now()) / (1000 * 60 * 60));
           return res.send(renderLinePayPage(orderId, fresh.amount, remainingHours, fresh.linepayPaymentUrl));
         }
@@ -540,10 +475,8 @@ app.get('/payment/linepay/pay/:orderId', async (req, res) => {
     creatingTransactions.add(orderId);
     try {
       logger.logToFile(`🔄 建立新 LINE Pay 交易: ${orderId}`);
-      logPaymentStep(orderId, { event: 'linepay.pay.create.start' });
       const lp = await createLinePayPayment(order.userId, order.userName, order.amount);
       if (!lp.success) {
-        logPaymentStep(orderId, { event: 'linepay.pay.create.fail', error: lp.error, orderId: lp.orderId || orderId });
         return res.status(500).send(renderErrorPage('生成失敗', lp.error || '無法建立付款連結'));
       }
 
@@ -554,11 +487,6 @@ app.get('/payment/linepay/pay/:orderId', async (req, res) => {
         lastLinePayRequestAt: Date.now()
       });
       logger.logToFile(`✅ 新交易建立: ${lp.transactionId}`);
-      logPaymentStep(orderId, {
-        event: 'linepay.pay.create.success',
-        transactionId: lp.transactionId,
-        paymentUrl: url
-      });
 
       const remainingHours = Math.floor((order.expiryTime - Date.now()) / (1000 * 60 * 60));
       return res.send(renderLinePayPage(orderId, order.amount, remainingHours, url));
@@ -568,7 +496,6 @@ app.get('/payment/linepay/pay/:orderId', async (req, res) => {
   } catch (error) {
     creatingTransactions.delete(orderId);
     logger.logError('LINE Pay 付款頁面錯誤', error);
-    logPaymentStep(orderId, { event: 'linepay.pay.error', error: error.message || String(error) });
     return res.status(500).send(renderErrorPage('系統錯誤', '請稍後重試或聯繫客服'));
   }
 });
@@ -577,71 +504,43 @@ app.get('/payment/linepay/pay/:orderId', async (req, res) => {
 app.get('/payment/linepay/confirm', async (req, res) => {
   const { transactionId, orderId } = req.query;
   logger.logToFile(`📥 收到 LINE Pay Confirm 回調: orderId=${orderId}, transactionId=${transactionId}`);
-  logPaymentStep(orderId || 'UNKNOWN', {
-    event: 'linepay.confirm.callback',
-    orderId,
-    transactionId
-  });
-
-  if (!transactionId && !orderId) {
-    logPaymentStep('UNKNOWN', { event: 'linepay.confirm.invalid_query', reason: 'missing_params' });
-    return res.status(400).send(renderErrorPage('參數錯誤', '缺少必要參數'));
-  }
 
   // ⭐ 先用 transactionId 找訂單
   let order = null;
   const allOrders = orderManager.getAllOrders();
   for (const o of allOrders) {
-    if (transactionId && o.linepayTransactionId === transactionId && o.status === 'pending') {
+    if (o.linepayTransactionId === transactionId && o.status === 'pending') {
       order = o;
       break;
     }
   }
-
   // 如果找不到，再試試用 orderId
-  if (!order && orderId) {
+  if (!order) {
     order = orderManager.getOrder(orderId);
   }
-
   if (!order) {
     logger.logToFile(`❌ 找不到訂單: transactionId=${transactionId}, orderId=${orderId}`);
-    logPaymentStep(orderId || 'UNKNOWN', {
-      event: 'linepay.confirm.order_not_found',
-      transactionId
-    });
     return res.status(404).send(renderErrorPage('訂單不存在', '找不到此訂單'));
   }
 
   const realOrderId = order.orderId;
 
   if (orderManager.isExpired(realOrderId)) {
-    logPaymentStep(realOrderId, { event: 'linepay.confirm.expired' });
     return res.send(renderErrorPage('訂單已過期', '此訂單已超過有效期'));
   }
   if (order.status === 'paid') {
     logger.logToFile(`⚠️ 訂單已付款: ${realOrderId}`);
-    logPaymentStep(realOrderId, { event: 'linepay.confirm.already_paid' });
     return res.redirect('/payment/success');
   }
 
   try {
     const nonce = crypto.randomBytes(16).toString('base64');
     const uri = `/v3/payments/${transactionId}/confirm`;
-    const requestBody = { amount: parseInt(order.amount), currency: 'TWD' };
+    const requestBody = { amount: Math.round(Number(order.amount)), currency: 'TWD' };
     const signature = generateLinePaySignature(uri, requestBody, nonce);
 
     logger.logToFile(`📤 呼叫 Confirm API: tx=${transactionId}, amount=${order.amount}, orderId=${realOrderId}`);
-    logPaymentStep(realOrderId, {
-      event: 'linepay.confirm.request',
-      api: `${LINE_PAY_CONFIG.apiUrl}${uri}`,
-      headers: {
-        'Content-Type': 'application/json',
-        'X-LINE-ChannelId': mask(LINE_PAY_CONFIG.channelId),
-        'X-LINE-Authorization-Nonce': mask(nonce),
-        'X-LINE-Authorization': mask(signature)
-      },
-      body: requestBody
-    });
+    logger.logToFile(`LINEPAY_DEBUG: orderId=${realOrderId} tx=${transactionId} reserveAmount=${order.amount} confirmBody=${JSON.stringify(requestBody)}`);
 
     const response = await fetch(`${LINE_PAY_CONFIG.apiUrl}${uri}`, {
       method: 'POST',
@@ -654,72 +553,51 @@ app.get('/payment/linepay/confirm', async (req, res) => {
       body: JSON.stringify(requestBody)
     });
 
-    const status = response.status;
     const result = await response.json();
     logger.logToFile(`📥 Confirm 回應: ${result.returnCode} - ${result.returnMessage}`);
-    logPaymentStep(realOrderId, {
-      event: 'linepay.confirm.response',
-      httpStatus: status,
-      returnCode: result.returnCode,
-      returnMessage: result.returnMessage
-    });
 
-    if (result.returnCode === '0000') {
+    // 接受已確認碼（避免重複跳回）
+    const OK_CODES = new Set(['0000', '1172', '1173']);
+
+    if (OK_CODES.has(result.returnCode)) {
       orderManager.updateOrderStatus(realOrderId, 'paid', 'LINE Pay');
       logger.logToFile(`✅ LINE Pay 付款成功: ${order.userName} - ${order.amount}元 - 訂單: ${realOrderId}`);
-      logPaymentStep(realOrderId, { event: 'linepay.confirm.success' });
 
       const ADMIN_USER_ID = process.env.ADMIN_USER_ID;
       if (ADMIN_USER_ID) {
-        try {
-          await client.pushMessage(ADMIN_USER_ID, {
-            type: 'text',
-            text:
-              `🎉 收到 LINE Pay 付款通知\n\n` +
-              `客戶姓名:${order.userName}\n` +
-              `付款金額:NT$ ${parseInt(order.amount).toLocaleString()}\n` +
-              `付款方式:LINE Pay\n` +
-              `訂單編號:${realOrderId}\n` +
-              `交易編號:${transactionId}\n\n` +
-              `狀態:✅ 付款成功`
-          });
-          logPaymentStep(realOrderId, { event: 'linepay.confirm.push_admin.success' });
-        } catch (e) {
-          logPaymentStep(realOrderId, { event: 'linepay.confirm.push_admin.fail', error: e.message });
-        }
+        await client.pushMessage(ADMIN_USER_ID, {
+          type: 'text',
+          text:
+            `🎉 收到 LINE Pay 付款通知\n\n` +
+            `客戶姓名:${order.userName}\n` +
+            `付款金額:NT$ ${parseInt(order.amount).toLocaleString()}\n` +
+            `付款方式:LINE Pay\n` +
+            `訂單編號:${realOrderId}\n` +
+            `交易編號:${transactionId}\n\n` +
+            `狀態:✅ 付款成功`
+        });
       }
 
       if (order.userId && order.userId !== 'undefined') {
-        try {
-          await client.pushMessage(order.userId, {
-            type: 'text',
-            text:
-              `✅ LINE Pay 付款成功\n\n` +
-              `感謝 ${order.userName} 的支付\n` +
-              `金額:NT$ ${parseInt(order.amount).toLocaleString()}\n` +
-              `訂單編號:${realOrderId}\n\n` +
-              `非常謝謝您\n感謝您的支持 💙`
-          });
-          logPaymentStep(realOrderId, { event: 'linepay.confirm.push_user.success' });
-        } catch (e) {
-          logPaymentStep(realOrderId, { event: 'linepay.confirm.push_user.fail', error: e.message });
-        }
+        await client.pushMessage(order.userId, {
+          type: 'text',
+          text:
+            `✅ LINE Pay 付款成功\n\n` +
+            `感謝 ${order.userName} 的支付\n` +
+            `金額:NT$ ${parseInt(order.amount).toLocaleString()}\n` +
+            `訂單編號:${realOrderId}\n\n` +
+            `非常謝謝您\n感謝您的支持 💙`
+        });
       }
 
-      res.redirect('/payment/success');
+      return res.redirect('/payment/success');
     } else {
       logger.logToFile(`❌ Confirm 失敗: ${result.returnCode} - ${result.returnMessage}`);
-      logPaymentStep(realOrderId, {
-        event: 'linepay.confirm.fail',
-        returnCode: result.returnCode,
-        returnMessage: result.returnMessage
-      });
-      res.send(renderErrorPage('付款失敗', result.returnMessage));
+      return res.send(renderErrorPage('付款失敗', result.returnMessage));
     }
   } catch (error) {
     logger.logError('LINE Pay 確認付款失敗', error);
-    logPaymentStep(orderId || 'UNKNOWN', { event: 'linepay.confirm.error', error: error.message || String(error) });
-    res.status(500).send('付款處理失敗');
+    return res.status(500).send('付款處理失敗');
   }
 });
 
@@ -764,7 +642,7 @@ app.post('/api/order/:orderId/renew', async (req, res) => {
   if (!order) return res.status(404).json({ success: false, error: '找不到此訂單' });
 
   try {
-    const baseURL = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.BASE_URL || 'https://stain-bot-production-2593.up.railway.app';
+    const baseURL = process.env.RAILWAY_PUBLIC_DOMAIN || 'https://stain-bot-production-0fac.up.railway.app';
     const ecpayPersistentUrl = `${baseURL}/payment/ecpay/pay/${orderId}`;
     const linepayPersistentUrl = `${baseURL}/payment/linepay/pay/${orderId}`;
 
@@ -787,10 +665,10 @@ app.post('/api/order/:orderId/renew', async (req, res) => {
       type: 'text',
       text:
         `🔄 付款連結已重新生成（持久網址）\n\n` +
-        `訂單編號: ${orderId}\n客戶姓名: ${order.userName}\n金額: NT$ ${Number(order.amount).toLocaleString()}\n\n` +
+        `訂單編號: ${orderId}\n客戶姓名: ${order.userName}\n金額: NT$ ${order.amount.toLocaleString()}\n\n` +
         `— 請選擇付款方式 —\n` +
-        `【信用卡／綠界】\n${ecpayShort}\n\n` +
-        `【LINE Pay】\n${linepayShort}\n\n` +
+        `【信用卡／綠界 ECPay】\n${ecpayShort}\n\n` +
+        `【LINE Pay（需開啟 LINE）】\n${linepayShort}\n\n` +
         `備註：以上連結可重複點擊，隨時都可以付款。\n` +
         `✅ 付款後系統會自動通知我們`
     });
@@ -824,7 +702,7 @@ app.post('/api/orders/send-reminders', async (req, res) => {
   }
 
   let sent = 0;
-  const baseURL = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.BASE_URL || 'https://stain-bot-production-2593.up.railway.app';
+  const baseURL = process.env.RAILWAY_PUBLIC_DOMAIN || 'https://stain-bot-production-0fac.up.railway.app';
 
   for (const order of ordersNeedingReminder) {
     try {
@@ -849,9 +727,9 @@ app.post('/api/orders/send-reminders', async (req, res) => {
       const reminderText =
         `😊 溫馨付款提醒\n\n` +
         `親愛的 ${order.userName} 您好，您於本次洗衣清潔仍待付款\n` +
-        `金額：NT$ ${Number(order.amount).toLocaleString()}\n\n` +
-        `【信用卡／綠界】\n${ecpayShort}\n\n` +
-        `【LINE Pay】\n${linepayShort}\n\n` +
+        `金額：NT$ ${order.amount.toLocaleString()}\n\n` +
+        `【信用卡／綠界 ECPay】\n${ecpayShort}\n\n` +
+        `【LINE Pay（需開啟 LINE）】\n${linepayShort}\n\n` +
         `備註：以上連結有效期間內可重複點擊付款。\n` +
         `若已完成付款，請忽略此訊息。感謝您的支持 💙`;
 
@@ -968,6 +846,7 @@ app.delete('/api/templates/:index', (req, res) => {
     const index = parseInt(req.params.index);
     const success = orderManager.deleteTemplate(index);
     if (success) res.json({ success: true, message: '模板已刪除' });
+    else res.status(404).json({ success: false, error: '找不到此模板' });
   } catch (error) {
     console.error('API DELETE /api/templates 錯誤:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -991,11 +870,7 @@ app.post('/send-payment', async (req, res) => {
 
   try {
     const type = paymentType || 'both';
-    const baseURL =
-      process.env.RAILWAY_PUBLIC_DOMAIN ||
-      process.env.BASE_URL ||
-      'https://stain-bot-production-2593.up.railway.app';
-
+    const baseURL = process.env.RAILWAY_PUBLIC_DOMAIN || 'https://stain-bot-production-0fac.up.railway.app';
     let finalMessage = '';
     let ecpayLink = '';
     let linepayLink = '';
@@ -1020,18 +895,13 @@ app.post('/send-payment', async (req, res) => {
       }
     }
 
-    // LINE Pay → 使用 LIFF URL
+    // LINE Pay（用 LIFF URL）
     if (type === 'linepay' || type === 'both') {
       const linePayResult = await createLinePayPayment(userId, userName, numAmount);
-      // NEW: 將 send-payment 的建立也記錄到 paylogs
-      logPaymentStep(linePayResult.orderId || 'UNKNOWN', {
-        event: 'send_payment.linepay.create_result',
-        success: linePayResult.success,
-        error: linePayResult.error || null
-      });
 
       if (linePayResult.success) {
         linePayOrderId = linePayResult.orderId;
+
         orderManager.createOrder(linePayOrderId, { userId, userName, amount: numAmount });
 
         const paymentUrl = linePayResult.paymentUrlApp || linePayResult.paymentUrlWeb || linePayResult.paymentUrl;
@@ -1041,34 +911,27 @@ app.post('/send-payment', async (req, res) => {
           lastLinePayRequestAt: Date.now()
         });
 
-        // 使用 LIFF URL 包裝
+        // ✅ 使用 LIFF URL 取代直接的 LINE Pay URL
         const liffUrl = `https://liff.line.me/${YOUR_LIFF_ID}?orderId=${linePayOrderId}`;
         linepayLink = liffUrl;
 
         logger.logToFile(`✅ 建立 LINE Pay 訂單(LIFF): ${linePayOrderId}`);
-        logPaymentStep(linePayOrderId, {
-          event: 'send_payment.linepay.liff_url',
-          liffUrl
-        });
-      } else {
-        // 回傳同時也記錄錯誤
-        return res.status(500).json({ error: `LINE Pay 建立失敗: ${linePayResult.error || '未知錯誤'}` });
       }
     }
 
     const userMsg = customMessage || '';
     if (type === 'both' && ecpayLink && linepayLink) {
       finalMessage = userMsg
-        ? `${userMsg}\n\n💙 付款連結如下:\n\n【信用卡付款】\n💙 ${ecpayLink}\n\n【LINE Pay】\n💙 ${linepayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`
-        : `💙 您好,${userName}\n\n您的專屬付款連結已生成\n金額:NT$ ${numAmount.toLocaleString()}\n\n請選擇付款方式:\n\n【信用卡付款】\n💙 ${ecpayLink}\n\n【LINE Pay】\n💙 ${linepayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
+        ? `${userMsg}\n\n— 請選擇付款方式 —\n\n【信用卡／綠界 ECPay】\n${ecpayLink}\n\n【LINE Pay（需開啟 LINE）】\n${linepayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`
+        : `💙 您好,${userName}\n\n您的專屬付款連結已生成\n金額:NT$ ${numAmount.toLocaleString()}\n\n— 請選擇付款方式 —\n\n【信用卡／綠界 ECPay】\n${ecpayLink}\n\n【LINE Pay（需開啟 LINE）】\n${linepayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
     } else if (type === 'ecpay' && ecpayLink) {
       finalMessage = userMsg
-        ? `${userMsg}\n\n💙 付款連結如下:\n💙 ${ecpayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`
-        : `💙 您好,${userName}\n\n您的專屬付款連結已生成\n付款方式:信用卡\n金額:NT$ ${numAmount.toLocaleString()}\n\n請點擊以下連結完成付款:\n💙 ${ecpayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
+        ? `${userMsg}\n\n【信用卡／綠界 ECPay】\n${ecpayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`
+        : `💙 您好,${userName}\n\n您的專屬付款連結已生成\n付款方式:信用卡（綠界 ECPay）\n金額:NT$ ${numAmount.toLocaleString()}\n\n請點擊以下連結完成付款:\n${ecpayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
     } else if (type === 'linepay' && linepayLink) {
       finalMessage = userMsg
-        ? `${userMsg}\n\n💙 付款連結如下:\n💙 ${linepayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`
-        : `💙 您好,${userName}\n\n您的專屬付款連結已生成\n付款方式:LINE Pay\n金額:NT$ ${numAmount.toLocaleString()}\n\n請點擊以下連結完成付款:\n💙 ${linepayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
+        ? `${userMsg}\n\n【LINE Pay（需開啟 LINE）】\n${linepayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`
+        : `💙 您好,${userName}\n\n您的專屬付款連結已生成\n付款方式:LINE Pay\n金額:NT$ ${numAmount.toLocaleString()}\n\n請點擊以下連結完成付款:\n${linepayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
     } else {
       return res.status(500).json({ error: '付款連結生成失敗' });
     }
@@ -1114,24 +977,28 @@ app.get('/health', (req, res) => {
   });
 });
 
-/* ========= ★★★ 新增：LIFF 相關路由 ★★★ ========= */
+/* ========= ★★★ 新增：LIFF 相關路由（保留） ★★★ ========= */
 
 // LIFF 付款頁（Endpoint URL: /liff/payment）
 app.get('/liff/payment', (req, res) => {
   res.sendFile('liff-payment.html', { root: './public' });
 });
 
-// 由 LIFF 前端取得（或重用）LINE Pay 付款 URL
+// 由 LIFF 前端取得（或重用）LINE Pay 付款 URL —— 分流保護
 app.get('/api/linepay/url/:orderId', async (req, res) => {
   const { orderId } = req.params;
+
+  // 分流保護：LP 才能要 LINE Pay 連結
+  if (!isLP(orderId)) {
+    return res.json({ success: false, error: '此訂單不是 LINE Pay 訂單' });
+  }
+
   const order = orderManager.getOrder(orderId);
 
   if (!order) {
-    logPaymentStep(orderId, { event: 'liff.get_url.order_not_found' });
     return res.json({ success: false, error: '找不到訂單' });
   }
   if (order.status === 'paid') {
-    logPaymentStep(orderId, { event: 'liff.get_url.already_paid' });
     return res.json({ success: false, error: '訂單已付款' });
   }
 
@@ -1139,17 +1006,14 @@ app.get('/api/linepay/url/:orderId', async (req, res) => {
     // ⭐ 直接使用既有的付款 URL（/send-payment 已經建立過了）
     if (order.linepayPaymentUrl) {
       logger.logToFile(`↩️ LIFF: 使用既有連結 ${orderId}`);
-      logPaymentStep(orderId, { event: 'liff.get_url.reuse', url: order.linepayPaymentUrl });
       return res.json({ success: true, paymentUrl: order.linepayPaymentUrl });
     }
 
-    // ⭐ 只有在真的沒有 URL 時才建立（理論上不該執行到這裡）
+    // ⭐ 只有在沒有 URL 時才建立（理論上不該常用到）
     logger.logToFile(`⚠️ LIFF: 訂單沒有付款 URL，重新建立 ${orderId}`);
-    logPaymentStep(orderId, { event: 'liff.get_url.create.start' });
     const lp = await createLinePayPayment(order.userId, order.userName, order.amount);
 
     if (!lp.success) {
-      logPaymentStep(orderId, { event: 'liff.get_url.create.fail', error: lp.error });
       return res.json({ success: false, error: lp.error });
     }
 
@@ -1162,47 +1026,14 @@ app.get('/api/linepay/url/:orderId', async (req, res) => {
     });
 
     logger.logToFile(`✅ LIFF: 交易建立 ${lp.transactionId}`);
-    logPaymentStep(orderId, { event: 'liff.get_url.create.success', url });
     res.json({ success: true, paymentUrl: url });
   } catch (error) {
     logger.logError('LIFF: 取得 LINE Pay URL 失敗', error);
-    logPaymentStep(orderId, { event: 'liff.get_url.error', error: error.message });
     res.json({ success: false, error: '系統錯誤' });
   }
 });
 
 /* ========= ★★★ 新增結束 ★★★ ========= */
-
-// ====== NEW: 支付 Debug 檢視 API ======
-app.get('/debug/payment-log/:orderId', (req, res) => {
-  const file = path.join(PAYLOG_DIR, `${req.params.orderId}.log.jsonl`);
-  if (!fs.existsSync(file)) return res.status(404).send('找不到此訂單的支付紀錄');
-  res.download(file, `${req.params.orderId}.log.jsonl`);
-});
-
-app.get('/debug/payment-log-json/:orderId', (req, res) => {
-  const file = path.join(PAYLOG_DIR, `${req.params.orderId}.log.jsonl`);
-  if (!fs.existsSync(file)) return res.status(404).json({ success: false, error: 'not_found' });
-  const lines = fs.readFileSync(file, 'utf8').trim().split('\n').filter(Boolean);
-  const arr = lines.map(l => { try { return JSON.parse(l); } catch { return { raw: l }; }});
-  res.json({ success: true, orderId: req.params.orderId, events: arr });
-});
-
-app.get('/debug/payment-log/list', (req, res) => {
-  const files = fs.readdirSync(PAYLOG_DIR).filter(f => f.endsWith('.log.jsonl'));
-  const orders = files.map(f => f.replace('.log.jsonl', ''));
-  res.json({ success: true, total: orders.length, orders });
-});
-
-// ====== NEW: Express 錯誤處理（兜底） ======
-app.use((err, req, res, next) => {
-  logger.logError('UnhandledError', err);
-  try {
-    const maybeOrder = req.params?.orderId || req.query?.orderId;
-    if (maybeOrder) logPaymentStep(maybeOrder, { event: 'express.unhandled_error', error: err.message || String(err) });
-  } catch {}
-  res.status(500).send('系統內部錯誤');
-});
 
 // ====== Server 啟動 + 自動任務（保留） ======
 const PORT = process.env.PORT || 3000;
@@ -1228,10 +1059,7 @@ app.listen(PORT, async () => {
     if (ordersNeedingReminder.length === 0) return;
 
     logger.logToFile(`🔔 檢測到 ${ordersNeedingReminder.length} 筆訂單需要提醒`);
-    const baseURL =
-      process.env.RAILWAY_PUBLIC_DOMAIN ||
-      process.env.BASE_URL ||
-      'https://stain-bot-production-2593.up.railway.app';
+    const baseURL = process.env.RAILWAY_PUBLIC_DOMAIN || 'https://stain-bot-production-0fac.up.railway.app';
 
     for (const order of ordersNeedingReminder) {
       try {
@@ -1260,9 +1088,9 @@ app.listen(PORT, async () => {
         const reminderText =
           `😊 溫馨付款提醒\n\n` +
           `親愛的 ${order.userName} 您好，您於本次洗衣清潔仍待付款\n` +
-          `金額：NT$ ${Number(order.amount).toLocaleString()}\n\n` +
-          `【信用卡／綠界】\n${ecpayShort}\n\n` +
-          `【LINE Pay】\n${linepayShort}\n\n` +
+          `金額：NT$ ${order.amount.toLocaleString()}\n\n` +
+          `【信用卡／綠界 ECPay】\n${ecpayShort}\n\n` +
+          `【LINE Pay（需開啟 LINE）】\n${linepayShort}\n\n` +
           `備註：以上連結有效期間內可重複點擊付款。\n` +
           `若已完成付款，請忽略此訊息。感謝您的支持 💙`;
 
