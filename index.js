@@ -101,24 +101,6 @@ function generateLinePaySignature(uri, body, nonce) {
   return crypto.createHmac('SHA256', LINE_PAY_CONFIG.channelSecret).update(message).digest('base64');
 }
 
-// ====== 互斥鎖（強化版，避免併發建立多筆交易） ======
-// 單執行緒下，同步區塊內 set 是原子；先 set 再 await，避免「兩邊都還沒 set」的競速。
-const linePayLocks = new Map(); // orderId -> true
-
-async function withLinePayLock(orderId, fn) {
-  if (linePayLocks.get(orderId)) {
-    const err = new Error('DUPLICATE_LINEPAY_REQUEST');
-    err.code = 'DUPLICATE_LINEPAY_REQUEST';
-    throw err;
-  }
-  linePayLocks.set(orderId, true);
-  try {
-    return await fn();
-  } finally {
-    linePayLocks.delete(orderId);
-  }
-}
-
 // ====== HTML 渲染 ======
 function renderErrorPage(title, message) {
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${title}</title>
@@ -148,7 +130,7 @@ h1{font-size:26px;margin-bottom:20px;font-weight:700}
 .info{background:rgba(255,255,255,0.2);border-radius:12px;padding:16px;margin:20px 0;font-size:15px}
 .btn{display:block;width:100%;padding:16px;background:#fff;color:#06C755;text-decoration:none;border-radius:12px;font-weight:700;margin-top:20px;font-size:17px;border:none;cursor:pointer;transition:all 0.2s}
 .btn:active{transform:scale(0.98);opacity:0.8}
-.btn.disabled{opacity:0.5;cursor:not-allowed}
+.btn.disabled{opacity:0.5;cursor:not-allowed;pointer-events:none}
 .note{font-size:13px;opacity:0.9;margin-top:16px;line-height:1.5}
 .warning{background:rgba(255,200,0,0.25);padding:12px;border-radius:8px;margin:16px 0;font-size:14px;line-height:1.5}
 </style>
@@ -161,40 +143,58 @@ h1{font-size:26px;margin-bottom:20px;font-weight:700}
     <div>有效期: ${remainingHours} 小時</div>
   </div>
   <div class="warning">
-    ⚠️ 請在 <b>LINE App 內</b> 開啟此連結；若在外部瀏覽器可能無法付款
+    ⚠️ 請在 <b>LINE App 內</b> 開啟此連結；點擊後請勿關閉或重新整理頁面
   </div>
   <button id="payBtn" class="btn" onclick="handlePay()">🔓 前往 LINE Pay 付款</button>
-  <p class="note">點擊後請完成付款；<b style="color:#FFE66D">付款過程中請勿關閉頁面</b><br>完成後會自動通知我們</p>
+  <p class="note">完成付款後系統會自動通知我們</p>
 </div>
 <script>
-let processing = false;
+// ✅ 使用 sessionStorage 防止頁面重新載入時重複建立交易/跳轉
+const STORAGE_KEY = 'linepay_visited_${orderId}';
 const paymentUrl = "${paymentUrl}";
+let processing = false;
+
+// 首次載入若已標記，直接跳轉既有 paymentUrl（避免重複建立交易）
+if (sessionStorage.getItem(STORAGE_KEY)) {
+  console.log('⚠️ 頁面已訪問過，直接跳轉付款連結');
+  window.location.href = paymentUrl;
+}
+
 function handlePay() {
   if (processing) { alert('處理中,請稍候...'); return; }
   processing = true;
   const btn = document.getElementById('payBtn');
-  btn.classList.add('disabled'); btn.textContent = '⏳ 跳轉中...';
+  btn.classList.add('disabled');
+  btn.textContent = '⏳ 跳轉中...';
+  sessionStorage.setItem(STORAGE_KEY, Date.now());
   setTimeout(function(){ window.location.href = paymentUrl; }, 300);
-  setTimeout(function(){
-    if (document.visibilityState === 'visible') {
-      processing = false; btn.classList.remove('disabled'); btn.textContent = '🔓 前往 LINE Pay 付款';
-    }
-  }, 5000);
 }
-document.addEventListener('visibilitychange', function(){
+
+// 付款過程返回本頁（例如切 App）時，不要重複建立交易
+document.addEventListener('visibilitychange', function() {
   if (document.visibilityState === 'visible' && processing) {
-    setTimeout(function(){
+    setTimeout(function() {
       processing = false;
       const btn = document.getElementById('payBtn');
-      btn.classList.remove('disabled'); btn.textContent = '🔓 前往 LINE Pay 付款';
-    }, 2000);
+      btn.classList.remove('disabled');
+      btn.textContent = '🔓 前往 LINE Pay 付款';
+    }, 3000);
+  }
+});
+
+// 從快取返回（Back/Forward）直接跳轉既有付款連結
+window.addEventListener('pageshow', function(event) {
+  if (event.persisted || (window.performance && window.performance.navigation.type === 2)) {
+    if (sessionStorage.getItem(STORAGE_KEY)) {
+      window.location.href = paymentUrl;
+    }
   }
 });
 </script>
 </body></html>`;
 }
 
-// ====== 建立 LINE Pay 交易（移除 capture；正確 confirmUrl） ======
+// ====== 建立 LINE Pay 交易（confirmUrl 僅帶 orderId；不使用 capture） ======
 async function createLinePayPayment(userId, userName, amount) {
   try {
     const orderId = `LP${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
@@ -212,11 +212,9 @@ async function createLinePayPayment(userId, userName, amount) {
         products: [{ name: '洗衣清潔費用', quantity: 1, price: amount }]
       }],
       redirectUrls: {
-        // ⚠️ 只帶 orderId，transactionId 由 LINE Pay 回傳
         confirmUrl: `${baseURL}/payment/linepay/confirm?orderId=${orderId}`,
         cancelUrl: `${baseURL}/payment/linepay/cancel?orderId=${orderId}`
       }
-      // 不加 options.payment.capture
     };
 
     const uri = '/v3/payments/request';
@@ -453,7 +451,10 @@ app.get('/payment/ecpay/pay/:orderId', async (req, res) => {
   }
 });
 
-// ====== ✅ LINE Pay 持久付款頁（15 分鐘重用 + 強化鎖 + 手動點擊） ======
+// ====== ✅ LINE Pay 持久付款頁（訂單層級鎖 + 15 分鐘重用 + 前端防重複） ======
+// 訂單層級的建立中鎖（只改這裡的新策略；其餘功能不變）
+const creatingTransactions = new Set(); // orderId 集合
+
 app.get('/payment/linepay/pay/:orderId', async (req, res) => {
   const { orderId } = req.params;
   const order = orderManager.getOrder(orderId);
@@ -479,52 +480,47 @@ app.get('/payment/linepay/pay/:orderId', async (req, res) => {
       if (elapsed < 15 * 60 * 1000) {
         paymentUrl = order.linepayPaymentUrl;
         logger.logToFile(`↩️ 重用既有連結: ${orderId}（${Math.floor(elapsed / 1000)} 秒前建立）`);
-      } else {
-        logger.logToFile(`⏰ 既有連結已超過 15 分鐘，準備建立新交易: ${orderId}`);
+        const remainingHours = Math.floor((order.expiryTime - Date.now()) / (1000 * 60 * 60));
+        return res.send(renderLinePayPage(orderId, order.amount, remainingHours, paymentUrl));
       }
     }
 
-    // 需要新交易時使用互斥鎖
-    if (!paymentUrl) {
-      const result = await withLinePayLock(orderId, async () => {
-        // 二次檢查（可能另一請求剛建立）
-        const fresh = orderManager.getOrder(orderId);
-        if (fresh.linepayTransactionId && fresh.linepayPaymentUrl && fresh.lastLinePayRequestAt) {
-          const e2 = Date.now() - fresh.lastLinePayRequestAt;
-          if (e2 < 15 * 60 * 1000) {
-            logger.logToFile(`↩️ 使用剛剛建立的連結: ${orderId}`);
-            return { ok: true, paymentUrl: fresh.linepayPaymentUrl };
-          }
-        }
+    // 檢查是否正在建立交易
+    if (creatingTransactions.has(orderId)) {
+      logger.logToFile(`⏳ 交易建立中,請稍候: ${orderId}`);
+      return res.status(503).send(renderErrorPage(
+        '交易建立中',
+        '正在為您建立付款連結<br>請稍候 3 秒後重新整理<br><br><small>請勿重複點擊連結</small>'
+      ));
+    }
 
-        logger.logToFile(`🔄 建立新 LINE Pay 交易: ${orderId}`);
-        const lp = await createLinePayPayment(order.userId, order.userName, order.amount);
-        if (!lp.success) return { ok: false, error: lp.error };
+    // 標記正在建立（5 秒冷卻）
+    creatingTransactions.add(orderId);
 
-        const url = lp.paymentUrlApp || lp.paymentUrlWeb || lp.paymentUrl;
-        orderManager.updatePaymentInfo(orderId, {
-          linepayTransactionId: lp.transactionId,
-          linepayPaymentUrl: url,
-          lastLinePayRequestAt: Date.now()
-        });
+    try {
+      logger.logToFile(`🔄 建立新 LINE Pay 交易: ${orderId}`);
+      const lp = await createLinePayPayment(order.userId, order.userName, order.amount);
+      if (!lp.success) {
+        return res.status(500).send(renderErrorPage('生成失敗', lp.error || '無法建立付款連結'));
+      }
 
-        logger.logToFile(`✅ 新交易建立: ${lp.transactionId}`);
-        return { ok: true, paymentUrl: url };
+      const url = lp.paymentUrlApp || lp.paymentUrlWeb || lp.paymentUrl;
+      orderManager.updatePaymentInfo(orderId, {
+        linepayTransactionId: lp.transactionId,
+        linepayPaymentUrl: url,
+        lastLinePayRequestAt: Date.now()
       });
 
-      if (!result.ok) {
-        return res.status(500).send(renderErrorPage('生成失敗', result.error || '無法建立付款連結'));
-      }
-      paymentUrl = result.paymentUrl;
+      logger.logToFile(`✅ 新交易建立: ${lp.transactionId}`);
+      paymentUrl = url;
+    } finally {
+      setTimeout(() => creatingTransactions.delete(orderId), 5000);
     }
 
     const remainingHours = Math.floor((order.expiryTime - Date.now()) / (1000 * 60 * 60));
     return res.send(renderLinePayPage(orderId, order.amount, remainingHours, paymentUrl));
   } catch (error) {
-    if (error?.code === 'DUPLICATE_LINEPAY_REQUEST') {
-      logger.logToFile(`⚠️ 阻擋重複請求: ${orderId}`);
-      return res.status(429).send(renderErrorPage('請稍候', '付款頁面正在生成中<br>請勿重複點擊<br>請於 3 秒後重新整理'));
-    }
+    creatingTransactions.delete(orderId);
     logger.logError('LINE Pay 付款頁面錯誤', error);
     return res.status(500).send(renderErrorPage('系統錯誤', '請稍後重試或聯繫客服'));
   }
