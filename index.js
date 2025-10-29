@@ -17,6 +17,9 @@ const multer = require('multer');
 const orderManager = require('./services/orderManager');
 const upload = multer({ storage: multer.memoryStorage() });
 
+// ★ 你的 LIFF ID（按你的需求：用常數名 YOUR_LIFF_ID）
+const YOUR_LIFF_ID = '2008313382-3Xna6abB';
+
 if (process.env.GOOGLE_PRIVATE_KEY) {
   console.log(`正在初始化 sheet.json: 成功`);
   fs.writeFileSync("./sheet.json", process.env.GOOGLE_PRIVATE_KEY);
@@ -119,7 +122,7 @@ p{font-size:16px;line-height:1.6}
 </body></html>`;
 }
 
-// 🔧 依你的指示：不自動跳轉，純<a>按鈕，清楚指示
+// 🔧 不自動跳轉，純 <a> 按鈕
 function renderLinePayPage(orderId, amount, remainingHours, paymentUrl) {
   return `<!DOCTYPE html><html><head><meta charset="UTF-8">
 <title>LINE Pay 付款</title>
@@ -133,37 +136,23 @@ h1{font-size:26px;margin-bottom:20px;font-weight:700}
 .btn:active{transform:scale(0.95)}
 .note{font-size:13px;opacity:0.9;margin-top:16px;line-height:1.5}
 .warning{background:rgba(255,200,0,0.25);padding:12px;border-radius:8px;margin:16px 0;font-size:14px;line-height:1.5}
-.step{background:rgba(255,255,255,0.1);padding:12px;border-radius:8px;margin:12px 0;font-size:14px;text-align:left}
-.step-num{display:inline-block;width:24px;height:24px;background:#fff;color:#06C755;border-radius:50%;text-align:center;line-height:24px;font-weight:700;margin-right:8px}
 </style>
 </head><body>
 <div class="container">
   <h1>💳 LINE Pay 付款</h1>
-  
   <div class="info">
     <div>訂單: ${orderId}</div>
     <div style="font-size:24px;font-weight:700;margin:12px 0">NT$ ${amount.toLocaleString()}</div>
     <div>有效期: ${remainingHours} 小時</div>
   </div>
-
-  <div class="warning">
-    ⚠️ <b>重要提示</b><br>
-    點擊下方按鈕後：<br>
-    1）會跳轉到 LINE Pay 付款頁面<br>
-    2）請在 LINE Pay 完成付款<br>
-    3）<b>付款完成後系統會自動通知</b>
-  </div>
-
+  <div class="warning">⚠️ 點擊按鈕後將前往 LINE Pay 完成付款，完成後系統會自動通知。</div>
   <a href="${paymentUrl}" class="btn">🔓 前往 LINE Pay 付款</a>
-
-  <p class="note">
-    請勿重複點擊。若已付款，稍後會收到成功通知。
-  </p>
+  <p class="note">請勿重複點擊；若已付款，稍後會收到成功通知。</p>
 </div>
 </body></html>`;
 }
 
-// ====== 建立 LINE Pay 交易（confirmUrl 僅帶 orderId；不使用 capture） ======
+// ====== 建立 LINE Pay 交易 ======
 async function createLinePayPayment(userId, userName, amount) {
   try {
     const orderId = `LP${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
@@ -420,7 +409,7 @@ app.get('/payment/ecpay/pay/:orderId', async (req, res) => {
   }
 });
 
-// ====== ✅ LINE Pay 持久付款頁（簡化鎖：立即清除；建立中等待 1 秒再查；15 分鐘重用；不自動跳轉） ======
+// ====== ✅ LINE Pay 持久付款頁（不自動跳轉，15 分鐘重用） ======
 const creatingTransactions = new Set(); // orderId 集合
 
 app.get('/payment/linepay/pay/:orderId', async (req, res) => {
@@ -466,7 +455,7 @@ app.get('/payment/linepay/pay/:orderId', async (req, res) => {
       return res.status(503).send(renderErrorPage('付款連結建立中', '正在為您建立付款連結<br>請稍候 2 秒後重新整理'));
     }
 
-    // 建立新交易（鎖：立即清除，不延遲 5 秒）
+    // 建立新交易（鎖立即清除）
     creatingTransactions.add(orderId);
     try {
       logger.logToFile(`🔄 建立新 LINE Pay 交易: ${orderId}`);
@@ -486,7 +475,7 @@ app.get('/payment/linepay/pay/:orderId', async (req, res) => {
       const remainingHours = Math.floor((order.expiryTime - Date.now()) / (1000 * 60 * 60));
       return res.send(renderLinePayPage(orderId, order.amount, remainingHours, url));
     } finally {
-      creatingTransactions.delete(orderId); // 立即清除鎖
+      creatingTransactions.delete(orderId);
     }
   } catch (error) {
     creatingTransactions.delete(orderId);
@@ -495,7 +484,7 @@ app.get('/payment/linepay/pay/:orderId', async (req, res) => {
   }
 });
 
-// ====== LINE Pay 付款結果確認（只依 orderId/transactionId，金額取自訂單） ======
+// ====== LINE Pay 付款結果確認 ======
 app.get('/payment/linepay/confirm', async (req, res) => {
   const { transactionId, orderId } = req.query;
   logger.logToFile(`📥 收到 LINE Pay Confirm 回調: orderId=${orderId}, transactionId=${transactionId}`);
@@ -828,7 +817,7 @@ app.delete('/api/templates/:index', (req, res) => {
   }
 });
 
-// ====== 發送付款（ECPay 保留；LINE Pay 建立一次交易 + 發「持久網址」） ======
+// ====== 發送付款（ECPay 保留；LINE Pay 改用 LIFF URL） ======
 app.post('/send-payment', async (req, res) => {
   const { userId, userName, amount, paymentType, customMessage } = req.body;
   logger.logToFile(`收到付款請求: userId=${userId}, userName=${userName}, amount=${amount}, type=${paymentType}`);
@@ -870,7 +859,7 @@ app.post('/send-payment', async (req, res) => {
       }
     }
 
-    // LINE Pay：建立一次交易 + 建本地訂單 + 發持久網址
+    // ====== ★ 你提供的「第 4 點」：LINE Pay 改成 LIFF URL ======
     if (type === 'linepay' || type === 'both') {
       const linePayResult = await createLinePayPayment(userId, userName, numAmount);
 
@@ -885,22 +874,15 @@ app.post('/send-payment', async (req, res) => {
           linepayPaymentUrl: paymentUrl,
           lastLinePayRequestAt: Date.now()
         });
-        logger.logToFile(`✅ 建立 LINE Pay 訂單: ${linePayOrderId}`);
 
-        const linepayPersistentUrl = `${baseURL}/payment/linepay/pay/${linePayOrderId}`;
-        linepayLink = linepayPersistentUrl;
+        // ✅ 使用 LIFF URL 取代直接的 LINE Pay URL
+        const liffUrl = `https://liff.line.me/${YOUR_LIFF_ID}?orderId=${linePayOrderId}`;
+        linepayLink = liffUrl;
 
-        try {
-          const response = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(linepayPersistentUrl)}`);
-          const result = await response.text();
-          if (result && result.startsWith('http')) linepayLink = result;
-        } catch {
-          logger.logToFile(`⚠️ LINE Pay 短網址生成失敗,使用原網址`);
-        }
-      } else {
-        logger.logToFile(`❌ LINE Pay 付款請求失敗`);
+        logger.logToFile(`✅ 建立 LINE Pay 訂單(LIFF): ${linePayOrderId}`);
       }
     }
+    // ====== ★ 第 4 點整合結束 ======
 
     const userMsg = customMessage || '';
     if (type === 'both' && ecpayLink && linepayLink) {
@@ -959,6 +941,61 @@ app.get('/health', (req, res) => {
     uptime: process.uptime()
   });
 });
+
+/* ========= ★★★ 新增：LIFF 相關路由 ★★★ ========= */
+
+// LIFF 付款頁（Endpoint URL: /liff/payment）
+app.get('/liff/payment', (req, res) => {
+  res.sendFile('liff-payment.html', { root: './public' });
+});
+
+// 由 LIFF 前端取得（或重用）LINE Pay 付款 URL
+app.get('/api/linepay/url/:orderId', async (req, res) => {
+  const { orderId } = req.params;
+  const order = orderManager.getOrder(orderId);
+
+  if (!order) {
+    return res.json({ success: false, error: '找不到訂單' });
+  }
+  if (order.status === 'paid') {
+    return res.json({ success: false, error: '訂單已付款' });
+  }
+
+  try {
+    // 15 分鐘內重用
+    if (order.linepayTransactionId && order.linepayPaymentUrl && order.lastLinePayRequestAt) {
+      const elapsed = Date.now() - order.lastLinePayRequestAt;
+      if (elapsed < 15 * 60 * 1000) {
+        logger.logToFile(`↩️ LIFF: 重用連結 ${orderId}`);
+        return res.json({ success: true, paymentUrl: order.linepayPaymentUrl });
+      }
+    }
+
+    // 新建交易
+    logger.logToFile(`🔄 LIFF: 建立新交易 ${orderId}`);
+    const lp = await createLinePayPayment(order.userId, order.userName, order.amount);
+
+    if (!lp.success) {
+      return res.json({ success: false, error: lp.error });
+    }
+
+    const url = lp.paymentUrlApp || lp.paymentUrlWeb || lp.paymentUrl;
+
+    orderManager.updatePaymentInfo(orderId, {
+      linepayTransactionId: lp.transactionId,
+      linepayPaymentUrl: url,
+      lastLinePayRequestAt: Date.now()
+    });
+
+    logger.logToFile(`✅ LIFF: 交易建立 ${lp.transactionId}`);
+    res.json({ success: true, paymentUrl: url });
+  } catch (error) {
+    logger.logError('LIFF: 取得 LINE Pay URL 失敗', error);
+    res.json({ success: false, error: '系統錯誤' });
+  }
+});
+
+/* ========= ★★★ 新增結束 ★★★ ========= */
 
 // ====== Server 啟動 + 自動任務（保留） ======
 const PORT = process.env.PORT || 3000;
