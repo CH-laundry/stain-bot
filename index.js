@@ -172,7 +172,7 @@ async function createLinePayPayment(userId, userName, amount) {
       redirectUrls: {
         confirmUrl: `${baseURL}/payment/linepay/confirm`,
         cancelUrl: `${baseURL}/payment/linepay/cancel`,
-        confirmUrlType: 'CLIENT'
+        confirmUrlType: 'SERVER'  // ⭐ 改成 SERVER
       }
     };
 
