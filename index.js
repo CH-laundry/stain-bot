@@ -157,7 +157,7 @@ async function createLinePayPayment(userId, userName, amount) {
   try {
     const orderId = `LP${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
     const nonce = crypto.randomBytes(16).toString('base64');
-    const baseURL = process.env.RAILWAY_PUBLIC_DOMAIN || 'https://stain-bot-production-0fac.up.railway.app';
+    const baseURL = process.env.RAILWAY_PUBLIC_DOMAIN || 'https://stain-bot-production-2593.up.railway.app';
 
     const requestBody = {
       amount: amount,
@@ -171,7 +171,8 @@ async function createLinePayPayment(userId, userName, amount) {
       }],
       redirectUrls: {
         confirmUrl: `${baseURL}/payment/linepay/confirm`,
-        cancelUrl: `${baseURL}/payment/linepay/cancel?orderId=${orderId}`
+        cancelUrl: `${baseURL}/payment/linepay/cancel`,
+        confirmUrlType: 'CLIENT'
       }
     };
 
@@ -215,7 +216,6 @@ async function createLinePayPayment(userId, userName, amount) {
     return { success: false, error: error.message };
   }
 }
-
 // ====== LINE Webhook（保留） ======
 app.post('/webhook', async (req, res) => {
   res.status(200).end();
