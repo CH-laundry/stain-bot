@@ -981,17 +981,14 @@ app.get('/api/linepay/url/:orderId', async (req, res) => {
   }
 
   try {
-    // 15 分鐘內重用
-    if (order.linepayTransactionId && order.linepayPaymentUrl && order.lastLinePayRequestAt) {
-      const elapsed = Date.now() - order.lastLinePayRequestAt;
-      if (elapsed < 15 * 60 * 1000) {
-        logger.logToFile(`↩️ LIFF: 重用連結 ${orderId}`);
-        return res.json({ success: true, paymentUrl: order.linepayPaymentUrl });
-      }
+    // ⭐ 直接使用既有的付款 URL（/send-payment 已經建立過了）
+    if (order.linepayPaymentUrl) {
+      logger.logToFile(`↩️ LIFF: 使用既有連結 ${orderId}`);
+      return res.json({ success: true, paymentUrl: order.linepayPaymentUrl });
     }
 
-    // 新建交易
-    logger.logToFile(`🔄 LIFF: 建立新交易 ${orderId}`);
+    // ⭐ 只有在真的沒有 URL 時才建立（理論上不該執行到這裡）
+    logger.logToFile(`⚠️ LIFF: 訂單沒有付款 URL，重新建立 ${orderId}`);
     const lp = await createLinePayPayment(order.userId, order.userName, order.amount);
 
     if (!lp.success) {
