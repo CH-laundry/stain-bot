@@ -485,20 +485,39 @@ app.get('/payment/linepay/pay/:orderId', async (req, res) => {
 });
 
 // ====== LINE Pay 付款結果確認 ======
+// ====== LINE Pay 付款結果確認 ======
 app.get('/payment/linepay/confirm', async (req, res) => {
   const { transactionId, orderId } = req.query;
   logger.logToFile(`📥 收到 LINE Pay Confirm 回調: orderId=${orderId}, transactionId=${transactionId}`);
 
-  const order = orderManager.getOrder(orderId);
+  // ⭐ 先用 transactionId 找訂單
+  let order = null;
+  const allOrders = orderManager.getAllOrders();
+  
+  for (const o of allOrders) {
+    if (o.linepayTransactionId === transactionId && o.status === 'pending') {
+      order = o;
+      break;
+    }
+  }
+
+  // 如果找不到，再試試用 orderId
   if (!order) {
-    logger.logToFile(`❌ 找不到訂單: ${orderId}`);
+    order = orderManager.getOrder(orderId);
+  }
+
+  if (!order) {
+    logger.logToFile(`❌ 找不到訂單: transactionId=${transactionId}, orderId=${orderId}`);
     return res.status(404).send(renderErrorPage('訂單不存在', '找不到此訂單'));
   }
-  if (orderManager.isExpired(orderId)) {
+
+  const realOrderId = order.orderId;
+
+  if (orderManager.isExpired(realOrderId)) {
     return res.send(renderErrorPage('訂單已過期', '此訂單已超過有效期'));
   }
   if (order.status === 'paid') {
-    logger.logToFile(`⚠️ 訂單已付款: ${orderId}`);
+    logger.logToFile(`⚠️ 訂單已付款: ${realOrderId}`);
     return res.redirect('/payment/success');
   }
 
@@ -508,7 +527,8 @@ app.get('/payment/linepay/confirm', async (req, res) => {
     const requestBody = { amount: parseInt(order.amount), currency: 'TWD' };
     const signature = generateLinePaySignature(uri, requestBody, nonce);
 
-    logger.logToFile(`📤 呼叫 Confirm API: tx=${transactionId}, amount=${order.amount}`);
+    logger.logToFile(`📤 呼叫 Confirm API: tx=${transactionId}, amount=${order.amount}, orderId=${realOrderId}`);
+
     const response = await fetch(`${LINE_PAY_CONFIG.apiUrl}${uri}`, {
       method: 'POST',
       headers: {
@@ -524,8 +544,8 @@ app.get('/payment/linepay/confirm', async (req, res) => {
     logger.logToFile(`📥 Confirm 回應: ${result.returnCode} - ${result.returnMessage}`);
 
     if (result.returnCode === '0000') {
-      orderManager.updateOrderStatus(orderId, 'paid', 'LINE Pay');
-      logger.logToFile(`✅ LINE Pay 付款成功: ${order.userName} - ${order.amount}元 - 訂單: ${orderId}`);
+      orderManager.updateOrderStatus(realOrderId, 'paid', 'LINE Pay');
+      logger.logToFile(`✅ LINE Pay 付款成功: ${order.userName} - ${order.amount}元 - 訂單: ${realOrderId}`);
 
       const ADMIN_USER_ID = process.env.ADMIN_USER_ID;
       if (ADMIN_USER_ID) {
@@ -536,7 +556,7 @@ app.get('/payment/linepay/confirm', async (req, res) => {
             `客戶姓名:${order.userName}\n` +
             `付款金額:NT$ ${parseInt(order.amount).toLocaleString()}\n` +
             `付款方式:LINE Pay\n` +
-            `訂單編號:${orderId}\n` +
+            `訂單編號:${realOrderId}\n` +
             `交易編號:${transactionId}\n\n` +
             `狀態:✅ 付款成功`
         });
@@ -549,7 +569,7 @@ app.get('/payment/linepay/confirm', async (req, res) => {
             `✅ LINE Pay 付款成功\n\n` +
             `感謝 ${order.userName} 的支付\n` +
             `金額:NT$ ${parseInt(order.amount).toLocaleString()}\n` +
-            `訂單編號:${orderId}\n\n` +
+            `訂單編號:${realOrderId}\n\n` +
             `非常謝謝您\n感謝您的支持 💙`
         });
       }
@@ -564,7 +584,6 @@ app.get('/payment/linepay/confirm', async (req, res) => {
     res.status(500).send('付款處理失敗');
   }
 });
-
 // ====== 訂單/統計 API（保留） ======
 app.get('/api/orders', (req, res) => {
   const { status } = req.query;
