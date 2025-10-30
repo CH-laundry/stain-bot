@@ -403,41 +403,33 @@ app.all('/payment/success', (req, res) => {
 
 // ====== 綠界伺服器回傳（真正驗證付款結果）======
 app.post('/payment/ecpay/return', (req, res) => {
-  const tradeNo = req.body.MerchantTradeNo;           // 可能是 EC123_R1
-  const baseOrderId = req.body.CustomField3 || tradeNo.split('_R')[0]; // 原始訂單 EC123
+  const merchantTradeNo = req.body.MerchantTradeNo;     // 綠界回傳的唯一編號
+  const baseOrderId = req.body.CustomField3 || '';      // 我們存的原始訂單
   const rtnCode = req.body.RtnCode;
   const checkMacValue = req.body.CheckMacValue;
 
-  log('ECPay Return', '收到綠界回傳', { tradeNo, baseOrderId, rtnCode });
+  log('ECPay Return', '收到回傳', { merchantTradeNo, baseOrderId, rtnCode });
 
   // 驗證 CheckMacValue
   const params = { ...req.body };
   delete params.CheckMacValue;
-  const calculated = generateECPayCheckMacValue(params);
+  const calculated = createCheckMacValue(params, process.env.ECPAY_HASH_KEY, process.env.ECPAY_HASH_IV);
   if (calculated !== checkMacValue) {
-    log('ERROR', 'ECPay CheckMacValue 驗證失敗');
+    log('ERROR', 'CheckMacValue 驗證失敗');
     return res.send('0|FAIL');
   }
 
-  if (rtnCode === '1') {
-    // 優先用原始訂單號找，找不到再用 tradeNo
-    let order = orderManager.getOrder(baseOrderId);
-    if (!order) {
-      order = orderManager.getOrder(tradeNo);
-    }
-
+  if (rtnCode === '1' && baseOrderId) {
+    const order = orderManager.getOrder(baseOrderId);
     if (order && order.status !== 'paid') {
       orderManager.updateOrderStatus(baseOrderId, 'paid');
-      log('PAYMENT', `訂單 ${baseOrderId} 付款成功 (綠界編號: ${tradeNo})`);
+      log('PAYMENT', `訂單 ${baseOrderId} 付款成功 (綠界編號: ${merchantTradeNo})`);
 
       // 發送 LINE 通知
-      const message = {
+      lineClient.pushMessage(order.userId, {
         type: 'text',
-        text: `您的訂單已付款成功！\n訂單編號：${baseOrderId}\n金額：NT$ ${order.amount}\n\n感謝您的支持 💙`
-      };
-      lineClient.pushMessage(order.userId, message).catch(err => {
-        log('ERROR', 'LINE 推播失敗', err.message);
-      });
+        text: `您的訂單已付款成功！\n訂單編號：${baseOrderId}\n金額：NT$ ${order.amount}\n\n感謝您的支持`
+      }).catch(() => {});
     }
   }
 
