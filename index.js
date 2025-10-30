@@ -313,6 +313,95 @@ app.get('/test-sheets', async (req, res) => {
   }
 });
 
+
+// ====== 綠界付款回調處理 ======
+app.post('/payment/ecpay/callback', express.urlencoded({ extended: true }), async (req, res) => {
+  try {
+    logger.logToFile(`[ECPAY][CALLBACK] 收到綠界回調: ${JSON.stringify(req.body)}`);
+    
+    const {
+      MerchantID,
+      MerchantTradeNo,
+      RtnCode,
+      RtnMsg,
+      TradeNo,
+      TradeAmt,
+      PaymentDate,
+      PaymentType,
+      CheckMacValue,
+      CustomField1, // userId
+      CustomField2  // userName
+    } = req.body;
+
+    // 1. 驗證 CheckMacValue（防止偽造）
+    const receivedCheckMac = CheckMacValue;
+    const calculatedCheckMac = generateECPayCheckMacValue(req.body);
+    
+    if (receivedCheckMac !== calculatedCheckMac) {
+      logger.logToFile(`[ECPAY][ERROR] CheckMacValue 驗證失敗`);
+      return res.send('0|CheckMacValue Error');
+    }
+
+    // 2. 檢查付款是否成功（RtnCode = 1 表示成功）
+    if (RtnCode === '1') {
+      // 查找訂單
+      const order = Object.values(orderManager.getAllOrders()).find(
+        o => o.orderId === MerchantTradeNo && o.status === 'pending'
+      );
+
+      if (order) {
+        // 更新訂單狀態
+        orderManager.updateOrderStatus(MerchantTradeNo, 'paid', '綠界信用卡');
+        logger.logToFile(`[ECPAY][SUCCESS] 訂單 ${MerchantTradeNo} 付款成功，金額 ${TradeAmt} 元`);
+
+        // 通知管理員
+        if (process.env.ADMIN_USER_ID) {
+          await client.pushMessage(process.env.ADMIN_USER_ID, {
+            type: 'text',
+            text: `✅ 收到綠界付款通知\n\n` +
+                  `客戶姓名: ${CustomField2 || order.userName}\n` +
+                  `付款金額: NT$ ${TradeAmt}\n` +
+                  `付款方式: 綠界信用卡\n` +
+                  `訂單編號: ${MerchantTradeNo}\n` +
+                  `綠界交易號: ${TradeNo}\n` +
+                  `付款時間: ${PaymentDate}\n\n` +
+                  `狀態: 付款成功 ✅`
+          }).catch(err => logger.logError('通知管理員失敗', err));
+        }
+
+        // 通知客戶
+        if (CustomField1 && CustomField1 !== 'undefined') {
+          await client.pushMessage(CustomField1, {
+            type: 'text',
+            text: `✅ 付款成功通知\n\n` +
+                  `感謝 ${CustomField2 || order.userName} 的支付\n` +
+                  `金額: NT$ ${TradeAmt}\n` +
+                  `訂單編號: ${MerchantTradeNo}\n` +
+                  `付款時間: ${PaymentDate}\n\n` +
+                  `非常感謝您的支持 💙`
+          }).catch(err => logger.logError('通知客戶失敗', err));
+        }
+      } else {
+        logger.logToFile(`[ECPAY][WARN] 找不到訂單 ${MerchantTradeNo} 或訂單已處理`);
+      }
+
+      // 必須回應 "1|OK" 給綠界，否則會持續重送通知
+      return res.send('1|OK');
+    } else {
+      logger.logToFile(`[ECPAY][FAIL] 付款失敗: ${RtnMsg} (Code: ${RtnCode})`);
+      return res.send('1|OK'); // 即使失敗也要回應，避免重複通知
+    }
+  } catch (error) {
+    logger.logError('綠界回調處理失敗', error);
+    return res.send('0|Error');
+  }
+});
+
+// ====== 修改這個原有的路由，改成支援 POST ======
+app.all('/payment/success', (req, res) => {  // ← 注意這裡從 app.get 改成 app.all
+  res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>付款完成</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;margin:0}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}h1{font-size:32px;margin-bottom:20px}p{font-size:18px;line-height:1.6}.success-icon{font-size:64px;margin-bottom:20px}</style></head><body><div class="container"><div class="success-icon">✅</div><h1>付款處理中</h1><p>感謝您的支付！</p><p>我們已收到您的付款資訊</p><p>稍後會收到確認通知</p><p style="margin-top:30px;font-size:14px;opacity:0.8">您可以關閉此頁面了</p></div></body></html>`);
+});
+
 app.get('/test-upload', (req, res) => {
   res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>測試上傳</title></head><body><h1>測試上傳功能已停用</h1></body></html>');
 });
