@@ -715,6 +715,9 @@ async function smartAutoReply(inputText) {
  * @param {string} orderId - 既存訂單編號（EC...）
  * @returns {string} - 完整 HTML 表單，可直接跳轉
  */
+/**
+ * 產生綠界付款表單（使用既存 orderId）
+ */
 function createECPayPaymentLink(userId, userName, amount, orderId) {
   const { ECPAY_MERCHANT_ID, ECPAY_HASH_KEY, ECPAY_HASH_IV, RAILWAY_STATIC_URL } = process.env;
 
@@ -723,24 +726,43 @@ function createECPayPaymentLink(userId, userName, amount, orderId) {
     throw new Error('綠界環境變數未設定');
   }
 
-  // 取得 baseURL
   let baseURL = RAILWAY_STATIC_URL || 'https://stain-bot-production-2593.up.railway.app';
-  if (!baseURL.startsWith('http')) {
-    baseURL = 'https://' + baseURL;
-  }
+  if (!baseURL.startsWith('http')) baseURL = 'https://' + baseURL;
 
-  // 使用傳入的訂單編號（不是產生新的！）
-  const merchantTradeNo = orderId;
-
-  // 產生交易時間
   const now = new Date();
-  const tradeDate = 
-    now.getFullYear() + '/' +
-    String(now.getMonth() + 1).padStart(2, '0') + '/' +
-    String(now.getDate()).padStart(2, '0') + ' ' +
-    String(now.getHours()).padStart(2, '0') + ':' +
-    String(now.getMinutes()).padStart(2, '0') + ':' +
-    String(now.getSeconds()).padStart(2, '0');
+  const tradeDate = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+
+  const paymentData = {
+    MerchantID: ECPAY_MERCHANT_ID,
+    MerchantTradeNo: orderId,
+    MerchantTradeDate: tradeDate,
+    PaymentType: 'aio',
+    TotalAmount: String(Math.floor(amount)),
+    TradeDesc: 'CH精緻洗衣服務',
+    ItemName: '洗衣服務費用',
+    OrderResultURL: `${baseURL}/payment/success`,
+    ReturnURL: `${baseURL}/payment/ecpay/return`,
+    ExpireDate: '1440',
+    CustomField1: String(userId),
+    CustomField2: String(userName),
+    ChoosePayment: 'ALL',
+    EncryptType: 1
+  };
+
+  paymentData.CheckMacValue = generateECPayCheckMacValue(paymentData);
+
+  let formHTML = '<form id="ecpayForm" action="https://payment.ecpay.com.tw/Cashier/AioCheckOut/V5" method="post">';
+  for (const key in paymentData) {
+    if (paymentData.hasOwnProperty(key)) {
+      const value = String(paymentData[key]).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+      formHTML += `<input type="hidden" name="${key}" value="${value}">`;
+    }
+  }
+  formHTML += '</form><script>document.getElementById("ecpayForm").submit();</script>';
+
+  log('PAYMENT', '綠界表單生成', { orderId, amount, CheckMacValue: paymentData.CheckMacValue });
+  return formHTML;
+}
 
   // 付款參數（使用 orderId 作為 MerchantTradeNo）
   const paymentData = {
@@ -780,21 +802,30 @@ function createECPayPaymentLink(userId, userName, amount, orderId) {
 /**
  * 產生 CheckMacValue（綠界官方規則）
  */
+/**
+ * 產生 CheckMacValue（綠界官方嚴格規則）
+ */
 function generateECPayCheckMacValue(params) {
   const { ECPAY_HASH_KEY, ECPAY_HASH_IV } = process.env;
+  
+  if (!ECPAY_HASH_KEY || !ECPAY_HASH_IV) {
+    throw new Error('ECPAY_HASH_KEY 或 ECPAY_HASH_IV 未設定');
+  }
+
   const data = { ...params };
   delete data.CheckMacValue;
 
-  const sortedKeys = Object.keys(data).sort();
-  let checkString = 'HashKey=' + ECPAY_HASH_KEY;
+  const sortedKeys = Object.keys(data).sort((a, b) => a.localeCompare(b));
+  let checkString = `HashKey=${ECPAY_HASH_KEY}`;
 
   sortedKeys.forEach(key => {
-    checkString += '&' + key + '=' + data[key];
+    const encodedValue = encodeURIComponent(data[key]).replace(/%20/g, '+');
+    checkString += `&${key}=${encodedValue}`;
   });
 
-  checkString += '&HashIV=' + ECPAY_HASH_IV;
+  checkString += `&HashIV=${ECPAY_HASH_IV}`;
 
-  checkString = encodeURIComponent(checkString)
+  const urlEncoded = encodeURIComponent(checkString)
     .replace(/%20/g, '+')
     .replace(/%2D/g, '-')
     .replace(/%5F/g, '_')
@@ -802,10 +833,13 @@ function generateECPayCheckMacValue(params) {
     .replace(/%21/g, '!')
     .replace(/%2A/g, '*')
     .replace(/%28/g, '(')
-    .replace(/%29/g, ')')
-    .toLowerCase();
+    .replace(/%29/g, ')');
 
-  return require('crypto').createHash('sha256').update(checkString).digest('hex').toUpperCase();
+  return require('crypto')
+    .createHash('sha256')
+    .update(urlEncoded.toLowerCase())
+    .digest('hex')
+    .toUpperCase();
 }
 
 
