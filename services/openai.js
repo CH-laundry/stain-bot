@@ -704,83 +704,81 @@ async function smartAutoReply(inputText) {
   return reply;
 }
 
-/* =================== 綠界付款功能（最終版：每次全新 MerchantTradeNo）=================== */
+/* =================== 綠界付款功能(修正版)=================== */
+function createECPayPaymentLink(userId, userName, amount) {
+  const { ECPAY_MERCHANT_ID, ECPAY_HASH_KEY, ECPAY_HASH_IV, RAILWAY_STATIC_URL } = process.env;
 
-function createECPayPaymentLink(userId, userName, amount, baseOrderId = null) {
-  const merchantId = process.env.ECPAY_MERCHANT_ID;
-  const hashKey = process.env.ECPAY_HASH_KEY;
-  const hashIv = process.env.ECPAY_HASH_IV;
-  let baseURL = process.env.RAILWAY_STATIC_URL || 'https://stain-bot-production-2593.up.railway.app';
-  if (!baseURL.startsWith('http')) baseURL = 'https://' + baseURL;
+  if (!ECPAY_MERCHANT_ID || !ECPAY_HASH_KEY || !ECPAY_HASH_IV) {
+    log('ERROR', '缺少綠界環境變數');
+    throw new Error('綠界環境變數未設定');
+  }
 
+  let baseURL = RAILWAY_STATIC_URL || 'https://stain-bot-production-2593.up.railway.app';
+  if (!baseURL.startsWith('http://') && !baseURL.startsWith('https://')) {
+    baseURL = `https://${baseURL}`;
+  }
+  
+  const merchantTradeNo = `CH${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
   const now = new Date();
-  const tradeDate = now.getFullYear() + '/' +
-    String(now.getMonth() + 1).padStart(2, '0') + '/' +
-    String(now.getDate()).padStart(2, '0') + ' ' +
-    String(now.getHours()).padStart(2, '0') + ':' +
-    String(now.getMinutes()).padStart(2, '0') + ':' +
-    String(now.getSeconds()).padStart(2, '0');
+  const tradeDate = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
 
-  // 每次都產生全新 MerchantTradeNo（關鍵！）
-  const timestamp = Date.now();
-  const random = Math.random().toString(36).substr(2, 5).toUpperCase();
-  const merchantTradeNo = `EC${timestamp}${random}`; // 絕對唯一！
-
-  const params = {
-    MerchantID: merchantId,
+  const paymentData = {
+    MerchantID: ECPAY_MERCHANT_ID,
     MerchantTradeNo: merchantTradeNo,
     MerchantTradeDate: tradeDate,
     PaymentType: 'aio',
     TotalAmount: String(amount),
     TradeDesc: 'CH精緻洗衣服務',
     ItemName: '洗衣服務費用',
-    ReturnURL: baseURL + '/payment/ecpay/return',
-    OrderResultURL: baseURL + '/payment/success',
-    ExpireDate: '1440',
-    CustomField1: userId,
-    CustomField2: userName,
-    CustomField3: baseOrderId || '', // 原始訂單號
+    ReturnURL: `${baseURL}/payment/ecpay/callback`,
+    ClientBackURL: `${baseURL}/payment/success`,
+    // 🔴 新增這三個，避免跳出返回造成容易失效、並延長有效時間（分鐘）
+    ExpireDate: '1440', // 24 小時（分鐘）
+    OrderResultURL: `${baseURL}/payment/success`,
+    ClientRedirectURL: `${baseURL}/payment/success`,
+
+    // 付款方式可留 ALL，或你固定用信用卡可設 'Credit'
     ChoosePayment: 'ALL',
-    EncryptType: 1
+    EncryptType: 1,
+    CustomField1: userId,
+    CustomField2: userName
   };
 
-  params.CheckMacValue = createCheckMacValue(params, hashKey, hashIv);
-
-  let html = '<form id="ecpay" method="post" action="https://payment.ecpay.com.tw/Cashier/AioCheckOut/V5">';
-  for (const key in params) {
-    if (params.hasOwnProperty(key)) {
-      const value = params[key].toString().replace(/&/g, '&amp;').replace(/</g, '&lt;');
-      html += `<input type="hidden" name="${key}" value="${value}">`;
-    }
+  try {
+    paymentData.CheckMacValue = generateECPayCheckMacValue(paymentData);
+    const paymentLink = `${baseURL}/payment/redirect?data=${encodeURIComponent(Buffer.from(JSON.stringify(paymentData)).toString('base64'))}`;
+    log('PAYMENT', `綠界連結已生成: 訂單=${merchantTradeNo}, 金額=${amount}元, 客戶=${userName}`);
+    return paymentLink;
+  } catch (error) {
+    log('ERROR', '生成付款連結失敗', error.message);
+    throw error;
   }
-  html += '</form><script>document.getElementById("ecpay").submit();</script>';
-
-  log('PAYMENT', '綠界付款表單生成', { merchantTradeNo, baseOrderId, amount });
-  return html;
 }
 
-function createCheckMacValue(params, hashKey, hashIv) {
+function generateECPayCheckMacValue(params) {
+  const { ECPAY_HASH_KEY, ECPAY_HASH_IV } = process.env;
   const data = { ...params };
   delete data.CheckMacValue;
 
-  const sorted = Object.keys(data).sort((a, b) => a.localeCompare(b));
-  let str = `HashKey=${hashKey}`;
-  sorted.forEach(key => {
-    str += `&${key}=${encodeURIComponent(data[key]).replace(/%20/g, '+')}`;
+  const sortedKeys = Object.keys(data).sort();
+  let checkString = `HashKey=${ECPAY_HASH_KEY}`;
+  sortedKeys.forEach(key => {
+    checkString += `&${key}=${data[key]}`;
   });
-  str += `&HashIV=${hashIv}`;
+  checkString += `&HashIV=${ECPAY_HASH_IV}`;
 
-  const encoded = encodeURIComponent(str)
+  checkString = encodeURIComponent(checkString)
     .replace(/%20/g, '+')
-    .replace(/%2D/g, '-')
-    .replace(/%5F/g, '_')
-    .replace(/%2E/g, '.')
+    .replace(/%2d/g, '-')
+    .replace(/%5f/g, '_')
+    .replace(/%2e/g, '.')
     .replace(/%21/g, '!')
-    .replace(/%2A/g, '*')
+    .replace(/%2a/g, '*')
     .replace(/%28/g, '(')
-    .replace(/%29/g, ')');
+    .replace(/%29/g, ')')
+    .toLowerCase();
 
-  return require('crypto').createHash('sha256').update(encoded.toLowerCase()).digest('hex').toUpperCase();
+  return crypto.createHash('sha256').update(checkString).digest('hex').toUpperCase();
 }
 
 
