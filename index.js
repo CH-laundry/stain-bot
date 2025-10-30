@@ -484,8 +484,8 @@ app.get('/payment/linepay/pay/:orderId', async (req, res) => {
       orderManager.updatePaymentInfo(orderId, {
         linepayTransactionId: lp.transactionId,
         linepayPaymentUrl: url,
-        lastLinePayRequestAt: Date.now()
-        linepayPayOrderId: lp.orderId,
+        lastLinePayRequestAt: Date.now(),
+        linepayPayOrderId: lp.orderId
       });
       logger.logToFile(`新交易建立: ${lp.transactionId}`);
 
