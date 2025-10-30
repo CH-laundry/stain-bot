@@ -403,35 +403,42 @@ app.all('/payment/success', (req, res) => {
 
 // ====== 綠界伺服器回傳（真正驗證付款結果）======
 app.post('/payment/ecpay/return', (req, res) => {
-  const result = req.body;
-  logger.logToFile(`[ECPay Return] 收到綠界回傳: ${JSON.stringify(result)}`);
+  const tradeNo = req.body.MerchantTradeNo;           // 可能是 EC123_R1
+  const baseOrderId = req.body.CustomField3 || tradeNo.split('_R')[0]; // 原始訂單 EC123
+  const rtnCode = req.body.RtnCode;
+  const checkMacValue = req.body.CheckMacValue;
 
-  if (result.RtnCode === '1') {
-    const orderId = result.MerchantTradeNo;
-    const amount = parseInt(result.TradeAmt);
+  log('ECPay Return', '收到綠界回傳', { tradeNo, baseOrderId, rtnCode });
 
-    const order = orderManager.getOrder(orderId);
-    if (order && order.status !== 'paid') {
-      orderManager.updateOrderStatus(orderId, 'paid', 'ECPay');
+  // 驗證 CheckMacValue
+  const params = { ...req.body };
+  delete params.CheckMacValue;
+  const calculated = generateECPayCheckMacValue(params);
+  if (calculated !== checkMacValue) {
+    log('ERROR', 'ECPay CheckMacValue 驗證失敗');
+    return res.send('0|FAIL');
+  }
 
-      if (order.userId && order.userId !== 'undefined') {
-        client.pushMessage(order.userId, {
-          type: 'text',
-          text: `綠界付款成功！\n\n訂單編號：${orderId}\n金額：NT$${amount.toLocaleString()}\n\n感謝您的支持！我們會盡快處理您的訂單`
-        }).catch(err => logger.logError('推播失敗', err));
-      }
-
-      if (process.env.ADMIN_USER_ID) {
-        client.pushMessage(process.env.ADMIN_USER_ID, {
-          type: 'text',
-          text: `綠界付款成功！\n\n客戶：${order.userName}\n訂單：${orderId}\n金額：NT$${amount.toLocaleString()}`
-        }).catch(() => {});
-      }
-
-      logger.logToFile(`[ECPay] 訂單 ${orderId} 付款成功，已更新狀態`);
+  if (rtnCode === '1') {
+    // 優先用原始訂單號找，找不到再用 tradeNo
+    let order = orderManager.getOrder(baseOrderId);
+    if (!order) {
+      order = orderManager.getOrder(tradeNo);
     }
-  } else {
-    logger.logToFile(`[ECPay] 付款失敗或未完成: ${result.RtnCode} - ${result.RtnMsg}`);
+
+    if (order && order.status !== 'paid') {
+      orderManager.updateOrderStatus(baseOrderId, 'paid');
+      log('PAYMENT', `訂單 ${baseOrderId} 付款成功 (綠界編號: ${tradeNo})`);
+
+      // 發送 LINE 通知
+      const message = {
+        type: 'text',
+        text: `您的訂單已付款成功！\n訂單編號：${baseOrderId}\n金額：NT$ ${order.amount}\n\n感謝您的支持 💙`
+      };
+      lineClient.pushMessage(order.userId, message).catch(err => {
+        log('ERROR', 'LINE 推播失敗', err.message);
+      });
+    }
   }
 
   res.send('1|OK');
