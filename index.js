@@ -36,6 +36,7 @@ app.use('/files', express.static(FILE_ROOT));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
+app.use('/debug', require('./services/debugStorage'));
 
 const client = new Client({
     channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
@@ -747,7 +748,6 @@ app.post('/send-payment', async (req, res) => {
         return res.status(400).json({ error: '缺少必要參數', required: ['userId', 'userName', 'amount'] });
     }
     
-    app.use('/debug', require('./services/debugStorage')); // ← 新增這行
     const numAmount = parseInt(amount);
     if (isNaN(numAmount) || numAmount <= 0) {
         return res.status(400).json({ error: '金額必須是正整數' });
