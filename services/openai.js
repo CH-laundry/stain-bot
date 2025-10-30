@@ -704,9 +704,11 @@ async function smartAutoReply(inputText) {
   return reply;
 }
 
-/* =================== 綠界付款功能（正式環境穩定版）=================== */
+/* =================== 綠界付款功能（正式版 + 防重複）=================== */
 
-function createECPayPaymentLink(userId, userName, amount, orderId) {
+let ecpayTradeNoCounter = 0; // 用來產生唯一編號
+
+function createECPayPaymentLink(userId, userName, amount, baseOrderId = null) {
   const merchantId = process.env.ECPAY_MERCHANT_ID;
   const hashKey = process.env.ECPAY_HASH_KEY;
   const hashIv = process.env.ECPAY_HASH_IV;
@@ -721,9 +723,20 @@ function createECPayPaymentLink(userId, userName, amount, orderId) {
     String(now.getMinutes()).padStart(2, '0') + ':' +
     String(now.getSeconds()).padStart(2, '0');
 
+  // 產生唯一 MerchantTradeNo
+  let merchantTradeNo;
+  if (baseOrderId && ecpayTradeNoCounter === 0) {
+    // 第一次用 baseOrderId
+    merchantTradeNo = baseOrderId;
+  } else {
+    // 之後加流水號，避免重複
+    ecpayTradeNoCounter++;
+    merchantTradeNo = `${baseOrderId || 'EC' + Date.now()}_R${ecpayTradeNoCounter}`;
+  }
+
   const params = {
     MerchantID: merchantId,
-    MerchantTradeNo: orderId,
+    MerchantTradeNo: merchantTradeNo,
     MerchantTradeDate: tradeDate,
     PaymentType: 'aio',
     TotalAmount: String(amount),
@@ -734,14 +747,13 @@ function createECPayPaymentLink(userId, userName, amount, orderId) {
     ExpireDate: '1440',
     CustomField1: userId,
     CustomField2: userName,
+    CustomField3: baseOrderId || '', // 保留原始訂單編號
     ChoosePayment: 'ALL',
     EncryptType: 1
   };
 
-  // 產生 CheckMacValue
   params.CheckMacValue = createCheckMacValue(params, hashKey, hashIv);
 
-  // 產生表單
   let html = '<form id="ecpay" method="post" action="https://payment.ecpay.com.tw/Cashier/AioCheckOut/V5">';
   for (const key in params) {
     if (params.hasOwnProperty(key)) {
@@ -751,7 +763,7 @@ function createECPayPaymentLink(userId, userName, amount, orderId) {
   }
   html += '</form><script>document.getElementById("ecpay").submit();</script>';
 
-  log('PAYMENT', '綠界正式表單生成', { orderId, amount });
+  log('PAYMENT', '綠界付款表單', { merchantTradeNo, baseOrderId, amount });
   return html;
 }
 
