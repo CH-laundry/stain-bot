@@ -1,177 +1,89 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="utf-8">
   <title>LINE Pay 付款</title>
-  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://static.line-scdn.net/liff/edge/versions/2.22.0/sdk.js"></script>
   <style>
-    body {
-      font-family: "Noto Sans TC", sans-serif;
-      text-align: center;
-      padding: 40px;
-      background: linear-gradient(135deg, #06C755, #00B900);
-      color: white;
-      margin: 0;
-    }
-    .container {
-      background: rgba(255, 255, 255, 0.15);
-      border-radius: 20px;
-      padding: 28px;
-      max-width: 480px;
-      margin: 0 auto;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-    }
-    h1 {
-      font-size: 26px;
-      margin-bottom: 20px;
-      font-weight: 700;
-    }
-    .info {
-      background: rgba(255, 255, 255, 0.2);
-      border-radius: 12px;
-      padding: 16px;
-      margin: 20px 0;
-      font-size: 15px;
-    }
-    .btn {
-      display: block;
-      width: 90%;
-      padding: 18px;
-      background: #fff;
-      color: #06C755;
-      text-decoration: none;
-      border-radius: 12px;
-      font-weight: 700;
-      margin: 20px auto;
-      font-size: 18px;
-      border: none;
-      cursor: pointer;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    }
-    .btn:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-    .loading {
-      font-size: 14px;
-      margin-top: 10px;
-      opacity: 0.9;
-    }
-    .error {
-      background: rgba(255, 0, 0, 0.25);
-      padding: 12px;
-      border-radius: 8px;
-      margin: 16px 0;
-    }
-    .hidden { display: none; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; text-align: center; padding: 40px; background: #f6f9fc; margin: 0; }
+    .container { max-width: 400px; margin: 0 auto; background: white; border-radius: 16px; padding: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    h2 { margin: 0 0 16px; font-size: 24px; }
+    .btn { display: block; width: 100%; padding: 16px; background: #06C755; color: white; text-decoration: none; border-radius: 12px; font-weight: bold; margin: 20px 0; font-size: 18px; }
+    .btn:active { opacity: 0.8; }
+    .loading { color: #666; font-size: 16px; }
+    .success { color: #06C755; }
+    .error { color: #e74c3c; }
+    .info { background: #f0f0f0; padding: 12px; border-radius: 8px; font-size: 14px; margin: 12px 0; }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>💳 LINE Pay 付款</h1>
     <div id="content">
-      <p class="loading">⏳ 正在載入付款資訊...</p>
+      <p class="loading">正在載入付款資訊...</p>
     </div>
   </div>
 
   <script>
-    const liffId = '2008313382-3Xna6abB'; // 你的 LIFF ID
-
     async function main() {
       try {
-        await liff.init({ liffId });
+        await liff.init({ liffId: '2008313382-3Xna6abB' });
 
-        if (!liff.isLoggedIn()) {
-          liff.login();
+        const urlParams = new URLSearchParams(window.location.search);
+        const status = urlParams.get('status');
+        const orderId = urlParams.get('orderId');
+        const txId = urlParams.get('txId');
+        const content = document.getElementById('content');
+
+        if (status === 'success') {
+          content.innerHTML = `
+            <h2 class="success">付款成功！</h2>
+            <div class="info">
+              <div>訂單編號：${orderId}</div>
+              <div>交易編號：${txId}</div>
+            </div>
+            <button class="btn" onclick="liff.closeWindow()">關閉視窗</button>
+          `;
           return;
         }
 
-        const params = new URLSearchParams(window.location.search);
-        const orderId = params.get("orderId");
+        if (status === 'failed' || status === 'error') {
+          content.innerHTML = `
+            <h2 class="error">付款失敗</h2>
+            <p>請重新嘗試或聯繫客服</p>
+            <button class="btn" onclick="location.reload()">重新付款</button>
+          `;
+          return;
+        }
+
+        if (status === 'cancel') {
+          content.innerHTML = `
+            <h2>已取消付款</h2>
+            <button class="btn" onclick="location.reload()">返回</button>
+          `;
+          return;
+        }
 
         if (!orderId) {
-          showError("缺少訂單編號");
+          content.innerHTML = `<p class="error">缺少訂單編號</p>`;
           return;
         }
 
-        const orderRes = await fetch(`/api/order/${orderId}`);
-        const orderJson = await orderRes.json();
+        const res = await fetch(`/api/linepay/url/${orderId}`);
+        const data = await res.json();
 
-        if (!orderJson.success) {
-          showError(orderJson.error || "無法取得訂單資料");
-          return;
+        if (data.success && data.paymentUrl) {
+          content.innerHTML = `
+            <p>請點擊下方按鈕前往付款</p>
+            <a href="${data.paymentUrl}" class="btn">前往 LINE Pay 付款</a>
+            <p style="font-size:12px;color:#888;margin-top:16px;">付款完成後會自動顯示結果</p>
+          `;
+        } else {
+          content.innerHTML = `<p class="error">載入失敗：${data.error || '未知錯誤'}</p>`;
         }
-
-        const order = orderJson.order;
-        if (order.status === "paid") {
-          showInfo("✅ 此訂單已付款");
-          return;
-        }
-        if (order.isExpired || order.expiryTime <= Date.now()) {
-          showError("⏰ 訂單已過期，請向客服索取新的付款連結");
-          return;
-        }
-
-        const remain = Math.floor((order.expiryTime - Date.now()) / (1000 * 60 * 60));
-
-        // 顯示付款按鈕
-        document.getElementById("content").innerHTML = `
-          <div class="info">
-            <div>訂單：${order.orderId}</div>
-            <div style="font-size:24px;font-weight:700;margin:12px 0">NT$ ${Number(order.amount).toLocaleString()}</div>
-            <div>有效期：${remain} 小時</div>
-          </div>
-          <button id="payBtn" class="btn">🔓 前往 LINE Pay 付款</button>
-          <p class="loading">點擊按鈕後將在新視窗開啟 LINE Pay<br>完成付款後會自動通知</p>
-        `;
-
-        document.getElementById("payBtn").onclick = handlePay;
-
-        // 嘗試自動跳轉一次
-        tryPay(orderId, true);
-      } catch (e) {
-        showError("LIFF 初始化失敗：" + e.message);
+      } catch (err) {
+        document.getElementById('content').innerHTML = `<p class="error">系統錯誤：${err.message}</p>`;
       }
-    }
-
-    async function handlePay() {
-      const params = new URLSearchParams(window.location.search);
-      const orderId = params.get("orderId");
-      const btn = document.getElementById("payBtn");
-      btn.disabled = true;
-      btn.textContent = "⏳ 處理中...";
-      try {
-        await tryPay(orderId);
-        btn.textContent = "✅ 已開啟付款頁面";
-      } catch (e) {
-        showError("付款失敗：" + e.message);
-        btn.disabled = false;
-        btn.textContent = "🔓 前往 LINE Pay 付款（重試）";
-      }
-    }
-
-    async function tryPay(orderId, silent = false) {
-      const res = await fetch(`/api/linepay/url/${orderId}`);
-      const j = await res.json();
-      if (!j.success) throw new Error(j.error || "取得付款連結失敗");
-      const url = j.paymentUrl;
-
-      if (liff.isInClient()) {
-        location.href = url;
-      } else {
-        liff.openWindow({ url, external: true });
-      }
-    }
-
-    function showError(msg) {
-      document.getElementById("content").innerHTML =
-        `<div class="error"><p>${msg}</p></div>`;
-    }
-
-    function showInfo(msg) {
-      document.getElementById("content").innerHTML =
-        `<div class="info"><p>${msg}</p></div>`;
     }
 
     main();
