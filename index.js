@@ -82,9 +82,6 @@ function generateECPayCheckMacValue(params) {
   return crypto.createHash('sha256').update(checkString).digest('hex').toUpperCase();
 }
 
-async function saveUserProfile(userId) {
-  try {
-    const profile = await client.getProfile(userId);
 
 async function saveUserProfile(userId) {
   try {
@@ -347,9 +344,7 @@ app.get('/test-sheets', async (req, res) => {
 
 
 // ====== 綠界付款回調處理 ======
-app.post('/payment/ecpay/callback', express.urlencoded({ extended: true }), async (req, res) => {
-  try {
-    logger.logToFile(`[ECPAY][CALLBACK] 收到綠界回調: ${JSON.stringify(req.body)}`);
+
     
     const {
       MerchantID,
