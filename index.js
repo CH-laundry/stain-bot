@@ -485,6 +485,7 @@ app.get('/payment/linepay/pay/:orderId', async (req, res) => {
         linepayTransactionId: lp.transactionId,
         linepayPaymentUrl: url,
         lastLinePayRequestAt: Date.now()
+        linepayPayOrderId: lp.orderId
       });
       logger.logToFile(`新交易建立: ${lp.transactionId}`);
 
@@ -561,6 +562,11 @@ app.post('/payment/linepay/confirm', async (req, res) => {
     }
     if (!order && orderId) {
       order = orderManager.getOrder(orderId);
+      order = orderManager.getOrder(orderId) || null;
+      if (!order) {
+        order = allOrders.find(o => o.linepayPayOrderId === orderId) || null;
+        if (order) logger.logToFile(`🔗 以 linepayPayOrderId 命中訂單：${orderId} -> ${order.orderId}`);
+     }
     }
   }
 
