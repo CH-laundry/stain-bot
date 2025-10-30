@@ -53,6 +53,41 @@ const client = new Client({
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
   channelSecret: process.env.LINE_CHANNEL_SECRET,
 });
+const client = new Client({
+  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
+  channelSecret: process.env.LINE_CHANNEL_SECRET,
+});
+
+// ====== 綠界 CheckMacValue 驗證函數 ======
+function generateECPayCheckMacValue(params) {
+  const { ECPAY_HASH_KEY, ECPAY_HASH_IV } = process.env;
+  const data = { ...params };
+  delete data.CheckMacValue;
+
+  const sortedKeys = Object.keys(data).sort();
+  let checkString = `HashKey=${ECPAY_HASH_KEY}`;
+  sortedKeys.forEach(key => {
+    checkString += `&${key}=${data[key]}`;
+  });
+  checkString += `&HashIV=${ECPAY_HASH_IV}`;
+
+  checkString = encodeURIComponent(checkString)
+    .replace(/%20/g, '+')
+    .replace(/%2d/g, '-')
+    .replace(/%5f/g, '_')
+    .replace(/%2e/g, '.')
+    .replace(/%21/g, '!')
+    .replace(/%2a/g, '*')
+    .replace(/%28/g, '(')
+    .replace(/%29/g, ')')
+    .toLowerCase();
+
+  return crypto.createHash('sha256').update(checkString).digest('hex').toUpperCase();
+}
+
+async function saveUserProfile(userId) {
+  try {
+    const profile = await client.getProfile(userId);
 
 async function saveUserProfile(userId) {
   try {
