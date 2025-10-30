@@ -429,6 +429,77 @@ app.post('/payment/ecpay/callback', express.urlencoded({ extended: true }), asyn
   }
 });
 
+// ... 前面的代碼 ...
+
+app.get('/payment/redirect', (req, res) => {
+  const { data } = req.query;
+  if (!data) return res.status(400).send('缺少付款資料');
+  try {
+    const paymentData = JSON.parse(Buffer.from(decodeURIComponent(data), 'base64').toString());
+    const formHTML = '<!DOCTYPE html>...' // 你原本的代碼
+    res.send(formHTML);
+  } catch (error) {
+    logger.logError('付款跳轉失敗', error);
+    res.status(500).send('付款連結錯誤');
+  }
+});
+
+// ✅ 在這裡貼上我給的代碼
+app.post('/payment/ecpay/callback', express.urlencoded({ extended: true }), async (req, res) => {
+  try {
+    logger.logToFile(`[ECPAY][CALLBACK] 收到綠界回調: ${JSON.stringify(req.body)}`);
+    
+    const {
+      MerchantTradeNo,
+      RtnCode,
+      TradeNo,
+      TradeAmt,
+      PaymentDate,
+      CustomField1,
+      CustomField2
+    } = req.body;
+
+    if (RtnCode === '1') {
+      const order = Object.values(orderManager.getAllOrders()).find(
+        o => o.orderId === MerchantTradeNo && o.status === 'pending'
+      );
+
+      if (order) {
+        orderManager.updateOrderStatus(MerchantTradeNo, 'paid', '綠界信用卡');
+        logger.logToFile(`[ECPAY][SUCCESS] 訂單 ${MerchantTradeNo} 付款成功`);
+
+        if (process.env.ADMIN_USER_ID) {
+          await client.pushMessage(process.env.ADMIN_USER_ID, {
+            type: 'text',
+            text: `✅ 綠界付款成功\n\n客戶:${CustomField2}\n金額:NT$ ${TradeAmt}\n訂單:${MerchantTradeNo}`
+          }).catch(() => {});
+        }
+
+        if (CustomField1 && CustomField1 !== 'undefined') {
+          await client.pushMessage(CustomField1, {
+            type: 'text',
+            text: `✅ 付款成功\n\n感謝 ${CustomField2} 的支付\n金額:NT$ ${TradeAmt}\n訂單:${MerchantTradeNo}`
+          }).catch(() => {});
+        }
+      }
+
+      return res.send('1|OK');
+    } else {
+      logger.logToFile(`[ECPAY][FAIL] 付款失敗: ${RtnCode}`);
+      return res.send('1|OK');
+    }
+  } catch (error) {
+    logger.logError('綠界回調處理失敗', error);
+    return res.send('0|Error');
+  }
+});
+
+app.get('/payment/success', (req, res) => {
+  // 你原本的代碼
+});
+
+// ... 後面的代碼 ...
+
 // ====== 修改這個原有的路由，改成支援 POST ======
 app.all('/payment/success', (req, res) => {  // ← 注意這裡從 app.get 改成 app.all
   res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>付款完成</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;margin:0}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}h1{font-size:32px;margin-bottom:20px}p{font-size:18px;line-height:1.6}.success-icon{font-size:64px;margin-bottom:20px}</style></head><body><div class="container"><div class="success-icon">✅</div><h1>付款處理中</h1><p>感謝您的支付！</p><p>我們已收到您的付款資訊</p><p>稍後會收到確認通知</p><p style="margin-top:30px;font-size:14px;opacity:0.8">您可以關閉此頁面了</p></div></body></html>`);
