@@ -704,9 +704,7 @@ async function smartAutoReply(inputText) {
   return reply;
 }
 
-/* =================== 綠界付款功能（正式版 + 防重複）=================== */
-
-let ecpayTradeNoCounter = 0; // 用來產生唯一編號
+/* =================== 綠界付款功能（最終版：每次全新 MerchantTradeNo）=================== */
 
 function createECPayPaymentLink(userId, userName, amount, baseOrderId = null) {
   const merchantId = process.env.ECPAY_MERCHANT_ID;
@@ -723,16 +721,10 @@ function createECPayPaymentLink(userId, userName, amount, baseOrderId = null) {
     String(now.getMinutes()).padStart(2, '0') + ':' +
     String(now.getSeconds()).padStart(2, '0');
 
-  // 產生唯一 MerchantTradeNo
-  let merchantTradeNo;
-  if (baseOrderId && ecpayTradeNoCounter === 0) {
-    // 第一次用 baseOrderId
-    merchantTradeNo = baseOrderId;
-  } else {
-    // 之後加流水號，避免重複
-    ecpayTradeNoCounter++;
-    merchantTradeNo = `${baseOrderId || 'EC' + Date.now()}_R${ecpayTradeNoCounter}`;
-  }
+  // 每次都產生全新 MerchantTradeNo（關鍵！）
+  const timestamp = Date.now();
+  const random = Math.random().toString(36).substr(2, 5).toUpperCase();
+  const merchantTradeNo = `EC${timestamp}${random}`; // 絕對唯一！
 
   const params = {
     MerchantID: merchantId,
@@ -747,7 +739,7 @@ function createECPayPaymentLink(userId, userName, amount, baseOrderId = null) {
     ExpireDate: '1440',
     CustomField1: userId,
     CustomField2: userName,
-    CustomField3: baseOrderId || '', // 保留原始訂單編號
+    CustomField3: baseOrderId || '', // 原始訂單號
     ChoosePayment: 'ALL',
     EncryptType: 1
   };
@@ -763,7 +755,7 @@ function createECPayPaymentLink(userId, userName, amount, baseOrderId = null) {
   }
   html += '</form><script>document.getElementById("ecpay").submit();</script>';
 
-  log('PAYMENT', '綠界付款表單', { merchantTradeNo, baseOrderId, amount });
+  log('PAYMENT', '綠界付款表單生成', { merchantTradeNo, baseOrderId, amount });
   return html;
 }
 
