@@ -374,9 +374,65 @@ app.get('/payment/redirect', (req, res) => {
   }
 });
 
-app.get('/payment/success', (req, res) => {
-  res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>付款完成</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white}h1{color:#fff;font-size:32px}p{font-size:18px}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}</style></head><body><div class="container"><h1>付款已完成</h1><p>感謝您的支付,我們會盡快處理您的訂單</p><p>您可以關閉此頁面了</p></div></body></html>');
+// ✅ 接受 GET 與 POST 的成功頁面（解決 Cannot POST 問題）
+app.all('/payment/success', (req, res) => {
+  res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>付款完成</title>
+  <style>
+  body{font-family:sans-serif;text-align:center;padding:50px;
+  background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);
+  color:white;margin:0}
+  .container{background:rgba(255,255,255,0.1);border-radius:20px;
+  padding:40px;max-width:500px;margin:0 auto}
+  h1{font-size:32px;margin-bottom:16px}
+  p{font-size:18px;line-height:1.6}
+  </style></head><body>
+  <div class="container">
+    <h1>付款已完成</h1>
+    <p>感謝您的支付，我們會盡快處理您的訂單</p>
+    <p>您可以關閉此頁面了</p>
+  </div>
+  </body></html>`);
 });
+
+// ✅ 綠界背景通知回傳 (ReturnURL)
+app.post('/payment/ecpay/return', async (req, res) => {
+  try {
+    const payload = req.body || {};
+    logger.logToFile(`[ECPAY][RETURN] ${JSON.stringify(payload)}`);
+
+    const orderId = payload.MerchantTradeNo; // 你的訂單編號
+    if (payload.RtnCode === '1' || payload.RtnCode === 1) {
+      orderManager.updateOrderStatus(orderId, 'paid', 'ECPay');
+      logger.logToFile(`[ECPAY][SUCCESS] ${orderId} 付款成功`);
+
+      const order = orderManager.getOrder(orderId);
+      if (process.env.ADMIN_USER_ID) {
+        client.pushMessage(process.env.ADMIN_USER_ID, {
+          type: 'text',
+          text: `收到綠界付款通知\n\n客戶姓名:${order?.userName}\n金額:NT$ ${order?.amount?.toLocaleString?.()}\n付款方式:信用卡(綠界)\n訂單編號:${orderId}\n狀態:付款成功`
+        }).catch(()=>{});
+      }
+      if (order?.userId && order.userId !== 'undefined') {
+        client.pushMessage(order.userId, {
+          type: 'text',
+          text: `信用卡（綠界）付款成功\n\n感謝 ${order.userName} 的支付\n金額:NT$ ${order.amount.toLocaleString()}\n訂單編號:${orderId}\n\n非常謝謝您`
+        }).catch(()=>{});
+      }
+    } else {
+      logger.logToFile(`[ECPAY][FAIL] ${orderId} RtnCode=${payload.RtnCode} Msg=${payload.RtnMsg}`);
+    }
+
+    // 綠界要求一定要回這句，否則它會判定失敗
+    return res.send('1|OK');
+  } catch (e) {
+    logger.logError('[ECPAY][RETURN] Handler error', e);
+    return res.send('0|ERROR');
+  }
+});
+
+
 
 app.get('/payment/linepay/cancel', (req, res) => {
   const { transactionId, orderId, parentOrderId } = req.query;
