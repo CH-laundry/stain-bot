@@ -705,6 +705,13 @@ async function smartAutoReply(inputText) {
 }
 
 /* =================== 綠界付款功能(修正版)=================== */
+/**
+ * 產生綠界 ECPay 付款連結（直接跳轉表單）
+ * @param {string} userId - LINE 使用者 ID
+ * @param {string} userName - 使用者姓名
+ * @param {number} amount - 付款金額
+ * @returns {string} - 完整 HTML 表單，可直接跳轉
+ */
 function createECPayPaymentLink(userId, userName, amount) {
   const { ECPAY_MERCHANT_ID, ECPAY_HASH_KEY, ECPAY_HASH_IV, RAILWAY_STATIC_URL } = process.env;
 
@@ -713,15 +720,20 @@ function createECPayPaymentLink(userId, userName, amount) {
     throw new Error('綠界環境變數未設定');
   }
 
+  // 1. 取得 baseURL
   let baseURL = RAILWAY_STATIC_URL || 'https://stain-bot-production-2593.up.railway.app';
   if (!baseURL.startsWith('http://') && !baseURL.startsWith('https://')) {
     baseURL = `https://${baseURL}`;
   }
-  
+
+  // 2. 產生訂單編號
   const merchantTradeNo = `CH${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
+
+  // 3. 產生交易時間（格式：yyyy/MM/dd HH:mm:ss）
   const now = new Date();
   const tradeDate = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
 
+  // 4. 付款資料（順序重要！EncryptType 必須最後）
   const paymentData = {
     MerchantID: ECPAY_MERCHANT_ID,
     MerchantTradeNo: merchantTradeNo,
@@ -730,29 +742,49 @@ function createECPayPaymentLink(userId, userName, amount) {
     TotalAmount: String(amount),
     TradeDesc: 'CH精緻洗衣服務',
     ItemName: '洗衣服務費用',
-    ReturnURL: `${baseURL}/payment/ecpay/callback`,
-    ClientBackURL: `${baseURL}/payment/success`,
-    // 🔴 新增這三個，避免跳出返回造成容易失效、並延長有效時間（分鐘）
-    ExpireDate: '1440', // 24 小時（分鐘）
-    OrderResultURL: `${baseURL}/payment/success`,
-    ClientRedirectURL: `${baseURL}/payment/success`,
 
-    // 付款方式可留 ALL，或你固定用信用卡可設 'Credit'
-    ChoosePayment: 'ALL',
-    EncryptType: 1,
+    // 使用者看到成功頁（GET）
+    OrderResultURL: `${baseURL}/payment/success`,
+
+    // 伺服器回傳（POST 結果）→ 必須對應 index.js 的 route
+    ReturnURL: `${baseURL}/payment/ecpay/return`,
+
+    // 付款有效時間：1440 分鐘 = 24 小時
+    ExpireDate: '1440',
+
+    // 傳遞使用者資訊（綠界會原封不動回傳）
     CustomField1: userId,
-    CustomField2: userName
+    CustomField2: userName,
+
+    ChoosePayment: 'ALL',
+
+    // 必須最後一個！
+    EncryptType: 1,
   };
 
-  try {
-    paymentData.CheckMacValue = generateECPayCheckMacValue(paymentData);
-    const paymentLink = `${baseURL}/payment/redirect?data=${encodeURIComponent(Buffer.from(JSON.stringify(paymentData)).toString('base64'))}`;
-    log('PAYMENT', `綠界連結已生成: 訂單=${merchantTradeNo}, 金額=${amount}元, 客戶=${userName}`);
-    return paymentLink;
-  } catch (error) {
-    log('ERROR', '生成付款連結失敗', error.message);
-    throw error;
+  // 5. 產生 CheckMacValue
+  paymentData.CheckMacValue = generateECPayCheckMacValue(paymentData);
+
+  // 6. 產生完整表單 HTML
+  let formHTML = `
+    <form id="ecpayForm" action="https://payment.ecpay.com.tw/Cashier/AioCheckOut/V5" method="post">
+  `;
+
+  for (const [key, value] of Object.entries(paymentData)) {
+    formHTML += `  <input type="hidden" name="${key}" value="${value}">\n`;
   }
+
+  formHTML += `
+    </form>
+    <script>
+      document.getElementById('ecpayForm').submit();
+    </script>
+  `;
+
+  log('PAYMENT', `綠界付款表單已生成: 訂單=${merchantTradeNo}, 金額=${amount}元, 客戶=${userName}`);
+
+  return formHTML;
+ }
 }
 
 function generateECPayCheckMacValue(params) {
