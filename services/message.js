@@ -38,10 +38,66 @@ function cleanText(s = '') {
 // 通用正規化：NFKC → 清理 → 小寫
 function normalize(text = '') {
   const src = String(text ?? '');
-  // 若環境支援 String.prototype.normalize，先做 Unicode 正規化（處理全半形、符號一致性）
   const nfkc = typeof src.normalize === 'function' ? src.normalize('NFKC') : src;
-  // 你的 cleanText 會做：全形轉半形、移除 emoji、壓縮空白、trim
   return cleanText(nfkc).toLowerCase();
+}
+
+
+// ✅ 柔性觸發（不嚴格）：大約碰到洗衣相關就放行 AI，避免亂回
+//   —— 不改你原本的 maybeLaundryRelated()；而是以它為其中一個條件
+const SERVICE_VERBS = [
+  '洗', '清洗', '清潔', '去污', '去漬', '除臭', '保養', '整燙', '燙', '修補'
+];
+const STAIN_TERMS = [
+  '污', '汙', '污漬', '汙漬', '發霉', '黴', '黴斑', '發黴', '黃斑', '泛黃',
+  '掉色', '染色', '退色', '變色', '異味', '臭', '油漬', '咖啡漬', '汗漬', '血漬', '霉味'
+];
+const CATEGORIES = [
+  // 衣物
+  '衣', '衣服', '外套', '襯衫', '褲', '大衣', '羽絨', '毛衣', '皮衣', '針織',
+  // 包
+  '包', '包包', '名牌包', '手提袋', '背包', '書包', '皮革', '帆布', '麂皮',
+  // 鞋
+  '鞋', '球鞋', '運動鞋', '皮鞋', '靴', '涼鞋', '鞋墊',
+  // 家居
+  '窗簾', '布簾', '遮光簾', '地毯', '地墊', '毯子', '毛毯', '被子', '棉被', '羽絨被',
+  // 其他
+  '帽子', '毛帽', '棒球帽', '鴨舌帽', '禮帽',
+  // 寶寶用品
+  '手推車', '嬰兒推車', '嬰兒車', '汽座', '安全座椅'
+];
+const ACTION_WORDS = ['收件','收衣','到府','上門','取件','預約','約收','送回','送件','送來','取回','還衣','送返','送還'];
+const COST_WORDS = ['價錢','多少','費用','價格','報價','價位','收費'];
+const PAYMENT_WORDS = ['付款','支付','line pay','linepay','信用卡','刷卡','連結'];
+const PROGRESS_WORDS = ['進度','洗好','好了嗎','可以拿','查進度','完成了嗎','查詢進度'];
+
+function containsAny(haystack = '', keywords = []) {
+  const s = normalize(haystack);
+  return keywords.some(k => s.includes(k));
+}
+function hasServiceAndCategory(haystack = '') {
+  const s = normalize(haystack);
+  const hitVerb = SERVICE_VERBS.some(v => s.includes(v));
+  const hitCat  = CATEGORIES.some(c => s.includes(c));
+  const hitStain = STAIN_TERMS.some(t => s.includes(t));
+  // 服務動詞+類別、或 汙漬詞+類別，任一成立即可（寬鬆）
+  return (hitVerb && hitCat) || (hitStain && hitCat);
+}
+function isSoftTriggered(text = '') {
+  const s = normalize(text);
+  // 1) 你的舊規則的語義偵測（完全保留）
+  if (maybeLaundryRelated(s)) return true;
+
+  // 2) 與營運流程直接相關的意圖：動作/費用/付款/進度
+  if (containsAny(s, ACTION_WORDS)) return true;
+  if (containsAny(s, PROGRESS_WORDS)) return true;
+  if (containsAny(s, PAYMENT_WORDS) && containsAny(s, CATEGORIES.concat(SERVICE_VERBS))) return true; // 付款最好跟品類同時出現
+  if (containsAny(s, COST_WORDS) && containsAny(s, CATEGORIES.concat(SERVICE_VERBS))) return true;    // 詢價也建議跟品類/服務詞一起
+
+  // 3) 服務/汙漬 + 類別 的寬鬆組合
+  if (hasServiceAndCategory(s)) return true;
+
+  return false;
 }
 
 
@@ -421,8 +477,8 @@ if (!isActionIntent && looksLikeAddress) {
       return;
     }
 
-    // AI 回覆（洗衣相關）
-    if (maybeLaundryRelated(raw)) {
+    // ✅ AI 回覆（柔性觸發；約略相關就回，無關就不回）
+    if (isSoftTriggered(raw)) {
       try {
         const aiText = await smartAutoReply(raw);
         if (aiText && aiText.trim()) {
