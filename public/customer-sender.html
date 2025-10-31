@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>C.H 精緻洗衣 - 客戶付款發送</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft JhengHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+        }
+
+        .search-section {
+            margin-bottom: 20px;
+        }
+
+        .search-box {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .search-box input {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+
+        .search-box button {
+            padding: 12px 30px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        .search-box button:hover {
+            background: #5568d3;
+        }
+
+        .customer-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .customer-item {
+            padding: 15px;
+            border: 2px solid #eee;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .customer-item:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+
+        .customer-item.selected {
+            border-color: #667eea;
+            background: linear-gradient(135deg, #667eea15, #764ba215);
+        }
+
+        .customer-name {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .customer-id {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .send-section {
+            margin-top: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: #333;
+        }
+
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+
+        .form-group textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .payment-type-group {
+            display: flex;
+            gap: 15px;
+        }
+
+        .payment-type-group label {
+            flex: 1;
+            padding: 15px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .payment-type-group input[type="radio"] {
+            display: none;
+        }
+
+        .payment-type-group input[type="radio"]:checked + .radio-label {
+            border-color: #667eea;
+            background: linear-gradient(135deg, #667eea15, #764ba215);
+            font-weight: bold;
+        }
+
+        .send-btn {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .send-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .send-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .alert.show {
+            display: block;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .alert-info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+
+        .selected-info {
+            background: #e7f3ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .selected-info strong {
+            color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>💳 客戶付款發送系統</h1>
+            <p>選擇客戶並發送專屬付款連結</p>
+        </div>
+
+        <div id="alert" class="alert"></div>
+
+        <div class="card">
+            <h2 style="margin-bottom: 20px;">🔍 搜尋客戶</h2>
+            <div class="search-section">
+                <div class="search-box">
+                    <input type="text" id="searchInput" placeholder="輸入客戶姓名或編號搜尋...">
+                    <button onclick="searchCustomers()">🔎 搜尋</button>
+                    <button onclick="loadAllCustomers()" style="background: #28a745;">📋 顯示全部</button>
+                </div>
+                <div id="customerList" class="customer-list">
+                    <div class="loading">請點擊「顯示全部」載入客戶列表</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2 style="margin-bottom: 20px;">💰 發送付款連結</h2>
+            
+            <div id="selectedInfo" class="selected-info" style="display: none;">
+                <strong>已選擇客戶：</strong><span id="selectedCustomerName"></span><br>
+                <strong>User ID：</strong><span id="selectedCustomerId"></span>
+            </div>
+
+            <form id="paymentForm" onsubmit="sendPayment(event)">
+                <div class="form-group">
+                    <label>客戶姓名 *</label>
+                    <input type="text" id="customerName" required placeholder="請先選擇客戶">
+                </div>
+
+                <div class="form-group">
+                    <label>User ID *</label>
+                    <input type="text" id="userId" required placeholder="請先選擇客戶" readonly>
+                </div>
+
+                <div class="form-group">
+                    <label>付款金額 (NT$) *</label>
+                    <input type="number" id="amount" required min="1" placeholder="例如：1500">
+                </div>
+
+                <div class="form-group">
+                    <label>付款方式 *</label>
+                    <div class="payment-type-group">
+                        <label>
+                            <input type="radio" name="paymentType" value="both" checked>
+                            <div class="radio-label">💳 雙方式<br><small>(綠界+LINE Pay)</small></div>
+                        </label>
+                        <label>
+                            <input type="radio" name="paymentType" value="ecpay">
+                            <div class="radio-label">🏦 綠界支付<br><small>(信用卡)</small></div>
+                        </label>
+                        <label>
+                            <input type="radio" name="paymentType" value="linepay">
+                            <div class="radio-label">💚 LINE Pay<br><small>(LINE支付)</small></div>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>自訂訊息（選填）</label>
+                    <textarea id="customMessage" placeholder="例如：您好，這是本次洗衣服務的付款連結..."></textarea>
+                </div>
+
+                <button type="submit" class="send-btn" id="sendBtn">
+                    🚀 發送付款連結
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let selectedCustomer = null;
+
+        function showAlert(message, type = 'info') {
+            const alert = document.getElementById('alert');
+            alert.className = `alert alert-${type} show`;
+            alert.textContent = message;
+            setTimeout(() => {
+                alert.classList.remove('show');
+            }, 5000);
+        }
+
+        async function loadAllCustomers() {
+            const listDiv = document.getElementById('customerList');
+            listDiv.innerHTML = '<div class="loading">載入中...</div>';
+
+            try {
+                const response = await fetch('/api/users');
+                const data = await response.json();
+
+                if (data.users && data.users.length > 0) {
+                    listDiv.innerHTML = '';
+                    data.users.forEach(user => {
+                        const item = document.createElement('div');
+                        item.className = 'customer-item';
+                        item.innerHTML = `
+                            <div class="customer-name">${user.displayName || '未命名客戶'}</div>
+                            <div class="customer-id">ID: ${user.userId}</div>
+                        `;
+                        item.onclick = () => selectCustomer(user);
+                        listDiv.appendChild(item);
+                    });
+                    showAlert(`已載入 ${data.users.length} 位客戶`, 'success');
+                } else {
+                    listDiv.innerHTML = '<div class="loading">目前沒有客戶資料</div>';
+                }
+            } catch (error) {
+                console.error('載入失敗:', error);
+                listDiv.innerHTML = '<div class="loading">載入失敗，請重試</div>';
+                showAlert('載入客戶列表失敗', 'error');
+            }
+        }
+
+        async function searchCustomers() {
+            const query = document.getElementById('searchInput').value.trim();
+            if (!query) {
+                showAlert('請輸入搜尋關鍵字', 'info');
+                return;
+            }
+
+            const listDiv = document.getElementById('customerList');
+            listDiv.innerHTML = '<div class="loading">搜尋中...</div>';
+
+            try {
+                const response = await fetch(`/api/search/user?name=${encodeURIComponent(query)}`);
+                const data = await response.json();
+
+                if (data.users && data.users.length > 0) {
+                    listDiv.innerHTML = '';
+                    data.users.forEach(user => {
+                        const item = document.createElement('div');
+                        item.className = 'customer-item';
+                        item.innerHTML = `
+                            <div class="customer-name">${user.displayName || '未命名客戶'}</div>
+                            <div class="customer-id">ID: ${user.userId}</div>
+                        `;
+                        item.onclick = () => selectCustomer(user);
+                        listDiv.appendChild(item);
+                    });
+                    showAlert(`找到 ${data.users.length} 位客戶`, 'success');
+                } else {
+                    listDiv.innerHTML = '<div class="loading">查無此客戶</div>';
+                    showAlert('查無此客戶', 'info');
+                }
+            } catch (error) {
+                console.error('搜尋失敗:', error);
+                listDiv.innerHTML = '<div class="loading">搜尋失敗，請重試</div>';
+                showAlert('搜尋失敗', 'error');
+            }
+        }
+
+        function selectCustomer(user) {
+            selectedCustomer = user;
+            
+            // 移除所有選中狀態
+            document.querySelectorAll('.customer-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            
+            // 添加選中狀態
+            event.currentTarget.classList.add('selected');
+
+            // 填充表單
+            document.getElementById('customerName').value = user.displayName || '';
+            document.getElementById('userId').value = user.userId;
+            
+            // 顯示已選擇資訊
+            document.getElementById('selectedInfo').style.display = 'block';
+            document.getElementById('selectedCustomerName').textContent = user.displayName || '未命名客戶';
+            document.getElementById('selectedCustomerId').textContent = user.userId;
+
+            showAlert(`已選擇客戶：${user.displayName}`, 'success');
+        }
+
+        async function sendPayment(event) {
+            event.preventDefault();
+
+            if (!selectedCustomer) {
+                showAlert('請先選擇客戶', 'error');
+                return;
+            }
+
+            const sendBtn = document.getElementById('sendBtn');
+            sendBtn.disabled = true;
+            sendBtn.textContent = '發送中...';
+
+            const formData = {
+                userId: document.getElementById('userId').value,
+                userName: document.getElementById('customerName').value,
+                amount: document.getElementById('amount').value,
+                paymentType: document.querySelector('input[name="paymentType"]:checked').value,
+                customMessage: document.getElementById('customMessage').value
+            };
+
+            try {
+                const response = await fetch('/send-payment', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showAlert(`✅ 付款連結已成功發送給 ${formData.userName}！`, 'success');
+                    
+                    // 清空表單
+                    document.getElementById('paymentForm').reset();
+                    document.getElementById('selectedInfo').style.display = 'none';
+                    selectedCustomer = null;
+                    document.querySelectorAll('.customer-item').forEach(item => {
+                        item.classList.remove('selected');
+                    });
+                } else {
+                    showAlert(`❌ 發送失敗：${result.error || '未知錯誤'}`, 'error');
+                }
+            } catch (error) {
+                console.error('發送錯誤:', error);
+                showAlert('❌ 發送失敗，請檢查網路連線', 'error');
+            } finally {
+                sendBtn.disabled = false;
+                sendBtn.textContent = '🚀 發送付款連結';
+            }
+        }
+
+        // 頁面載入時提示
+        window.onload = () => {
+            showAlert('請點擊「顯示全部」載入客戶列表', 'info');
+        };
+    </script>
+</body>
+</html>
