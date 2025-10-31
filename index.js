@@ -1,7 +1,7 @@
 require('./bootstrap/storageBridge');
 console.log('📦 RAILWAY_VOLUME_MOUNT_PATH =', process.env.RAILWAY_VOLUME_MOUNT_PATH);
 const { createECPayPaymentLink } = require('./services/openai');
-const customerDB = require('./services/customerDatabase');
+onst customerStorage = require('./services/customerStorage');
 const fs = require('fs');
 const express = require('express');
 require('dotenv').config();
@@ -53,40 +53,35 @@ async function saveUserProfile(userId) {
 }
 
 app.get('/api/users', (req, res) => {
-    const users = customerDB.getAllCustomers();
-    res.json({ total: users.length, users: users });
+  const users = customerDB.getAllCustomers();
+  res.json({ total: users.length, users: users });
 });
 
 app.get('/api/user/:userId', (req, res) => {
-    const user = customerDB.getCustomer(req.params.userId);
-    if (user) {
-        res.json(user);
-    } else {
-        res.status(404).json({ error: '找不到此用戶' });
-    }
+  const user = customerDB.getCustomer(req.params.userId);
+  if (user) res.json(user);
+  else res.status(404).json({ error: '找不到此用戶' });
 });
 
 app.put('/api/user/:userId/name', express.json(), async (req, res) => {
-    const { userId } = req.params;
-    const { displayName } = req.body;
-    if (!displayName || displayName.trim() === '') {
-        return res.status(400).json({ error: '名稱不能為空' });
-    }
-    try {
-        const user = await customerDB.updateCustomerName(userId, displayName.trim());
-        res.json({ success: true, message: '名稱已更新', user: user });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
+  const { userId } = req.params;
+  const { displayName } = req.body;
+  if (!displayName || displayName.trim() === '') {
+    return res.status(400).json({ error: '名稱不能為空' });
+  }
+  try {
+    const user = await customerDB.updateCustomerName(userId, displayName.trim());
+    res.json({ success: true, message: '名稱已更新', user: user });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 app.get('/api/search/user', (req, res) => {
-    const { name } = req.query;
-    if (!name) {
-        return res.status(400).json({ error: '請提供搜尋名稱' });
-    }
-    const results = customerDB.searchCustomers(name);
-    res.json({ total: results.length, users: results });
+  const { name } = req.query;
+  if (!name) return res.status(400).json({ error: '請提供搜尋名稱' });
+  const results = customerDB.searchCustomers(name);
+  res.json({ total: results.length, users: results });
 });
 
 const LINE_PAY_CONFIG = {
@@ -943,11 +938,11 @@ app.listen(PORT, async () => {
     logger.logToFile(`伺服器正在運行,端口:${PORT}`);
     
     try {
-        await customerDB.loadAllCustomers();
-        console.log('✅ 客戶資料載入完成');
-    } catch (error) {
-        console.error('❌ 客戶資料載入失敗:', error.message);
-    }
+        const customers = customerStorage.getAllCustomers();  // 直接讀檔案
+        console.log('客戶資料載入完成，從 Volume 讀取', customers.length, '筆');
+      } catch (error) {
+        console.error('客戶資料載入失敗:', error.message);
+      }
     
     setInterval(() => { 
         orderManager.cleanExpiredOrders(); 
