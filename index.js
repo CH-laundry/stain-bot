@@ -925,6 +925,11 @@ app.get('/payment', (req, res) => {
     res.sendFile('payment.html', { root: './public' });
 });
 
+// ✅ 新增：客戶付款發送頁面
+app.get('/customer-sender', (req, res) => {
+    res.sendFile('customer-sender.html', { root: './public' });
+});
+
 app.get('/payment/status/:orderId', async (req, res) => {
     res.json({ message: '付款狀態查詢功能(待實作)', orderId: req.params.orderId });
 });
