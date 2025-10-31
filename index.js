@@ -743,6 +743,193 @@ app.post('/send-payment', async (req, res) => {
     const { userId, userName, amount, paymentType, customMessage } = req.body;
     logger.logToFile(`收到付款請求: userId=${userId}, userName=${userName}, amount=${amount}, type=${paymentType}`);
     
+    // ✅ 驗證 User ID 格式
+    if (!userId || typeof userId !== 'string' || !userId.startsWith('U') || userId.length !== 33) {
+        logger.logToFile(`❌ 無效的 User ID 格式: ${userId}`);
+        return res.status(400).json({ 
+            success: false,
+            error: '無效的 User ID 格式',
+            details: 'User ID 必須是 U 開頭的 33 字元字串'
+        });
+    }
+    
+    if (!userName || !amount) {
+        logger.logToFile(`❌ 參數驗證失敗`);
+        return res.status(400).json({ 
+            success: false,
+            error: '缺少必要參數', 
+            required: ['userId', 'userName', 'amount'] 
+        });
+    }
+    
+    const numAmount = parseInt(amount);
+    if (isNaN(numAmount) || numAmount <= 0) {
+        return res.status(400).json({ 
+            success: false,
+            error: '金額必須是正整數' 
+        });
+    }
+    
+    try {
+        const type = paymentType || 'both';
+        const baseURL = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.RAILWAY_STATIC_URL || 'https://stain-bot-production-0fac.up.railway.app';
+        
+        let ecpayOrderId = '';
+        let linePayOrderId = '';
+        let ecpayShort = '';
+        let linepayShort = '';
+        
+        // === 綠界支付 ===
+        if (type === 'ecpay' || type === 'both') {
+            ecpayOrderId = `EC${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
+            orderManager.createOrder(ecpayOrderId, { 
+                userId: userId, 
+                userName: userName, 
+                amount: numAmount 
+            });
+            logger.logToFile(`✅ 建立綠界訂單: ${ecpayOrderId}`);
+            
+            const ecpayPersistentUrl = `${baseURL}/payment/ecpay/pay/${ecpayOrderId}`;
+            ecpayShort = ecpayPersistentUrl;
+            
+            try {
+                const response = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(ecpayPersistentUrl)}`);
+                const result = await response.text();
+                if (result && result.startsWith('http')) {
+                    ecpayShort = result;
+                }
+            } catch (error) {
+                logger.logToFile(`⚠️ 綠界短網址失敗，使用原網址`);
+            }
+        }
+        
+        // === LINE Pay ===
+        if (type === 'linepay' || type === 'both') {
+            const linePayResult = await createLinePayPayment(userId, userName, numAmount);
+            
+            if (linePayResult.success) {
+                linePayOrderId = linePayResult.orderId;
+                orderManager.createOrder(linePayResult.orderId, { 
+                    userId: userId, 
+                    userName: userName, 
+                    amount: numAmount 
+                });
+                
+                const paymentData = {
+                    linepayTransactionId: linePayResult.transactionId,
+                    linepayPaymentUrl: linePayResult.paymentUrl
+                };
+                orderManager.updatePaymentInfo(linePayResult.orderId, paymentData);
+                logger.logToFile(`✅ 建立 LINE Pay 訂單: ${linePayOrderId}`);
+                
+                const linepayPersistentUrl = `${baseURL}/payment/linepay/pay/${linePayResult.orderId}`;
+                linepayShort = linepayPersistentUrl;
+                
+                try {
+                    const response = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(linepayPersistentUrl)}`);
+                    const result = await response.text();
+                    if (result && result.startsWith('http')) {
+                        linepayShort = result;
+                    }
+                } catch (error) {
+                    logger.logToFile(`⚠️ LINE Pay 短網址失敗，使用原網址`);
+                }
+            } else {
+                logger.logToFile(`❌ LINE Pay 付款請求失敗`);
+                if (type === 'linepay') {
+                    return res.status(500).json({ 
+                        success: false,
+                        error: 'LINE Pay 付款連結生成失敗',
+                        details: linePayResult.error 
+                    });
+                }
+            }
+        }
+        
+        // === 組合訊息 ===
+        let finalMessage = '';
+        const userMessage = (customMessage || '').trim();
+        
+        if (type === 'both' && ecpayShort && linepayShort) {
+            if (userMessage) {
+                finalMessage = `${userMessage}\n\n💙 付款連結如下:\n\n【信用卡付款】\n💙 ${ecpayShort}\n\n【LINE Pay】\n💙 ${linepayShort}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
+            } else {
+                finalMessage = `💙 您好,${userName}\n\n您的專屬付款連結已生成\n金額:NT$ ${numAmount.toLocaleString()}\n\n請選擇付款方式:\n\n【信用卡付款】\n💙 ${ecpayShort}\n\n【LINE Pay】\n💙 ${linepayShort}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
+            }
+        } else if (type === 'ecpay' && ecpayShort) {
+            if (userMessage) {
+                finalMessage = `${userMessage}\n\n💙 付款連結如下:\n💙 ${ecpayShort}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
+            } else {
+                finalMessage = `💙 您好,${userName}\n\n您的專屬付款連結已生成\n付款方式:信用卡\n金額:NT$ ${numAmount.toLocaleString()}\n\n請點擊以下連結完成付款:\n💙 ${ecpayShort}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
+            }
+        } else if (type === 'linepay' && linepayShort) {
+            if (userMessage) {
+                finalMessage = `${userMessage}\n\n💙 付款連結如下:\n💙 ${linepayShort}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
+            } else {
+                finalMessage = `💙 您好,${userName}\n\n您的專屬付款連結已生成\n付款方式:LINE Pay\n金額:NT$ ${numAmount.toLocaleString()}\n\n請點擊以下連結完成付款:\n💙 ${linepayShort}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
+            }
+        } else {
+            logger.logToFile(`❌ 付款連結生成失敗`);
+            return res.status(500).json({ 
+                success: false,
+                error: '付款連結生成失敗' 
+            });
+        }
+        
+        // ✅ 檢查訊息長度（LINE 限制 5000 字元）
+        if (finalMessage.length > 5000) {
+            logger.logToFile(`⚠️ 訊息過長，截斷至 5000 字元`);
+            finalMessage = finalMessage.substring(0, 4900) + '\n\n(訊息過長已截斷)';
+        }
+        
+        // ✅ 發送訊息（增加錯誤處理）
+        try {
+            await client.pushMessage(userId, { 
+                type: 'text', 
+                text: finalMessage 
+            });
+            logger.logToFile(`✅ 已發送付款連結: ${userName} - ${numAmount}元 (${type})`);
+        } catch (sendError) {
+            logger.logToFile(`❌ LINE 訊息發送失敗: ${sendError.message}`);
+            
+            // 檢查是否是 User ID 封鎖問題
+            if (sendError.statusCode === 403) {
+                return res.status(400).json({ 
+                    success: false,
+                    error: '該用戶已封鎖機器人或尚未加入好友',
+                    details: '請確認用戶已加入 LINE Bot 並未封鎖'
+                });
+            }
+            
+            throw sendError;
+        }
+        
+        res.json({ 
+            success: true, 
+            message: '付款連結已發送', 
+            data: { 
+                userId, 
+                userName, 
+                amount: numAmount, 
+                paymentType: type, 
+                ecpayLink: ecpayShort || null, 
+                linepayLink: linepayShort || null, 
+                ecpayOrderId: ecpayOrderId || null, 
+                linePayOrderId: linePayOrderId || null, 
+                customMessage: userMessage 
+            } 
+        });
+        
+    } catch (err) {
+        logger.logError('發送付款連結失敗', err);
+        res.status(500).json({ 
+            success: false,
+            error: '發送失敗', 
+            details: err.message 
+        });
+    }
+});
+    
     if (!userId || !userName || !amount) {
         logger.logToFile(`❌ 參數驗證失敗`);
         return res.status(400).json({ error: '缺少必要參數', required: ['userId', 'userName', 'amount'] });
