@@ -1,33 +1,68 @@
 <!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/x-icon" sizes="any" href="/ai-town/favicon.ico" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AI Town</title>
-    <meta
-      name="description"
-      content="A virtual town where AI characters live, chat and socialize"
-    />
-    <script defer data-domain="convex.dev" src="https://plausible.io/js/script.js"></script>
-    <script type="module" crossorigin src="/ai-town/assets/index-4568f2c0.js"></script>
-    <link rel="stylesheet" href="/ai-town/assets/index-fd4994f9.css">
-  </head>
-  <body>
-    <div id="root"></div>
-    <a href="/portal/ai-town/" target="_blank" style="
-  display:inline-block;
-  background:#3B5F8F;
-  color:white;
-  padding:10px 18px;
-  border-radius:8px;
-  text-decoration:none;
-  font-weight:600;
-">
-  🌟 進入 C.H 精緻洗衣 AI 小鎮
-</a>
-<script src="/agents/loader.js" defer></script>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>C.H 精緻洗衣｜AI 小鎮</title>
+  <link rel="icon" href="./favicon.ico" />
+  <link rel="stylesheet" href="./assets/app.css" />
+  <!-- 可選：避免相對路徑在子目錄出錯 -->
+  <!-- <base href="./"> -->
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">C.H 精緻洗衣 · AI 小鎮</div>
+    <nav class="nav">
+      <button class="nav-btn" data-action="entry">入口頁</button>
+      <button class="nav-btn" data-action="progress">查詢進度</button>
+      <button class="nav-btn" data-action="pickup">預約收件</button>
+      <button class="nav-btn" data-action="price">價目與優惠</button>
+    </nav>
+  </header>
 
-    
-  </body>
+  <main class="layout">
+    <!-- 左：角色清單 -->
+    <aside class="sidebar">
+      <h2>角色</h2>
+      <div class="agent-list" id="agentList">
+        <!-- 由 JS 渲染：小C.H客服 / 清潔師傅 / 熨燙師傅 / 收送人員 / 店長 -->
+      </div>
+    </aside>
+
+    <!-- 右：對話區 -->
+    <section class="chat">
+      <div class="chat-title">
+        <div>
+          <div id="agentTitle" class="title">請選擇左側角色</div>
+          <div id="agentDesc" class="subtitle">點選任一角色開始互動</div>
+        </div>
+        <div class="status-dot" id="statusDot" title="ready"></div>
+      </div>
+
+      <div class="quick-actions">
+        <button class="qa" data-qa="bag">包包清潔</button>
+        <button class="qa" data-qa="shoe">洗鞋服務</button>
+        <button class="qa" data-qa="curtain">窗簾清洗</button>
+        <button class="qa" data-qa="stain">污漬處理</button>
+        <button class="qa" data-qa="delivery">到府收送</button>
+      </div>
+
+      <div class="chat-log" id="chatLog">
+        <!-- 訊息會注入 -->
+      </div>
+
+      <form id="composer" class="composer">
+        <input id="userInput" type="text" placeholder="輸入想問的內容… 例如：帆布包發霉怎麼處理？" />
+        <button type="submit">送出</button>
+      </form>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <small>© C.H 精緻洗衣 · 板橋｜免費收送：板橋 / 中和 / 永和 / 新莊 / 土城 / 萬華 / 雙和</small>
+  </footer>
+
+  <script src="./assets/agents.js"></script>
+  <script src="./assets/app.js"></script>
+</body>
 </html>
