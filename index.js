@@ -14,8 +14,6 @@ const googleAuth = require('./services/googleAuth');
 const multer = require('multer');
 const orderManager = require('./services/orderManager');
 const upload = multer({ storage: multer.memoryStorage() });
-const { markSiblingsPaidAndStopReminders } = require('./routes/webflow');
-
 
 if (process.env.GOOGLE_PRIVATE_KEY) {
     console.log(`正在初始化 sheet.json: 成功`);
@@ -418,12 +416,6 @@ app.get('/payment/linepay/confirm', async (req, res) => {
             
             const updated = orderManager.updateOrderStatusByUserId(userId, 'paid', 'LINE Pay');
             logger.logToFile(`✅ LINE Pay 付款成功,已標記 ${updated} 筆訂單為已付款`);
-                // ✅ 任一成功 → 關聯訂單停止提醒
-            const paidOrder = orderManager.getOrder(orderId);
-            if (paidOrder) {
-                markSiblingsPaidAndStopReminders(paidOrder);
-            }
-
             
             const ADMIN_USER_ID = process.env.ADMIN_USER_ID;
             if (ADMIN_USER_ID) {
@@ -890,14 +882,6 @@ app.post('/payment/ecpay/callback', async (req, res) => {
             const amount = parseInt(TradeAmt);
             const updated = orderManager.updateOrderStatusByUserId(userId, 'paid', '綠界支付');
             logger.logToFile(`✅ 綠界付款成功,已標記 ${updated} 筆訂單為已付款`);
-                // ✅ 任一成功 → 關聯訂單停止提醒
-            const paidOrder = orderManager.getOrderByUserAndAmount
-                ? orderManager.getOrderByUserAndAmount(userId, amount)  // 若你有這函式就用它
-                : orderManager.getOrder(MerchantTradeNo) || orderManager.getOrder(orderId); // 沒有就盡量用現有能拿到的
-            if (paidOrder) {
-                markSiblingsPaidAndStopReminders(paidOrder);
-            }
-
             
             const ADMIN_USER_ID = process.env.ADMIN_USER_ID;
             if (ADMIN_USER_ID) {
@@ -952,9 +936,6 @@ app.get('/health', (req, res) => {
         uptime: process.uptime()
     });
 });
-
-const webflow = require('./routes/webflow');
-if (webflow?.router) app.use(webflow.router);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
