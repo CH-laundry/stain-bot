@@ -988,15 +988,15 @@ app.post('/send-payment', async (req, res) => {
     if (type === 'both' && ecpayLink && linepayLink) {
       finalMessage = userMsg
         ? `${userMsg}\n\n付款連結如下:\n\n【💙信用卡付款】\n${ecpayLink}\n\n【💙LINE Pay】\n${linepayLink}\n\n付款後系統會自動通知我們\n感謝您的支持💙`
-        : `您好,${userName}\n\n您的專屬付款連結已生成\n金額:NT$ ${numAmount.toLocaleString()}\n\n請選擇付款方式:\n\n【信用卡付款】\n${ecpayLink}\n\n【LINE Pay】\n${linepayLink}\n\n付款後系統會自動通知我們\n感謝您的支持`;
+        : `💙您好,${userName}\n\n您的專屬付款連結已生成\n金額:NT$ ${numAmount.toLocaleString()}\n\n請選擇付款方式:\n\n【信用卡付款】\n${ecpayLink}\n\n【LINE Pay】\n${linepayLink}\n\n付款後系統會自動通知我們\n感謝您的支持`;
     } else if (type === 'ecpay' && ecpayLink) {
       finalMessage = userMsg
         ? `${userMsg}\n\n付款連結如下:\n${ecpayLink}\n\n付款後系統會自動通知我們\n感謝您的支持💙`
-        : `您好,${userName}\n\n您的專屬付款連結已生成\n付款方式:信用卡\n金額:NT$ ${numAmount.toLocaleString()}\n\n請點擊以下連結完成付款:\n${ecpayLink}\n\n付款後系統會自動通知我們\n感謝您的支持`;
+        : `💙您好,${userName}\n\n您的專屬付款連結已生成\n付款方式:信用卡\n金額:NT$ ${numAmount.toLocaleString()}\n\n請點擊以下連結完成付款:\n${ecpayLink}\n\n付款後系統會自動通知我們\n感謝您的支持`;
     } else if (type === 'linepay' && linepayLink) {
       finalMessage = userMsg
         ? `${userMsg}\n\n付款連結如下:\n${linepayLink}\n\n付款後系統會自動通知我們\n感謝您的支持💙`
-        : `您好,${userName}\n\n您的專屬付款連結已生成\n付款方式:LINE Pay\n金額:NT$ ${numAmount.toLocaleString()}\n\n請點擊以下連結完成付款:\n${linepayLink}\n\n付款後系統會自動通知我們\n感謝您的支持`;
+        : `💙您好,${userName}\n\n您的專屬付款連結已生成\n付款方式:LINE Pay\n金額:NT$ ${numAmount.toLocaleString()}\n\n請點擊以下連結完成付款:\n${linepayLink}\n\n付款後系統會自動通知我們\n感謝您的支持`;
     } else {
       return res.status(500).json({ error: '付款連結生成失敗' });
     }
