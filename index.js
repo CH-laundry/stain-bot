@@ -3,6 +3,7 @@ console.log('📦 RAILWAY_VOLUME_MOUNT_PATH =', process.env.RAILWAY_VOLUME_MOUNT
 const { createECPayPaymentLink } = require('./services/openai');
 const customerDB = require('./services/customerDatabase');
 const fs = require('fs');
+const path = require('path');
 const express = require('express');
 require('dotenv').config();
 const fetch = require('node-fetch');
