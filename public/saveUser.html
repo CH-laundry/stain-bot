@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>C.H 精緻洗衣｜儲存用戶 & 發送支付連結</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,"Noto Sans TC",sans-serif;padding:20px}
+    .card{max-width:560px;margin:0 auto;padding:16px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.08)}
+    .row{display:flex;gap:10px;margin:10px 0}
+    input,select,button{padding:12px;border-radius:10px;border:1px solid #ddd;flex:1}
+    button{cursor:pointer;font-weight:600}
+    .ok{color:#0a7e38;font-weight:600;margin:8px 0}
+    .err{color:#b00020;font-weight:600;margin:8px 0}
+    .muted{color:#666}
+    .pill{display:inline-block;padding:6px 10px;border-radius:999px;background:#f1f5f9;color:#334155;font-size:12px}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>儲存用戶 & 發送支付連結</h2>
+    <div id="status" class="muted">初始化中...</div>
+
+    <div class="row">
+      <input id="name" placeholder="客戶姓名（預設用 LINE 顯示名稱）" />
+    </div>
+
+    <div class="row">
+      <input id="amount" type="number" inputmode="numeric" placeholder="金額（NT$）" />
+      <select id="method">
+        <option value="ecpay">綠界（信用卡）</option>
+        <option value="linepay">LINE Pay</option>
+        <option value="both">同時發送兩個</option>
+      </select>
+    </div>
+
+    <div class="row">
+      <button id="saveBtn">1️⃣ 先儲存用戶</button>
+      <button id="payBtn">2️⃣ 發送支付連結</button>
+    </div>
+
+    <div id="result"></div>
+    <div class="muted">提示：步驟1成功後，步驟2才能發送支付連結（會推播到客戶 LINE）。</div>
+    <div class="muted">狀態：<span id="who" class="pill">未取得使用者</span></div>
+  </div>
+
+  <script>
+    const YOUR_LIFF_ID = "請填你的 LIFF ID";
+
+    let gUserId = null;
+    let gDisplayName = null;
+
+    async function init() {
+      try {
+        await liff.init({ liffId: YOUR_LIFF_ID });
+        const decoded = liff.getDecodedIDToken();
+        gUserId = decoded?.sub || null;
+        try {
+          const profile = await liff.getProfile();
+          gDisplayName = profile?.displayName || null;
+        } catch {}
+        document.getElementById('status').textContent = '✅ LIFF 初始化完成';
+        document.getElementById('who').textContent = gUserId ? ('UserId: ' + gUserId) : '無法取得 userId（請在 LINE 內開啟）';
+        if (gDisplayName) document.getElementById('name').value = gDisplayName;
+      } catch (e) {
+        document.getElementById('status').textContent = '❌ LIFF 初始化失敗：' + e.message;
+      }
+    }
+
+    async function saveUser() {
+      const displayName = document.getElementById('name').value?.trim() || gDisplayName || '';
+      const result = document.getElementById('result');
+      if (!gUserId) return result.innerHTML = '<div class="err">取不到 userId，請在 LINE App 內開啟此頁</div>';
+      try {
+        const r = await fetch('/api/register-user', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: gUserId, displayName })
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data?.error || '儲存失敗');
+        result.innerHTML = '<div class="ok">✅ 已儲存：' + (displayName || '(未填姓名)') + '</div>';
+      } catch (e) { result.innerHTML = '<div class="err">❌ 儲存失敗：' + e.message + '</div>'; }
+    }
+
+    async function sendPayLink() {
+      const amount = Number(document.getElementById('amount').value);
+      const payment = document.getElementById('method').value;
+      const displayName = document.getElementById('name').value?.trim() || gDisplayName || '';
+      const result = document.getElementById('result');
+      if (!gUserId) return result.innerHTML = '<div class="err">請先儲存用戶（需要 userId）</div>';
+      if (!amount || amount <= 0) return result.innerHTML = '<div class="err">請輸入正確金額</div>';
+      try {
+        const r = await fetch('/api/send-paylink', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: gUserId, userName: displayName || '貴賓', amount, payment })
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data?.error || '發送失敗');
+        result.innerHTML = '<div class="ok">✅ 已發送支付連結至 LINE！' +
+                           (data.summary ? ('<br>' + data.summary) : '') + '</div>';
+      } catch (e) { result.innerHTML = '<div class="err">❌ 發送失敗：' + e.message + '</div>'; }
+    }
+
+    document.getElementById('saveBtn').addEventListener('click', saveUser);
+    document.getElementById('payBtn').addEventListener('click', sendPayLink);
+    init();
+  </script>
+</body>
+</html>
