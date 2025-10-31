@@ -136,12 +136,21 @@ function generateLinePaySignature(uri, body, nonce) {
 // 【關鍵修改 1】強制驗證 userId → 觸發 LINE Pay 信任
 async function createLinePayPayment(userId, userName, amount) {
     try {
-        // 強制呼叫 getProfile → LINE 會記住此 userId 已信任
-        const profile = await client.getProfile(userId);
-        const validName = profile.displayName || userName;
+        // 【強制觸發信任】連續呼叫 2 次 getProfile
+        for (let i = 0; i < 2; i++) {
+            try {
+                const profile = await client.getProfile(userId);
+                console.log(`[TRUST] getProfile 第 ${i+1} 次成功: ${profile.displayName}`);
+                break;
+            } catch (e) {
+                if (i === 1) throw e;
+                await new Promise(r => setTimeout(r, 1000)); // 隔 1 秒再試
+            }
+        }
 
+        const validName = userName;
         const orderId = `LP${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
-        const nonce = crypto.randomBytes(16).toString('base64');
+        const nonce = Date.now().toString() + crypto.randomBytes(8).toString('hex');
         const baseURL = process.env.RAILWAY_PUBLIC_DOMAIN || 'https://stain-bot-production-0fac.up.railway.app';
 
         const requestBody = {
@@ -152,11 +161,16 @@ async function createLinePayPayment(userId, userName, amount) {
                 id: orderId,
                 amount: amount,
                 name: 'C.H精緻洗衣服務',
-                products: [{ name: '洗衣清潔費用', quantity: 1, price: amount }]
+                products: [{ name: '洗衣費用', quantity: 1, price: amount }]
             }],
             redirectUrls: {
                 confirmUrl: `${baseURL}/payment/linepay/confirm?orderId=${orderId}&userId=${userId}&userName=${encodeURIComponent(validName)}&amount=${amount}`,
                 cancelUrl: `${baseURL}/payment/linepay/cancel`
+            },
+            options: {
+                payment: {
+                    capture: true
+                }
             }
         };
 
@@ -176,14 +190,14 @@ async function createLinePayPayment(userId, userName, amount) {
 
         const result = await response.json();
         if (result.returnCode === '0000') {
-            logger.logToFile(`LINE Pay 付款請求成功: ${orderId}`);
-            return { success: true, paymentUrl: result.info.paymentUrl.web, orderId: orderId, transactionId: result.info.transactionId };
+            logger.logToFile(`LINE Pay 請求成功: ${orderId}`);
+            return { success: true, paymentUrl: result.info.paymentUrl.web, orderId, transactionId: result.info.transactionId };
         } else {
-            logger.logToFile(`LINE Pay 付款請求失敗: ${result.returnCode} - ${result.returnMessage}`);
+            logger.logToFile(`LINE Pay 失敗: ${result.returnCode} - ${result.returnMessage}`);
             return { success: false, error: result.returnMessage };
         }
     } catch (error) {
-        logger.logError('LINE Pay 付款請求錯誤', error);
+        logger.logError('LINE Pay 請求錯誤', error);
         return { success: false, error: error.message };
     }
 }
