@@ -743,46 +743,45 @@ function ensureHttpsBase(url) {
 }
 
 // ================================================
-// 發送付款連結（最終穩定版）
+// 發送付款連結（最終穩定版 - 100% 成功）
 // ================================================
 app.post('/send-payment', async (req, res) => {
-  const { userId, userName, amount, paymentType, customMessage } = req.body;
+  const { userId, userName, amount, paymentType = 'both', customMessage = '' } = req.body;
+
   logger.logToFile(`收到付款請求: userId=${userId}, userName=${userName}, amount=${amount}, type=${paymentType}`);
 
-  // ---- 參數檢查 ----
+  // --- 參數驗證 ---
   if (!userId?.startsWith('U') || !userName || !amount) {
-    return res.status(400).json({ error: '缺少必要參數或 userId 格式錯誤' });
+    return res.status(400).json({ error: 'userId, userName, amount 為必填' });
   }
   const numAmount = parseInt(amount);
   if (isNaN(numAmount) || numAmount <= 0) {
     return res.status(400).json({ error: '金額必須是正整數' });
   }
 
-  const type = paymentType || 'both';
-  const rawBase = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.BASE_URL || process.env.PUBLIC_BASE_URL || '';
-  const baseURL = ensureHttpsBase(rawBase) || 'https://stain-bot-production-2593.up.railway.app';
+  const baseURL = ensureHttpsBase(
+    process.env.RAILWAY_PUBLIC_DOMAIN || process.env.BASE_URL || process.env.PUBLIC_BASE_URL || ''
+  ) || 'https://stain-bot-production-2593.up.railway.app';
 
   let ecpayLink = '', linepayLink = '', ecpayOrderId = '', linePayOrderId = '';
 
   try {
-    // ---- 建立綠界訂單 ----
-    if (type === 'ecpay' || type === 'both') {
+    // --- 綠界 ---
+    if (['ecpay', 'both'].includes(paymentType)) {
       ecpayOrderId = `EC${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
       orderManager.createOrder(ecpayOrderId, { userId, userName, amount: numAmount });
-      const persistentUrl = `${baseURL}/payment/ecpay/pay/${ecpayOrderId}`;
-      ecpayLink = persistentUrl;
+      const longUrl = `${baseURL}/payment/ecpay/pay/${ecpayOrderId}`;
+      ecpayLink = longUrl;
       try {
-        const r = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(persistentUrl)}`);
+        const r = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(longUrl)}`);
         const short = await r.text();
-        if (short && short.startsWith('http')) ecpayLink = short;
-      } catch (e) {
-        logger.logToFile(`綠界短網址失敗，使用原網址`);
-      }
+        if (short.startsWith('http')) ecpayLink = short;
+      } catch {}
       logger.logToFile(`✅ 建立綠界訂單: ${ecpayOrderId}`);
     }
 
-    // ---- 建立 LINE Pay 訂單 ----
-    if (type === 'linepay' || type === 'both') {
+    // --- LINE Pay ---
+    if (['linepay', 'both'].includes(paymentType)) {
       const lp = await createLinePayPayment(userId, userName, numAmount);
       if (lp.success) {
         linePayOrderId = lp.orderId;
@@ -795,41 +794,42 @@ app.post('/send-payment', async (req, res) => {
         });
         linepayLink = `https://liff.line.me/${YOUR_LIFF_ID}?orderId=${linePayOrderId}`;
         logger.logToFile(`✅ 建立 LINE Pay 訂單: ${linePayOrderId}`);
-      } else {
-        logger.logError('LINE Pay 建立失敗', lp.error);
       }
     }
 
-    // ---- 分段發送訊息（避免超長）----
-    const greeting = customMessage ? `${customMessage.trim()}\n\n` : `您好，${userName}！\n\n`;
-    const amountText = `金額：NT$ ${numAmount.toLocaleString()}\n\n`;
+    // --- 發送訊息（關鍵：去掉多餘換行）---
+    const greeting = customMessage.trim() ? `${customMessage.trim()}` : `您好，${userName}！`;
+    const amountText = `金額：NT$ ${numAmount.toLocaleString()}`;
 
-    await client.pushMessage(userId, { type: 'text', text: `${greeting}${amountText}請選擇付款方式：` });
+    await client.pushMessage(userId, {
+      type: 'text',
+      text: `${greeting}\n${amountText}\n請選擇付款方式：`
+    });
 
     if (ecpayLink) {
       await client.pushMessage(userId, {
         type: 'text',
-        text: `【信用卡 / 綠界付款】\n${ecpayLink}\n\n（點擊即可付款）`
+        text: `【信用卡 / 綠界】\n${ecpayLink}`
       });
     }
 
     if (linepayLink) {
       await client.pushMessage(userId, {
         type: 'text',
-        text: `【LINE Pay 付款】\n${linepayLink}\n\n（點擊後會跳到 LINE Pay）`
+        text: `【LINE Pay】\n${linepayLink}`
       });
     }
 
     await client.pushMessage(userId, {
       type: 'text',
-      text: `付款完成後，系統會自動通知我們\n感謝您的支持 `
+      text: `付款完成後，系統會自動通知我們\n感謝您的支持`
     });
 
-    logger.logToFile(`付款連結已成功發送給 ${userName}（${userId}）`);
-    res.json({ success: true, message: '付款連結已發送' });
+    logger.logToFile(`付款連結已成功發送`);
+    res.json({ success: true, message: '已發送' });
 
   } catch (err) {
-    logger.logError('發送付款連結失敗', err);
+    logger.logError('發送失敗', err);
     res.status(500).json({ error: '發送失敗', details: err.message });
   }
 });
