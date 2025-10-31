@@ -734,6 +734,13 @@ app.delete('/api/templates/:index', (req, res) => {
     }
 });
 
+// ====== 強制 HTTPS ======
+function ensureHttpsBase(url) {
+  if (!url) return '';
+  if (!/^https?:\/\//i.test(url)) return 'https://' + url.replace(/^\/+/, '');
+  return url.replace(/^http:/i, 'https:');
+}
+
 // ================================================
 // 發送付款連結（修正版）
 // ================================================
