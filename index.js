@@ -1079,7 +1079,7 @@ app.listen(PORT, async () => {
                         const t2 = await r2.text();
                         if (t2 && t2.startsWith('http')) ecpayShort = t2;
                     } catch {
-                        logger.logToFile(`綠界短網址失敗，使用原網址nością
+                       logger.logToFile(`綠界短網址失敗，使用原網址`);
                     }
                     const reminderText =
                       `溫馨付款提醒\n\n` +
