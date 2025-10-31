@@ -797,23 +797,25 @@ app.post('/send-payment', async (req, res) => {
       }
     }
 
-    // --- 發送訊息（關鍵：去掉多餘換行 + 清理全形標點）---
+    // --- 發送訊息（關鍵：清理全形標點 + 簡潔）---
     const cleanText = (str) => str.replace(/，/g, ',').replace(/：/g, ':').replace(/！/g, '!').replace(/？/g, '?');
     const greeting = customMessage.trim() ? cleanText(customMessage.trim()) : `您好，${cleanText(userName)}！`;
     const amountText = `金額：NT$ ${numAmount.toLocaleString()}`;
-          type: 'text',
-          text: `${greeting}\n${amountText}\n請選擇付款方式：`
-        });
 
-        if (ecpayLink) {
-          await client.pushMessage(userId, {
-            type: 'text',
-            text: `【信用卡 / 綠界】\n${ecpayLink}`
-          });
-        }
+    await client.pushMessage(userId, {
+      type: 'text',
+      text: `${greeting}\n${amountText}\n請選擇付款方式：`
+    });
 
-        if (linepayLink) {
-          await client.pushMessage(userId, {
+    if (ecpayLink) {
+      await client.pushMessage(userId, {
+        type: 'text',
+        text: `【信用卡 / 綠界】\n${ecpayLink}`
+      });
+    }
+
+    if (linepayLink) {
+      await client.pushMessage(userId, {
         type: 'text',
         text: `【LINE Pay】\n${linepayLink}`
       });
