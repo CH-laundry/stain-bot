@@ -125,12 +125,6 @@ app.get('/api/saved-users', (req, res) => {
 });
 // 👆👆👆 新增結束 👆👆👆
 
-const LINE_PAY_CONFIG = {
-    channelId: process.env.LINE_PAY_CHANNEL_ID,
-    channelSecret: process.env.LINE_PAY_CHANNEL_SECRET,
-    env: process.env.LINE_PAY_ENV || 'production',
-    apiUrl: process.env.LINE_PAY_ENV === 'sandbox' ? 'https://sandbox-api-pay.line.me' : 'https://api-pay.line.me'
-};
 
 const LINE_PAY_CONFIG = {
     channelId: process.env.LINE_PAY_CHANNEL_ID,
