@@ -1,7 +1,7 @@
 require('./bootstrap/storageBridge');
 console.log('📦 RAILWAY_VOLUME_MOUNT_PATH =', process.env.RAILWAY_VOLUME_MOUNT_PATH);
 const { createECPayPaymentLink } = require('./services/openai');
-onst customerStorage = require('./services/customerStorage');
+const customerStorage = require('./services/customerStorage');
 const fs = require('fs');
 const express = require('express');
 require('dotenv').config();
