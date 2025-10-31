@@ -797,31 +797,59 @@ app.post('/send-payment', async (req, res) => {
       }
     }
 
-            // --- 發送訊息（超級安全版：清理所有隱藏字元 + 強制 UTF-8）---
-        const sanitize = (str) => {
-          if (!str) return '';
-          return str
-            .replace(/[\u200B-\u200D\uFEFF\r\n\t]/g, '') // 移除零寬度字元、換行、tab
-            .replace(/[，：！？]/g, (match) => ({ '，': ',', '：': ':', '！': '!', '？': '?' }[match]))
-            .replace(/\s+/g, ' ')
-            .trim();
-        };
+    // ✅ 修正：組合完整訊息一次發送
+    let fullMessage = '';
+    
+    if (customMessage && customMessage.trim()) {
+      fullMessage = `${customMessage.trim()}\n\n`;
+    } else {
+      fullMessage = `💙 您好，${userName}\n\n`;
+    }
+    
+    fullMessage += `您的專屬付款連結已生成\n`;
+    fullMessage += `金額：NT$ ${numAmount.toLocaleString()}\n\n`;
+    fullMessage += `請選擇付款方式：\n\n`;
+    
+    if (ecpayLink && linepayLink) {
+      fullMessage += `【信用卡／綠界】\n${ecpayLink}\n\n`;
+      fullMessage += `【LINE Pay】\n${linepayLink}\n\n`;
+    } else if (ecpayLink) {
+      fullMessage += `【信用卡／綠界】\n${ecpayLink}\n\n`;
+    } else if (linepayLink) {
+      fullMessage += `【LINE Pay】\n${linepayLink}\n\n`;
+    }
+    
+    fullMessage += `✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
 
-        const greeting = customMessage ? sanitize(customMessage) : `您好，${sanitize(userName)}！`;
-        const amountText = `金額：NT$ ${numAmount.toLocaleString()}`;
-        const finalText = `${greeting}\n${amountText}\n請選擇付款方式：`.trim();
+    // ✅ 一次發送完整訊息
+    await client.pushMessage(userId, { 
+      type: 'text', 
+      text: fullMessage 
+    });
 
-        await client.pushMessage(userId, { type: 'text', text: finalText });
-        if (ecpayLink) await client.pushMessage(userId, { type: 'text', text: `【信用卡 / 綠界】\n${ecpayLink}` });
-        if (linepayLink) await client.pushMessage(userId, { type: 'text', text: `【LINE Pay】\n${linepayLink}` });
-        await client.pushMessage(userId, { type: 'text', text: `付款完成後，系統會自動通知我們\n感謝您的支持` });
-
-        logger.logToFile(`付款連結已成功發送`);
-        res.json({ success: true, message: '已發送' });
+    logger.logToFile(`✅ 付款連結已成功發送給 ${userName}`);
+    res.json({ 
+      success: true, 
+      message: '付款連結已發送',
+      data: {
+        userId,
+        userName,
+        amount: numAmount,
+        paymentType,
+        ecpayLink,
+        linepayLink,
+        ecpayOrderId,
+        linePayOrderId
+      }
+    });
 
   } catch (err) {
     logger.logError('發送失敗', err);
-    res.status(500).json({ error: '發送失敗', details: err.message });
+    res.status(500).json({ 
+      success: false,
+      error: '發送失敗', 
+      details: err.message 
+    });
   }
 });
 
