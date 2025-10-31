@@ -54,12 +54,12 @@ async function saveUserProfile(userId) {
 }
 
 app.get('/api/users', (req, res) => {
-  const users = customerDB.getAllCustomers();
+  const users = customerStorage.getAllCustomers();
   res.json({ total: users.length, users: users });
 });
 
 app.get('/api/user/:userId', (req, res) => {
-  const user = customerDB.getCustomer(req.params.userId);
+  const user = customerStorage.getCustomer(req.params.userId);
   if (user) res.json(user);
   else res.status(404).json({ error: '找不到此用戶' });
 });
@@ -71,7 +71,7 @@ app.put('/api/user/:userId/name', express.json(), async (req, res) => {
     return res.status(400).json({ error: '名稱不能為空' });
   }
   try {
-    const user = await customerDB.updateCustomerName(userId, displayName.trim());
+    const user = customerStorage.addOrUpdateCustomer(userId, displayName.trim());
     res.json({ success: true, message: '名稱已更新', user: user });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -81,7 +81,7 @@ app.put('/api/user/:userId/name', express.json(), async (req, res) => {
 app.get('/api/search/user', (req, res) => {
   const { name } = req.query;
   if (!name) return res.status(400).json({ error: '請提供搜尋名稱' });
-  const results = customerDB.searchCustomers(name);
+  const results = customerStorage.searchCustomers(name);
   res.json({ total: results.length, users: results });
 });
 
