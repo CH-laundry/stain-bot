@@ -3,6 +3,7 @@ console.log('📦 RAILWAY_VOLUME_MOUNT_PATH =', process.env.RAILWAY_VOLUME_MOUNT
 const { createECPayPaymentLink } = require('./services/openai');
 const customerStorage = require('./services/customerStorage');
 const fs = require('fs');
+const YOUR_LIFF_ID = '2008313382-3Xna6abB';
 const express = require('express');
 require('dotenv').config();
 const fetch = require('node-fetch');
@@ -742,18 +743,15 @@ function ensureHttpsBase(url) {
 }
 
 // ================================================
-// 發送付款連結（修正版）
+// 發送付款連結（最終穩定版）
 // ================================================
 app.post('/send-payment', async (req, res) => {
   const { userId, userName, amount, paymentType, customMessage } = req.body;
   logger.logToFile(`收到付款請求: userId=${userId}, userName=${userName}, amount=${amount}, type=${paymentType}`);
 
   // ---- 參數檢查 ----
-  if (!userId || !userName || !amount) {
-    return res.status(400).json({ error: '缺少必要參數', required: ['userId', 'userName', 'amount'] });
-  }
-  if (!userId.startsWith('U')) {
-    return res.status(400).json({ error: 'userId 必須以 U 開頭' });
+  if (!userId?.startsWith('U') || !userName || !amount) {
+    return res.status(400).json({ error: '缺少必要參數或 userId 格式錯誤' });
   }
   const numAmount = parseInt(amount);
   if (isNaN(numAmount) || numAmount <= 0) {
@@ -766,47 +764,48 @@ app.post('/send-payment', async (req, res) => {
 
   let ecpayLink = '', linepayLink = '', ecpayOrderId = '', linePayOrderId = '';
 
-  // ---- 建立綠界訂單 ----
-  if (type === 'ecpay' || type === 'both') {
-    ecpayOrderId = `EC${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
-    orderManager.createOrder(ecpayOrderId, { userId, userName, amount: numAmount });
-    const persistentUrl = `${baseURL}/payment/ecpay/pay/${ecpayOrderId}`;
-    ecpayLink = persistentUrl;
-    try {
-      const r = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(persistentUrl)}`);
-      const short = await r.text();
-      if (short && short.startsWith('http')) ecpayLink = short;
-    } catch { /* ignore */ }
-  }
-
-  // ---- 建立 LINE Pay 訂單 ----
-  if (type === 'linepay' || type === 'both') {
-    const lp = await createLinePayPayment(userId, userName, numAmount);
-    if (lp.success) {
-      linePayOrderId = lp.orderId;
-      orderManager.createOrder(linePayOrderId, { userId, userName, amount: numAmount });
-      const url = lp.paymentUrlApp || lp.paymentUrlWeb || lp.paymentUrl;
-      orderManager.updatePaymentInfo(linePayOrderId, {
-        linepayTransactionId: lp.transactionId,
-        linepayPaymentUrl: url,
-        lastLinePayRequestAt: Date.now()
-      });
-      const liffUrl = `https://liff.line.me/${YOUR_LIFF_ID}?orderId=${linePayOrderId}`;
-      linepayLink = liffUrl;
-    } else {
-      logger.logError('LINE Pay 建立失敗', lp.error);
-    }
-  }
-
-  // ---- 組合訊息（分段發送，保證不超長）----
-  const greeting = customMessage ? `${customMessage.trim()}\n\n` : `您好，${userName}！\n\n`;
-  const amountText = `金額：NT$ ${numAmount.toLocaleString()}\n\n`;
-
   try {
-    // 1. 先發基本資訊
+    // ---- 建立綠界訂單 ----
+    if (type === 'ecpay' || type === 'both') {
+      ecpayOrderId = `EC${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
+      orderManager.createOrder(ecpayOrderId, { userId, userName, amount: numAmount });
+      const persistentUrl = `${baseURL}/payment/ecpay/pay/${ecpayOrderId}`;
+      ecpayLink = persistentUrl;
+      try {
+        const r = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(persistentUrl)}`);
+        const short = await r.text();
+        if (short && short.startsWith('http')) ecpayLink = short;
+      } catch (e) {
+        logger.logToFile(`綠界短網址失敗，使用原網址`);
+      }
+      logger.logToFile(`✅ 建立綠界訂單: ${ecpayOrderId}`);
+    }
+
+    // ---- 建立 LINE Pay 訂單 ----
+    if (type === 'linepay' || type === 'both') {
+      const lp = await createLinePayPayment(userId, userName, numAmount);
+      if (lp.success) {
+        linePayOrderId = lp.orderId;
+        orderManager.createOrder(linePayOrderId, { userId, userName, amount: numAmount });
+        const url = lp.paymentUrlApp || lp.paymentUrlWeb || lp.paymentUrl;
+        orderManager.updatePaymentInfo(linePayOrderId, {
+          linepayTransactionId: lp.transactionId,
+          linepayPaymentUrl: url,
+          lastLinePayRequestAt: Date.now()
+        });
+        linepayLink = `https://liff.line.me/${YOUR_LIFF_ID}?orderId=${linePayOrderId}`;
+        logger.logToFile(`✅ 建立 LINE Pay 訂單: ${linePayOrderId}`);
+      } else {
+        logger.logError('LINE Pay 建立失敗', lp.error);
+      }
+    }
+
+    // ---- 分段發送訊息（避免超長）----
+    const greeting = customMessage ? `${customMessage.trim()}\n\n` : `您好，${userName}！\n\n`;
+    const amountText = `金額：NT$ ${numAmount.toLocaleString()}\n\n`;
+
     await client.pushMessage(userId, { type: 'text', text: `${greeting}${amountText}請選擇付款方式：` });
 
-    // 2. 綠界（如果有）
     if (ecpayLink) {
       await client.pushMessage(userId, {
         type: 'text',
@@ -814,7 +813,6 @@ app.post('/send-payment', async (req, res) => {
       });
     }
 
-    // 3. LINE Pay（如果有）
     if (linepayLink) {
       await client.pushMessage(userId, {
         type: 'text',
@@ -822,14 +820,14 @@ app.post('/send-payment', async (req, res) => {
       });
     }
 
-    // 4. 結尾
     await client.pushMessage(userId, {
       type: 'text',
       text: `付款完成後，系統會自動通知我們\n感謝您的支持 `
     });
 
-    logger.logToFile(`付款連結已分段發送給 ${userName}（${userId}）`);
+    logger.logToFile(`付款連結已成功發送給 ${userName}（${userId}）`);
     res.json({ success: true, message: '付款連結已發送' });
+
   } catch (err) {
     logger.logError('發送付款連結失敗', err);
     res.status(500).json({ error: '發送失敗', details: err.message });
