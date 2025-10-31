@@ -797,26 +797,27 @@ app.post('/send-payment', async (req, res) => {
       }
     }
 
-        // --- 發送訊息（超級安全版：清理所有隱藏字元 + 強制 UTF-8）---
-    const sanitize = (str) => {
-      return str
-        .replace(/[\u200B-\u200D\uFEFF]/g, '') // 移除零寬度字元
-        .replace(/，/g, ',').replace(/：/g, ':').replace(/！/g, '!').replace(/？/g, '?')
-        .replace(/\s+/g, ' ')
-        .trim();
-    };
+            // --- 發送訊息（超級安全版：清理所有隱藏字元 + 強制 UTF-8）---
+        const sanitize = (str) => {
+          if (!str) return '';
+          return str
+            .replace(/[\u200B-\u200D\uFEFF\r\n\t]/g, '') // 移除零寬度字元、換行、tab
+            .replace(/[，：！？]/g, (match) => ({ '，': ',', '：': ':', '！': '!', '？': '?' }[match]))
+            .replace(/\s+/g, ' ')
+            .trim();
+        };
 
-    const greeting = customMessage ? sanitize(customMessage) : `您好，${sanitize(userName)}！`;
-    const amountText = `金額：NT$ ${numAmount.toLocaleString()}`;
-    const finalText = `${greeting}\n${amountText}\n請選擇付款方式：`.trim();
+        const greeting = customMessage ? sanitize(customMessage) : `您好，${sanitize(userName)}！`;
+        const amountText = `金額：NT$ ${numAmount.toLocaleString()}`;
+        const finalText = `${greeting}\n${amountText}\n請選擇付款方式：`.trim();
 
-    await client.pushMessage(userId, { type: 'text', text: finalText });
-    if (ecpayLink) await client.pushMessage(userId, { type: 'text', text: `【信用卡 / 綠界】\n${ecpayLink}` });
-    if (linepayLink) await client.pushMessage(userId, { type: 'text', text: `【LINE Pay】\n${linepayLink}` });
-    await client.pushMessage(userId, { type: 'text', text: `付款完成後，系統會自動通知我們\n感謝您的支持` });
+        await client.pushMessage(userId, { type: 'text', text: finalText });
+        if (ecpayLink) await client.pushMessage(userId, { type: 'text', text: `【信用卡 / 綠界】\n${ecpayLink}` });
+        if (linepayLink) await client.pushMessage(userId, { type: 'text', text: `【LINE Pay】\n${linepayLink}` });
+        await client.pushMessage(userId, { type: 'text', text: `付款完成後，系統會自動通知我們\n感謝您的支持` });
 
-    logger.logToFile(`付款連結已成功發送`);
-    res.json({ success: true, message: '已發送' });
+        logger.logToFile(`付款連結已成功發送`);
+        res.json({ success: true, message: '已發送' });
 
   } catch (err) {
     logger.logError('發送失敗', err);
