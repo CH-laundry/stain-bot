@@ -3,7 +3,6 @@ console.log('📦 RAILWAY_VOLUME_MOUNT_PATH =', process.env.RAILWAY_VOLUME_MOUNT
 const { createECPayPaymentLink } = require('./services/openai');
 const customerDB = require('./services/customerDatabase');
 const fs = require('fs');
-const path = require('path');
 const express = require('express');
 require('dotenv').config();
 const fetch = require('node-fetch');
@@ -89,33 +88,6 @@ app.get('/api/search/user', (req, res) => {
     const results = customerDB.searchCustomers(name);
     res.json({ total: results.length, users: results });
 });
-
-// 👇👇👇 保留的客戶資料查詢功能 👇👇👇
-app.get('/api/saved-users', (req, res) => {
-    try {
-        const USERS_FILE = '/data/users.json';
-        if (fs.existsSync(USERS_FILE)) {
-            const data = fs.readFileSync(USERS_FILE, 'utf8');
-            const users = JSON.parse(data);
-            res.json({ 
-                success: true, 
-                total: users.length, 
-                users: users 
-            });
-        } else {
-            res.json({ 
-                success: false, 
-                message: '尚未有任何客戶資料' 
-            });
-        }
-    } catch (error) {
-        res.status(500).json({ 
-            success: false, 
-            error: error.message 
-        });
-    }
-});
-// 👆👆👆 客戶資料查詢功能結束 👆👆👆
 
 const LINE_PAY_CONFIG = {
     channelId: process.env.LINE_PAY_CHANNEL_ID,
@@ -638,50 +610,179 @@ app.post('/api/orders/send-reminders', async (req, res) => {
                 orderManager.markReminderSent(order.orderId);
                 logger.logToFile(`✅ 已發送付款提醒：${order.orderId} (第 ${order.reminderCount} 次)`);
             } else {
-                logger.logToFile(`❌ 無法生成 LINE Pay 連結: ${order.orderId}`);
+                logger.logToFile(`❌ 重新生成付款連結失敗: ${order.orderId}`);
             }
         } catch (error) {
             logger.logError(`發送提醒失敗: ${order.orderId}`, error);
         }
     }
-    
-    res.json({ success: true, message: `已發送 ${sent} 筆付款提醒`, sent });
+
+    res.json({ success: true, message: `已發送 ${sent} 筆付款提醒`, sent: sent });
 });
 
-app.post('/api/send-payment-link', async (req, res) => {
+app.get('/api/orders/statistics', (req, res) => {
+    res.json({ success: true, statistics: orderManager.getStatistics() });
+});
+
+app.post('/api/orders/clean-expired', (req, res) => {
+    const cleaned = orderManager.cleanExpiredOrders();
+    res.json({ success: true, message: `已清理 ${cleaned} 筆過期訂單`, cleaned: cleaned });
+});
+
+app.get('/api/customer-numbers', (req, res) => {
     try {
-        const { userId, userName, amount, type, customMessage } = req.body;
-        
-        if (!userId || !userName || !amount) {
-            return res.status(400).json({ error: '缺少必要參數' });
+        const customers = orderManager.getAllCustomerNumbers();
+        res.json({ success: true, total: customers.length, customers });
+    } catch (error) {
+        console.error('API /api/customer-numbers 錯誤:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.post('/api/customer-numbers', (req, res) => {
+    try {
+        const { number, name, userId } = req.body;
+        if (!number || !name || !userId) {
+            return res.status(400).json({ success: false, error: '請填寫所有欄位' });
         }
-        
-        const numAmount = parseInt(amount);
-        if (isNaN(numAmount) || numAmount <= 0) {
-            return res.status(400).json({ error: '金額格式錯誤' });
+        const customer = orderManager.saveCustomerNumber(number, name, userId);
+        res.json({ success: true, message: '客戶編號已儲存', customer });
+    } catch (error) {
+        console.error('API POST /api/customer-numbers 錯誤:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.delete('/api/customer-numbers/:number', (req, res) => {
+    try {
+        const deleted = orderManager.deleteCustomerNumber(req.params.number);
+        if (deleted) {
+            res.json({ success: true, message: '客戶編號已刪除' });
+        } else {
+            res.status(404).json({ success: false, error: '找不到此客戶編號' });
         }
-        
-        let ecpayLink = null;
-        let linepayLink = null;
-        let ecpayOrderId = null;
-        let linePayOrderId = null;
-        let finalMessage = '';
-        
+    } catch (error) {
+        console.error('API DELETE /api/customer-numbers 錯誤:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.get('/api/customer-numbers/search', (req, res) => {
+    try {
+        const { q } = req.query;
+        if (!q) {
+            return res.status(400).json({ success: false, error: '請提供搜尋關鍵字' });
+        }
+        const results = orderManager.searchCustomerNumber(q);
+        res.json({ success: true, total: results.length, customers: results });
+    } catch (error) {
+        console.error('API /api/customer-numbers/search 錯誤:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.get('/api/templates', (req, res) => {
+    try {
+        const templates = orderManager.getAllTemplates();
+        res.json({ success: true, total: templates.length, templates });
+    } catch (error) {
+        console.error('API /api/templates 錯誤:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.post('/api/templates', (req, res) => {
+    try {
+        const { content } = req.body;
+        if (!content || !content.trim()) {
+            return res.status(400).json({ success: false, error: '模板內容不能為空' });
+        }
+        orderManager.addTemplate(content.trim());
+        res.json({ success: true, message: '模板已新增' });
+    } catch (error) {
+        console.error('API POST /api/templates 錯誤:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.put('/api/templates/:index', (req, res) => {
+    try {
+        const index = parseInt(req.params.index);
+        const { content } = req.body;
+        if (!content || !content.trim()) {
+            return res.status(400).json({ success: false, error: '模板內容不能為空' });
+        }
+        const success = orderManager.updateTemplate(index, content.trim());
+        if (success) {
+            res.json({ success: true, message: '模板已更新' });
+        } else {
+            res.status(404).json({ success: false, error: '找不到此模板' });
+        }
+    } catch (error) {
+        console.error('API PUT /api/templates 錯誤:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.delete('/api/templates/:index', (req, res) => {
+    try {
+        const index = parseInt(req.params.index);
+        const success = orderManager.deleteTemplate(index);
+        if (success) {
+            res.json({ success: true, message: '模板已刪除' });
+        } else {
+            res.status(404).json({ success: false, error: '找不到此模板' });
+        }
+    } catch (error) {
+        console.error('API DELETE /api/templates 錯誤:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.post('/send-payment', async (req, res) => {
+    const { userId, userName, amount, paymentType, customMessage } = req.body;
+    logger.logToFile(`收到付款請求: userId=${userId}, userName=${userName}, amount=${amount}, type=${paymentType}`);
+    
+    if (!userId || !userName || !amount) {
+        logger.logToFile(`❌ 參數驗證失敗`);
+        return res.status(400).json({ error: '缺少必要參數', required: ['userId', 'userName', 'amount'] });
+    }
+    
+    const numAmount = parseInt(amount);
+    if (isNaN(numAmount) || numAmount <= 0) {
+        return res.status(400).json({ error: '金額必須是正整數' });
+    }
+    
+    try {
+        const type = paymentType || 'both';
         const baseURL = process.env.RAILWAY_PUBLIC_DOMAIN || 'https://stain-bot-production-0fac.up.railway.app';
+        let finalMessage = '';
+        let ecpayLink = '';
+        let linepayLink = '';
+        let ecpayOrderId = '';
+        let linePayOrderId = '';
         
         if (type === 'ecpay' || type === 'both') {
-            ecpayLink = createECPayPaymentLink(userId, userName, numAmount);
-            ecpayOrderId = orderManager.createOrder(userId, userName, numAmount, 'ecpay');
+            ecpayOrderId = `EC${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
+            orderManager.createOrder(ecpayOrderId, { 
+                userId: userId, 
+                userName: userName, 
+                amount: numAmount 
+            });
+            logger.logToFile(`✅ 建立綠界訂單: ${ecpayOrderId}`);
+            
+            const ecpayPersistentUrl = `${baseURL}/payment/ecpay/pay/${ecpayOrderId}`;
+            ecpayLink = ecpayPersistentUrl;
             
             try {
-                const ecpayPersistentUrl = `${baseURL}/payment/ecpay/pay/${ecpayOrderId}`;
-                const shortResponse = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(ecpayPersistentUrl)}`);
-                const shortUrl = await shortResponse.text();
-                if (shortUrl && shortUrl.startsWith('http')) {
-                    ecpayLink = shortUrl;
+                const response = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(ecpayPersistentUrl)}`);
+                const result = await response.text();
+                if (result && result.startsWith('http')) {
+                    ecpayLink = result;
+                    logger.logToFile(`✅ 已縮短綠界持久付款網址`);
                 }
             } catch (error) {
-                logger.logToFile(`⚠️ 綠界短網址生成失敗,使用原網址`);
+                logger.logToFile(`⚠️ 短網址生成失敗,使用原網址`);
             }
         }
         
@@ -689,21 +790,29 @@ app.post('/api/send-payment-link', async (req, res) => {
             const linePayResult = await createLinePayPayment(userId, userName, numAmount);
             
             if (linePayResult.success) {
-                linePayOrderId = orderManager.createOrder(userId, userName, numAmount, 'linepay');
+                linePayOrderId = linePayResult.orderId;
+                orderManager.createOrder(linePayResult.orderId, { 
+                    userId: userId, 
+                    userName: userName, 
+                    amount: numAmount 
+                });
+                
                 const paymentData = {
                     linepayTransactionId: linePayResult.transactionId,
                     linepayPaymentUrl: linePayResult.paymentUrl
                 };
-                orderManager.updatePaymentInfo(linePayOrderId, paymentData);
+                orderManager.updatePaymentInfo(linePayResult.orderId, paymentData);
+                logger.logToFile(`✅ 建立 LINE Pay 訂單: ${linePayOrderId}`);
                 
-                const linepayPersistentUrl = `${baseURL}/payment/linepay/pay/${linePayOrderId}`;
+                const linepayPersistentUrl = `${baseURL}/payment/linepay/pay/${linePayResult.orderId}`;
                 linepayLink = linepayPersistentUrl;
                 
                 try {
-                    const shortResponse = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(linepayPersistentUrl)}`);
-                    const shortUrl = await shortResponse.text();
-                    if (shortUrl && shortUrl.startsWith('http')) {
-                        linepayLink = shortUrl;
+                    const response = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(linepayPersistentUrl)}`);
+                    const result = await response.text();
+                    if (result && result.startsWith('http')) {
+                        linepayLink = result;
+                        logger.logToFile(`✅ 已縮短 LINE Pay 持續付款網址`);
                     }
                 } catch (error) {
                     logger.logToFile(`⚠️ LINE Pay 短網址生成失敗,使用原網址`);
