@@ -89,6 +89,49 @@ app.get('/api/search/user', (req, res) => {
     res.json({ total: results.length, users: results });
 });
 
+app.get('/api/search/user', (req, res) => {
+    const { name } = req.query;
+    if (!name) {
+        return res.status(400).json({ error: '請提供搜尋名稱' });
+    }
+    const results = customerDB.searchCustomers(name);
+    res.json({ total: results.length, users: results });
+});
+
+// 👇👇👇 新增：查看已儲存的客戶資料 👇👇👇
+app.get('/api/saved-users', (req, res) => {
+    try {
+        const USERS_FILE = '/data/users.json';
+        if (fs.existsSync(USERS_FILE)) {
+            const data = fs.readFileSync(USERS_FILE, 'utf8');
+            const users = JSON.parse(data);
+            res.json({ 
+                success: true, 
+                total: users.length, 
+                users: users 
+            });
+        } else {
+            res.json({ 
+                success: false, 
+                message: '尚未有任何客戶資料' 
+            });
+        }
+    } catch (error) {
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
+    }
+});
+// 👆👆👆 新增結束 👆👆👆
+
+const LINE_PAY_CONFIG = {
+    channelId: process.env.LINE_PAY_CHANNEL_ID,
+    channelSecret: process.env.LINE_PAY_CHANNEL_SECRET,
+    env: process.env.LINE_PAY_ENV || 'production',
+    apiUrl: process.env.LINE_PAY_ENV === 'sandbox' ? 'https://sandbox-api-pay.line.me' : 'https://api-pay.line.me'
+};
+
 const LINE_PAY_CONFIG = {
     channelId: process.env.LINE_PAY_CHANNEL_ID,
     channelSecret: process.env.LINE_PAY_CHANNEL_SECRET,
@@ -754,6 +797,69 @@ app.post('/send-payment', async (req, res) => {
     }
     
     try {
+        // ============ 新增：自動儲存客戶資料 ============
+        const DATA_DIR = '/data';
+        const USERS_FILE = path.join(DATA_DIR, 'users.json');
+        
+        // 確保目錄存在
+        if (!fs.existsSync(DATA_DIR)) {
+            fs.mkdirSync(DATA_DIR, { recursive: true });
+            logger.logToFile(`✅ 已建立 /data 目錄`);
+        }
+        
+        // 確保檔案存在
+        if (!fs.existsSync(USERS_FILE)) {
+            fs.writeFileSync(USERS_FILE, '[]', 'utf8');
+            logger.logToFile(`✅ 已建立 users.json 檔案`);
+        }
+        
+        // 讀取現有客戶資料
+        let userList = [];
+        try {
+            const fileContent = fs.readFileSync(USERS_FILE, 'utf8');
+            userList = JSON.parse(fileContent);
+        } catch (e) {
+            logger.logToFile(`⚠️ 讀取 users.json 失敗，使用空陣列`);
+            userList = [];
+        }
+        
+        // 檢查客戶是否已存在
+        const existIndex = userList.findIndex(u => u.userId === userId);
+        const timestamp = new Date().toISOString();
+        
+        if (existIndex >= 0) {
+            // 更新現有客戶
+            userList[existIndex] = {
+                userId: userId,
+                name: userName,
+                lastUpdate: timestamp,
+                createdAt: userList[existIndex].createdAt || timestamp
+            };
+            logger.logToFile(`♻️ 更新客戶資料: ${userName} (${userId})`);
+        } else {
+            // 新增客戶
+            userList.push({
+                userId: userId,
+                name: userName,
+                createdAt: timestamp,
+                lastUpdate: timestamp
+            });
+            logger.logToFile(`➕ 新增客戶資料: ${userName} (${userId})`);
+        }
+        
+        // 寫回檔案
+        fs.writeFileSync(USERS_FILE, JSON.stringify(userList, null, 2), 'utf8');
+        logger.logToFile(`💾 已將客戶資料寫入 /data/users.json (總共 ${userList.length} 筆)`);
+        
+        // 同時也存進 customerDB（雙重備份）
+        try {
+            await customerDB.saveCustomer(userId, userName);
+        } catch (e) {
+            logger.logToFile(`⚠️ customerDB 同步失敗: ${e.message}`);
+        }
+        // ============ 儲存邏輯結束 ============
+        
+        // 下面是你原本的付款邏輯（保持不變）
         const type = paymentType || 'both';
         const baseURL = process.env.RAILWAY_PUBLIC_DOMAIN || 'https://stain-bot-production-0fac.up.railway.app';
         let finalMessage = '';
