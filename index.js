@@ -403,7 +403,7 @@ app.get('/payment/redirect', (req, res) => {
 });
 
 app.get('/payment/success', (req, res) => {
-  res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>付款完成</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white}h1{color:#fff;font-size:32px}p{font-size:18px}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}</style></head><body><div class="container"><h1>付款已完成</h1><p>感謝您的支付💙,/p><p>您可以關閉此頁面了</p></div></body></html>');
+  res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>付款完成</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white}h1{color:#fff;font-size:32px}p{font-size:18px}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}</style></head><body><div class="container"><h1>付款已完成</h1><p>感謝您的支付,我們會盡快處理您的訂單</p><p>您可以關閉此頁面了</p></div></body></html>');
 });
 
 app.get('/payment/linepay/cancel', (req, res) => {
@@ -563,7 +563,7 @@ async function handleLinePayConfirm(transactionId, orderId, parentOrderId) {
 
     if (result.returnCode === '0000') {
       orderManager.updateOrderStatus(order.orderId, 'paid', 'LINE Pay');
-      logger.logToFile(`[LINEPAY][SUCCESS] ${order.orderId} 💙付款成功`);
+      logger.logToFile(`[LINEPAY][SUCCESS] ${order.orderId} 付款成功`);
 
       if (process.env.ADMIN_USER_ID) {
         client.pushMessage(process.env.ADMIN_USER_ID, {
@@ -575,7 +575,7 @@ async function handleLinePayConfirm(transactionId, orderId, parentOrderId) {
       if (order.userId && order.userId !== 'undefined') {
         client.pushMessage(order.userId, {
           type: 'text',
-          text: `LINE Pay 💙付款成功\n\n感謝 ${order.userName} 的支付\n金額:NT$ ${order.amount.toLocaleString()}\n訂單編號:${order.orderId}\n\n非常謝謝您\n感謝您的支持`💙
+          text: `LINE Pay 付款成功\n\n感謝 ${order.userName} 的支付\n金額:NT$ ${order.amount.toLocaleString()}\n訂單編號:${order.orderId}\n\n非常謝謝您\n感謝您的支持`
         }).catch(() => {});
       }
     } else {
@@ -726,12 +726,12 @@ app.post('/api/orders/send-reminders', async (req, res) => {
 
       const reminderText =
         `溫馨付款提醒\n\n` +
-        `親愛的 ${order.userName} 💙您好，您於本次洗衣清潔仍待付款\n` +
+        `親愛的 ${order.userName} 您好，您於本次洗衣清潔仍待付款\n` +
         `金額：NT$ ${order.amount.toLocaleString()}\n\n` +
         `【信用卡／綠界】\n${ecpayShort}\n\n` +
         `【LINE Pay】\n${linepayShort}\n\n` +
         `備註：以上連結有效期間內可重複點擊付款。\n` +
-        `若已完成付款，請忽略此訊息。感謝您的支持💙`;
+        `若已完成付款，請忽略此訊息。感謝您的支持`;
 
       await client.pushMessage(order.userId, { type: 'text', text: reminderText });
 
@@ -987,16 +987,16 @@ app.post('/send-payment', async (req, res) => {
     const userMsg = customMessage || '';
     if (type === 'both' && ecpayLink && linepayLink) {
       finalMessage = userMsg
-        ? `${userMsg}\n\n付款連結如下:\n\n【💙信用卡付款】\n${ecpayLink}\n\n【💙LINE Pay】\n${linepayLink}\n\n付款後系統會自動通知我們\n感謝您的支持💙`
-        : `💙您好,${userName}\n\n您的專屬付款連結已生成\n金額:NT$ ${numAmount.toLocaleString()}\n\n請選擇付款方式:\n\n【信用卡付款】\n${ecpayLink}\n\n【LINE Pay】\n${linepayLink}\n\n付款後系統會自動通知我們\n感謝您的支持`;
+        ? `${userMsg}\n\n付款連結如下:\n\n【信用卡付款】\n${ecpayLink}\n\n【LINE Pay】\n${linepayLink}\n\n付款後系統會自動通知我們\n感謝您的支持`
+        : `您好,${userName}\n\n您的專屬付款連結已生成\n金額:NT$ ${numAmount.toLocaleString()}\n\n請選擇付款方式:\n\n【信用卡付款】\n${ecpayLink}\n\n【LINE Pay】\n${linepayLink}\n\n付款後系統會自動通知我們\n感謝您的支持`;
     } else if (type === 'ecpay' && ecpayLink) {
       finalMessage = userMsg
-        ? `${userMsg}\n\n付款連結如下:\n${ecpayLink}\n\n付款後系統會自動通知我們\n感謝您的支持💙`
-        : `💙您好,${userName}\n\n您的專屬付款連結已生成\n付款方式:信用卡\n金額:NT$ ${numAmount.toLocaleString()}\n\n請點擊以下連結完成付款:\n${ecpayLink}\n\n付款後系統會自動通知我們\n感謝您的支持`;
+        ? `${userMsg}\n\n付款連結如下:\n${ecpayLink}\n\n付款後系統會自動通知我們\n感謝您的支持`
+        : `您好,${userName}\n\n您的專屬付款連結已生成\n付款方式:信用卡\n金額:NT$ ${numAmount.toLocaleString()}\n\n請點擊以下連結完成付款:\n${ecpayLink}\n\n付款後系統會自動通知我們\n感謝您的支持`;
     } else if (type === 'linepay' && linepayLink) {
       finalMessage = userMsg
-        ? `${userMsg}\n\n付款連結如下:\n${linepayLink}\n\n付款後系統會自動通知我們\n感謝您的支持💙`
-        : `💙您好,${userName}\n\n您的專屬付款連結已生成\n付款方式:LINE Pay\n金額:NT$ ${numAmount.toLocaleString()}\n\n請點擊以下連結完成付款:\n${linepayLink}\n\n付款後系統會自動通知我們\n感謝您的支持`;
+        ? `${userMsg}\n\n付款連結如下:\n${linepayLink}\n\n付款後系統會自動通知我們\n感謝您的支持`
+        : `您好,${userName}\n\n您的專屬付款連結已生成\n付款方式:LINE Pay\n金額:NT$ ${numAmount.toLocaleString()}\n\n請點擊以下連結完成付款:\n${linepayLink}\n\n付款後系統會自動通知我們\n感謝您的支持`;
     } else {
       return res.status(500).json({ error: '付款連結生成失敗' });
     }
@@ -1141,12 +1141,12 @@ app.listen(PORT, async () => {
 
         const reminderText =
           `溫馨付款提醒\n\n` +
-          `親愛的 ${order.userName} 💙您好，您於本次洗衣清潔仍待付款\n` +
+          `親愛的 ${order.userName} 您好，您於本次洗衣清潔仍待付款\n` +
           `金額：NT$ ${order.amount.toLocaleString()}\n\n` +
           `【信用卡／綠界】\n${ecpayShort}\n\n` +
           `【LINE Pay】\n${linepayShort}\n\n` +
           `備註：以上連結有效期間內可重複點擊付款。\n` +
-          `若已完成付款，請忽略此訊息。感謝您的支持💙`;
+          `若已完成付款，請忽略此訊息。感謝您的支持`;
 
         await client.pushMessage(order.userId, { type: 'text', text: reminderText });
 
