@@ -357,7 +357,7 @@ class MessageHandler {
         return;
       }
 
-      let reply = "可以的 🙏 我們會到您輸入的地址收送，送達後再通知您 💙";
+      let reply = "可以的 🙏 我們會到您輸入的地址收送，謝謝您 💙";
 
       try {
         const rawClean2 = cleanText(raw);
@@ -374,7 +374,7 @@ class MessageHandler {
           }
         }
         if (formatted) {
-          reply = `可以的 🙏 我們會到您輸入的地址收送：\n${formatted}\n送達後會再通知您 💙`;
+          reply = `可以的 🙏 我們會到您輸入的地址收送：\n${formatted}\n謝謝您 💙`;
         }
       } catch (err) {
         logger.logError("收件地址處理錯誤", err, userId);
