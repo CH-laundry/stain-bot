@@ -718,7 +718,7 @@ function createECPayPaymentLink(userId, userName, amount) {
     baseURL = `https://${baseURL}`;
   }
   
-  const merchantTradeNo = `EC${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
+  const merchantTradeNo = `EC${Date.now().toString().slice(-10)}${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
   const now = new Date();
   const tradeDate = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
 
