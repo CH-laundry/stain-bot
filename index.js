@@ -412,40 +412,6 @@ app.get('/payment/linepay/cancel', (req, res) => {
   res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>付款取消</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#f093fb 0%,#f5576c 100%);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}</style></head><body><div class="container"><h1>付款已取消</h1><p>您已取消此次付款</p><p>如需協助請聯繫客服</p></div></body></html>');
 });
 
-app.post('/payment/ecpay/callback', async (req, res) => {
-  try {
-    const { MerchantTradeNo, RtnCode } = req.body;
-    logger.logToFile(`[ECPAY] 收到通知: ${MerchantTradeNo}, 狀態=${RtnCode}`);
-    
-    res.send('1|OK');
-    
-    if (RtnCode === '1') {
-      setTimeout(async () => {
-        const order = orderManager.getOrder(MerchantTradeNo);
-        if (order && order.status !== 'paid') {
-          orderManager.updateOrderStatus(MerchantTradeNo, 'paid', '綠界');
-          
-          if (process.env.ADMIN_USER_ID) {
-            client.pushMessage(process.env.ADMIN_USER_ID, {
-              type: 'text',
-              text: `✅ 綠界付款通知\n客戶: ${order.userName}\n金額: NT$ ${order.amount}\n訂單: ${MerchantTradeNo}`
-            }).catch(() => {});
-          }
-          
-          if (order.userId && order.userId !== 'undefined') {
-            client.pushMessage(order.userId, {
-              type: 'text',
-              text: `✅ 付款成功\n感謝 ${order.userName}\n金額: NT$ ${order.amount}\n訂單: ${MerchantTradeNo} 💙`
-            }).catch(() => {});
-          }
-        }
-      }, 100);
-    }
-  } catch (e) {
-    logger.logError('綠界回調錯誤', e);
-    res.send('0|ERROR');
-  }
-});
 // ====== 綠界持久付款頁 ======
 app.get('/payment/ecpay/pay/:orderId', async (req, res) => {
   const { orderId } = req.params;
@@ -619,6 +585,103 @@ async function handleLinePayConfirm(transactionId, orderId, parentOrderId) {
     logger.logError('Confirm 處理失敗', error);
   }
 }
+
+// ====== 綠界 ReturnURL（伺服器背景通知）======
+// 支援 POST / GET；為避免綠界重試，先回 "1|OK"（若你想嚴謹驗章後再回，也可移到成功分支最後）
+function generateECPayCheckMacValue(params) {
+  const { ECPAY_HASH_KEY, ECPAY_HASH_IV } = process.env;
+  const data = { ...params };
+  delete data.CheckMacValue;
+
+  const sortedKeys = Object.keys(data).sort();
+  let raw = `HashKey=${ECPAY_HASH_KEY}`;
+  sortedKeys.forEach((k) => { raw += `&${k}=${data[k]}`; });
+  raw += `&HashIV=${ECPAY_HASH_IV}`;
+
+  raw = encodeURIComponent(raw)
+    .replace(/%20/g, '+')
+    .replace(/%2d/g, '-')
+    .replace(/%5f/g, '_')
+    .replace(/%2e/g, '.')
+    .replace(/%21/g, '!')
+    .replace(/%2a/g, '*')
+    .replace(/%28/g, '(')
+    .replace(/%29/g, ')')
+    .toLowerCase();
+
+  return require('crypto')
+    .createHash('sha256')
+    .update(raw)
+    .digest('hex')
+    .toUpperCase();
+}
+
+app.all('/payment/ecpay/callback', async (req, res) => {
+  try {
+    // 1) 先回覆綠界，避免重試
+    res.type('text').send('1|OK');
+
+    // 2) 取得回傳資料（綠界可能用 POST，也可能 GET）
+    const data = { ...req.body, ...req.query };
+
+    // 3) 驗證 CheckMacValue
+    const mac = String(data.CheckMacValue || '');
+    const calc = generateECPayCheckMacValue(data);
+    if (!mac || mac.toUpperCase() !== calc.toUpperCase()) {
+      logger.logToFile('[ECPAY][WARN] CheckMacValue 不一致，疑似假通知或金鑰不符');
+      return; // 不處理
+    }
+
+    // 4) 僅在成功時處理：RtnCode === '1'
+    if (String(data.RtnCode) !== '1') {
+      logger.logToFile(`[ECPAY][INFO] 非成功回傳：RtnCode=${data.RtnCode} Msg=${data.RtnMsg || ''}`);
+      return;
+    }
+
+    // 5) 取必要欄位（依你送單時的 CustomField）
+    const merchantTradeNo = data.MerchantTradeNo;
+    const amount = Number(data.TradeAmt || data.Amount || 0);
+    const payType = data.PaymentType || 'ECPay';
+    const payTime = data.PaymentDate || '';
+    const userId = data.CustomField1 || '';   // 你送單時塞入的 LINE userId
+    const userName = data.CustomField2 || ''; // 你送單時塞入的客戶姓名
+
+    logger.logToFile(`[ECPAY][SUCCESS] ${merchantTradeNo} 成功 NT$${amount} ${payType} ${payTime} user=${userName}/${userId}`);
+
+    // 6)（可選）若有自家訂單對應，這裡更新狀態
+    // const orderId = mapEcpayToOrderId(merchantTradeNo); // 若你有建立 mapping
+    // orderManager.updateOrderStatus(orderId, 'paid', 'ECPay');
+
+    // 7) 通知老闆（ADMIN_USER_ID）
+    if (process.env.ADMIN_USER_ID) {
+      client.pushMessage(process.env.ADMIN_USER_ID, {
+        type: 'text',
+        text:
+          `✅ 綠界付款成功\n\n` +
+          `客戶：${userName || '-'}\n` +
+          `金額：NT$ ${amount.toLocaleString()}\n` +
+          `方式：${payType}\n` +
+          `綠界單號：${merchantTradeNo}\n` +
+          (payTime ? `時間：${payTime}\n` : '') +
+          `狀態：已付款`
+      }).catch(() => {});
+    }
+
+    // 8) 通知客人（以 CustomField1 的 userId 推播）
+    if (userId && userId !== 'undefined') {
+      client.pushMessage(userId, {
+        type: 'text',
+        text:
+          `✅ 付款成功（綠界）\n\n` +
+          (userName ? `感謝 ${userName} 的支付\n` : '') +
+          `金額：NT$ ${amount.toLocaleString()}\n` +
+          `我們會盡快為您處理，謝謝 💙`
+      }).catch(() => {});
+    }
+  } catch (err) {
+    logger.logError('[ECPAY][ERROR] 回調處理失敗', err);
+  }
+});
 
 // ====== 修正：GET + POST 都支援，立即回應 200 ======
 app.all('/payment/linepay/confirm', async (req, res) => {
