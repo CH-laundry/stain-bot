@@ -746,24 +746,9 @@ function createECPayPaymentLink(userId, userName, amount) {
 
   try {
   paymentData.CheckMacValue = generateECPayCheckMacValue(paymentData);
-  // 改用持久連結，更快更穩定
   const paymentLink = `${baseURL}/payment/ecpay/pay/${merchantTradeNo}`;
   log('PAYMENT', `綠界連結已生成: 訂單=${merchantTradeNo}, 金額=${amount}元, 客戶=${userName}`);
   return paymentLink;
-```
-
----
-
-## 為什麼這樣更快？
-
-**原本的流程：**
-```
-用戶點擊 → /payment/redirect (慢) → 生成表單 → 提交表單 → 綠界
-```
-
-**改後的流程：**
-```
-用戶點擊 → /payment/ecpay/pay/:orderId (快) → 直接跳轉綠界
   } catch (error) {
     log('ERROR', '生成付款連結失敗', error.message);
     throw error;
