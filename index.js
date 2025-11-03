@@ -675,7 +675,7 @@ app.all('/payment/ecpay/callback', async (req, res) => {
           `✅ 付款成功（綠界）\n\n` +
           (userName ? `感謝 ${userName} 的支付\n` : '') +
           `金額：NT$ ${amount.toLocaleString()}\n` +
-          `我們會盡快為您處理，謝謝 💙`
+          `非常謝謝您，感謝您的支持 💙`
       }).catch(() => {});
     }
   } catch (err) {
