@@ -445,6 +445,98 @@ app.get('/payment/linepay/cancel', (req, res) => {
   res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>付款取消</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#f093fb 0%,#f5576c 100%);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}</style></head><body><div class="container"><h1>付款已取消</h1><p>您已取消此次付款</p><p>如需協助請聯繫客服</p></div></body></html>');
 });
 
+// ⭐⭐⭐ 新增：綠界付款結果通知 ⭐⭐⭐
+app.post('/payment/ecpay/callback', async (req, res) => {
+  try {
+    const callbackData = req.body;
+    logger.logToFile(`[ECPAY][CALLBACK] 收到綠界通知: ${JSON.stringify(callbackData)}`);
+    
+    const { 
+      MerchantTradeNo,  // 訂單編號
+      RtnCode,          // 回傳碼 (1 = 成功)
+      RtnMsg,           // 回傳訊息
+      TradeAmt,         // 交易金額
+      PaymentDate,      // 付款時間
+      PaymentType       // 付款方式
+    } = callbackData;
+    
+    // ⚠️ 重要：必須立即回應 "1|OK" 給綠界
+    res.send('1|OK');
+    
+    // 背景處理付款通知
+    setImmediate(async () => {
+      try {
+        logger.logToFile(`[ECPAY][處理] 訂單=${MerchantTradeNo}, 狀態=${RtnCode}, 訊息=${RtnMsg}`);
+        
+        // RtnCode = '1' 代表付款成功
+        if (RtnCode === '1') {
+          const order = orderManager.getOrder(MerchantTradeNo);
+          
+          if (!order) {
+            logger.logToFile(`[ECPAY][錯誤] 找不到訂單: ${MerchantTradeNo}`);
+            return;
+          }
+          
+          if (order.status === 'paid') {
+            logger.logToFile(`[ECPAY][略過] 訂單已付款: ${MerchantTradeNo}`);
+            return;
+          }
+          
+          // 更新訂單狀態
+          orderManager.updateOrderStatus(MerchantTradeNo, 'paid', '綠界');
+          logger.logToFile(`[ECPAY][SUCCESS] ${MerchantTradeNo} 付款成功，金額 NT$ ${TradeAmt}`);
+          
+          // ⭐ 通知管理員（您）
+          logger.logToFile(`[ECPAY][通知管理員] ADMIN_USER_ID=${process.env.ADMIN_USER_ID}`);
+          
+          if (process.env.ADMIN_USER_ID) {
+            try {
+              await client.pushMessage(process.env.ADMIN_USER_ID, {
+                type: 'text',
+                text: `✅ 收到綠界付款通知\n\n客戶姓名: ${order.userName}\n付款金額: NT$ ${order.amount.toLocaleString()}\n付款方式: 綠界 ${PaymentType || '信用卡'}\n訂單編號: ${MerchantTradeNo}\n付款時間: ${PaymentDate}\n\n狀態: 付款成功`
+              });
+              logger.logToFile(`[ECPAY][通知管理員] ✅ 推播成功`);
+            } catch (error) {
+              logger.logError(`[ECPAY][通知管理員] ❌ 推播失敗`, error);
+            }
+          } else {
+            logger.logToFile(`[ECPAY][通知管理員] ⚠️ ADMIN_USER_ID 未設定`);
+          }
+          
+          // ⭐ 通知客戶
+          logger.logToFile(`[ECPAY][通知客戶] 準備推播: userId=${order.userId}, userName=${order.userName}`);
+          
+          if (order.userId && order.userId !== 'undefined') {
+            try {
+              await client.pushMessage(order.userId, {
+                type: 'text',
+                text: `✅ 付款成功\n\n感謝 ${order.userName} 的支付\n金額: NT$ ${order.amount.toLocaleString()}\n訂單編號: ${MerchantTradeNo}\n付款方式: 綠界 ${PaymentType || '信用卡'}\n\n非常謝謝您\n感謝您的支持 💙`
+              });
+              logger.logToFile(`[ECPAY][通知客戶] ✅ 推播成功: ${order.userId}`);
+            } catch (error) {
+              logger.logError(`[ECPAY][通知客戶] ❌ 推播失敗: ${order.userId}`, error);
+            }
+          } else {
+            logger.logToFile(`[ECPAY][通知客戶] ⚠️ userId 無效: ${order.userId}`);
+          }
+          
+        } else {
+          // 付款失敗
+          logger.logToFile(`[ECPAY][失敗] 付款失敗: ${RtnCode} - ${RtnMsg}, 訂單: ${MerchantTradeNo}`);
+        }
+        
+      } catch (error) {
+        logger.logError('[ECPAY][CALLBACK] 處理錯誤', error);
+      }
+    });
+    
+  } catch (error) {
+    logger.logError('[ECPAY][CALLBACK] 接收錯誤', error);
+    res.send('0|ERROR');
+  }
+});
+// ⭐⭐⭐ 綠界回調結束 ⭐⭐⭐
+
 // ====== 綠界持久付款頁 ======
 app.get('/payment/ecpay/pay/:orderId', async (req, res) => {
   const { orderId } = req.params;
