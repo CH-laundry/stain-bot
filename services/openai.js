@@ -705,7 +705,7 @@ async function smartAutoReply(inputText) {
 }
 
 /* =================== 綠界付款功能(修正版)=================== */
-function createECPayPaymentLink(userId, userName, amount, existingOrderId = null) {
+function createECPayPaymentLink(userId, userName, amount) {
   const { ECPAY_MERCHANT_ID, ECPAY_HASH_KEY, ECPAY_HASH_IV, RAILWAY_STATIC_URL } = process.env;
 
   if (!ECPAY_MERCHANT_ID || !ECPAY_HASH_KEY || !ECPAY_HASH_IV) {
@@ -718,7 +718,7 @@ function createECPayPaymentLink(userId, userName, amount, existingOrderId = null
     baseURL = `https://${baseURL}`;
   }
   
-  const merchantTradeNo = existingOrderId || `EC${Date.now().toString().slice(-10)}${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
+  const merchantTradeNo = `CH${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
   const now = new Date();
   const tradeDate = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
 
@@ -745,10 +745,10 @@ function createECPayPaymentLink(userId, userName, amount, existingOrderId = null
   };
 
   try {
-  paymentData.CheckMacValue = generateECPayCheckMacValue(paymentData);
-  const paymentLink = `${baseURL}/payment/ecpay/pay/${merchantTradeNo}`;
-  log('PAYMENT', `綠界連結已生成: 訂單=${merchantTradeNo}, 金額=${amount}元, 客戶=${userName}`);
-  return paymentLink;
+    paymentData.CheckMacValue = generateECPayCheckMacValue(paymentData);
+    const paymentLink = `${baseURL}/payment/redirect?data=${encodeURIComponent(Buffer.from(JSON.stringify(paymentData)).toString('base64'))}`;
+    log('PAYMENT', `綠界連結已生成: 訂單=${merchantTradeNo}, 金額=${amount}元, 客戶=${userName}`);
+    return paymentLink;
   } catch (error) {
     log('ERROR', '生成付款連結失敗', error.message);
     throw error;
