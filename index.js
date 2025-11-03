@@ -412,54 +412,6 @@ app.get('/payment/linepay/cancel', (req, res) => {
   res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>付款取消</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#f093fb 0%,#f5576c 100%);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}</style></head><body><div class="container"><h1>付款已取消</h1><p>您已取消此次付款</p><p>如需協助請聯繫客服</p></div></body></html>');
 });
 
-// 綠界付款回調
-app.post('/payment/ecpay/callback', async (req, res) => {
-  try {
-    const { MerchantTradeNo, RtnCode, RtnMsg, TradeAmt, PaymentDate, PaymentType } = req.body;
-    logger.logToFile(`[ECPAY][CALLBACK] 收到通知: 訂單=${MerchantTradeNo}, 狀態=${RtnCode}`);
-    
-    res.send('1|OK');
-    
-    setImmediate(async () => {
-      if (RtnCode === '1') {
-        const order = orderManager.getOrder(MerchantTradeNo);
-        
-        if (!order) {
-          logger.logToFile(`[ECPAY][錯誤] 找不到訂單: ${MerchantTradeNo}`);
-          return;
-        }
-        
-        if (order.status === 'paid') {
-          logger.logToFile(`[ECPAY][略過] 訂單已付款`);
-          return;
-        }
-        
-        orderManager.updateOrderStatus(MerchantTradeNo, 'paid', '綠界');
-        logger.logToFile(`[ECPAY][SUCCESS] 付款成功`);
-        
-        // 通知管理員
-        if (process.env.ADMIN_USER_ID) {
-          await client.pushMessage(process.env.ADMIN_USER_ID, {
-            type: 'text',
-            text: `✅ 收到綠界付款通知\n\n客戶: ${order.userName}\n金額: NT$ ${order.amount}\n訂單: ${MerchantTradeNo}`
-          }).catch(e => logger.logError('通知管理員失敗', e));
-        }
-        
-        // 通知客戶
-        if (order.userId && order.userId !== 'undefined') {
-          await client.pushMessage(order.userId, {
-            type: 'text',
-            text: `✅ 付款成功\n\n感謝 ${order.userName} 的支付\n金額: NT$ ${order.amount}\n訂單: ${MerchantTradeNo}\n\n感謝您的支持 💙`
-          }).catch(e => logger.logError('通知客戶失敗', e));
-        }
-      }
-    });
-  } catch (error) {
-    logger.logError('[ECPAY] 回調錯誤', error);
-    res.send('0|ERROR');
-  }
-});
-
 // ====== 綠界持久付款頁 ======
 app.get('/payment/ecpay/pay/:orderId', async (req, res) => {
   const { orderId } = req.params;
@@ -481,7 +433,7 @@ app.get('/payment/ecpay/pay/:orderId', async (req, res) => {
 
   try {
     logger.logToFile(`重新生成綠界付款連結: ${orderId}`);
-    const ecpayLink = createECPayPaymentLink(order.userId, order.userName, order.amount, order.orderId);
+    const ecpayLink = createECPayPaymentLink(order.userId, order.userName, order.amount);
     const remainingHours = Math.floor((order.expiryTime - Date.now()) / (1000 * 60 * 60));
     res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>前往綠界付款</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#667eea,#764ba2);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}h1{font-size:28px;margin-bottom:20px}p{font-size:16px;margin:15px 0}.btn{display:inline-block;padding:15px 40px;background:#fff;color:#667eea;text-decoration:none;border-radius:10px;font-weight:bold;margin-top:20px;font-size:18px}.info{background:rgba(255,255,255,0.2);padding:15px;border-radius:10px;margin:20px 0}</style></head><body><div class="container"><h1>前往綠界付款</h1><div class="info"><p><strong>訂單編號:</strong> ' + orderId + '</p><p><strong>客戶姓名:</strong> ' + order.userName + '</p><p><strong>金額:</strong> NT$ ' + order.amount.toLocaleString() + '</p><p><strong>剩餘有效時間:</strong> ' + remainingHours + ' 小時</p></div><p>正在為您生成付款連結...</p><p>若未自動跳轉，請點擊下方按鈕</p><a href="' + ecpayLink + '" class="btn">立即前往綠界付款</a></div><script>setTimeout(function(){window.location.href="' + ecpayLink + '"},1500)</script></body></html>');
     logger.logToFile(`綠界付款連結已重新生成: ${orderId}`);
