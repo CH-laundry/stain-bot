@@ -412,6 +412,54 @@ app.get('/payment/linepay/cancel', (req, res) => {
   res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>付款取消</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#f093fb 0%,#f5576c 100%);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}</style></head><body><div class="container"><h1>付款已取消</h1><p>您已取消此次付款</p><p>如需協助請聯繫客服</p></div></body></html>');
 });
 
+// 綠界付款回調
+app.post('/payment/ecpay/callback', async (req, res) => {
+  try {
+    const { MerchantTradeNo, RtnCode, RtnMsg, TradeAmt, PaymentDate, PaymentType } = req.body;
+    logger.logToFile(`[ECPAY][CALLBACK] 收到通知: 訂單=${MerchantTradeNo}, 狀態=${RtnCode}`);
+    
+    res.send('1|OK');
+    
+    setImmediate(async () => {
+      if (RtnCode === '1') {
+        const order = orderManager.getOrder(MerchantTradeNo);
+        
+        if (!order) {
+          logger.logToFile(`[ECPAY][錯誤] 找不到訂單: ${MerchantTradeNo}`);
+          return;
+        }
+        
+        if (order.status === 'paid') {
+          logger.logToFile(`[ECPAY][略過] 訂單已付款`);
+          return;
+        }
+        
+        orderManager.updateOrderStatus(MerchantTradeNo, 'paid', '綠界');
+        logger.logToFile(`[ECPAY][SUCCESS] 付款成功`);
+        
+        // 通知管理員
+        if (process.env.ADMIN_USER_ID) {
+          await client.pushMessage(process.env.ADMIN_USER_ID, {
+            type: 'text',
+            text: `✅ 收到綠界付款通知\n\n客戶: ${order.userName}\n金額: NT$ ${order.amount}\n訂單: ${MerchantTradeNo}`
+          }).catch(e => logger.logError('通知管理員失敗', e));
+        }
+        
+        // 通知客戶
+        if (order.userId && order.userId !== 'undefined') {
+          await client.pushMessage(order.userId, {
+            type: 'text',
+            text: `✅ 付款成功\n\n感謝 ${order.userName} 的支付\n金額: NT$ ${order.amount}\n訂單: ${MerchantTradeNo}\n\n感謝您的支持 💙`
+          }).catch(e => logger.logError('通知客戶失敗', e));
+        }
+      }
+    });
+  } catch (error) {
+    logger.logError('[ECPAY] 回調錯誤', error);
+    res.send('0|ERROR');
+  }
+});
+
 // ====== 綠界持久付款頁 ======
 app.get('/payment/ecpay/pay/:orderId', async (req, res) => {
   const { orderId } = req.params;
