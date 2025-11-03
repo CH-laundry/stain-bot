@@ -412,6 +412,40 @@ app.get('/payment/linepay/cancel', (req, res) => {
   res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>付款取消</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#f093fb 0%,#f5576c 100%);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}</style></head><body><div class="container"><h1>付款已取消</h1><p>您已取消此次付款</p><p>如需協助請聯繫客服</p></div></body></html>');
 });
 
+app.post('/payment/ecpay/callback', async (req, res) => {
+  try {
+    const { MerchantTradeNo, RtnCode } = req.body;
+    logger.logToFile(`[ECPAY] 收到通知: ${MerchantTradeNo}, 狀態=${RtnCode}`);
+    
+    res.send('1|OK');
+    
+    if (RtnCode === '1') {
+      setTimeout(async () => {
+        const order = orderManager.getOrder(MerchantTradeNo);
+        if (order && order.status !== 'paid') {
+          orderManager.updateOrderStatus(MerchantTradeNo, 'paid', '綠界');
+          
+          if (process.env.ADMIN_USER_ID) {
+            client.pushMessage(process.env.ADMIN_USER_ID, {
+              type: 'text',
+              text: `✅ 綠界付款通知\n客戶: ${order.userName}\n金額: NT$ ${order.amount}\n訂單: ${MerchantTradeNo}`
+            }).catch(() => {});
+          }
+          
+          if (order.userId && order.userId !== 'undefined') {
+            client.pushMessage(order.userId, {
+              type: 'text',
+              text: `✅ 付款成功\n感謝 ${order.userName}\n金額: NT$ ${order.amount}\n訂單: ${MerchantTradeNo} 💙`
+            }).catch(() => {});
+          }
+        }
+      }, 100);
+    }
+  } catch (e) {
+    logger.logError('綠界回調錯誤', e);
+    res.send('0|ERROR');
+  }
+});
 // ====== 綠界持久付款頁 ======
 app.get('/payment/ecpay/pay/:orderId', async (req, res) => {
   const { orderId } = req.params;
