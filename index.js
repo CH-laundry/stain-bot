@@ -385,6 +385,39 @@ app.get('/test-push', async (req, res) => {
     res.status(500).send(`推播失敗: ${err.message}`);
   }
 });
+app.get('/test-push', async (req, res) => {
+  const userId = process.env.ADMIN_USER_ID || "Uxxxxxxxxxxxxxxxxxxxx";
+  try {
+    await client.pushMessage(userId, { type: 'text', text: '測試推播成功!這是一則主動訊息' });
+    res.send("推播成功,請查看 LINE Bot 訊息");
+  } catch (err) {
+    console.error("推播錯誤", err);
+    res.status(500).send(`推播失敗: ${err.message}`);
+  }
+});
+
+// ⭐⭐⭐ 新增：測試推播給指定客戶 ⭐⭐⭐
+app.get('/test-push-customer', async (req, res) => {
+  const { userId } = req.query;
+  
+  if (!userId) {
+    return res.status(400).send('請提供 userId 參數，例如：/test-push-customer?userId=U1234567890');
+  }
+  
+  try {
+    await client.pushMessage(userId, { 
+      type: 'text', 
+      text: '🔔 測試推播\n\n如果您收到這則訊息，代表系統可以正常推播給您！' 
+    });
+    
+    logger.logToFile(`測試推播成功發送給: ${userId}`);
+    res.send(`✅ 推播已發送給 ${userId}，請檢查 LINE 訊息`);
+  } catch (err) {
+    logger.logError("測試推播錯誤", err, userId);
+    res.status(500).send(`❌ 推播失敗: ${err.message}\n\n可能原因：\n1. userId 不正確\n2. 對方未加 Bot 好友\n3. Bot Token 有問題`);
+  }
+});
+// ⭐⭐⭐ 測試推播結束 ⭐⭐⭐
 
 app.get('/payment/redirect', (req, res) => {
   const { data } = req.query;
@@ -565,26 +598,47 @@ async function handleLinePayConfirm(transactionId, orderId, parentOrderId) {
       orderManager.updateOrderStatus(order.orderId, 'paid', 'LINE Pay');
       logger.logToFile(`[LINEPAY][SUCCESS] ${order.orderId} 付款成功`);
 
-      if (process.env.ADMIN_USER_ID) {
-        client.pushMessage(process.env.ADMIN_USER_ID, {
-          type: 'text',
-          text: `收到 LINE Pay 付款通知\n\n客戶姓名:${order.userName}\n付款金額:NT$ ${order.amount.toLocaleString()}\n付款方式:LINE Pay\n訂單編號:${order.orderId}\n交易編號:${transactionId}\n\n狀態:付款成功`
-        }).catch(() => {});
-      }
+      // ⭐ 通知管理員（加強 log 版本）
+logger.logToFile(`[LINEPAY][通知管理員] ADMIN_USER_ID=${process.env.ADMIN_USER_ID}`);
+
+if (process.env.ADMIN_USER_ID) {
+  try {
+    await client.pushMessage(process.env.ADMIN_USER_ID, {
+      type: 'text',
+      text: `收到 LINE Pay 付款通知\n\n客戶姓名:${order.userName}\n付款金額:NT$ ${order.amount.toLocaleString()}\n付款方式:LINE Pay\n訂單編號:${order.orderId}\n交易編號:${transactionId}\n\n狀態:付款成功`
+    });
+    logger.logToFile(`[LINEPAY][通知管理員] ✅ 推播成功`);
+  } catch (error) {
+    logger.logError(`[LINEPAY][通知管理員] ❌ 推播失敗`, error);
+  }
+} else {
+  logger.logToFile(`[LINEPAY][通知管理員] ⚠️ ADMIN_USER_ID 未設定`);
+}
+
+
+      // ⭐ 通知客戶（加強 log 版本）
+      logger.logToFile(`[LINEPAY][通知客戶] 準備推播: userId=${order.userId}, userName=${order.userName}`);
 
       if (order.userId && order.userId !== 'undefined') {
-        client.pushMessage(order.userId, {
-          type: 'text',
-          text: `✅ LINE Pay 付款成功\n\n感謝 ${order.userName} 的支付\n金額:NT$ ${order.amount.toLocaleString()}\n訂單編號:${order.orderId}\n\n非常謝謝您\n感謝您的支持 💙`
-        }).catch(() => {});
-      }
+        try {
+          await client.pushMessage(order.userId, {
+            type: 'text',
+            text: `✅ LINE Pay 付款成功\n\n感謝 ${order.userName} 的支付\n金額:NT$ ${order.amount.toLocaleString()}\n訂單編號:${order.orderId}\n\n非常謝謝您\n感謝您的支持 💙`
+          });
+          logger.logToFile(`[LINEPAY][通知客戶] ✅ 推播成功: ${order.userId}`);
+        } catch (error) {
+          logger.logError(`[LINEPAY][通知客戶] ❌ 推播失敗: ${order.userId}`, error);
+        }
+       } else {
+         logger.logToFile(`[LINEPAY][通知客戶] ⚠️ userId 無效: ${order.userId}`);
+}
     } else {
       logger.logToFile(`[LINEPAY][FAIL] Confirm 失敗: ${result.returnCode} - ${result.returnMessage}`);
     }
-  } catch (error) {
-    logger.logError('Confirm 處理失敗', error);
-  }
-}
+        } catch (error) {
+          logger.logError('Confirm 處理失敗', error);
+        }
+      }
 
 // ====== 修正：GET + POST 都支援，立即回應 200 ======
 app.all('/payment/linepay/confirm', async (req, res) => {
