@@ -705,7 +705,7 @@ async function smartAutoReply(inputText) {
 }
 
 /* =================== 綠界付款功能(修正版)=================== */
-function createECPayPaymentLink(userId, userName, amount, existingOrderId = null) {
+function createECPayPaymentLink(userId, userName, amount) {
   const { ECPAY_MERCHANT_ID, ECPAY_HASH_KEY, ECPAY_HASH_IV, RAILWAY_STATIC_URL } = process.env;
 
   if (!ECPAY_MERCHANT_ID || !ECPAY_HASH_KEY || !ECPAY_HASH_IV) {
@@ -718,7 +718,7 @@ function createECPayPaymentLink(userId, userName, amount, existingOrderId = null
     baseURL = `https://${baseURL}`;
   }
   
-  const merchantTradeNo = `EC${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
+  const merchantTradeNo = `CH${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
   const now = new Date();
   const tradeDate = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
 
