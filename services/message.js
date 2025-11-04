@@ -258,15 +258,35 @@ class MessageHandler {
                     `👉 請點擊下方連結完成付款\n${shortUrl}\n\n` +
                     `✅ 付款後系統會自動通知我們\n` +
                     `感謝您的支持 💙`;
-        } else if (paymentType === 'linepay') {
-          const LINE_PAY_URL = process.env.LINE_PAY_URL;
-          message = `您好,${customerName} 👋\n\n` +
-                    `您的專屬付款連結已生成\n` +
-                    `付款方式:LINE Pay\n` +
-                    `金額:NT$ ${parseInt(amount).toLocaleString()}\n\n` +
-                    `👉 請點擊下方連結完成付款\n${LINE_PAY_URL}\n\n` +
-                    `✅ 付款後系統會自動通知我們\n` +
-                    `感謝您的支持 💙`;
+       } else if (paymentType === 'linepay') {
+         // 改成呼叫剛剛新增的 API，動態生成付款連結
+         const base = (process.env.RAILWAY_PUBLIC_DOMAIN || '').replace(/^http:/i, 'https:');
+         const api = `${base}/api/payments/linepay`;
+
+         const resp = await fetch(api, {
+           method: 'POST',
+           headers: { 'Content-Type': 'application/json' },
+           body: JSON.stringify({
+             userId: customerId,
+              userName: customerName,
+             amount: parseInt(amount, 10)
+           })
+          });
+
+          const data = await resp.json();
+          if (!data.success) throw new Error(data.error || '建立 LINE Pay 訂單失敗');
+
+         const liffUrl = data.liffUrl; // 專屬付款連結
+
+         message =
+           `您好，${customerName} 👋\n\n` +
+           `您的付款連結已生成。\n` +
+           `付款方式：LINE Pay\n` +
+           `金額：NT$ ${parseInt(amount, 10).toLocaleString()}\n\n` +
+           `👉 點擊以下連結完成付款：\n${liffUrl}\n\n` +
+           `✅ 付款完成後系統會自動通知我們，感謝您的支持 💙`;
+       }
+
         } else {
           await client.pushMessage(userId, { type: 'text', text: '❌ 不支援的付款方式\n請使用 ecpay 或 linepay' });
           return true;
