@@ -1235,7 +1235,7 @@ app.get('/api/linepay/url/:orderId', async (req, res) => {
    const urlApp = lp.paymentUrlApp || null;
 const urlWeb = lp.paymentUrlWeb || null;
 const urlAny = urlApp || urlWeb || lp.paymentUrl;
-const now = Date.now();
+
 
 orderManager.updatePaymentInfo(orderId, {
   linepayTransactionId: lp.transactionId,
