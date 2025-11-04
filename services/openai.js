@@ -713,9 +713,7 @@ function createECPayPaymentLink(userId, userName, amount) {
     throw new Error('綠界環境變數未設定');
   }
 
-  let baseURL = process.env.RAILWAY_PUBLIC_DOMAIN || 
-               process.env.BASE_URL || 
-               'https://stain-bot-production-2593.up.railway.app';
+  let baseURL = RAILWAY_STATIC_URL || 'https://stain-bot-production-2593.up.railway.app';
   if (!baseURL.startsWith('http://') && !baseURL.startsWith('https://')) {
     baseURL = `https://${baseURL}`;
   }
