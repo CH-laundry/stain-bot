@@ -1191,7 +1191,13 @@ app.get('/liff/payment', (req, res) => {
 app.get('/api/linepay/url/:orderId', async (req, res) => {
   const { orderId } = req.params;
   const order = orderManager.getOrder(orderId);
-
+  // 權限檢查：只有訂單本人能拿付款連結
+  const requestUserId = req.query.userId;
+  if (requestUserId && requestUserId !== order.userId) {
+    logger.logToFile(`[LINEPAY][ACCESS_DENIED] orderId=${orderId} request=${requestUserId} real=${order.userId}`);
+    return res.json({ success: false, error: '無權限' });
+  }
+  
   // 記錄誰在請求
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   const ua = req.headers['user-agent'];
