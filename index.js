@@ -192,6 +192,16 @@ async function createLinePayPayment(userId, userName, amount) {
     const orderId = `LP${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
     const nonce = crypto.randomBytes(16).toString('base64');
 
+    // ⭐⭐⭐ 修復：立即創建訂單記錄（在調用 LINE Pay API 之前）
+    orderManager.createOrder(orderId, { 
+      userId, 
+      userName, 
+      amount,
+      status: 'pending',
+      createdAt: Date.now()
+    });
+    logger.logToFile(`[LINE PAY] 已創建訂單: ${orderId}, userId: ${userId}, amount: ${amount}`);
+
     const rawBase = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.BASE_URL || process.env.PUBLIC_BASE_URL || '';
     const baseURL = ensureHttpsBase(rawBase) || 'https://stain-bot-production-2593.up.railway.app';
 
@@ -227,13 +237,22 @@ async function createLinePayPayment(userId, userName, amount) {
     });
 
     const result = await response.json();
-    logger.logToFile(`LINE Pay API: ${result.returnCode} - ${result.returnMessage}`);
+    logger.logToFile(`[LINE PAY API Response] returnCode=${result.returnCode}, message=${result.returnMessage || 'success'}`);
 
     if (result.returnCode === '0000') {
       const paymentUrlApp = result.info?.paymentUrl?.app || null;
       const paymentUrlWeb = result.info?.paymentUrl?.web || null;
       const txId = result.info?.transactionId || null;
       const pickUrl = paymentUrlApp || paymentUrlWeb;
+
+      // ⭐⭐⭐ 修復：更新訂單的 LINE Pay 資訊
+      orderManager.updatePaymentInfo(orderId, {
+        linepayTransactionId: txId,
+        linepayPaymentUrl: pickUrl,
+        lastLinePayRequestAt: Date.now()
+      });
+
+      logger.logToFile(`[LINE PAY] 交易建立成功: transactionId=${txId}`);
 
       return {
         success: true,
@@ -244,6 +263,9 @@ async function createLinePayPayment(userId, userName, amount) {
         transactionId: txId
       };
     } else {
+      logger.logError('LINE Pay 建立失敗', new Error(result.returnMessage || 'Unknown error'), userId);
+      // ⭐⭐⭐ 修復：失敗時刪除訂單
+      orderManager.deleteOrder(orderId);
       return { success: false, error: result.returnMessage || '請求失敗' };
     }
   } catch (error) {
@@ -732,6 +754,11 @@ app.all('/payment/ecpay/callback', async (req, res) => {
 app.all('/payment/linepay/confirm', async (req, res) => {
   const { transactionId, orderId, parentOrderId } = { ...req.query, ...req.body };
   
+  // ⭐⭐⭐ 修復：詳細的 debug logging
+  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  const ua = req.headers['user-agent'] || 'unknown';
+  logger.logToFile(`[LINEPAY CONFIRM] 收到確認請求 - IP=${ip}, transactionId=${transactionId}, parentOrderId=${parentOrderId}, UA=${ua}`);
+  
   // 立即回應，阻止 LINE Pay 重試
   res.status(200).send('OK');
 
@@ -748,14 +775,12 @@ app.get('/api/orders', (req, res) => {
   const ordersWithStatus = orders.map(order => ({
     ...order,
     isExpired: orderManager.isExpired(order.orderId),
-    remainingTime: Math.max(0, order.expiryTime - Date.now()),
-    remainingHours: Math.floor(Math.max(0, order.expiryTime - Date.now()) / (1000 * 60 * 60))
+    remainingTime: order.expiryTime - Date.now()
   }));
   res.json({
     success: true,
     total: ordersWithStatus.length,
-    orders: ordersWithStatus,
-    statistics: orderManager.getStatistics()
+    orders: ordersWithStatus
   });
 });
 
@@ -767,316 +792,138 @@ app.get('/api/order/:orderId', (req, res) => {
       order: {
         ...order,
         isExpired: orderManager.isExpired(order.orderId),
-        remainingTime: Math.max(0, order.expiryTime - Date.now()),
-        remainingHours: Math.floor(Math.max(0, order.expiryTime - Date.now()) / (1000 * 60 * 60))
+        remainingTime: order.expiryTime - Date.now()
       }
     });
   } else {
-    res.status(404).json({ success: false, error: '找不到此訂單' });
-  }
-});
-
-app.post('/api/order/:orderId/renew', async (req, res) => {
-  const { orderId } = req.params;
-  const order = orderManager.renewOrder(orderId);
-  if (!order) return res.status(404).json({ success: false, error: '找不到此訂單' });
-
-  try {
-    const rawBase = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.BASE_URL || process.env.PUBLIC_BASE_URL || '';
-    const baseURL = ensureHttpsBase(rawBase) || 'https://stain-bot-production-2593.up.railway.app';
-
-    const ecpayPersistentUrl = `${baseURL}/payment/ecpay/pay/${orderId}`;
-    const linepayPersistentUrl = `${baseURL}/payment/linepay/pay/${orderId}`;
-
-    let ecpayShort = ecpayPersistentUrl;
-    let linepayShort = linepayPersistentUrl;
-
-    try {
-      const r2 = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(ecpayPersistentUrl)}`);
-      const t2 = await r2.text();
-      if (t2 && t2.startsWith('http')) ecpayShort = t2;
-    } catch { logger.logToFile(`綠界短網址失敗，使用原網址`); }
-
-    try {
-      const r1 = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(linepayPersistentUrl)}`);
-      const t1 = await r1.text();
-      if (t1 && t1.startsWith('http')) linepayShort = t1;
-    } catch { logger.logToFile(`LINE Pay 短網址失敗,使用原網址`); }
-
-    await client.pushMessage(order.userId, {
-      type: 'text',
-      text:
-        `付款連結已重新生成（持久網址）\n\n` +
-        `訂單編號: ${orderId}\n客戶姓名: ${order.userName}\n金額: NT$ ${order.amount.toLocaleString()}\n\n` +
-        `— 請選擇付款方式 —\n` +
-        `【信用卡／綠界】\n${ecpayShort}\n\n` +
-        `【LINE Pay】\n${linepayShort}\n\n` +
-        `備註：以上連結可重複點擊，隨時都可以付款。\n` +
-        `付款後系統會自動通知我們`
-    });
-
-    orderManager.markReminderSent(orderId);
-    logger.logToFile(`單筆續約重發（綠界+LINE Pay 持久網址）：${orderId}`);
-
-    return res.json({
-      success: true,
-      message: '訂單已續約並重新發送付款連結（持久網址：綠界 + LINE Pay）',
-      order,
-      links: { ecpay: ecpayShort, linepay: linepayShort }
-    });
-  } catch (error) {
-    logger.logError('續約訂單失敗', error);
-    return res.status(500).json({ success: false, error: error.message });
+    res.status(404).json({ success: false, error: '找不到訂單' });
   }
 });
 
 app.delete('/api/order/:orderId', (req, res) => {
-  const deleted = orderManager.deleteOrder(req.params.orderId);
-  if (deleted) res.json({ success: true, message: '訂單已刪除' });
-  else res.status(404).json({ success: false, error: '找不到此訂單' });
+  const { orderId } = req.params;
+  const deleted = orderManager.deleteOrder(orderId);
+  if (deleted) {
+    res.json({ success: true, message: '訂單已刪除' });
+  } else {
+    res.status(404).json({ success: false, error: '找不到訂單' });
+  }
 });
 
-app.post('/api/orders/send-reminders', async (req, res) => {
-  const ordersNeedingReminder = orderManager.getOrdersNeedingReminder();
-  if (ordersNeedingReminder.length === 0) {
-    return res.json({ success: true, message: '目前沒有需要提醒的訂單', sent: 0 });
+app.post('/api/order/:orderId/renew', (req, res) => {
+  const { orderId } = req.params;
+  const order = orderManager.renewOrder(orderId);
+  if (order) {
+    res.json({ success: true, message: '訂單已續約', order: order });
+  } else {
+    res.status(404).json({ success: false, error: '找不到訂單' });
   }
-
-  let sent = 0;
-  const rawBase = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.BASE_URL || process.env.PUBLIC_BASE_URL || '';
-  const baseURL = ensureHttpsBase(rawBase) || 'https://stain-bot-production-2593.up.railway.app';
-
-  for (const order of ordersNeedingReminder) {
-    try {
-      const linepayPersistentUrl = `${baseURL}/payment/linepay/pay/${order.orderId}`;
-      const ecpayPersistentUrl = `${baseURL}/payment/ecpay/pay/${order.orderId}`;
-
-      let linepayShort = linepayPersistentUrl;
-      let ecpayShort = ecpayPersistentUrl;
-
-      try {
-        const r1 = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(linepayPersistentUrl)}`);
-        const t1 = await r1.text();
-        if (t1 && t1.startsWith('http')) linepayShort = t1;
-      } catch {}
-
-      try {
-        const r2 = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(ecpayPersistentUrl)}`);
-        const t2 = await r2.text();
-        if (t2 && t2.startsWith('http')) ecpayShort = t2;
-      } catch {}
-
-      const reminderText =
-        `溫馨付款提醒\n\n` +
-        `親愛的 ${order.userName} 您好，您於本次洗衣清潔仍待付款\n` +
-        `金額：NT$ ${order.amount.toLocaleString()}\n\n` +
-        `【信用卡／綠界】\n${ecpayShort}\n\n` +
-        `【LINE Pay】\n${linepayShort}\n\n` +
-        `備註：以上連結有效期間內可重複點擊付款。\n` +
-        `若已完成付款，請忽略此訊息。感謝您的支持 💙`;
-
-      await client.pushMessage(order.userId, { type: 'text', text: reminderText });
-
-      sent++;
-      orderManager.markReminderSent(order.orderId);
-      logger.logToFile(`已發送付款提醒：${order.orderId} (第 ${order.reminderCount} 次)`);
-    } catch (error) {
-      logger.logError(`發送提醒失敗: ${order.orderId}`, error);
-    }
-  }
-
-  res.json({ success: true, message: `已發送 ${sent} 筆付款提醒`, sent: sent });
 });
 
-app.get('/api/orders/statistics', (req, res) => {
-  res.json({ success: true, statistics: orderManager.getStatistics() });
+app.post('/api/order/:orderId/toggle-reminder', (req, res) => {
+  const { orderId } = req.params;
+  const { enabled } = req.body;
+  const order = orderManager.getOrder(orderId);
+  if (!order) {
+    return res.status(404).json({ success: false, error: '找不到訂單' });
+  }
+  orderManager.toggleReminder(orderId, enabled);
+  res.json({ success: true, message: enabled ? '已啟用提醒' : '已暫停提醒' });
+});
+
+app.get('/api/statistics', (req, res) => {
+  const stats = orderManager.getStatistics();
+  res.json({ success: true, statistics: stats });
 });
 
 app.get('/api/customer-numbers', (req, res) => {
-  try {
-    const customers = orderManager.getAllCustomerNumbers();
-    res.json({ success: true, total: customers.length, customers });
-  } catch (error) {
-    console.error('API /api/customer-numbers 錯誤:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
+  const customers = orderManager.getAllCustomerNumbers();
+  res.json({ success: true, total: customers.length, customers: customers });
 });
 
-app.post('/api/customer-numbers', (req, res) => {
-  try {
-    const { number, name, userId } = req.body;
-    if (!number || !name || !userId) {
-      return res.status(400).json({ success: false, error: '請填寫所有欄位' });
-    }
-    const customer = orderManager.saveCustomerNumber(number, name, userId);
-    res.json({ success: true, message: '客戶編號已儲存', customer });
-  } catch (error) {
-    console.error('API POST /api/customer-numbers 錯誤:', error);
-    res.status(500).json({ success: false, error: error.message });
+app.post('/api/customer-number', express.json(), (req, res) => {
+  const { number, name, userId } = req.body;
+  if (!number || !name) {
+    return res.status(400).json({ success: false, error: '編號和姓名為必填欄位' });
   }
+  const customer = orderManager.saveCustomerNumber(number, name, userId);
+  res.json({ success: true, message: '客戶編號已儲存', customer: customer });
 });
 
-app.delete('/api/customer-numbers/:number', (req, res) => {
-  try {
-    const deleted = orderManager.deleteCustomerNumber(req.params.number);
-    if (deleted) {
-      res.json({ success: true, message: '客戶編號已刪除' });
-    } else {
-      res.status(404).json({ success: false, error: '找不到此客戶編號' });
-    }
-  } catch (error) {
-    console.error('API DELETE /api/customer-numbers 錯誤:', error);
-    res.status(500).json({ success: false, error: error.message });
+app.get('/api/customer-number/search', (req, res) => {
+  const { query } = req.query;
+  if (!query) {
+    return res.status(400).json({ success: false, error: '請提供搜尋關鍵字' });
   }
+  const results = orderManager.searchCustomerNumber(query);
+  res.json({ success: true, total: results.length, customers: results });
 });
 
-app.get('/api/customer-numbers/search', (req, res) => {
-  try {
-    const { q } = req.query;
-    if (!q) return res.status(400).json({ success: false, error: '請提供搜尋關鍵字' });
-    const results = orderManager.searchCustomerNumber(q);
-    res.json({ success: true, total: results.length, customers: results });
-  } catch (error) {
-    console.error('API /api/customer-numbers/search 錯誤:', error);
-    res.status(500).json({ success: false, error: error.message });
+app.delete('/api/customer-number/:number', (req, res) => {
+  const { number } = req.params;
+  const deleted = orderManager.deleteCustomerNumber(number);
+  if (deleted) {
+    res.json({ success: true, message: '客戶編號已刪除' });
+  } else {
+    res.status(404).json({ success: false, error: '找不到該編號' });
   }
 });
 
 app.get('/api/templates', (req, res) => {
-  try {
-    const templates = orderManager.getAllTemplates();
-    res.json({ success: true, total: templates.length, templates });
-  } catch (error) {
-    console.error('API /api/templates 錯誤:', error);
-    res.status(500).json({ success: false, error: error.message });
+  const templates = orderManager.getAllTemplates();
+  res.json({ success: true, total: templates.length, templates: templates });
+});
+
+app.post('/api/template', express.json(), (req, res) => {
+  const { content } = req.body;
+  if (!content) {
+    return res.status(400).json({ success: false, error: '模板內容不能為空' });
+  }
+  orderManager.addTemplate(content);
+  res.json({ success: true, message: '模板已新增' });
+});
+
+app.put('/api/template/:index', express.json(), (req, res) => {
+  const index = parseInt(req.params.index, 10);
+  const { content } = req.body;
+  if (!content) {
+    return res.status(400).json({ success: false, error: '模板內容不能為空' });
+  }
+  const success = orderManager.updateTemplate(index, content);
+  if (success) {
+    res.json({ success: true, message: '模板已更新' });
+  } else {
+    res.status(404).json({ success: false, error: '找不到該模板' });
   }
 });
 
-app.post('/api/templates', (req, res) => {
-  try {
-    const { content } = req.body;
-    if (!content || !content.trim()) {
-      return res.status(400).json({ success: false, error: '模板內容不能為空' });
-    }
-    orderManager.addTemplate(content.trim());
-    res.json({ success: true, message: '模板已新增' });
-  } catch (error) {
-    console.error('API POST /api/templates 錯誤:', error);
-    res.status(500).json({ success: false, error: error.message });
+app.delete('/api/template/:index', (req, res) => {
+  const index = parseInt(req.params.index, 10);
+  const success = orderManager.deleteTemplate(index);
+  if (success) {
+    res.json({ success: true, message: '模板已刪除' });
+  } else {
+    res.status(404).json({ success: false, error: '找不到該模板' });
   }
 });
 
-app.put('/api/templates/:index', (req, res) => {
+// ====== 發送付款連結 API ======
+app.post('/api/send-payment', async (req, res) => {
   try {
-    const index = parseInt(req.params.index);
-    const { content } = req.body;
-    if (!content || !content.trim()) {
-      return res.status(400).json({ success: false, error: '模板內容不能為空' });
-    }
-    const success = orderManager.updateTemplate(index, content.trim());
-    if (success) res.json({ success: true, message: '模板已更新' });
-    else res.status(404).json({ success: false, error: '找不到此模板' });
-  } catch (error) {
-    console.error('API PUT /api/templates 錯誤:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
+    const { userId, userName, amount, type = 'both', customMessage = '' } = req.body;
 
-app.delete('/api/templates/:index', (req, res) => {
-  try {
-    const index = parseInt(req.params.index);
-    const success = orderManager.deleteTemplate(index);
-    if (success) res.json({ success: true, message: '模板已刪除' });
-    else res.status(404).json({ success: false, error: '找不到此模板' });
-  } catch (error) {
-    console.error('API DELETE /api/templates 錯誤:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
+    logger.logToFile(`[SEND PAYMENT] 收到請求: userId=${userId}, userName=${userName}, amount=${amount}, type=${type}`);
 
-app.post('/send-payment', async (req, res) => {
-  const { userId, userName, amount, paymentType, customMessage } = req.body;
-  logger.logToFile(`收到付款請求: userId=${userId}, userName=${userName}, amount=${amount}, type=${paymentType}`);
-
-  if (!userId || !userName || !amount) {
-    logger.logToFile(`參數驗證失敗`);
-    return res.status(400).json({ error: '缺少必要參數', required: ['userId', 'userName', 'amount'] });
-  }
-
-  const numAmount = parseInt(amount);
-  if (isNaN(numAmount) || numAmount <= 0) {
-    return res.status(400).json({ error: '金額必須是正整數' });
-  }
-
-  // ⭐⭐⭐ 新增：自動儲存客戶資料（獨立 try-catch，不影響付款流程）⭐⭐⭐
-  try {
-    const DATA_DIR = '/data';
-    const USERS_FILE = path.join(DATA_DIR, 'users.json');
-
-    // 確保目錄存在
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
-      logger.logToFile(`✅ 已建立 /data 目錄`);
+    if (!userId || !userName || !amount) {
+      logger.logToFile(`[SEND PAYMENT ERROR] 缺少必要參數`);
+      return res.status(400).json({ error: '缺少必要參數: userId, userName, amount' });
     }
 
-    // 確保檔案存在
-    if (!fs.existsSync(USERS_FILE)) {
-      fs.writeFileSync(USERS_FILE, '[]', 'utf8');
-      logger.logToFile(`✅ 已建立 users.json 檔案`);
+    const numAmount = parseInt(amount, 10);
+    if (isNaN(numAmount) || numAmount <= 0) {
+      logger.logToFile(`[SEND PAYMENT ERROR] 金額無效: ${amount}`);
+      return res.status(400).json({ error: '金額無效，必須為正整數' });
     }
-
-    // 讀取現有客戶資料
-    let userList = [];
-    try {
-      const fileContent = fs.readFileSync(USERS_FILE, 'utf8');
-      userList = JSON.parse(fileContent);
-    } catch (e) {
-      logger.logToFile(`⚠️ 讀取 users.json 失敗，使用空陣列`);
-      userList = [];
-    }
-
-    // 檢查客戶是否已存在
-    const existIndex = userList.findIndex(u => u.userId === userId);
-    const timestamp = new Date().toISOString();
-
-    if (existIndex >= 0) {
-      // 更新現有客戶
-      userList[existIndex] = {
-        userId: userId,
-        name: userName,
-        lastUpdate: timestamp,
-        createdAt: userList[existIndex].createdAt || timestamp
-      };
-      logger.logToFile(`♻️ 更新客戶資料: ${userName} (${userId})`);
-    } else {
-      // 新增客戶
-      userList.push({
-        userId: userId,
-        name: userName,
-        createdAt: timestamp,
-        lastUpdate: timestamp
-      });
-      logger.logToFile(`➕ 新增客戶資料: ${userName} (${userId})`);
-    }
-
-    // 寫回檔案
-    fs.writeFileSync(USERS_FILE, JSON.stringify(userList, null, 2), 'utf8');
-    logger.logToFile(`💾 已將客戶資料寫入 /data/users.json (總共 ${userList.length} 筆)`);
-
-    // 同時也存進 customerDB（雙重備份）
-    try {
-      await customerDB.saveCustomer(userId, userName);
-    } catch (e) {
-      logger.logToFile(`⚠️ customerDB 同步失敗: ${e.message}`);
-    }
-  } catch (saveError) {
-    // ⚠️ 重要：儲存客戶資料失敗不應影響付款流程，只記錄錯誤
-    logger.logError('儲存客戶資料失敗（不影響付款流程）', saveError);
-  }
-  // ⭐⭐⭐ 客戶資料儲存結束 ⭐⭐⭐
-
-  try {
-    const type = paymentType || 'both';
 
     const rawBase = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.BASE_URL || process.env.PUBLIC_BASE_URL || '';
     const baseURL = ensureHttpsBase(rawBase) || 'https://stain-bot-production-2593.up.railway.app';
@@ -1105,24 +952,25 @@ app.post('/send-payment', async (req, res) => {
     }
 
     if (type === 'linepay' || type === 'both') {
+      // ⭐⭐⭐ 修復：createLinePayPayment 內部已經創建訂單了，這裡不要再創建！
+      logger.logToFile(`[SEND PAYMENT] 開始建立 LINE Pay 訂單...`);
       const linePayResult = await createLinePayPayment(userId, userName, numAmount);
 
       if (linePayResult.success) {
         linePayOrderId = linePayResult.orderId;
 
-        orderManager.createOrder(linePayOrderId, { userId, userName, amount: numAmount });
-
-        const paymentUrl = linePayResult.paymentUrlApp || linePayResult.paymentUrlWeb || linePayResult.paymentUrl;
-        orderManager.updatePaymentInfo(linePayOrderId, {
-          linepayTransactionId: linePayResult.transactionId,
-          linepayPaymentUrl: paymentUrl,
-          lastLinePayRequestAt: Date.now()
-        });
+        // ⭐⭐⭐ 修復：不要重複創建訂單！createLinePayPayment 內部已經創建了
+        // 移除這行：orderManager.createOrder(linePayOrderId, { userId, userName, amount: numAmount });
 
         const liffUrl = `https://liff.line.me/${YOUR_LIFF_ID}?orderId=${linePayOrderId}`;
         linepayLink = liffUrl;
 
-        logger.logToFile(`建立 LINE Pay 訂單(LIFF): ${linePayOrderId}`);
+        logger.logToFile(`[SEND PAYMENT] LINE Pay 訂單建立成功: ${linePayOrderId}, userId: ${userId}`);
+      } else {
+        logger.logError('[SEND PAYMENT] LINE Pay 建立失敗', new Error(linePayResult.error));
+        if (type === 'linepay') {
+          return res.status(500).json({ error: 'LINE Pay 建立失敗', details: linePayResult.error });
+        }
       }
     }
 
