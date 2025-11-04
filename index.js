@@ -518,22 +518,30 @@ app.get('/payment/linepay/pay/:orderId', async (req, res) => {
     creatingTransactions.add(orderId);
     try {
       logger.logToFile(`建立新 LINE Pay 交易: ${orderId}`);
-      const lp = await createLinePayPayment(order.userId, order.userName, order.amount);
+      const lp = await createLinePayPayment(order.userId, order.userName, order.amount, orderId);
       if (!lp.success) {
         return res.status(500).send(renderErrorPage('生成失敗', lp.error || '無法建立付款連結'));
       }
 
-      const url = lp.paymentUrlApp || lp.paymentUrlWeb || lp.paymentUrl;
+      const urlApp = lp.paymentUrlApp || null;
+      const urlWeb = lp.paymentUrlWeb || null;
+      const urlAny = urlApp || urlWeb || lp.paymentUrl;
 
       orderManager.updatePaymentInfo(orderId, {
         linepayTransactionId: lp.transactionId,
-        linepayPaymentUrl: url,
+        linepayPaymentUrl: urlAny,
+        linepayPaymentUrlApp: urlApp,
+        linepayPaymentUrlWeb: urlWeb,
         lastLinePayRequestAt: Date.now()
-      });
-      logger.logToFile(`新交易建立: ${lp.transactionId}`);
+});
 
-      const remainingHours = Math.floor((order.expiryTime - Date.now()) / (1000 * 60 * 60));
-      return res.send(renderLinePayPage(orderId, order.amount, remainingHours, url));
+const ua = String(req.headers['user-agent'] || '');
+const preferApp = /Line\/|LineApp/i.test(ua); // 判斷是否在 LINE App 內
+const chosenUrl = preferApp ? (urlApp || urlAny) : (urlWeb || urlAny);
+
+const remainingHours = Math.floor((order.expiryTime - Date.now()) / (1000 * 60 * 60));
+return res.send(renderLinePayPage(orderId, order.amount, remainingHours, chosenUrl));
+
     } finally {
       creatingTransactions.delete(orderId);
     }
@@ -1224,21 +1232,31 @@ app.get('/api/linepay/url/:orderId', async (req, res) => {
       return res.json({ success: false, error: lp?.error || '建立 LINE Pay 交易失敗' });
     }
 
-    const url = lp.paymentUrlApp || lp.paymentUrlWeb || lp.paymentUrl;
+   const urlApp = lp.paymentUrlApp || null;
+const urlWeb = lp.paymentUrlWeb || null;
+const urlAny = urlApp || urlWeb || lp.paymentUrl;
+const now = Date.now();
 
-    orderManager.updatePaymentInfo(orderId, {
-      linepayTransactionId: lp.transactionId,
-      linepayPaymentUrl: url,
-      lastLinePayRequestAt: now
-    });
-
-    logger.logToFile(`LIFF: 交易建立 ${lp.transactionId}`);
-    return res.json({ success: true, paymentUrl: url });
-  } catch (error) {
-    logger.logError('LIFF: 取得 LINE Pay URL 失敗', error);
-    return res.json({ success: false, error: '系統錯誤' });
-  }
+orderManager.updatePaymentInfo(orderId, {
+  linepayTransactionId: lp.transactionId,
+  linepayPaymentUrl: urlAny,      // 通用網址
+  linepayPaymentUrlApp: urlApp,   // 儲存 app 連結
+  linepayPaymentUrlWeb: urlWeb,   // 儲存 web 連結
+  lastLinePayRequestAt: now
 });
+
+const ua = String(req.headers['user-agent'] || '');
+const preferApp = /Line\/|LineApp/i.test(ua); // 在 LINE App 內用 app 連結
+const chosenUrl = preferApp ? (urlApp || urlAny) : (urlWeb || urlAny);
+
+logger.logToFile(`LIFF: 交易建立 ${lp.transactionId}`);
+return res.json({ success: true, paymentUrl: chosenUrl });
+} catch (error) {
+  logger.logError('LIFF: 取得 LINE Pay URL 失敗', error);
+  return res.json({ success: false, error: '系統錯誤' });
+}
+});
+
 
 
 const PORT = process.env.PORT || 3000;
