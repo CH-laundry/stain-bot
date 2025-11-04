@@ -723,26 +723,31 @@ function createECPayPaymentLink(userId, userName, amount) {
   const tradeDate = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
 
   const paymentData = {
-    MerchantID: ECPAY_MERCHANT_ID,
-    MerchantTradeNo: merchantTradeNo,
-    MerchantTradeDate: tradeDate,
-    PaymentType: 'aio',
-    TotalAmount: String(amount),
-    TradeDesc: 'CH精緻洗衣服務',
-    ItemName: '洗衣服務費用',
-    ReturnURL: `${baseURL}/payment/ecpay/callback`,
-    ClientBackURL: `${baseURL}/payment/success`,
-    // 🔴 新增這三個，避免跳出返回造成容易失效、並延長有效時間（分鐘）
-    ExpireDate: '1440', // 24 小時（分鐘）
-    OrderResultURL: `${baseURL}/payment/success`,
-    ClientRedirectURL: `${baseURL}/payment/success`,
+  MerchantID: ECPAY_MERCHANT_ID,
+  MerchantTradeNo: merchantTradeNo,
+  MerchantTradeDate: tradeDate,
+  PaymentType: 'aio',
+  TotalAmount: String(amount),
+  TradeDesc: 'CH精緻洗衣服務',
+  ItemName: '洗衣服務費用',
 
-    // 付款方式可留 ALL，或你固定用信用卡可設 'Credit'
-    ChoosePayment: 'ALL',
-    EncryptType: 1,
-    CustomField1: userId,
-    CustomField2: userName
-  };
+  // ✅ 修正通知設定 (這兩行是關鍵)
+  ReturnURL: `${baseURL}/payment/ecpay/notify`,        // 綠界伺服器付款通知
+  PaymentInfoURL: `${baseURL}/payment/ecpay/notify`,   // ATM / 超商繳費結果通知
+
+  // ✅ 用戶瀏覽器回傳位置（成功頁）
+  ClientBackURL: `${baseURL}/payment/success`,
+  OrderResultURL: `${baseURL}/payment/success`,
+  ClientRedirectURL: `${baseURL}/payment/success`,
+
+  // 其他設定
+  ExpireDate: '1440', // 24 小時（分鐘）
+  ChoosePayment: 'ALL',
+  EncryptType: 1,
+  CustomField1: userId,
+  CustomField2: userName
+};
+
 
   try {
     paymentData.CheckMacValue = generateECPayCheckMacValue(paymentData);
