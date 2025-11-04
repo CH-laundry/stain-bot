@@ -192,17 +192,6 @@ async function createLinePayPayment(userId, userName, amount) {
     const orderId = `LP${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
     const nonce = crypto.randomBytes(16).toString('base64');
 
-
-    // ⭐⭐⭐ 修復：立即創建訂單記錄（在調用 LINE Pay API 之前）
-    orderManager.createOrder(orderId, { 
-      userId, 
-      userName, 
-      amount,
-      status: 'pending',
-      createdAt: Date.now()
-    });
-    logger.logToFile(`[LINE PAY] 已創建訂單: ${orderId}, userId: ${userId}, amount: ${amount}`);
-
     const rawBase = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.BASE_URL || process.env.PUBLIC_BASE_URL || '';
     const baseURL = ensureHttpsBase(rawBase) || 'https://stain-bot-production-2593.up.railway.app';
 
@@ -246,15 +235,6 @@ async function createLinePayPayment(userId, userName, amount) {
       const txId = result.info?.transactionId || null;
       const pickUrl = paymentUrlApp || paymentUrlWeb;
 
-      // ⭐⭐⭐ 修復：更新訂單的 LINE Pay 資訊
-      orderManager.updatePaymentInfo(orderId, {
-        linepayTransactionId: txId,
-        linepayPaymentUrl: pickUrl,
-        lastLinePayRequestAt: Date.now()
-      });
-
-      logger.logToFile(`[LINE PAY] 交易建立成功: transactionId=${txId}`);
-
       return {
         success: true,
         paymentUrlApp,
@@ -264,9 +244,6 @@ async function createLinePayPayment(userId, userName, amount) {
         transactionId: txId
       };
     } else {
-      logger.logError('LINE Pay 建立失敗', new Error(result.returnMessage || 'Unknown error'), userId);
-      // ⭐⭐⭐ 修復：失敗時刪除訂單
-      orderManager.deleteOrder(orderId);
       return { success: false, error: result.returnMessage || '請求失敗' };
     }
   } catch (error) {
@@ -755,11 +732,6 @@ app.all('/payment/ecpay/callback', async (req, res) => {
 app.all('/payment/linepay/confirm', async (req, res) => {
   const { transactionId, orderId, parentOrderId } = { ...req.query, ...req.body };
   
-  // ⭐⭐⭐ 修復：詳細的 debug logging
-  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-  const ua = req.headers['user-agent'] || 'unknown';
-  logger.logToFile(`[LINEPAY CONFIRM] 收到確認請求 - IP=${ip}, transactionId=${transactionId}, parentOrderId=${parentOrderId}, UA=${ua}`);
-  
   // 立即回應，阻止 LINE Pay 重試
   res.status(200).send('OK');
 
@@ -1133,32 +1105,24 @@ app.post('/send-payment', async (req, res) => {
     }
 
     if (type === 'linepay' || type === 'both') {
-      logger.logToFile(`[SEND PAYMENT] 開始建立 LINE Pay 訂單...`);
       const linePayResult = await createLinePayPayment(userId, userName, numAmount);
 
       if (linePayResult.success) {
         linePayOrderId = linePayResult.orderId;
 
-        // ⭐⭐⭐ 修復：不要重複創建訂單！createLinePayPayment 內部已經創建了
-        // orderManager.createOrder(linePayOrderId, { userId, userName, amount: numAmount });
+        orderManager.createOrder(linePayOrderId, { userId, userName, amount: numAmount });
 
-
-        // ⭐⭐⭐ 修復：不需要再次更新付款資訊（createLinePayPayment 內部已經更新了）
-        // orderManager.updatePaymentInfo(linePayOrderId, {
-        // linepayTransactionId: linePayResult.transactionId,
-        // linepayPaymentUrl: paymentUrl,
-        // lastLinePayRequestAt: Date.now()
-        // });
+        const paymentUrl = linePayResult.paymentUrlApp || linePayResult.paymentUrlWeb || linePayResult.paymentUrl;
+        orderManager.updatePaymentInfo(linePayOrderId, {
+          linepayTransactionId: linePayResult.transactionId,
+          linepayPaymentUrl: paymentUrl,
+          lastLinePayRequestAt: Date.now()
+        });
 
         const liffUrl = `https://liff.line.me/${YOUR_LIFF_ID}?orderId=${linePayOrderId}`;
         linepayLink = liffUrl;
 
-        logger.logToFile(`[SEND PAYMENT] LINE Pay 訂單建立成功: ${linePayOrderId}, userId: ${userId}`);
-      } else {
-        logger.logError('[SEND PAYMENT] LINE Pay 建立失敗', new Error(linePayResult.error));
-        if (type === 'linepay') {
-          return res.status(500).json({ error: 'LINE Pay 建立失敗', details: linePayResult.error });
-        }
+        logger.logToFile(`建立 LINE Pay 訂單(LIFF): ${linePayOrderId}`);
       }
     }
 
