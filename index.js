@@ -427,7 +427,6 @@ app.get('/payment/ecpay/pay/:orderId', async (req, res) => {
     return res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>訂單已過期</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#f093fb,#f5576c);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}h1{font-size:28px;margin-bottom:20px}p{font-size:16px;margin:15px 0}</style></head><body><div class="container"><h1>訂單已過期</h1><p>此訂單已超過 7 天(168 小時)</p><p>已過時間: ' + Math.floor(hoursPassed) + ' 小時</p><p>訂單編號: ' + orderId + '</p><p>請聯繫 C.H 精緻洗衣客服重新取得訂單</p></div></body></html>');
   }
 
-  
   if (order.status === 'paid') {
     return res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>訂單已付款</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#667eea,#764ba2);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}</style></head><body><div class="container"><h1>訂單已付款</h1><p>此訂單已完成付款</p><p>訂單編號: ' + orderId + '</p></div></body></html>');
   }
@@ -1191,28 +1190,18 @@ app.get('/liff/payment', (req, res) => {
 app.get('/api/linepay/url/:orderId', async (req, res) => {
   const { orderId } = req.params;
   const order = orderManager.getOrder(orderId);
-  // 權限檢查：只有訂單本人能拿付款連結
-  const requestUserId = req.query.userId;
-  if (requestUserId && requestUserId !== order.userId) {
-    logger.logToFile(`[LINEPAY][ACCESS_DENIED] orderId=${orderId} request=${requestUserId} real=${order.userId}`);
-    return res.json({ success: false, error: '無權限' });
-  }
-  
-  // 記錄誰在請求
+
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   const ua = req.headers['user-agent'];
   const ref = req.headers['referer'] || 'no-ref';
-  logger.logToFile(`[LINEPAY][LIFF_GET_URL_HIT] ip=${ip} ua="${ua}" ref="${ref}" extra=${JSON.stringify({orderId})}`);
+  logger.logToFile(`[LINEPAY][LIFF_GET_URL_HIT] ip=${ip} ua="${ua}" ref="${ref}" method=${req.method} path=${req.path} extra=${JSON.stringify({orderId})}`);
 
-  if (!order) return res.json({ success: false, error: '找不到訂單' });
-
-  // 權限檢查：只有訂單本人能拿付款連結
-  if (requestUserId && requestUserId !== order.userId) {
-    logger.logToFile(`[LINEPAY][ACCESS_DENIED] orderId=${orderId} request=${requestUserId} real=${order.userId}`);
-    return res.json({ success: false, error: '無權限' });
+  if (!order) {
+    return res.json({ success: false, error: '找不到訂單' });
   }
-
-  if (order.status === 'paid') return res.json({ success: false, error: '訂單已付款' });
+  if (order.status === 'paid') {
+    return res.json({ success: false, error: '訂單已付款' });
+  }
 
   try {
     if (order.linepayPaymentUrl) {
@@ -1220,11 +1209,15 @@ app.get('/api/linepay/url/:orderId', async (req, res) => {
       return res.json({ success: true, paymentUrl: order.linepayPaymentUrl });
     }
 
-    logger.logToFile(`LIFF: 重新建立付款 ${orderId}`);
+    logger.logToFile(`LIFF: 訂單沒有付款 URL，重新建立 ${orderId}`);
     const lp = await createLinePayPayment(order.userId, order.userName, order.amount);
-    if (!lp.success) return res.json({ success: false, error: lp.error });
+
+    if (!lp.success) {
+      return res.json({ success: false, error: lp.error });
+    }
 
     const url = lp.paymentUrlApp || lp.paymentUrlWeb || lp.paymentUrl;
+
     orderManager.updatePaymentInfo(orderId, {
       linepayTransactionId: lp.transactionId,
       linepayPaymentUrl: url,
