@@ -1203,65 +1203,6 @@ app.get('/api/linepay/url/:orderId', async (req, res) => {
   }
 });
 
-// ──────────────────────────────────────────────────────────────
-// 綠界 ECPay 付款完成後的 callback（必加這段！）
-// ──────────────────────────────────────────────────────────────
-app.post('/payment/ecpay/callback', async (req, res) => {
-  // ===== 關鍵：一定要先回應 1|OK =====
-  res.send('1|OK');
-
-  // ===== 背景處理 =====
-  setImmediate(async () => {
-    try {
-      // 詳細 LOG：確認綠界有沒有呼叫
-      logger.logToFile(`[ECPAY][CALLBACK_RECEIVED] 時間: ${new Date().toISOString()} | IP: ${req.ip} | Body: ${JSON.stringify(req.body)}`);
-
-      const { RtnCode, MerchantTradeNo: orderId, CustomField1: userId, CustomField2: userName } = req.body;
-
-      if (!orderId) {
-        logger.logToFile(`[ECPAY][ERROR] 缺少 MerchantTradeNo`);
-        return;
-      }
-
-      const order = orderManager.getOrder(orderId);
-      if (!order) {
-        logger.logToFile(`[ECPAY][ERROR] 訂單不存在: ${orderId}`);
-        return;
-      }
-
-      if (RtnCode === '1') {
-        // ====== 關鍵：更新狀態 + 強制存檔 ======
-        orderManager.updateOrderStatus(orderId, 'paid');
-        orderManager.saveOrders();  // 確保狀態寫入 /data/orders.json
-        // =====================================
-
-        // 通知客人
-        await client.pushMessage(userId, {
-          type: 'text',
-          text: `付款成功！\n訂單：${orderId}\n金額：NT$${order.amount.toLocaleString()}\n感謝您的支持 💙`
-        });
-
-        // 通知管理員（您）
-        if (process.env.ADMIN_USER_ID) {
-          await client.pushMessage(process.env.ADMIN_USER_ID, {
-            type: 'text',
-            text: `新付款通知！\n用戶：${userName}\n訂單：${orderId}\n金額：NT$${order.amount.toLocaleString()}\n方式：綠界 ECPay`
-          });
-          logger.logToFile(`[ECPAY][NOTIFY_ADMIN] 已推播給 ADMIN: ${process.env.ADMIN_USER_ID}`);
-        } else {
-          logger.logToFile(`[ECPAY][WARN] ADMIN_USER_ID 未設定`);
-        }
-
-        logger.logToFile(`[ECPAY][SUCCESS] 訂單 ${orderId} 付款成功，狀態已更新為 paid`);
-      } else {
-        logger.logToFile(`[ECPAY][FAILED] RtnCode=${RtnCode}, 訂單=${orderId}`);
-      }
-    } catch (error) {
-      logger.logError('[ECPAY][EXCEPTION] 處理失敗', error);
-    }
-  });
-});
-
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
   console.log(`伺服器正在運行,端口:${PORT}`);
