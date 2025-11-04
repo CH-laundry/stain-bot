@@ -1187,6 +1187,7 @@ app.get('/liff/payment', (req, res) => {
   res.sendFile('liff-payment.html', { root: './public' });
 });
 
+// 讓 LIFF 永遠拿到可用的 LINE Pay 連結：舊的>15分鐘就重建
 app.get('/api/linepay/url/:orderId', async (req, res) => {
   const { orderId } = req.params;
   const order = orderManager.getOrder(orderId);
@@ -1204,16 +1205,22 @@ app.get('/api/linepay/url/:orderId', async (req, res) => {
   }
 
   try {
-    if (order.linepayPaymentUrl) {
-      logger.logToFile(`LIFF: 使用既有連結 ${orderId}`);
+    const now = Date.now();
+    const last = order.lastLinePayRequestAt || 0;
+    const elapsed = now - last;
+    const EXPIRE_MS = 15 * 60 * 1000; // 15 分鐘（僅用於重建檢查，不影響你 168 小時訂單有效期）
+
+    // 若已有連結且仍在 15 分鐘內 → 直接用
+    if (order.linepayPaymentUrl && elapsed < EXPIRE_MS) {
+      logger.logToFile(`LIFF: 重用既有連結 ${orderId}（${Math.floor(elapsed / 1000)} 秒內）`);
       return res.json({ success: true, paymentUrl: order.linepayPaymentUrl });
     }
 
-    logger.logToFile(`LIFF: 訂單沒有付款 URL，重新建立 ${orderId}`);
+    // 沒有連結或已逾 15 分鐘 → 重建
+    logger.logToFile(`LIFF: 重新建立 LINE Pay 連結 ${orderId}（elapsed=${elapsed}ms）`);
     const lp = await createLinePayPayment(order.userId, order.userName, order.amount);
-
-    if (!lp.success) {
-      return res.json({ success: false, error: lp.error });
+    if (!lp?.success) {
+      return res.json({ success: false, error: lp?.error || '建立 LINE Pay 交易失敗' });
     }
 
     const url = lp.paymentUrlApp || lp.paymentUrlWeb || lp.paymentUrl;
@@ -1221,16 +1228,17 @@ app.get('/api/linepay/url/:orderId', async (req, res) => {
     orderManager.updatePaymentInfo(orderId, {
       linepayTransactionId: lp.transactionId,
       linepayPaymentUrl: url,
-      lastLinePayRequestAt: Date.now()
+      lastLinePayRequestAt: now
     });
 
     logger.logToFile(`LIFF: 交易建立 ${lp.transactionId}`);
-    res.json({ success: true, paymentUrl: url });
+    return res.json({ success: true, paymentUrl: url });
   } catch (error) {
     logger.logError('LIFF: 取得 LINE Pay URL 失敗', error);
-    res.json({ success: false, error: '系統錯誤' });
+    return res.json({ success: false, error: '系統錯誤' });
   }
 });
+
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
