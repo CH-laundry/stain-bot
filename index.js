@@ -427,6 +427,7 @@ app.get('/payment/ecpay/pay/:orderId', async (req, res) => {
     return res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>訂單已過期</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#f093fb,#f5576c);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}h1{font-size:28px;margin-bottom:20px}p{font-size:16px;margin:15px 0}</style></head><body><div class="container"><h1>訂單已過期</h1><p>此訂單已超過 7 天(168 小時)</p><p>已過時間: ' + Math.floor(hoursPassed) + ' 小時</p><p>訂單編號: ' + orderId + '</p><p>請聯繫 C.H 精緻洗衣客服重新取得訂單</p></div></body></html>');
   }
 
+  
   if (order.status === 'paid') {
     return res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>訂單已付款</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#667eea,#764ba2);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}</style></head><body><div class="container"><h1>訂單已付款</h1><p>此訂單已完成付款</p><p>訂單編號: ' + orderId + '</p></div></body></html>');
   }
@@ -1198,6 +1199,32 @@ app.get('/api/linepay/url/:orderId', async (req, res) => {
 
   if (!order) {
     return res.json({ success: false, error: '找不到訂單' });
+  }
+  // ──────────────────────────────────────
+  // 權限檢查：LIFF 必須帶上 userId 參數，且必須與訂單的 userId 相同
+  // ──────────────────────────────────────
+  const requestUserId = req.query.userId;          // LIFF 端會在 query 帶入
+  if (requestUserId && requestUserId !== order.userId) {
+    logger.logToFile(`[LINEPAY][ACCESS_DENIED] orderId=${orderId} requestUserId=${requestUserId} realUserId=${order.userId}`);
+    return res.json({ success: false, error: '無權限' });
+  // 取得 LIFF 登入的使用者 ID
+liff.init({ liffId: YOUR_LIFF_ID })
+  .then(() => liff.getProfile())
+  .then(profile => {
+    const userId = profile.userId;
+    const orderId = /* 從 URL query 取得 */;
+    fetch(`/api/linepay/url/${orderId}?userId=${encodeURIComponent(userId)}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          // 跳轉至 LINE Pay
+          location.href = data.paymentUrl;
+        } else {
+          alert(data.error);
+        }
+      });
+  });
+    
   }
   if (order.status === 'paid') {
     return res.json({ success: false, error: '訂單已付款' });
