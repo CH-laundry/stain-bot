@@ -1227,7 +1227,7 @@ app.get('/api/linepay/url/:orderId', async (req, res) => {
 
     // 沒有連結或已逾 15 分鐘 → 重建
     logger.logToFile(`LIFF: 重新建立 LINE Pay 連結 ${orderId}（elapsed=${elapsed}ms）`);
-    const lp = await createLinePayPayment(order.userId, order.userName, order.amount);
+    const lp = await createLinePayPayment(order.userId, order.userName, order.amount, orderId);
     if (!lp?.success) {
       return res.json({ success: false, error: lp?.error || '建立 LINE Pay 交易失敗' });
     }
