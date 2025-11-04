@@ -668,18 +668,19 @@ app.all('/payment/ecpay/callback', async (req, res) => {
 
     // ✅【新增這段：更新訂單狀態為已付款】
     const allOrders = orderManager.getAllOrders();
-    for (const [oid, order] of Object.entries(allOrders)) {
-      // 根據你送單時存的 CustomField1（userId）與金額來比對
+    for (const order of allOrders) {
+      const oid = order.orderId; // ← 用真正的訂單編號，而不是陣列索引
       if (
         order.userId === data.CustomField1 &&
-        order.amount === Number(data.TradeAmt || data.Amount || 0) &&
+        Number(order.amount) === Number(data.TradeAmt || data.Amount || 0) &&
         order.status !== 'paid'
       ) {
         orderManager.updateOrderStatus(oid, 'paid', 'ECPay');
         logger.logToFile(`[ECPAY][UPDATE] 訂單 ${oid} 狀態更新為已付款`);
         break;
       }
-     }
+    }
+
 
 
     // 5) 取必要欄位（依你送單時的 CustomField）
