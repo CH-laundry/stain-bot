@@ -443,6 +443,47 @@ app.get('/payment/ecpay/pay/:orderId', async (req, res) => {
   }
 });
 
+// ====== 綠界付款結果通知 ======
+app.post('/payment/ecpay/notify', express.urlencoded({ extended: false }), (req, res) => {
+  try {
+    const data = req.body;
+    const orderId = data.MerchantTradeNo;
+    const rtnCode = data.RtnCode;
+    const tradeNo = data.TradeNo;
+    const paymentDate = data.PaymentDate;
+    
+    logger.logToFile(`[ECPAY][NOTIFY] 收到付款通知: ${JSON.stringify(data)}`);
+
+    // ✅ 付款成功才更新狀態
+    if (rtnCode === '1' || rtnCode === 1) {
+      const order = orderManager.getOrder(orderId);
+      if (order) {
+        order.status = 'paid';
+        order.tradeNo = tradeNo;
+        order.paymentDate = paymentDate;
+        orderManager.saveOrders();
+        logger.logToFile(`[ECPAY][SUCCESS] 訂單 ${orderId} 已付款`);
+
+        // ✅ 推播通知客戶與管理員
+        const userId = order.userId;
+        const msg = `✅ 付款成功通知\n\n訂單編號：${orderId}\n金額：NT$ ${order.amount}\n付款方式：綠界科技 (ECPay)\n\n感謝您的付款 💙`;
+        client.pushMessage(userId, { type: 'text', text: msg });
+        const adminId = process.env.ADMIN_USER_ID;
+        if (adminId) client.pushMessage(adminId, { type: 'text', text: `📢 用戶已付款：${msg}` });
+      } else {
+        logger.logToFile(`[ECPAY][ERROR] 找不到訂單: ${orderId}`);
+      }
+    }
+
+    // 綠界要求回傳字串 "1|OK" 代表接收成功
+    res.send('1|OK');
+  } catch (error) {
+    logger.logError('ECPAY 付款通知錯誤', error);
+    res.status(500).send('0|ERROR');
+  }
+});
+
+
 // ====== LINE Pay 持久付款頁 ======
 const creatingTransactions = new Set();
 
