@@ -251,22 +251,27 @@ class MessageHandler {
             logger.logToFile(`⚠️ 短網址生成失敗,使用原網址: ${error.message}`);
           }
 
+         if (paymentType === 'ecpay' || paymentType === 'creditcard') {
+           message = `您好,${customerName} 👋\n\n` +
+            `您的專屬付款連結已生成\n` +
+            `付款方式:信用卡\n` +
+            `金額:NT$ ${parseInt(amount).toLocaleString()}\n\n` +
+            `👉 請點擊下方連結完成付款\n${shortUrl}\n\n` +
+            `✅ 付款後系統會自動通知我們\n` +
+            `感謝您的支持 💙`;
+         } else if (paymentType === 'linepay') {
+           // 用持久網址推給客人
+          const baseURL = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.BASE_URL || process.env.PUBLIC_BASE_URL || 'https://stain-bot-production-2593.up.railway.app';
+          const persistentUrl = `${baseURL.replace(/^http:/, 'https:')}/payment/linepay/pay/${orderId}`;
           message = `您好,${customerName} 👋\n\n` +
-                    `您的專屬付款連結已生成\n` +
-                    `付款方式:信用卡\n` +
-                    `金額:NT$ ${parseInt(amount).toLocaleString()}\n\n` +
-                    `👉 請點擊下方連結完成付款\n${shortUrl}\n\n` +
-                    `✅ 付款後系統會自動通知我們\n` +
-                    `感謝您的支持 💙`;
-        } else if (paymentType === 'linepay') {
-          const LINE_PAY_URL = process.env.LINE_PAY_URL;
-          message = `您好,${customerName} 👋\n\n` +
-                    `您的專屬付款連結已生成\n` +
-                    `付款方式:LINE Pay\n` +
-                    `金額:NT$ ${parseInt(amount).toLocaleString()}\n\n` +
-                    `👉 請點擊下方連結完成付款\n${LINE_PAY_URL}\n\n` +
-                    `✅ 付款後系統會自動通知我們\n` +
-                    `感謝您的支持 💙`;
+            `您的專屬付款連結已生成\n` +
+            `付款方式:LINE Pay\n` +
+            `金額:NT$ ${parseInt(amount).toLocaleString()}\n\n` +
+            `👉 請點擊下方連結完成付款\n${persistentUrl}\n\n` +
+            `✅ 付款後系統會自動通知我們\n` +
+            `感謝您的支持 💙`;
+}
+
         } else {
           await client.pushMessage(userId, { type: 'text', text: '❌ 不支援的付款方式\n請使用 ecpay 或 linepay' });
           return true;
