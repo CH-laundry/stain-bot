@@ -187,9 +187,9 @@ h1{font-size:26px;margin-bottom:20px;font-weight:700}
 }
 
 // ====== 建立 LINE Pay 交易 ======
-async function createLinePayPayment(userId, userName, amount) {
+async function createLinePayPayment(userId, userName, amount, orderIdOverride) {
   try {
-    const orderId = `LP${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
+     const orderId = orderIdOverride || `LP${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
     const nonce = crypto.randomBytes(16).toString('base64');
 
     const rawBase = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.BASE_URL || process.env.PUBLIC_BASE_URL || '';
