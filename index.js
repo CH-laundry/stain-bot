@@ -1207,7 +1207,6 @@ app.get('/api/linepay/url/:orderId', async (req, res) => {
   if (!order) return res.json({ success: false, error: '找不到訂單' });
 
   // 權限檢查：只有訂單本人能拿付款連結
-  const requestUserId = req.query.userId;
   if (requestUserId && requestUserId !== order.userId) {
     logger.logToFile(`[LINEPAY][ACCESS_DENIED] orderId=${orderId} request=${requestUserId} real=${order.userId}`);
     return res.json({ success: false, error: '無權限' });
