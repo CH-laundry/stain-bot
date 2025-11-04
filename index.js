@@ -443,6 +443,34 @@ app.get('/payment/ecpay/pay/:orderId', async (req, res) => {
   }
 });
 
+// ====== 綠界付款結果通知 (只更新為已付款，不動其他功能) ======
+app.post('/payment/ecpay/notify', express.urlencoded({ extended: false }), (req, res) => {
+  try {
+    const data = req.body;
+    const orderId = data.MerchantTradeNo;
+    const rtnCode = data.RtnCode;
+
+    logger.logToFile(`[ECPAY][NOTIFY] 收到通知: ${JSON.stringify(data)}`);
+
+    // ✅ 若付款成功 (rtnCode=1)
+    if (rtnCode === '1' || rtnCode === 1) {
+      const order = orderManager.getOrder(orderId);
+      if (order && order.status !== 'paid') {
+        order.status = 'paid';
+        orderManager.saveOrders();
+        logger.logToFile(`[ECPAY][SUCCESS] 訂單 ${orderId} 狀態更新為已付款`);
+      }
+    }
+
+    // ✅ 綠界要求回傳 "1|OK" 表示接收成功
+    res.send('1|OK');
+  } catch (err) {
+    logger.logError('ECPAY 通知處理錯誤', err);
+    res.send('0|ERROR');
+  }
+});
+
+
 // ====== LINE Pay 持久付款頁 ======
 const creatingTransactions = new Set();
 
