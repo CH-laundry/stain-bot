@@ -1119,10 +1119,11 @@ app.post('/send-payment', async (req, res) => {
           lastLinePayRequestAt: Date.now()
         });
 
-        const liffUrl = `https://liff.line.me/${YOUR_LIFF_ID}?orderId=${linePayOrderId}`;
-        linepayLink = liffUrl;
-
-        logger.logToFile(`建立 LINE Pay 訂單(LIFF): ${linePayOrderId}`);
+        
+        const persistentUrl = `${baseURL}/payment/linepay/pay/${linePayOrderId}`;
+        linepayLink = persistentUrl; 
+        logger.logToFile(`建立 LINE Pay 訂單(PERSISTENT): ${linePayOrderId}`);
+        
       }
     }
 
