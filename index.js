@@ -741,6 +741,41 @@ app.all('/payment/linepay/confirm', async (req, res) => {
   });
 });
 
+// === 建立 LINE Pay 訂單 API（用於產生客人專屬付款連結）===
+app.post('/api/payments/linepay', express.json(), async (req, res) => {
+  try {
+    const { userId, userName, amount } = req.body || {};
+    if (!userId || !userName || !amount) {
+      return res.status(400).json({ success: false, error: '缺少必要參數' });
+    }
+
+    // 建立 LINE Pay 訂單
+    const result = await createLinePayPayment(userId, userName, Number(amount));
+    if (!result || !result.success) {
+      return res.status(500).json({ success: false, error: result?.error || '建立 LINE Pay 交易失敗' });
+    }
+
+    const orderId = result.orderId;
+    const paymentUrl = result.paymentUrlApp || result.paymentUrlWeb || result.paymentUrl;
+
+    // 記錄訂單資料
+    try { orderManager.createOrder(orderId, { userId, userName, amount: Number(amount) }); } catch (_) {}
+    orderManager.updatePaymentInfo(orderId, {
+      linepayTransactionId: result.transactionId,
+      linepayPaymentUrl: paymentUrl,
+      lastLinePayRequestAt: Date.now()
+    });
+
+    // 回傳綁訂單的 LIFF 連結（客人要點這個付款）
+    const liffUrl = `https://liff.line.me/${YOUR_LIFF_ID}?orderId=${orderId}`;
+    return res.json({ success: true, orderId, liffUrl });
+  } catch (e) {
+    logger.logError('建立 LINE Pay API 錯誤', e);
+    return res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+
 // ====== 其餘 API 保持不變（以下全部保留） ======
 app.get('/api/orders', (req, res) => {
   const { status } = req.query;
