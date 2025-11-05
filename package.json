@@ -29,5 +29,12 @@
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
+    {
+  "scripts": {
+    "pickup:track": "node startPickupTrack.js",
+    "pickup:watch": "node pickupWatcher.js"
+  }
+}
+
   }
 }
