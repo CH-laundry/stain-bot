@@ -1,253 +1,184 @@
-#!/usr/bin/env node
 /**
  * pickupWatcher.js
- * 用途：定時掃描 /data/pickup-tracker.json
- *   1) 到 Aolan 查詢該 ReceivingOrder 是否「已簽收」
- *   2) 若超過門檻天數仍未簽收 → 自動再發一次提醒（Aolan 模板 & 可選 LINE Push）
- *   3) 直到查到簽收為止 → 標記 done，停止提醒但保留記錄
- *
- * 相依 API：
- *   - POST {AOLAN_BASE}/ReceivingOrder/SearchItemDetail
- *   - POST {AOLAN_BASE}/SendMessage/SendDeliverRemindTemplateMessage
- *   - POST https://api.line.me/v2/bot/message/push（若啟用）
+ * 功能：每隔 WATCH_SCAN_INTERVAL_MIN 分鐘檢查追蹤清單：
+ *   - 若已簽收 → 結案
+ *   - 若超過門檻且尚未通知 → 發送逾期提醒（Aolan 模板）
+ * ✅ 不修改現有任何檔案；資料存到 /data/pickup-tracker.json（或本機 ./data/）
  */
 
 require('dotenv').config();
-
 const fs = require('fs');
 const path = require('path');
+const fetch = require('node-fetch');
 
-// 若你使用 Node 18+ 可用全域 fetch；否則採用 node-fetch
-let fetchFn = global.fetch;
-if (typeof fetchFn !== 'function') {
-  fetchFn = require('node-fetch');
-}
-const fetch = (...args) => fetchFn(...args);
+// ---------- 路徑設定 ----------
+const VOL_ROOT = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
+const FALLBACK_ROOT = path.join(__dirname, 'data');
+const STORE_DIR = fs.existsSync(VOL_ROOT) ? VOL_ROOT : FALLBACK_ROOT;
+const TRACK_FILE = path.join(STORE_DIR, 'pickup-tracker.json');
 
-// ===== 路徑與日誌 =====
-const VOL_ROOT  = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
-const TRACK_FILE = path.join(VOL_ROOT, 'pickup-tracker.json');
-const LOG_FILE   = path.join(VOL_ROOT, 'pickup-watcher.log');
+// ---------- 環境 ----------
+const BASE = process.env.AOLAN_BASE || '';
+const TOKEN = process.env.AOLAN_BEARER_TOKEN || '';
+const INTERVAL_MIN = toInt(process.env.WATCH_SCAN_INTERVAL_MIN, 1);
+const MAX_TIMES = toInt(process.env.PICKUP_REMINDER_MAX_TIMES, 1); // 預設逾期提醒 1 次
+const SCAN_MS = Math.max(1, INTERVAL_MIN) * 60 * 1000;
 
-// 掃描頻率（分鐘）
-const WATCH_SCAN_INTERVAL_MIN = parseInt(process.env.WATCH_SCAN_INTERVAL_MIN || '60', 10);
-
-// ===== Aolan 設定（支援兩種命名）=====
-const AOLAN_BASE_URL = process.env.AOLAN_BASE_URL || process.env.AOLAN_BASE || 'https://your-aolan.example.com';
-const AOLAN_TOKEN    = process.env.AOLAN_TOKEN    || process.env.AOLAN_BEARER_TOKEN || '';
-
-// ===== LINE Push（可選）=====
-const LINE_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN || '';
-const LINE_PUSH_USERID_FIELD    = process.env.LINE_PUSH_USERID_FIELD    || 'LineUserId';
-const LINE_TEST_USER_ID         = process.env.LINE_TEST_USER_ID         || '';
-
-// ===== 工具：日誌 =====
-function log(...args) {
-  const line = `[${new Date().toISOString()}] ${args.join(' ')}`;
-  console.log(line);
-  try { fs.appendFileSync(LOG_FILE, line + '\n'); } catch {}
-}
-
-// ===== 追蹤檔 I/O =====
-function readTrack() {
-  try { return JSON.parse(fs.readFileSync(TRACK_FILE, 'utf-8')); }
-  catch { return { items: [] }; }
-}
-function writeTrack(data) {
-  try { fs.mkdirSync(path.dirname(TRACK_FILE), { recursive: true }); } catch {}
-  const tmp = TRACK_FILE + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
-  fs.renameSync(tmp, TRACK_FILE);
-}
-
-// ===== Aolan：查詢訂單是否已簽收 =====
-async function fetchOrderDetail(receivingOrderId) {
-  const url = `${AOLAN_BASE_URL}/ReceivingOrder/SearchItemDetail`;
+// ---------- 檢查是否簽收 ----------
+// 依你先前提供：SearchItemDetail = POST + JSON Body：{ReceivingOrderID: "..."}
+async function isSigned(receivingOrderId) {
+  const url = joinUrl(BASE, '/ReceivingOrder/SearchItemDetail');
   const body = { ReceivingOrderID: String(receivingOrderId) };
 
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(AOLAN_TOKEN ? { Authorization: `Bearer ${AOLAN_TOKEN}` } : {}),
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) {
-    const txt = await res.text().catch(() => '');
-    throw new Error(`SearchItemDetail 失敗 HTTP ${res.status} ${txt}`);
-  }
-  return await res.json().catch(() => ({}));
-}
-
-// ===== 是否簽收的穩健判斷 =====
-// 優先：DeliverDate 有值 → 已簽收；其次：StatusName/FlowText 出現關鍵字
-function isSigned(detail) {
   try {
-    if (!detail || typeof detail !== 'object') return false;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${TOKEN}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
 
-    if (detail.DeliverDate) return true;
+    if (!res.ok) {
+      const t = await safeText(res);
+      console.warn(`⚠️ SearchItemDetail 非 2xx：${res.status} ${res.statusText} ${t ? '- ' + trunc(t) : ''}`);
+      // 失敗時保守判斷：先視為「未簽收」，避免錯過提醒
+      return false;
+    }
 
-    const status = [
-      detail.StatusName, detail.Status,
-      detail.FlowText, detail.Flow
-    ].filter(Boolean).join(' ').toLowerCase();
+    const j = await res.json().catch(() => ({}));
+    // 兼容多種欄位：DeliverDate 有值、或狀態文字含「簽收/已取件/完成」等
+    const deliverDate = getFirst(j, ['DeliverDate', 'DeliveredAt', 'SignOffAt']);
+    const statusText = [
+      getFirst(j, ['StatusTypeName']),
+      getFirst(j, ['StatusName']),
+      getFirst(j, ['FlowText']),
+      getFirst(j, ['FlowName'])
+    ].filter(Boolean).join(' | ');
 
-    // 可依你實際字樣再增修
-    const keywords = ['已簽收', '已取件', 'picked up', 'signed', 'delivered', 'complete', 'completed'];
-    return keywords.some(k => status.includes(k.toLowerCase()));
-  } catch {
+    if (deliverDate) return true;
+
+    const signedLike = /(簽收|已取|已領|完成|closed|done)/i;
+    return signedLike.test(String(statusText));
+  } catch (err) {
+    console.error('⚠️ 查詢簽收狀態異常：', err.message);
     return false;
   }
 }
 
-// ===== 從明細取 LINE 使用者 ID；若取不到就 fallback 到測試 ID =====
-function extractLineUserId(detail) {
-  try {
-    const f = LINE_PUSH_USERID_FIELD;
-    const id = (detail && detail[f]) ? String(detail[f]) : '';
-    return id || LINE_TEST_USER_ID || '';
-  } catch {
-    return LINE_TEST_USER_ID || '';
-  }
-}
-
-// ===== Aolan：發送逾期提醒模板 =====
-async function sendOverdueReminder({ receivingOrderId, customerId, orderNo, isDelivery }) {
-  const url = `${AOLAN_BASE_URL}/SendMessage/SendDeliverRemindTemplateMessage`;
+// ---------- 發送逾期提醒（Aolan 模板，同一路徑即可） ----------
+async function sendOverdue(order) {
+  const url = joinUrl(BASE, '/SendMessage/SendDeliverRemindTemplateMessage');
   const body = {
-    ReceivingOrderID: String(receivingOrderId),
-    CustomerID: String(customerId),
-    OrderNo: String(orderNo),
-    IsDelivery: !!isDelivery,
-    Overdue: true, // 若模板需辨識「逾期提醒」，可用此旗標
+    ReceivingOrderID: order.receivingOrderId,
+    CustomerID: order.customerId,
+    OrderNo: order.orderNo,
+    IsDelivery: !!order.isDelivery
+    // 許多客製 API 也接受 Overdue: true，但既已測過同一路徑可用，就不加自訂欄位避免風險
   };
 
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(AOLAN_TOKEN ? { Authorization: `Bearer ${AOLAN_TOKEN}` } : {}),
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) {
-    const txt = await res.text().catch(() => '');
-    throw new Error(`Aolan 逾期提醒失敗 HTTP ${res.status} ${txt}`);
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${TOKEN}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+    const ok = res.ok;
+    const text = await safeText(res);
+    console.log(`🔔 逾期提醒 ${ok ? '成功' : '失敗'}：#${order.receivingOrderId}（${order.orderNo}） ${res.status} ${res.statusText} ${text ? '- ' + trunc(text) : ''}`);
+    return ok;
+  } catch (err) {
+    console.error('❌ 逾期提醒呼叫異常：', err.message);
+    return false;
   }
-  return await res.json().catch(() => ({}));
 }
 
-// ===== LINE Push（可選）=====
-async function linePushMessage(userId, text) {
-  if (!LINE_CHANNEL_ACCESS_TOKEN || !userId) return { skipped: true };
-  const res = await fetch('https://api.line.me/v2/bot/message/push', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}`,
-    },
-    body: JSON.stringify({ to: userId, messages: [{ type: 'text', text }] }),
-  });
-  if (!res.ok) {
-    const txt = await res.text().catch(() => '');
-    throw new Error(`LINE Push 失敗 HTTP ${res.status} ${txt}`);
-  }
-  return await res.json().catch(() => ({}));
-}
-
-// ===== 單次掃描 =====
-async function scanOnce() {
-  const track = readTrack();
-  if (!track.items || !track.items.length) {
-    log('🟦 目前無追蹤中的訂單。');
+// ---------- 主迴圈 ----------
+function tick() {
+  const state = loadJson(TRACK_FILE, { items: [] });
+  if (!Array.isArray(state.items) || state.items.length === 0) {
+    console.log('📁 目前沒有追蹤中的訂單。檔案：' + TRACK_FILE);
     return;
   }
 
   const now = Date.now();
   let changed = false;
 
-  for (let i = 0; i < track.items.length; i++) {
-    const t = track.items[i];
-    if (t.status === 'done') continue;
+  (async () => {
+    for (const o of state.items) {
+      if (o.completed) continue;
 
-    // 查詢最新明細
-    let detail;
-    try {
-      detail = await fetchOrderDetail(t.receivingOrderId);
-    } catch (e) {
-      log(`❌ 查詢失敗 #${t.receivingOrderId}: ${e.message}`);
-      continue;
-    }
-
-    // 已簽收 → 結案
-    if (isSigned(detail)) {
-      t.status = 'done';
-      t.lastCheckedAt = now;
-      t.notes = (t.notes || []).concat(`簽收結案@${new Date(now).toISOString()}`);
-      changed = true;
-      log(`✅ 已簽收，結案 #${t.receivingOrderId}（${t.orderNo}）`);
-      continue;
-    }
-
-    // 未簽收 → 判斷是否跨過門檻
-    const msFromStart   = now - (t.startedAt || now);
-    const daysFromStart = msFromStart / (24 * 60 * 60 * 1000);
-    t.lastCheckedAt = now;
-
-    if (daysFromStart >= (t.graceDays || 7) && !t.remindSent) {
-      try {
-        // 1) Aolan 模板提醒
-        await sendOverdueReminder({
-          receivingOrderId: t.receivingOrderId,
-          customerId: t.customerId,
-          orderNo: t.orderNo,
-          isDelivery: t.isDelivery,
-        });
-
-        // 2) LINE Push（若能取得 ID 或使用 fallback）
-        const lineUserId = extractLineUserId(detail);
-        if (lineUserId && LINE_CHANNEL_ACCESS_TOKEN) {
-          const msg = `提醒您：訂單 ${t.orderNo} 已可取件，已超過門檻未簽收。如已完成，請忽略此訊息。感謝！`;
-          await linePushMessage(lineUserId, msg);
-        }
-
-        t.lastNotifiedAt = now;
-        t.remindSent = true;
-        t.notes = (t.notes || []).concat(`已逾期提醒@${new Date(now).toISOString()}`);
+      // 1) 判斷是否已簽收
+      const signed = await isSigned(o.receivingOrderId);
+      if (signed) {
+        o.completed = true;
         changed = true;
-        log(`🔔 已發逾期提醒 #${t.receivingOrderId}（${t.orderNo}）`);
-      } catch (e) {
-        log(`❌ 逾期提醒失敗 #${t.receivingOrderId}: ${e.message}`);
+        console.log(`✅ 已簽收，結案 #${o.receivingOrderId}（${o.orderNo}）`);
+        continue;
       }
-    } else {
-      const pct = ((daysFromStart / (t.graceDays || 7)) * 100).toFixed(1);
-      log(`⏳ 未簽收 #${t.receivingOrderId}（第 ${daysFromStart.toFixed(3)} 天 / 門檻 ${t.graceDays} 天，${pct}%）`);
+
+      // 2) 未簽收，檢查是否已逾期
+      const remainMs = (o.deadlineAt || 0) - now;
+      if (remainMs <= 0) {
+        const times = toInt(o.notifiedTimes, 0);
+
+        if (times < MAX_TIMES) {
+          const ok = await sendOverdue(o);
+          o.notifiedTimes = times + (ok ? 1 : 0);
+          o.lastNotifiedAt = now;
+          changed = true;
+        } else {
+          // 已達最大提醒次數，不再提醒，但持續列在追蹤（直到簽收）
+          console.log(`⏰ 已達最大提醒次數（${MAX_TIMES}）#${o.receivingOrderId}（${o.orderNo}）`);
+        }
+      } else {
+        const minsPassed = ((now - (o.startedAt || now)) / 60000).toFixed(2);
+        const minsLeft = (remainMs / 60000).toFixed(2);
+        console.log(`⏳ 未簽收 #${o.receivingOrderId}（${o.orderNo}）｜已過 ${minsPassed} 分｜剩餘 ${minsLeft} 分`);
+      }
     }
+
+    if (changed) saveJson(TRACK_FILE, state);
+  })().catch(e => console.error('tick error:', e.message));
+}
+
+console.log(`👀 取件監看中：每 ${INTERVAL_MIN} 分鐘掃描一次。資料檔：${TRACK_FILE}`);
+setInterval(tick, SCAN_MS);
+tick();
+
+// ---------- 小工具 ----------
+function loadJson(file, def) {
+  try {
+    if (!fs.existsSync(file)) return def;
+    const s = fs.readFileSync(file, 'utf8').trim();
+    return s ? JSON.parse(s) : def;
+  } catch { return def; }
+}
+function saveJson(file, obj) {
+  try { fs.writeFileSync(file, JSON.stringify(obj, null, 2)); } catch {}
+}
+function toInt(v, d) {
+  const n = parseInt(v, 10);
+  return Number.isFinite(n) ? n : d;
+}
+function joinUrl(base, p) {
+  if (!base) return p;
+  return base.replace(/\/+$/, '') + '/' + p.replace(/^\/+/, '');
+}
+async function safeText(res) {
+  try { return await res.text(); } catch { return ''; }
+}
+function getFirst(obj, keys) {
+  for (const k of keys) {
+    const v = obj && obj[k];
+    if (v != null && v !== '') return v;
   }
-
-  if (changed) writeTrack(track);
+  return null;
 }
-
-// ===== 入口點 =====
-async function main() {
-  log('🚀 pickupWatcher 啟動');
-  log(`📄 追蹤檔：${TRACK_FILE}`);
-  log(`🕒 掃描頻率：每 ${WATCH_SCAN_INTERVAL_MIN} 分鐘`);
-  log(`🌐 Aolan：${AOLAN_BASE_URL}`);
-
-  // 立即掃一次
-  try { await scanOnce(); } catch (e) { log('首次掃描異常：', e.message); }
-
-  // 之後週期掃描
-  setInterval(() => {
-    scanOnce().catch(e => log('掃描異常：', e.message));
-  }, WATCH_SCAN_INTERVAL_MIN * 60 * 1000);
+function trunc(s, n = 200) {
+  return String(s).length > n ? String(s).slice(0, n) + '…' : s;
 }
-
-main().catch(err => {
-  log('程式異常：', err.message);
-  process.exit(1);
-});
