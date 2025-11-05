@@ -7,7 +7,9 @@
     "start": "node index.js",
     "dev": "nodemon index.js",
     "inspect:storage": "node scripts/inspectStorage.js",
-    "write:test": "node scripts/writeTest.js"
+    "write:test": "node scripts/writeTest.js",
+    "pickup:track": "node startPickupTrack.js",
+    "pickup:watch": "node pickupWatcher.js"
   },
   "engines": {
     "node": "18.x"
@@ -29,12 +31,5 @@
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
-    {
-  "scripts": {
-    "pickup:track": "node startPickupTrack.js",
-    "pickup:watch": "node pickupWatcher.js"
-  }
-}
-
   }
 }
