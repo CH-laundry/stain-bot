@@ -15,7 +15,74 @@ const FALLBACK_ROOT = path.join(__dirname, 'data');
 const STORE_DIR = fs.existsSync(VOL_ROOT) ? VOL_ROOT : FALLBACK_ROOT;
 const TRACK_FILE = path.join(STORE_DIR, 'pickup-tracker.json');
 
-// ---------- 參數與環境 ----------
+// ---------- 參數與環境 ----------// ======= startPickupTrack.js =======
+// 用程式方式把一筆訂單加入追蹤（供內部呼叫；也保留 CLI 相容）
+
+const { addTrack } = require('./pickupWatcher');
+const fetch = require('node-fetch');
+
+try { require('dotenv').config(); } catch (e) {}
+
+const AOLAN_BASE  = process.env.AOLAN_API_BASE || process.env.AOLAN_BASE || 'https://hk2.ao-lan.cn/xiyi-yidianyuan1';
+const AOLAN_TOKEN = process.env.AOLAN_AUTH_TOKEN || process.env.AOLAN_BEARER_TOKEN || '';
+const LINE_TOKEN  = process.env.LINE_CHANNEL_ACCESS_TOKEN || '';
+const TEST_USER   = process.env.LINE_TEST_USER_ID || process.env.LINE_USER_ID || '';
+
+async function sendInitialLine(orderNo, roid) {
+  if (!LINE_TOKEN || !TEST_USER) return;
+  const res = await fetch('https://api.line.me/v2/bot/message/push', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${LINE_TOKEN}` },
+    body: JSON.stringify({
+      to: TEST_USER,
+      messages: [{ type: 'text', text: `📣 已開始追蹤：${orderNo}（${roid}）` }]
+    })
+  }).catch(()=>null);
+  if (res && !res.ok) {
+    const t = await res.text().catch(()=> '');
+    console.error('❌ 首次 LINE 通知失敗：', res.status, t);
+  }
+}
+
+async function mainCli() {
+  const [ReceivingOrderID, CustomerID, OrderNo, isDelStr = '0'] = process.argv.slice(2);
+  if (!ReceivingOrderID || !CustomerID || !OrderNo) {
+    console.log('用法：node startPickupTrack.js <ReceivingOrderID> <CustomerID> <OrderNo> <isDelivery(0|1)>');
+    process.exit(1);
+  }
+  const ok = addTrack({
+    receivingOrderId: ReceivingOrderID,
+    customerId: CustomerID,
+    orderNo: OrderNo,
+    isDelivery: isDelStr === '1',
+    hungAt: Date.now()
+  });
+  if (ok) {
+    console.log(`🚀 開始追蹤：OrderNo=${OrderNo} | ReceivingOrderID=${ReceivingOrderID} | 店取/外送=${isDelStr==='1'?'外送':'店取'}`);
+    await sendInitialLine(OrderNo, ReceivingOrderID);
+  } else {
+    console.log('⚠️ 已存在相同 ReceivingOrderID，略過。');
+  }
+}
+
+if (require.main === module) {
+  mainCli().catch(e => {
+    console.error('startPickupTrack 例外：', e);
+    process.exit(1);
+  });
+}
+
+// 也導出方法，供日後在你的 index.js 或任一路由直接呼叫：
+// const { startTrack } = require('./startPickupTrack');
+// startTrack({ receivingOrderId, customerId, orderNo, isDelivery: false, hungAt: Date.now() });
+async function startTrack(payload) {
+  const ok = addTrack(payload);
+  if (ok) await sendInitialLine(payload.orderNo, payload.receivingOrderId);
+  return ok;
+}
+
+module.exports = { startTrack };
+
 const BASE = process.env.AOLAN_BASE || '';
 const TOKEN = process.env.AOLAN_BEARER_TOKEN || '';
 const GRACE_MIN = toInt(process.env.PICKUP_GRACE_MINUTES, null);
