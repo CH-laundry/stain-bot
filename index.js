@@ -8,15 +8,6 @@ const fs = require('fs');
 const path = require('path'); // ⭐ 新增：用於客戶資料儲存
 const express = require('express');
 require('dotenv').config();
-// >>> WATCHER 追加：條件啟動（不影響既有功能，沒開環境變數就不啟動）
-if (process.env.PICKUP_WATCHER_ENABLED === 'true') {
-  try {
-    const watcher = require('./pickupWatcher');
-    watcher.start();
-  } catch (e) {
-    console.error('無法啟動 pickupWatcher：', e.message);
-  }
-}
 const fetch = require('node-fetch');
 const crypto = require('crypto');
 const logger = require('./services/logger');
@@ -1192,23 +1183,6 @@ app.get('/payment', (req, res) => {
 app.get('/payment/status/:orderId', async (req, res) => {
   res.json({ message: '付款狀態查詢功能(待實作)', orderId: req.params.orderId });
 });
-
-// >>> WATCHER 追加：健康檢查（可選）
-// 放在 app 與 middleware 都已建立後，任何路由之前/之間都可以
-try {
-  const watcher = require('./pickupWatcher');
-  app.get('/health/pickup-watcher', (req, res) => {
-    try {
-      const s = watcher.status();
-      res.json({ ok: true, ...s });
-    } catch (e) {
-      res.status(500).json({ ok: false, error: String(e) });
-    }
-  });
-} catch (e) {
-  // 若檔案不存在或未部署，不影響任何功能
-}
-
 
 app.get('/health', (req, res) => {
   res.json({
