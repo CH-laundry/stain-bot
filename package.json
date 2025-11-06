@@ -9,7 +9,8 @@
     "inspect:storage": "node scripts/inspectStorage.js",
     "write:test": "node scripts/writeTest.js",
     "pickup:track": "node startPickupTrack.js",
-    "pickup:watch": "node pickupWatcher.js"
+    "pickup:watch": "node pickupWatcher.js",
+    "pickup:auto": "node pickupWatcher.js"
   },
   "engines": {
     "node": "18.x"
