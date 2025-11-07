@@ -1257,6 +1257,169 @@ return res.json({ success: true, paymentUrl: chosenUrl });
 }
 });
 
+// ========================================
+// 取件追蹤 API
+// ========================================
+const PICKUP_TRACKER_FILE = '/data/pickup-tracker.json';
+
+// 確保追蹤檔存在
+function ensurePickupTracker() {
+  const dir = '/data';
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  if (!fs.existsSync(PICKUP_TRACKER_FILE)) {
+    fs.writeFileSync(PICKUP_TRACKER_FILE, JSON.stringify({ items: [] }, null, 2));
+  }
+}
+
+// 讀取追蹤清單
+function readPickupTracker() {
+  ensurePickupTracker();
+  return JSON.parse(fs.readFileSync(PICKUP_TRACKER_FILE, 'utf8'));
+}
+
+// 儲存追蹤清單
+function writePickupTracker(tracker) {
+  fs.writeFileSync(PICKUP_TRACKER_FILE, JSON.stringify(tracker, null, 2));
+}
+
+// API: 開始追蹤訂單
+app.post('/api/track-pickup', (req, res) => {
+  const { customerNumber, customerName, userID } = req.body;
+  
+  if (!customerNumber || !customerName || !userID) {
+    return res.status(400).json({ 
+      success: false, 
+      error: '缺少必要參數' 
+    });
+  }
+  
+  try {
+    const tracker = readPickupTracker();
+    
+    // 檢查是否已存在
+    const exists = tracker.items.find(item => item.customerNumber === customerNumber);
+    if (exists) {
+      return res.json({ 
+        success: false, 
+        message: '此訂單已在追蹤清單中' 
+      });
+    }
+    
+    // 新增追蹤
+    tracker.items.push({
+      customerNumber,
+      customerName,
+      userID,
+      notifiedAt: new Date().toISOString(),
+      reminderSent: false,
+      pickedUp: false,
+      createdAt: new Date().toISOString()
+    });
+    
+    writePickupTracker(tracker);
+    logger.logToFile(`[PICKUP] 開始追蹤：${customerNumber} - ${customerName}`);
+    
+    res.json({ 
+      success: true, 
+      message: '已加入追蹤清單',
+      total: tracker.items.length 
+    });
+  } catch (error) {
+    logger.logError('追蹤訂單失敗', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// API: 標記已取件
+app.post('/api/pickup-complete', (req, res) => {
+  const { customerNumber } = req.body;
+  
+  if (!customerNumber) {
+    return res.status(400).json({ 
+      success: false, 
+      error: '缺少訂單編號' 
+    });
+  }
+  
+  try {
+    const tracker = readPickupTracker();
+    const order = tracker.items.find(item => item.customerNumber === customerNumber);
+    
+    if (!order) {
+      return res.status(404).json({ 
+        success: false, 
+        error: '找不到此訂單' 
+      });
+    }
+    
+    // 標記已取件
+    order.pickedUp = true;
+    order.pickedUpAt = new Date().toISOString();
+    
+    writePickupTracker(tracker);
+    logger.logToFile(`[PICKUP] 已取件：${customerNumber} - ${order.customerName}`);
+    
+    res.json({ 
+      success: true, 
+      message: '已標記為已取件' 
+    });
+  } catch (error) {
+    logger.logError('標記取件失敗', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// API: 移除追蹤
+app.delete('/api/tracked-order/:customerNumber', (req, res) => {
+  const { customerNumber } = req.params;
+  
+  try {
+    const tracker = readPickupTracker();
+    const index = tracker.items.findIndex(item => item.customerNumber === customerNumber);
+    
+    if (index === -1) {
+      return res.status(404).json({ 
+        success: false, 
+        error: '找不到此訂單' 
+      });
+    }
+    
+    const removed = tracker.items.splice(index, 1)[0];
+    writePickupTracker(tracker);
+    logger.logToFile(`[PICKUP] 移除追蹤：${customerNumber} - ${removed.customerName}`);
+    
+    res.json({ 
+      success: true, 
+      message: '已移除追蹤' 
+    });
+  } catch (error) {
+    logger.logError('移除追蹤失敗', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// API: 查看追蹤清單
+app.get('/api/tracked-orders', (req, res) => {
+  try {
+    const tracker = readPickupTracker();
+    
+    // 計算每筆訂單的經過時間
+    const ordersWithTime = tracker.items.map(order => ({
+      ...order,
+      minutesSince: Math.floor((Date.now() - new Date(order.notifiedAt).getTime()) / 60000)
+    }));
+    
+    res.json({ 
+      success: true, 
+      total: ordersWithTime.length,
+      orders: ordersWithTime 
+    });
+  } catch (error) {
+    logger.logError('查詢追蹤清單失敗', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 
 
 const PORT = process.env.PORT || 3000;
