@@ -1420,7 +1420,15 @@ app.get('/api/tracked-orders', (req, res) => {
   }
 });
 
+// ========================================
+// 🧺 取件追蹤系統啟動
+// ========================================
+const pickupWatcher = require('./pickupWatcher');
 
+// 取件追蹤管理頁面
+app.get('/pickup-admin', (req, res) => {
+  res.sendFile('pickup-admin.html', { root: './public' });
+});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
@@ -1434,6 +1442,14 @@ app.listen(PORT, async () => {
     console.error('客戶資料載入失敗:', error.message);
   }
 
+// 🧺 啟動取件追蹤監控
+  try {
+    pickupWatcher.startWatcher();
+    console.log('✅ 取件追蹤系統已啟動');
+  } catch (error) {
+    console.error('❌ 取件追蹤系統啟動失敗:', error.message);
+  }
+  
   setInterval(() => {
     orderManager.cleanExpiredOrders();
   }, 24 * 60 * 60 * 1000);
