@@ -4,7 +4,7 @@
   "description": "洗衣服務 LINE 機器人（包含圖片上傳與 node-fetch 範例）",
   "main": "index.js",
   "scripts": {
-   "start": "node index.js & node pickupWatcher.js",
+    "start": "node index.js",
     "dev": "nodemon index.js",
     "inspect:storage": "node scripts/inspectStorage.js",
     "write:test": "node scripts/writeTest.js",
