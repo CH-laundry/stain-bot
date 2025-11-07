@@ -1425,11 +1425,6 @@ app.get('/api/tracked-orders', (req, res) => {
 // ========================================
 const pickupWatcher = require('./pickupWatcher');
 
-// 取件追蹤管理頁面
-app.get('/pickup-admin', (req, res) => {
-  res.sendFile('pickup-admin.html', { root: './public' });
-});
-
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
   console.log(`伺服器正在運行,端口:${PORT}`);
