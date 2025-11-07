@@ -1,12 +1,18 @@
 // ====== Bootstraps / 基礎設定 ======
 require('./bootstrap/storageBridge');
 console.log('RAILWAY_VOLUME_MOUNT_PATH =', process.env.RAILWAY_VOLUME_MOUNT_PATH);
-
 const { createECPayPaymentLink } = require('./services/openai');
 const customerDB = require('./services/customerDatabase');
 const fs = require('fs');
 const path = require('path'); // ⭐ 新增：用於客戶資料儲存
 const express = require('express');
+// --- 啟動取件監看器（同服務版） ---
+const path = require('path');
+const { fork } = require('child_process');
+if (process.env.ENABLE_PICKUP_WATCHER === '1') {
+  fork(path.join(__dirname, 'pickupWatcher.js'), { stdio: 'inherit' });
+  console.log('[BOOT] 已在同服務啟動 pickupWatcher');
+}
 require('dotenv').config();
 const fetch = require('node-fetch');
 const crypto = require('crypto');
