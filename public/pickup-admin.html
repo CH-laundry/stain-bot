@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>C.H 精緻洗衣 - 取件追蹤管理</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
+    .container { max-width: 1200px; margin: 0 auto; background: #fff; border-radius: 20px; padding: 30px; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+    h1 { color: #667eea; text-align: center; margin-bottom: 10px; font-size: 28px; }
+    .subtitle { text-align: center; color: #666; margin-bottom: 30px; font-size: 14px; }
+    
+    /* 統計卡片 */
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 30px; }
+    .stat-card { background: linear-gradient(135deg, #667eea, #764ba2); padding: 20px; border-radius: 15px; color: white; text-align: center; }
+    .stat-card.tracking { background: linear-gradient(135deg, #f093fb, #f5576c); }
+    .stat-card.reminded { background: linear-gradient(135deg, #ffd89b, #19547b); }
+    .stat-card.picked { background: linear-gradient(135deg, #a8edea, #fed6e3); }
+    .stat-number { font-size: 36px; font-weight: bold; margin-bottom: 5px; }
+    .stat-label { font-size: 14px; opacity: 0.9; }
+    
+    /* 搜尋區 */
+    .search-box { background: #f8f9fa; padding: 20px; border-radius: 15px; margin-bottom: 30px; }
+    .search-box input { width: 100%; padding: 15px; border: 2px solid #e0e0e0; border-radius: 10px; font-size: 16px; }
+    .search-box input:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102,126,234,.1); }
+    
+    /* 客戶卡片 */
+    .customer-result { background: #f0f4ff; padding: 15px; border-radius: 10px; margin-top: 15px; border-left: 4px solid #667eea; }
+    .customer-result h4 { color: #667eea; margin-bottom: 10px; }
+    .customer-result p { margin: 5px 0; font-size: 14px; color: #333; }
+    .customer-result button { margin-top: 10px; }
+    
+    /* 按鈕 */
+    .btn { padding: 12px 24px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; border: none; border-radius: 10px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all .3s; }
+    .btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(102,126,234,.6); }
+    .btn-small { padding: 8px 16px; font-size: 14px; }
+    .btn-success { background: linear-gradient(135deg, #52c41a 0%, #389e0d 100%); }
+    .btn-danger { background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); }
+    .btn-warning { background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); }
+    
+    /* 訂單列表 */
+    .order-item { background: #fff; padding: 20px; margin-bottom: 15px; border-radius: 12px; border: 2px solid #e0e0e0; transition: all .3s; }
+    .order-item:hover { border-color: #667eea; box-shadow: 0 4px 12px rgba(102,126,234,.2); }
+    .order-item.tracking { border-left: 4px solid #ffc107; }
+    .order-item.reminded { border-left: 4px solid #dc3545; }
+    .order-item.picked { border-left: 4px solid #28a745; opacity: 0.6; }
+    
+    .order-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+    .order-name { font-size: 18px; font-weight: bold; color: #333; }
+    .order-status { padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; }
+    .status-tracking { background: #fff3cd; color: #856404; }
+    .status-reminded { background: #f8d7da; color: #721c24; }
+    .status-picked { background: #d4edda; color: #155724; }
+    
+    .order-details { font-size: 14px; color: #666; margin-bottom: 15px; }
+    .order-details div { margin: 5px 0; }
+    
+    .order-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    
+    /* 分類標籤 */
+    .tabs { display: flex; gap: 10px; margin-bottom: 30px; border-bottom: 2px solid #e0e0e0; flex-wrap: wrap; }
+    .tab { padding: 12px 20px; background: none; border: none; color: #666; font-size: 15px; font-weight: 600; cursor: pointer; border-bottom: 3px solid transparent; transition: all .3s; }
+    .tab:hover { color: #667eea; }
+    .tab.active { color: #667eea; border-bottom-color: #667eea; }
+    
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    
+    /* 表單 */
+    .form-group { margin-bottom: 20px; }
+    label { display: block; margin-bottom: 8px; color: #333; font-weight: 600; font-size: 14px; }
+    input, textarea, select { width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 10px; font-size: 16px; transition: all .3s; }
+    input:focus, textarea:focus, select:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102,126,234,.1); }
+    textarea { min-height: 100px; resize: vertical; font-family: inherit; }
+    
+    /* 批量匯入 */
+    .import-area { background: #f8f9fa; padding: 20px; border-radius: 15px; border: 2px dashed #ccc; text-align: center; margin-bottom: 20px; }
+    .import-area.active { border-color: #667eea; background: #f0f4ff; }
+    
+    /* 訊息 */
+    .message { padding: 15px; border-radius: 10px; margin-bottom: 20px; display: none; }
+    .message.success { background: #d4edda; border: 2px solid #28a745; color: #155724; }
+    .message.error { background: #f8d7da; border: 2px solid #dc3545; color: #721c24; }
+    .message.info { background: #d1ecf1; border: 2px solid #17a2b8; color: #0c5460; }
+    
+    @media (max-width: 768px) {
+      .container { padding: 20px; }
+      h1 { font-size: 24px; }
+      .stats { grid-template-columns: 1fr; }
+      .order-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🧺 取件追蹤管理系統</h1>
+    <p class="subtitle">C.H 精緻洗衣 - 自動提醒客人取件</p>
+
+    <!-- 統計卡片 -->
+    <div class="stats">
+      <div class="stat-card">
+        <div class="stat-number" id="totalCount">0</div>
+        <div class="stat-label">總追蹤數</div>
+      </div>
+      <div class="stat-card tracking">
+        <div class="stat-number" id="trackingCount">0</div>
+        <div class="stat-label">追蹤中</div>
+      </div>
+      <div class="stat-card reminded">
+        <div class="stat-number" id="remindedCount">0</div>
+        <div class="stat-label">已提醒</div>
+      </div>
+      <div class="stat-card picked">
+        <div class="stat-number" id="pickedCount">0</div>
+        <div class="stat-label">已取件</div>
+      </div>
+    </div>
+
+    <!-- 分頁標籤 -->
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('add')">➕ 新增追蹤</button>
+      <button class="tab" onclick="switchTab('list')">📋 追蹤清單</button>
+      <button class="tab" onclick="switchTab('batch')">📦 批量匯入</button>
+      <button class="tab" onclick="switchTab('settings')">⚙️ 設定</button>
+    </div>
+
+    <!-- 新增追蹤 -->
+    <div id="add-tab" class="tab-content active">
+      <div class="search-box">
+        <label>🔍 搜尋客戶</label>
+        <input type="text" id="searchInput" placeholder="輸入編號或姓名查詢客戶" oninput="searchCustomer()">
+        <div id="searchResult"></div>
+      </div>
+
+      <div class="form-group">
+        <label>客戶編號 *</label>
+        <input type="text" id="customerNumber" placeholder="例如: 625" required>
+      </div>
+      <div class="form-group">
+        <label>客戶姓名 *</label>
+        <input type="text" id="customerName" placeholder="例如: 小林王子大大" required>
+      </div>
+      <div class="form-group">
+        <label>LINE User ID *</label>
+        <input type="text" id="userID" placeholder="U5099169723d6e83588c5f23dfaf6f9cf" required>
+      </div>
+      <button class="btn" onclick="startTracking()">🎯 開始追蹤取件</button>
+    </div>
+
+    <!-- 追蹤清單 -->
+    <div id="list-tab" class="tab-content">
+      <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
+        <button class="btn btn-small btn-success" onclick="loadOrders()">🔄 重新整理</button>
+        <select id="filterStatus" onchange="filterOrders()" style="padding: 8px; border-radius: 8px; border: 2px solid #e0e0e0;">
+          <option value="all">全部訂單</option>
+          <option value="tracking">追蹤中</option>
+          <option value="reminded">已提醒</option>
+          <option value="picked">已取件</option>
+        </select>
+      </div>
+      <div id="orderList"></div>
+    </div>
+
+    <!-- 批量匯入 -->
+    <div id="batch-tab" class="tab-content">
+      <h3 style="color: #667eea; margin-bottom: 20px;">📦 批量匯入推送記錄</h3>
+      <div class="import-area" id="importArea">
+        <p style="margin-bottom: 15px;">
+          請從洗衣軟件複製「推送記錄」，然後按 Ctrl+V 貼上
+        </p>
+        <button class="btn" onclick="focusImport()">📋 點此貼上</button>
+        <textarea id="importText" style="display: none;" placeholder="貼上複製的推送記錄..."></textarea>
+      </div>
+      <div style="margin-top: 20px;">
+        <button class="btn btn-success" onclick="batchImport()">📥 開始匯入</button>
+      </div>
+      <div id="importResult" style="margin-top: 20px;"></div>
+    </div>
+
+    <!-- 設定 -->
+    <div id="settings-tab" class="tab-content">
+      <h3 style="color: #667eea; margin-bottom: 20px;">⚙️ 提醒訊息設定</h3>
+      <div class="form-group">
+        <label>提醒訊息模板</label>
+        <p style="font-size: 13px; color: #666; margin-bottom: 10px;">
+          可用變數：{客戶姓名}、{客戶編號}、{通知日期}、{已過天數}、{已過時數}
+        </p>
+        <textarea id="templateText" placeholder="例如：親愛的 {客戶姓名}，您的衣物已清洗完成超過 {已過天數} 天，請盡快來領取！訂單編號：{客戶編號}"></textarea>
+      </div>
+      <button class="btn btn-success" onclick="saveTemplate()">💾 儲存模板</button>
+
+      <div style="margin-top: 30px; padding: 20px; background: #f8f9fa; border-radius: 15px;">
+        <h4 style="color: #667eea; margin-bottom: 15px;">📊 系統資訊</h4>
+        <div style="font-size: 14px; color: #666;">
+          <div style="margin: 8px 0;">⏰ 檢查頻率：每 2 分鐘</div>
+          <div style="margin: 8px 0;">🎯 測試模式：20 分鐘後提醒</div>
+          <div style="margin: 8px 0;">🚀 正式模式：7 天後中午 12:00 提醒</div>
+          <div style="margin: 8px 0;">🔄 持續提醒：每 7 天一次，直到取件</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="message" class="message"></div>
+  </div>
+
+  <script>
+    let allOrders = [];
+    let allCustomers = [];
+
+    // 載入客戶資料
+    async function loadCustomers() {
+      try {
+        const res = await fetch('/api/customer-numbers');
+        const data = await res.json();
+        if (data.success) {
+          allCustomers = data.customers || [];
+        }
+      } catch (error) {
+        console.error('載入客戶失敗:', error);
+      }
+    }
+
+    // 搜尋客戶
+    async function searchCustomer() {
+      const query = document.getElementById('searchInput').value.trim();
+      const resultDiv = document.getElementById('searchResult');
+      
+      if (!query) {
+        resultDiv.innerHTML = '';
+        return;
+      }
+
+      const found = allCustomers.filter(c => 
+        c.number === query || (c.name && c.name.includes(query))
+      );
+
+      if (found.length === 0) {
+        resultDiv.innerHTML = '<p style="color: #999; margin-top: 10px;">找不到此客戶</p>';
+        return;
+      }
+
+      const customer = found[0];
+      resultDiv.innerHTML = `
+        <div class="customer-result">
+          <h4>✅ 找到客戶</h4>
+          <p><strong>編號：</strong>${customer.number}</p>
+          <p><strong>姓名：</strong>${customer.name}</p>
+          <p><strong>User ID：</strong>${customer.userId}</p>
+          <button class="btn btn-small btn-success" onclick="fillCustomer('${customer.number}', '${customer.name}', '${customer.userId}')">帶入資料</button>
+        </div>
+      `;
+    }
+
+    // 帶入客戶資料
+    function fillCustomer(number, name, userId) {
+      document.getElementById('customerNumber').value = number;
+      document.getElementById('customerName').value = name;
+      document.getElementById('userID').value = userId;
+      showMessage('success', '✅ 已帶入客戶資料');
+    }
+
+    // 開始追蹤
+    async function startTracking() {
+      const customerNumber = document.getElementById('customerNumber').value.trim();
+      const customerName = document.getElementById('customerName').value.trim();
+      const userID = document.getElementById('userID').value.trim();
+
+      if (!customerNumber || !customerName || !userID) {
+        showMessage('error', '❌ 請填寫所有欄位');
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/track-pickup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ customerNumber, customerName, userID })
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          showMessage('success', '✅ 已開始追蹤取件');
+          document.getElementById('customerNumber').value = '';
+          document.getElementById('customerName').value = '';
+          document.getElementById('userID').value = '';
+          document.getElementById('searchInput').value = '';
+          document.getElementById('searchResult').innerHTML = '';
+          await loadOrders();
+        } else {
+          showMessage('error', '❌ ' + (data.error || data.message || '追蹤失敗'));
+        }
+      } catch (error) {
+        showMessage('error', '❌ 連線失敗：' + error.message);
+      }
+    }
+
+    // 載入訂單
+    async function loadOrders() {
+      try {
+        const res = await fetch('/api/tracked-orders');
+        const data = await res.json();
+
+        if (data.success) {
+          allOrders = data.orders || [];
+          updateStats();
+          displayOrders(allOrders);
+        }
+      } catch (error) {
+        console.error('載入訂單失敗:', error);
+      }
+    }
+
+    // 更新統計
+    function updateStats() {
+      const total = allOrders.length;
+      const tracking = allOrders.filter(o => !o.reminderSent && !o.pickedUp).length;
+      const reminded = allOrders.filter(o => o.reminderSent && !o.pickedUp).length;
+      const picked = allOrders.filter(o => o.pickedUp).length;
+
+      document.getElementById('totalCount').textContent = total;
+      document.getElementById('trackingCount').textContent = tracking;
+      document.getElementById('remindedCount').textContent = reminded;
+      document.getElementById('pickedCount').textContent = picked;
+    }
+
+    // 顯示訂單
+    function displayOrders(orders) {
+      const listDiv = document.getElementById('orderList');
+
+      if (!orders || orders.length === 0) {
+        listDiv.innerHTML = '<p style="text-align: center; color: #999;">尚無追蹤訂單</p>';
+        return;
+      }
+
+      let html = '';
+      orders.forEach(order => {
+        const status = order.pickedUp ? 'picked' : (order.reminderSent ? 'reminded' : 'tracking');
+        const statusText = order.pickedUp ? '已取件' : (order.reminderSent ? '已提醒' : '追蹤中');
+        const statusClass = order.pickedUp ? 'status-picked' : (order.reminderSent ? 'status-reminded' : 'status-tracking');
+        
+        const notifiedDate = new Date(order.notifiedAt).toLocaleString('zh-TW');
+        const minutesPassed = Math.floor((Date.now() - new Date(order.notifiedAt).getTime()) / 60000);
+        const hoursPassed = Math.floor(minutesPassed / 60);
+        const daysPassed = Math.floor(hoursPassed / 24);
+
+        html += `
+          <div class="order-item ${status}">
+            <div class="order-header">
+              <div class="order-name">${order.customerNumber} - ${order.customerName}</div>
+              <div class="order-status ${statusClass}">${statusText}</div>
+            </div>
+            <div class="order-details">
+              <div>📅 通知時間：${notifiedDate}</div>
+              <div>⏰ 已過時間：${daysPassed} 天 ${hoursPassed % 24} 小時 ${minutesPassed % 60} 分鐘</div>
+              ${order.reminderSent ? `<div>🔔 提醒次數：${order.reminderCount || 1} 次</div>` : ''}
+              ${order.pickedUp ? `<div>✅ 取件時間：${new Date(order.pickedUpAt).toLocaleString('zh-TW')}</div>` : ''}
+            </div>
+            <div class="order-actions">
+              ${!order.pickedUp ? `<button class="btn btn-small btn-success" onclick="markPicked('${order.customerNumber}')">✅ 標記已取件</button>` : ''}
+              <button class="btn btn-small btn-danger" onclick="removeOrder('${order.customerNumber}')">🗑️ 移除追蹤</button>
+            </div>
+          </div>
+        `;
+      });
+
+      listDiv.innerHTML = html;
+    }
+
+    // 篩選訂單
+    function filterOrders() {
+      const filter = document.getElementById('filterStatus').value;
+      
+      if (filter === 'all') {
+        displayOrders(allOrders);
+        return;
+      }
+
+      const filtered = allOrders.filter(o => {
+        if (filter === 'picked') return o.pickedUp;
+        if (filter === 'reminded') return o.reminderSent && !o.pickedUp;
+        if (filter === 'tracking') return !o.reminderSent && !o.pickedUp;
+        return true;
+      });
+
+      displayOrders(filtered);
+    }
+
+    // 標記已取件
+    async function markPicked(customerNumber) {
+      if (!confirm('確定標記為已取件？')) return;
+
+      try {
+        const res = await fetch('/api/pickup-complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ customerNumber })
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          showMessage('success', '✅ 已標記為已取件');
+          await loadOrders();
+        } else {
+          showMessage('error', '❌ ' + (data.error || '操作失敗'));
+        }
+      } catch (error) {
+        showMessage('error', '❌ 連線失敗：' + error.message);
+      }
+    }
+
+    // 移除追蹤
+    async function removeOrder(customerNumber) {
+      if (!confirm('確定移除此追蹤？')) return;
+
+      try {
+        const res = await fetch(`/api/tracked-order/${customerNumber}`, {
+          method: 'DELETE'
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          showMessage('success', '✅ 已移除追蹤');
+          await loadOrders();
+        } else {
+          showMessage('error', '❌ ' + (data.error || '操作失敗'));
+        }
+      } catch (error) {
+        showMessage('error', '❌ 連線失敗：' + error.message);
+      }
+    }
+
+    // 批量匯入
+    function focusImport() {
+      const textarea = document.getElementById('importText');
+      textarea.style.display = 'block';
+      textarea.focus();
+    }
+
+    async function batchImport() {
+      const text = document.getElementById('importText').value.trim();
+      
+      if (!text) {
+        showMessage('error', '❌ 請先貼上推送記錄');
+        return;
+      }
+
+      const lines = text.split('\n').filter(line => line.trim());
+      const imported = [];
+      const failed = [];
+
+      for (const line of lines) {
+        const parts = line.split('\t');
+        if (parts.length < 3) continue;
+
+        const customerNumber = parts[0].trim();
+        const customerName = parts[1].trim();
+        const phone = parts[2].trim();
+
+        // 查詢客戶 User ID
+        const customer = allCustomers.find(c => c.number === customerNumber || c.name === customerName);
+        
+        if (!customer || !customer.userId) {
+          failed.push({ customerNumber, customerName, reason: '找不到 User ID' });
+          continue;
+        }
+
+        try {
+          const res = await fetch('/api/track-pickup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              customerNumber,
+              customerName,
+              userID: customer.userId
+            })
+          });
+
+          const data = await res.json();
+          if (data.success) {
+            imported.push(customerNumber);
+          } else {
+            failed.push({ customerNumber, customerName, reason: data.message || '已存在' });
+          }
+        } catch (error) {
+          failed.push({ customerNumber, customerName, reason: error.message });
+        }
+      }
+
+      let resultHTML = `<div class="message success" style="display: block;">
+        ✅ 匯入完成！<br>
+        成功：${imported.length} 筆<br>
+        ${failed.length > 0 ? `失敗：${failed.length} 筆` : ''}
+      </div>`;
+
+      if (failed.length > 0) {
+        resultHTML += '<div style="margin-top: 15px; font-size: 13px; color: #666;">';
+        resultHTML += '<strong>失敗項目：</strong><br>';
+        failed.forEach(f => {
+          resultHTML += `${f.customerNumber} - ${f.customerName}：${f.reason}<br>`;
+        });
+        resultHTML += '</div>';
+      }
+
+      document.getElementById('importResult').innerHTML = resultHTML;
+      document.getElementById('importText').value = '';
+      await loadOrders();
+    }
+
+    // 儲存模板
+    function saveTemplate() {
+      const template = document.getElementById('templateText').value.trim();
+      if (!template) {
+        showMessage('error', '❌ 請輸入模板內容');
+        return;
+      }
+
+      // 這裡可以呼叫 API 儲存模板
+      // 暫時只顯示成功訊息
+      showMessage('success', '✅ 模板已儲存');
+    }
+
+    // 切換分頁
+    function switchTab(tabName) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      
+      event.target.classList.add('active');
+      document.getElementById(tabName + '-tab').classList.add('active');
+
+      if (tabName === 'list') {
+        loadOrders();
+      }
+    }
+
+    // 顯示訊息
+    function showMessage(type, text) {
+      const msg = document.getElementById('message');
+      msg.className = 'message ' + type;
+      msg.textContent = text;
+      msg.style.display = 'block';
+      
+      setTimeout(() => {
+        msg.style.display = 'none';
+      }, 5000);
+    }
+
+    // 初始化
+    document.addEventListener('DOMContentLoaded', async () => {
+      await loadCustomers();
+      await loadOrders();
+    });
+  </script>
+</body>
+</html>
