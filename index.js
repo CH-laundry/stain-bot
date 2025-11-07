@@ -1264,6 +1264,15 @@ app.listen(PORT, async () => {
   console.log(`伺服器正在運行,端口:${PORT}`);
   logger.logToFile(`伺服器正在運行,端口:${PORT}`);
 
+  // --- 啟動取件監看器（同服務版） ---
+const path = require('path');
+const { fork } = require('child_process');
+if (process.env.ENABLE_PICKUP_WATCHER === '1') {
+  fork(path.join(__dirname, 'pickupWatcher.js'), { stdio: 'inherit' });
+  console.log('[BOOT] 已在同服務啟動 pickupWatcher');
+}
+
+
   try {
     await customerDB.loadAllCustomers();
     console.log('客戶資料載入完成');
