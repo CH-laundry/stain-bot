@@ -16,6 +16,7 @@ const { Client } = require('@line/bot-sdk');
 const googleAuth = require('./services/googleAuth');
 const multer = require('multer');
 const orderManager = require('./services/orderManager');
+const pickupRoutes = require('./pickupRoutes');
 const upload = multer({ storage: multer.memoryStorage() });
 
 // ★ 你的 LIFF ID
@@ -48,6 +49,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 app.use('/debug', require('./services/debugStorage'));
+app.use('/api/pickup', pickupRoutes.router);
 
 // ====== LINE Client ======
 const client = new Client({
@@ -1264,6 +1266,12 @@ app.listen(PORT, async () => {
   console.log(`伺服器正在運行,端口:${PORT}`);
   logger.logToFile(`伺服器正在運行,端口:${PORT}`);
 
+// 🧺 初始化取件追蹤
+  pickupRoutes.setLineClient(client);
+  setInterval(() => {
+    pickupRoutes.checkAndSendReminders();
+  }, 60 * 60 * 1000);
+  console.log('✅ 取件追蹤系統已啟動');
   try {
     await customerDB.loadAllCustomers();
     console.log('客戶資料載入完成');
