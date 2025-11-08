@@ -1452,6 +1452,119 @@ app.get('/api/tracked-orders', (req, res) => {
 const pickupWatcher = require('./pickupWatcher');
 
 const PORT = process.env.PORT || 3000;
+// ========================================
+// 🧺 取件追蹤 API（不影響付款功能）
+// ========================================
+const pickupCustomerDB = require('./services/pickupCustomerDB');
+const pickupWatcher = require('./pickupWatcher');
+
+app.get('/api/tracked-orders', (req, res) => {
+  try {
+    const orders = pickupCustomerDB.getAllOrders();
+    res.json({ success: true, orders });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/track-pickup', (req, res) => {
+  const { customerNumber, customerName, userID, phone } = req.body;
+  
+  if (!customerNumber || !customerName || !userID) {
+    return res.status(400).json({ success: false, message: '缺少必要欄位' });
+  }
+
+  const result = pickupCustomerDB.addOrder(customerNumber, customerName, userID, phone);
+  res.json(result);
+});
+
+app.post('/api/pickup-complete', (req, res) => {
+  const { customerNumber } = req.body;
+  if (!customerNumber) {
+    return res.status(400).json({ success: false, error: '缺少客戶編號' });
+  }
+  const result = pickupCustomerDB.markAsPickedUp(customerNumber);
+  res.json(result);
+});
+
+app.post('/api/pickup-note', (req, res) => {
+  const { customerNumber, note } = req.body;
+  if (!customerNumber) {
+    return res.status(400).json({ success: false, error: '缺少客戶編號' });
+  }
+  const result = pickupCustomerDB.updateNote(customerNumber, note || '');
+  res.json(result);
+});
+
+app.delete('/api/tracked-order/:customerNumber', (req, res) => {
+  const { customerNumber } = req.params;
+  const result = pickupCustomerDB.deleteOrder(customerNumber);
+  res.json(result);
+});
+
+app.post('/api/send-pickup-reminder/:customerNumber', async (req, res) => {
+  const { customerNumber } = req.params;
+  const orders = pickupCustomerDB.getAllOrders();
+  const order = orders.find(o => o.customerNumber === customerNumber);
+  
+  if (!order) {
+    return res.status(404).json({ success: false, error: '找不到此訂單' });
+  }
+
+  try {
+    const success = await pickupWatcher.sendReminder(order);
+    res.json({ success: success, message: success ? '提醒已發送' : '發送失敗' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/pickup-template', (req, res) => {
+  const templatePath = path.join(__dirname, 'data', 'pickup-template.json');
+  try {
+    if (fs.existsSync(templatePath)) {
+      const data = JSON.parse(fs.readFileSync(templatePath, 'utf8'));
+      res.json({ success: true, template: data.template });
+    } else {
+      res.json({ success: true, template: '親愛的 {客戶姓名}，您的衣物已清洗完成超過 {已過天數} 天，請盡快來領取！訂單編號：{客戶編號}' });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/pickup-template', (req, res) => {
+  const { template } = req.body;
+  if (!template) {
+    return res.status(400).json({ success: false, error: '缺少模板內容' });
+  }
+  const templatePath = path.join(__dirname, 'data', 'pickup-template.json');
+  try {
+    const dir = path.dirname(templatePath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(templatePath, JSON.stringify({ template }, null, 2), 'utf8');
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ========================================
+// 你原本的 app.listen（不要動）
+// ========================================
+app.listen(PORT, () => {
+  console.log('伺服器正在運行,端口:' + PORT);
+  
+  // 啟動取件追蹤
+  try {
+    pickupWatcher.startWatcher();
+    console.log('✅ 取件追蹤系統已啟動');
+  } catch (error) {
+    console.error('❌ 取件追蹤啟動失敗:', error.message);
+  }
+});
 app.listen(PORT, async () => {
   console.log(`伺服器正在運行,端口:${PORT}`);
   logger.logToFile(`伺服器正在運行,端口:${PORT}`);
