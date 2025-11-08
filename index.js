@@ -1456,7 +1456,6 @@ const PORT = process.env.PORT || 3000;
 // 🧺 取件追蹤 API（不影響付款功能）
 // ========================================
 const pickupCustomerDB = require('./services/pickupCustomerDB');
-const pickupWatcher = require('./pickupWatcher');
 
 app.get('/api/tracked-orders', (req, res) => {
   try {
