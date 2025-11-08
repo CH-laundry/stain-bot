@@ -211,9 +211,13 @@ router.post('/remind/:customerNumber', async (req, res) => {
     return res.json({ success: false, message: '此訂單已簽收' });
   }
   
+  // ✅ 計算已過天數
+  const daysPassed = Math.floor((Date.now() - new Date(order.notifiedAt).getTime()) / (1000 * 60 * 60 * 24));
+  
   const message = data.template
     .replace(/{客戶姓名}/g, order.customerName)
-    .replace(/{客戶編號}/g, order.customerNumber);
+    .replace(/{客戶編號}/g, order.customerNumber)
+    .replace(/{已過天數}/g, daysPassed);  // ✅ 新增已過天數變數
   
   try {
     await lineClient.pushMessage(order.userId, {
@@ -311,9 +315,13 @@ async function checkAndSendReminders() {
     const nextReminder = new Date(order.nextReminderAt);
     
     if (now.toDateString() === nextReminder.toDateString()) {
+      // ✅ 計算已過天數
+      const daysPassed = Math.floor((Date.now() - new Date(order.notifiedAt).getTime()) / (1000 * 60 * 60 * 24));
+      
       const message = data.template
         .replace(/{客戶姓名}/g, order.customerName)
-        .replace(/{客戶編號}/g, order.customerNumber);
+        .replace(/{客戶編號}/g, order.customerNumber)
+        .replace(/{已過天數}/g, daysPassed);  // ✅ 新增已過天數變數
       
       try {
         await lineClient.pushMessage(order.userId, {
