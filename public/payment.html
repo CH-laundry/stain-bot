@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>C.H 精緻洗衣 - 管理系統</title>
+  <title>C.H 精緻洗衣 - 付款管理系統</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Microsoft JhengHei', 'Segoe UI', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
-    .container { max-width: 1400px; margin: 0 auto; background: #fff; border-radius: 20px; padding: 30px; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+    body { font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
+    .container { max-width: 900px; margin: 0 auto; background: #fff; border-radius: 20px; padding: 30px; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
     h1 { color: #667eea; text-align: center; margin-bottom: 10px; font-size: 28px; }
     .subtitle { text-align: center; color: #666; margin-bottom: 30px; font-size: 14px; }
     .tabs { display: flex; gap: 10px; margin-bottom: 30px; border-bottom: 2px solid #e0e0e0; flex-wrap: wrap; }
@@ -28,8 +28,6 @@
     .btn-small { padding: 10px 20px; font-size: 14px; width: auto; }
     .btn-secondary { background: linear-gradient(135deg, #52c41a 0%, #389e0d 100%); }
     .btn-danger { background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); }
-    .btn-warning { background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%); }
-    .btn-info { background: linear-gradient(135deg, #17a2b8 0%, #117a8b 100%); }
     .payment-options { display: grid; grid-template-columns: repeat(3,1fr); gap: 15px; margin-bottom: 20px; }
     .payment-option { position: relative; }
     .payment-option input[type="radio"] { position: absolute; opacity: 0; }
@@ -44,92 +42,53 @@
     .result { margin-top: 20px; padding: 20px; border-radius: 12px; display: none; }
     .result.success { background: #d4edda; border: 2px solid #28a745; color: #155724; }
     .result.error { background: #f8d7da; border: 2px solid #dc3545; color: #721c24; }
-    .result.warning { background: #fff3cd; border: 2px solid #ffc107; color: #856404; }
-    .result.info { background: #d1ecf1; border: 2px solid #17a2b8; color: #0c5460; }
     .loading { display: none; text-align: center; margin-top: 20px; }
     .loading-spinner { border: 4px solid #f3f3f3; border-top: 4px solid #667eea; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 10px; }
     @keyframes spin { 0%{transform:rotate(0)} 100%{transform:rotate(360deg)} }
-    .card { background: #fff; padding: 20px; margin-bottom: 20px; border-radius: 15px; border: 2px solid #e0e0e0; transition: all .3s; }
-    .card:hover { border-color: #667eea; box-shadow: 0 4px 12px rgba(102,126,234,.2); }
-    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-    .card-title { font-size: 18px; font-weight: bold; color: #333; }
-    .badge { padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; }
-    .badge-pending { background: #fff3cd; color: #856404; }
-    .badge-completed { background: #d4edda; color: #155724; }
-    .badge-warning { background: #f8d7da; color: #721c24; }
-    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 30px; }
-    .stat-card { background: linear-gradient(135deg, #667eea, #764ba2); padding: 25px; border-radius: 15px; color: white; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,.15); }
-    .stat-card.warning { background: linear-gradient(135deg, #f093fb, #f5576c); }
-    .stat-card.success { background: linear-gradient(135deg, #a8edea, #fed6e3); }
-    .stat-card.info { background: linear-gradient(135deg, #ffd89b, #19547b); }
-    .stat-number { font-size: 42px; font-weight: bold; margin-bottom: 8px; }
-    .stat-label { font-size: 14px; opacity: 0.9; }
-    .customer-list-item { background: #f8f9fa; padding: 15px; margin-bottom: 10px; border-radius: 10px; border-left: 4px solid #667eea; display: flex; justify-content: space-between; align-items: center; transition: all .3s; }
-    .customer-list-item:hover { background: #f0f4ff; transform: translateX(5px); }
-    .customer-info { flex: 1; }
-    .customer-number { font-size: 20px; font-weight: bold; color: #667eea; margin-bottom: 5px; }
-    .customer-name { font-size: 16px; color: #333; margin-bottom: 3px; }
-    .customer-id { font-size: 12px; color: #999; }
-    .customer-phone { font-size: 13px; color: #666; margin-top: 3px; }
-    .customer-actions { display: flex; gap: 10px; flex-wrap: wrap; }
-    .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 1000; padding: 20px; overflow: auto; }
-    .modal-content { background: #fff; max-width: 700px; margin: 50px auto; border-radius: 20px; padding: 30px; position: relative; box-shadow: 0 10px 40px rgba(0,0,0,.3); }
-    .modal-close { position: absolute; top: 15px; right: 15px; background: #dc3545; color: #fff; border: none; padding: 8px 15px; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold; }
-    .modal-close:hover { background: #c82333; }
-    .help-text { font-size: 13px; color: #666; margin-top: 5px; line-height: 1.5; }
-    .section-header { background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 15px 20px; border-radius: 10px; margin-bottom: 20px; }
-    .section-header h3 { margin: 0; font-size: 20px; }
-    .reminder-log { margin-top: 10px; padding: 10px; background: #f8f9fa; border-radius: 8px; }
-    .reminder-log-item { margin: 8px 0; padding: 10px; background: white; border-left: 3px solid #667eea; font-size: 12px; }
-    .note-section { margin-top: 10px; padding: 10px; background: #fff3cd; border-radius: 8px; border-left: 4px solid #ff9800; }
-    .import-preview { max-height: 400px; overflow-y: auto; margin-top: 15px; }
-    .import-row { padding: 10px; margin: 5px 0; background: #f8f9fa; border-radius: 5px; display: flex; justify-content: space-between; align-items: center; }
-    .import-row.success { background: #d4edda; border-left: 3px solid #28a745; }
-    .import-row.error { background: #f8d7da; border-left: 3px solid #dc3545; }
+    .user-item { background: #f8f9fa; padding: 15px; margin-bottom: 10px; border-radius: 8px; border: 1px solid #e0e0e0; transition: all .3s; display: flex; align-items: center; gap: 15px; }
+    .user-item:hover { border-color: #667eea; box-shadow: 0 2px 8px rgba(102,126,234,.2); }
+    .user-info { flex: 1; cursor: pointer; }
+    .user-info strong { color: #333; font-size: 16px; display: block; margin-bottom: 5px; }
+    .user-info small { display: block; color: #999; font-size: 12px; margin-top: 3px; }
+    .customer-card { background: #f0f4ff; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #667eea; }
+    .customer-card h4 { color: #667eea; margin-bottom: 10px; }
+    .customer-card p { margin: 5px 0; font-size: 14px; color: #333; }
+    .template-item { background: #fff; padding: 12px; margin-bottom: 10px; border-radius: 8px; border: 1px solid #e0e0e0; }
     @media (max-width: 768px){
       .container{padding:20px}
       h1{font-size:24px}
       .payment-options{grid-template-columns:1fr}
       .message-templates{grid-template-columns:1fr}
-      .stats-grid{grid-template-columns:1fr}
-      .customer-actions{flex-direction:column}
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>💳 C.H 精緻洗衣管理系統</h1>
-    <p class="subtitle">付款管理 ｜ 取件追蹤 ｜ 客戶管理</p>
+    <h1>💳 付款管理系統</h1>
+    <p class="subtitle">C.H 精緻洗衣 - 發送付款連結給客戶</p>
 
     <div class="tabs">
       <button class="tab active" onclick="switchTab(event,'payment')">💳 發送付款</button>
       <button class="tab" onclick="switchTab(event,'orders')">📦 訂單管理</button>
-      <button class="tab" onclick="switchTab(event,'pickup')">🧺 取件追蹤</button>
-      <button class="tab" onclick="switchTab(event,'customers')">👥 客戶管理</button>
+      <button class="tab" onclick="switchTab(event,'customers')">📋 客戶編號</button>
       <button class="tab" onclick="switchTab(event,'templates')">📝 訊息模板</button>
+      <button class="tab" onclick="switchTab(event,'users')">👥 客戶列表</button>
     </div>
-    <!-- 💳 發送付款 -->
-    <div id="payment-tab" class="tab-content active">
-      <div class="section-header">
-        <h3>💳 發送付款連結</h3>
-      </div>
 
+    <div id="payment-tab" class="tab-content active">
       <div class="form-group">
-        <label>🔍 快速查詢客戶</label>
+        <label>🔍 快速查詢</label>
         <div class="quick-search">
-          <input type="text" id="quickSearch" placeholder="輸入編號（例如：001）或姓名">
+          <input type="text" id="quickSearch" placeholder="輸入編號或姓名">
           <button class="btn btn-small" onclick="quickSearchCustomer()">查詢</button>
         </div>
       </div>
 
-      <div id="customerCard" style="display:none; background:#f0f4ff; padding:20px; border-radius:15px; margin-bottom:20px; border-left:5px solid #667eea;">
-        <h4 style="color:#667eea; margin-bottom:15px;">✅ 客戶資訊</h4>
-        <div style="font-size:14px;">
-          <div style="margin:8px 0;"><strong>編號：</strong><span id="cardNumber"></span></div>
-          <div style="margin:8px 0;"><strong>姓名：</strong><span id="cardName"></span></div>
-          <div style="margin:8px 0;"><strong>電話：</strong><span id="cardPhone"></span></div>
-          <div style="margin:8px 0;"><strong>User ID：</strong><span id="cardUserId" style="font-size:12px; color:#666;"></span></div>
-        </div>
+      <div id="customerCard" class="customer-card" style="display:none;">
+        <h4>✅ 客戶資訊</h4>
+        <p><strong>編號:</strong> <span id="cardNumber"></span></p>
+        <p><strong>姓名:</strong> <span id="cardName"></span></p>
+        <p><strong>User ID:</strong> <span id="cardUserId"></span></p>
       </div>
 
       <form id="paymentForm">
@@ -167,7 +126,7 @@
         <div class="form-group">
           <label>訊息內容</label>
           <div id="customTemplates" class="message-templates"></div>
-          <textarea id="customMessage" placeholder="輸入訊息內容,使用 {amount} 會自動替換成金額"></textarea>
+          <textarea id="customMessage" placeholder="輸入訊息內容,使用 {amount} 會自動替換成金額&#10;&#10;例如: 您好,已收回衣物,金額 NT$ {amount},請儘速付款,謝謝!"></textarea>
         </div>
 
         <button type="submit" class="btn" id="submitBtn">💙 發送付款連結</button>
@@ -180,19 +139,15 @@
       <div class="result" id="result"></div>
     </div>
 
-    <!-- 📦 訂單管理 -->
     <div id="orders-tab" class="tab-content">
-      <div class="section-header">
-        <h3>📦 訂單管理</h3>
-      </div>
-
+      <h3 style="color:#667eea; margin-bottom:20px;">📦 訂單管理</h3>
       <div style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
         <button class="btn btn-secondary btn-small" onclick="loadOrders()">🔄 重新整理</button>
         <button class="btn btn-secondary btn-small" onclick="sendReminders()">⏰ 發送付款提醒</button>
-        <button class="btn btn-danger btn-small" onclick="cleanExpired()">🧹 清理過期訂單</button>
+        <button class="btn btn-secondary btn-small" onclick="cleanExpired()">🧹 清理過期訂單</button>
       </div>
 
-      <div id="orderStats" class="stats-grid"></div>
+      <div id="orderStats" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:15px; margin-bottom:20px;"></div>
 
       <div class="form-group">
         <label>🔍 快速搜尋訂單</label>
@@ -200,8 +155,8 @@
       </div>
 
       <div style="margin-bottom:15px;">
-        <label>篩選狀態：</label>
-        <select id="orderStatusFilter" onchange="filterOrders()" style="padding:10px; border-radius:8px; border:2px solid #e0e0e0; width:200px;">
+        <label style="font-size:14px; color:#666;">篩選狀態:</label>
+        <select id="orderStatusFilter" onchange="filterOrders()" style="padding:8px; border-radius:8px; border:2px solid #e0e0e0;">
           <option value="">全部訂單</option>
           <option value="pending">待付款</option>
           <option value="paid">已付款</option>
@@ -209,227 +164,79 @@
         </select>
       </div>
 
-      <div id="orderList"><p style="text-align:center; color:#999; padding:40px;">尚未載入訂單，請點「重新整理」</p></div>
+      <div id="orderList"><p style="text-align:center; color:#999;">尚未載入訂單，請點「重新整理」。</p></div>
+
+      <div id="customerHistoryModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:1000; padding:20px; overflow:auto;">
+        <div style="background:#fff; max-width:800px; margin:50px auto; border-radius:20px; padding:30px; position:relative;">
+          <button onclick="closeCustomerHistory()" style="position:absolute; top:15px; right:15px; background:#dc3545; color:#fff; border:none; padding:8px 15px; border-radius:5px; cursor:pointer; font-size:16px;">✕</button>
+          <h3 style="color:#667eea; margin-bottom:20px;">👤 客戶付款歷史</h3>
+          <div id="customerHistoryContent"></div>
+        </div>
+      </div>
     </div>
-    <!-- 🧺 取件追蹤 -->
-    <div id="pickup-tab" class="tab-content">
-      <div class="section-header">
-        <h3>🧺 取件追蹤管理</h3>
-      </div>
 
-      <!-- 統計卡片 -->
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-number" id="pickupTotal">0</div>
-          <div class="stat-label">📊 總追蹤數</div>
-        </div>
-        <div class="stat-card warning">
-          <div class="stat-number" id="pickupPending">0</div>
-          <div class="stat-label">⏰ 未取件</div>
-        </div>
-        <div class="stat-card success">
-          <div class="stat-number" id="pickupCompleted">0</div>
-          <div class="stat-label">✅ 已取件</div>
-        </div>
-        <div class="stat-card info">
-          <div class="stat-number" id="pickupNeedReminder">0</div>
-          <div class="stat-label">🔔 需提醒</div>
-        </div>
-      </div>
-
-      <!-- 操作按鈕 -->
-      <div style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
-        <button class="btn btn-secondary btn-small" onclick="loadPickupOrders()">🔄 重新整理</button>
-        <button class="btn btn-warning btn-small" onclick="showPickupTemplateEditor()">📝 編輯提醒模板</button>
-        <button class="btn btn-warning btn-small" onclick="showBatchImport()">📦 批量匯入</button>
-        <button class="btn btn-info btn-small" onclick="exportPickupData()">📥 匯出報表</button>
-      </div>
-
-      <!-- 新增追蹤 -->
-      <div class="card">
-        <h4 style="color:#667eea; margin-bottom:20px;">➕ 新增取件追蹤</h4>
-        
-        <div class="form-group">
-          <label>🔍 快速查詢客戶</label>
-          <div class="quick-search">
-            <input type="text" id="pickupSearchInput" placeholder="輸入編號（例如：001）或姓名">
-            <button class="btn btn-small" onclick="searchPickupCustomer()">查詢</button>
-          </div>
-          <div id="pickupSearchResult" style="margin-top:15px;"></div>
-        </div>
-
-        <div class="form-group">
-          <label>客戶編號 *</label>
-          <input type="text" id="pickupCustomerNumber" placeholder="自動編號或手動輸入（例如：001）">
-          <p class="help-text">💡 提示：留空會自動產生下一個編號</p>
-        </div>
-        <div class="form-group">
-          <label>客戶姓名 *</label>
-          <input type="text" id="pickupCustomerName" placeholder="例如：小林王子大大">
-        </div>
-        <div class="form-group">
-          <label>LINE User ID *</label>
-          <input type="text" id="pickupUserID" placeholder="U5099169723d6e83588c5f23dfaf6f9cf">
-          <p class="help-text">💡 提示：可以從「客戶管理」分頁查詢</p>
-        </div>
-        <div class="form-group">
-          <label>電話號碼（選填）</label>
-          <input type="text" id="pickupPhone" placeholder="例如：0912345678">
-        </div>
-        <button class="btn btn-secondary" onclick="startPickupTracking()">🎯 開始追蹤（7天後自動提醒）</button>
-      </div>
-
-      <!-- 篩選 -->
-      <div style="margin: 30px 0 20px 0;">
-        <label style="font-weight:600;">篩選狀態：</label>
-        <select id="pickupFilterStatus" onchange="filterPickupOrders()" style="padding:10px; border-radius:8px; border:2px solid #e0e0e0; width:200px;">
-          <option value="all">全部</option>
-          <option value="pending">⏰ 未取件</option>
-          <option value="completed">✅ 已取件</option>
-          <option value="needReminder">🔔 需提醒（超過7天）</option>
-        </select>
-      </div>
-
-      <!-- 追蹤清單 -->
-      <div id="pickupOrderList"><p style="text-align:center; color:#999; padding:40px;">尚未載入，請點「重新整理」</p></div>
-    </div>
-    <!-- 👥 客戶管理 -->
     <div id="customers-tab" class="tab-content">
-      <div class="section-header">
-        <h3>👥 客戶管理（編號從 001 開始）</h3>
-      </div>
+      <h3 style="color:#667eea; margin-bottom:20px;">📋 客戶編號管理</h3>
+      ### 客戶編號管理
+    <input id="user-id-input" placeholder="User ID (e.g. Uxxxxxx)" style="width:300px;margin:5px;">
+    <input id="user-name-input" placeholder="姓名" style="width:150px;margin:5px;">
+    <button id="save-user" style="margin:5px;">儲存 User ID</button>
+    <button id="send-payment" style="margin:5px;">發送支付連結</button>
+    <input id="amount" type="number" placeholder="金額" style="width:120px;margin:5px;">
 
-      <div style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
-        <button class="btn btn-secondary btn-small" onclick="loadCustomerNumbers()">🔄 重新整理</button>
-        <button class="btn btn-info btn-small" onclick="exportCustomerData()">📥 匯出客戶資料</button>
+<div id="customer-list" style="margin-top:15px; max-height:200px; overflow-y:auto; border:1px solid #ccc; padding:10px;"></div>
+      <div class="form-group">
+        <label>客戶編號</label>
+        <input type="text" id="newCustomerNumber" placeholder="例如: 755">
       </div>
-
-      <div class="card">
-        <h4 style="color:#667eea; margin-bottom:20px;">➕ 新增客戶</h4>
-        <div class="form-group">
-          <label>客戶編號</label>
-          <input type="text" id="newCustomerNumber" placeholder="留空自動產生（例如：001、002...）">
-          <p class="help-text">💡 提示：留空會自動產生下一個編號</p>
-        </div>
-        <div class="form-group">
-          <label>客戶姓名 *</label>
-          <input type="text" id="newCustomerName" placeholder="例如：王小明">
-        </div>
-        <div class="form-group">
-          <label>LINE User ID *</label>
-          <input type="text" id="newCustomerUserId" placeholder="U1234567890abcdef">
-        </div>
-        <div class="form-group">
-          <label>電話號碼（選填）</label>
-          <input type="text" id="newCustomerPhone" placeholder="例如：0912345678">
-        </div>
-        <button class="btn btn-secondary" onclick="saveCustomerNumber()">💾 儲存客戶</button>
+      <div class="form-group">
+        <label>客戶姓名</label>
+        <input type="text" id="newCustomerName" placeholder="例如: 王小明">
       </div>
+      <div class="form-group">
+        <label>User ID</label>
+        <input type="text" id="newCustomerUserId" placeholder="U1234567890abcdef">
+      </div>
+      <button class="btn btn-secondary" onclick="saveCustomerNumber()">💾 儲存客戶編號</button>
 
       <div style="margin-top:30px;">
-        <h4 style="color:#667eea; margin-bottom:15px;">📋 客戶列表（共 <span id="customerCount">0</span> 位）</h4>
-        <div class="form-group">
-          <input type="text" id="customerSearchInput" placeholder="🔍 搜尋客戶編號或姓名" oninput="searchCustomers()">
-        </div>
-        <div id="savedCustomers"><p style="text-align:center; color:#999; padding:40px;">尚無客戶資料</p></div>
+        <h4 style="color:#667eea; margin-bottom:15px;">已儲存的客戶編號</h4>
+        <div id="savedCustomers"></div>
       </div>
     </div>
 
-    <!-- 📝 訊息模板 -->
     <div id="templates-tab" class="tab-content">
-      <div class="section-header">
-        <h3>📝 訊息模板管理</h3>
+      <h3 style="color:#667eea; margin-bottom:20px;">📝 訊息模板管理</h3>
+      <div class="form-group">
+        <label>新增模板 (使用 {amount} 代表金額)</label>
+        <textarea id="newTemplateContent" placeholder="例如: 您好,已收回衣物,金額 NT$ {amount},請儘速付款,謝謝!"></textarea>
       </div>
-
-      <div class="card">
-        <h4 style="color:#667eea; margin-bottom:20px;">➕ 新增模板</h4>
-        <div class="form-group">
-          <label>模板內容</label>
-          <p class="help-text">💡 使用 {amount} 代表金額</p>
-          <textarea id="newTemplateContent" placeholder="例如: 您好,已收回衣物,金額 NT$ {amount},請儘速付款,謝謝!"></textarea>
-        </div>
-        <button class="btn btn-secondary" onclick="saveTemplate()">💾 儲存模板</button>
-      </div>
+      <button class="btn btn-secondary" onclick="saveTemplate()">💾 儲存模板</button>
 
       <div style="margin-top:30px;">
-        <h4 style="color:#667eea; margin-bottom:15px;">📋 我的模板</h4>
+        <h4 style="color:#667eea; margin-bottom:15px;">我的模板</h4>
         <div id="templateList"></div>
       </div>
     </div>
 
-    <div id="message" class="result"></div>
-  </div>
-
-  <!-- 提醒模板編輯器 Modal -->
-  <div id="pickupTemplateModal" class="modal">
-    <div class="modal-content">
-      <button class="modal-close" onclick="closePickupTemplateModal()">✕</button>
-      <h3 style="color:#667eea; margin-bottom:20px;">📝 編輯取件提醒模板</h3>
-      <div class="form-group">
-        <label>提醒訊息內容</label>
-        <p class="help-text">💡 可用變數：{客戶姓名}、{客戶編號}、{已過天數}</p>
-        <textarea id="pickupTemplateContent" style="min-height:150px;" placeholder="例如：親愛的 {客戶姓名}，您的衣物已清洗完成超過 {已過天數} 天，請盡快來領取！訂單編號：{客戶編號}"></textarea>
-      </div>
-      <div style="display:flex; gap:10px;">
-        <button class="btn btn-secondary" onclick="savePickupTemplate()">💾 儲存模板</button>
-        <button class="btn btn-info btn-small" onclick="testPickupTemplate()">🧪 測試模板</button>
-      </div>
-      <div id="templateTestResult" style="margin-top:15px;"></div>
+    <div id="users-tab" class="tab-content">
+      <h3 style="color:#667eea; margin-bottom:20px;">👥 客戶列表</h3>
+      <button class="btn btn-secondary btn-small" onclick="loadUsers()" style="margin-bottom:20px;">🔄 重新載入</button>
+      <div id="userList"><p style="text-align:center; color:#999;">尚未載入，請點「重新載入」。</p></div>
     </div>
   </div>
 
-  <!-- 批量匯入 Modal -->
-  <div id="batchImportModal" class="modal">
-    <div class="modal-content">
-      <button class="modal-close" onclick="closeBatchImport()">✕</button>
-      <h3 style="color:#667eea; margin-bottom:20px;">📦 批量匯入客戶</h3>
-      <div style="background:#f8f9fa; padding:20px; border-radius:15px; margin-bottom:20px;">
-        <p style="font-size:16px; margin-bottom:15px;"><strong>匯入格式說明：</strong></p>
-        <p class="help-text">每行一筆資料，格式：編號,姓名,電話,User ID</p>
-        <p class="help-text">電話可選填，其他必填</p>
-        <div style="background:#fff; padding:10px; border-radius:5px; margin-top:10px; font-family:monospace; font-size:12px;">
-          625,小林王子,0912345678,U5099169723d6e83588c5f23dfaf6f9cf<br>
-          626,王小明,,U1234567890abcdef<br>
-          627,李小華,0987654321,U9876543210fedcba
-        </div>
-        <textarea id="importText" style="min-height:200px; margin-top:15px;" placeholder="請貼上資料..."></textarea>
-      </div>
-      <button class="btn btn-secondary" onclick="processBatchImport()">📥 開始匯入</button>
-      <div id="importResult" class="import-preview"></div>
-    </div>
-  </div>
-
-  <!-- 編輯備註 Modal -->
-  <div id="editNoteModal" class="modal">
-    <div class="modal-content">
-      <button class="modal-close" onclick="closeEditNote()">✕</button>
-      <h3 style="color:#667eea; margin-bottom:20px;">📝 編輯備註</h3>
-      <div class="form-group">
-        <label>客戶編號：<span id="noteCustomerNumber"></span></label>
-        <label>客戶姓名：<span id="noteCustomerName"></span></label>
-      </div>
-      <div class="form-group">
-        <label>備註內容</label>
-        <textarea id="noteContent" style="min-height:120px;" placeholder="輸入備註內容..."></textarea>
-      </div>
-      <button class="btn btn-secondary" onclick="saveNote()">💾 儲存備註</button>
-    </div>
-  </div>
   <script>
     var allUsers = [];
     var allOrders = [];
-    var allPickupOrders = [];
     var savedCustomers = {};
     var savedTemplates = [];
-    var pickupReminderTemplate = '親愛的 {客戶姓名}，您的衣物已清洗完成超過 {已過天數} 天，請盡快來領取！訂單編號：{客戶編號}';
-    var currentEditingCustomerNumber = '';
 
     async function initLoad() {
       try {
         await loadCustomerNumbers();
         await loadTemplates();
         loadCustomTemplates();
-        await loadPickupTemplate();
       } catch (error) {
         console.error('初始化失敗:', error);
       }
@@ -443,15 +250,12 @@
       if (pane) pane.classList.add('active');
 
       if (tabName === 'payment') loadCustomTemplates();
-      if (tabName === 'customers') { loadCustomerNumbers(); displaySavedCustomers(); }
+      if (tabName === 'customers') displaySavedCustomers();
       if (tabName === 'templates') displayTemplates();
+      if (tabName === 'users') loadUsers();
       if (tabName === 'orders') loadOrders();
-      if (tabName === 'pickup') loadPickupOrders();
     }
 
-    // ========================================
-    // 客戶管理
-    // ========================================
     async function loadCustomerNumbers() {
       try {
         var res = await fetch('/api/customer-numbers');
@@ -459,11 +263,7 @@
         if (data.success) {
           savedCustomers = {};
           (data.customers || []).forEach(function(c) {
-            savedCustomers[c.number] = { 
-              name: c.name, 
-              userId: c.userId,
-              phone: c.phone || '' 
-            };
+            savedCustomers[c.number] = { name: c.name, userId: c.userId };
           });
         }
       } catch (error) {
@@ -471,31 +271,12 @@
       }
     }
 
-    function getNextCustomerNumber() {
-      var numbers = Object.keys(savedCustomers).map(function(n) { return parseInt(n); }).filter(function(n) { return !isNaN(n); });
-      if (numbers.length === 0) return '001';
-      var max = Math.max.apply(null, numbers);
-      return String(max + 1).padStart(3, '0');
-    }
-
     async function saveCustomerNumber() {
-      var number = document.getElementById('newCustomerNumber').value.trim() || getNextCustomerNumber();
+      var number = document.getElementById('newCustomerNumber').value.trim();
       var name = document.getElementById('newCustomerName').value.trim();
       var userId = document.getElementById('newCustomerUserId').value.trim();
-      var phone = document.getElementById('newCustomerPhone').value.trim();
-      
-      if (!name || !userId) {
-        showResult('error', '❌ 請輸入姓名和 User ID');
-        return;
-      }
-
-      if (number && !isNaN(number)) {
-        number = String(parseInt(number)).padStart(3, '0');
-      }
-
-      // 檢查重複編號
-      if (savedCustomers[number]) {
-        showResult('warning', '⚠️ 編號 ' + number + ' 已存在！請使用其他編號或留空自動產生。');
+      if (!number || !name || !userId) {
+        alert('請完整輸入 編號 / 姓名 / User ID');
         return;
       }
 
@@ -503,15 +284,14 @@
         var res = await fetch('/api/customer-numbers', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ number: number, name: name, userId: userId, phone: phone })
+          body: JSON.stringify({ number: number, name: name, userId: userId })
         });
         var data = await res.json();
         if (data.success) {
-          showResult('success', '✅ 已儲存客戶編號：' + number);
+          showResult('success', '✅ 已儲存客戶編號');
           document.getElementById('newCustomerNumber').value = '';
           document.getElementById('newCustomerName').value = '';
           document.getElementById('newCustomerUserId').value = '';
-          document.getElementById('newCustomerPhone').value = '';
           await loadCustomerNumbers();
           displaySavedCustomers();
         } else {
@@ -524,106 +304,46 @@
 
     function displaySavedCustomers() {
       var wrap = document.getElementById('savedCustomers');
-      var entries = Object.entries(savedCustomers).sort(function(a, b) {
-        return parseInt(a[0]) - parseInt(b[0]);
-      });
-
-      document.getElementById('customerCount').textContent = entries.length;
-
+      var entries = Object.entries(savedCustomers);
       if (entries.length === 0) {
-        wrap.innerHTML = '<p style="text-align:center; color:#999; padding:40px;">尚無客戶資料</p>';
+        wrap.innerHTML = '<p style="color:#999;">尚無資料</p>';
         return;
       }
-
       wrap.innerHTML = entries.map(function(item) {
         var no = item[0];
         var c = item[1];
-        return '<div class="customer-list-item">' +
-          '<div class="customer-info" onclick="fillCustomer(\'' + c.userId + '\',\'' + c.name + '\',\'' + (c.phone || '') + '\')">' +
-          '<div class="customer-number">#' + no + '</div>' +
-          '<div class="customer-name">' + c.name + '</div>' +
-          (c.phone ? '<div class="customer-phone">📞 ' + c.phone + '</div>' : '') +
-          '<div class="customer-id">' + c.userId + '</div>' +
+        return '<div class="user-item" style="justify-content:space-between;">' +
+          '<div class="user-info" onclick="fillCustomer(\'' + c.userId + '\',\'' + c.name + '\')">' +
+          '<strong>#' + no + '　' + c.name + '</strong>' +
+          '<small>User ID: ' + c.userId + '</small>' +
           '</div>' +
-          '<div class="customer-actions">' +
-          '<button class="btn btn-small btn-secondary" onclick="fillCustomer(\'' + c.userId + '\',\'' + c.name + '\',\'' + (c.phone || '') + '\')">帶入</button>' +
           '<button class="btn btn-small btn-danger" onclick="removeSavedCustomer(\'' + no + '\')">刪除</button>' +
-          '</div>' +
           '</div>';
       }).join('');
     }
 
-    function searchCustomers() {
-      var query = (document.getElementById('customerSearchInput').value || '').toLowerCase().trim();
-      if (!query) {
-        displaySavedCustomers();
-        return;
-      }
-      
-      var filtered = Object.entries(savedCustomers).filter(function(item) {
-        var no = item[0];
-        var c = item[1];
-        return no.includes(query) || (c.name || '').toLowerCase().includes(query) || (c.phone || '').includes(query);
-      });
-
-      if (filtered.length === 0) {
-        document.getElementById('savedCustomers').innerHTML = '<p style="text-align:center; color:#999; padding:40px;">找不到符合的客戶</p>';
-        return;
-      }
-
-      savedCustomers = {};
-      filtered.forEach(function(item) {
-        savedCustomers[item[0]] = item[1];
-      });
-      displaySavedCustomers();
-      loadCustomerNumbers();
-    }
-
     async function removeSavedCustomer(number) {
-      if (!confirm('⚠️ 確定刪除編號 #' + number + ' 嗎？\n此操作無法復原！')) return;
+      if (!confirm('刪除編號 #' + number + ' ?')) return;
       try {
         var res = await fetch('/api/customer-numbers/' + encodeURIComponent(number), { method: 'DELETE' });
         var data = await res.json();
         if (data.success) {
-          showResult('success', '✅ 已刪除客戶 #' + number);
           await loadCustomerNumbers();
           displaySavedCustomers();
         } else {
-          showResult('error', '❌ 刪除失敗: ' + (data.error || '未知錯誤'));
+          alert('刪除失敗: ' + (data.error || '未知錯誤'));
         }
       } catch (error) {
-        showResult('error', '❌ 連線失敗: ' + error.message);
+        alert('連線失敗: ' + error.message);
       }
     }
 
-    function fillCustomer(userId, name, phone) {
+    function fillCustomer(userId, name) {
       document.getElementById('userId').value = userId;
       document.getElementById('userName').value = name;
       switchTab({ currentTarget: document.querySelector('.tab') }, 'payment');
     }
 
-    function exportCustomerData() {
-      var csv = 'data:text/csv;charset=utf-8,編號,姓名,電話,User ID\n';
-      Object.entries(savedCustomers).sort(function(a, b) {
-        return parseInt(a[0]) - parseInt(b[0]);
-      }).forEach(function(item) {
-        var no = item[0];
-        var c = item[1];
-        csv += no + ',' + c.name + ',' + (c.phone || '') + ',' + c.userId + '\n';
-      });
-      
-      var link = document.createElement('a');
-      link.setAttribute('href', encodeURI(csv));
-      link.setAttribute('download', 'customers_' + new Date().toISOString().split('T')[0] + '.csv');
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
-      showResult('success', '✅ 客戶資料已匯出！');
-    }
-    // ========================================
-    // 模板管理
-    // ========================================
     async function loadTemplates() {
       try {
         var res = await fetch('/api/templates');
@@ -657,7 +377,7 @@
     async function saveTemplate() {
       var content = document.getElementById('newTemplateContent').value.trim();
       if (!content) {
-        showResult('error', '❌ 請輸入模板內容');
+        alert('請輸入模板內容');
         return;
       }
 
@@ -685,13 +405,13 @@
     function displayTemplates() {
       var wrap = document.getElementById('templateList');
       if (savedTemplates.length === 0) {
-        wrap.innerHTML = '<p style="text-align:center; color:#999; padding:40px;">尚無模板</p>';
+        wrap.innerHTML = '<p style="color:#999;">尚無模板</p>';
         return;
       }
       wrap.innerHTML = savedTemplates.map(function(t, i) {
-        return '<div class="card">' +
-          '<div style="white-space:pre-wrap; margin-bottom:15px;">' + t + '</div>' +
-          '<div style="display:flex; gap:10px;">' +
+        return '<div class="template-item">' +
+          '<div style="white-space:pre-wrap;">' + t + '</div>' +
+          '<div style="margin-top:10px; display:flex; gap:10px;">' +
           '<button class="btn btn-small btn-secondary" onclick="editTemplate(' + i + ')">編輯</button>' +
           '<button class="btn btn-small btn-danger" onclick="deleteTemplate(' + i + ')">刪除</button>' +
           '</div>' +
@@ -711,56 +431,47 @@
         });
         var data = await res.json();
         if (data.success) {
-          showResult('success', '✅ 已更新模板');
           await loadTemplates();
           displayTemplates();
           loadCustomTemplates();
         } else {
-          showResult('error', '❌ 更新失敗: ' + (data.error || '未知錯誤'));
+          alert('更新失敗: ' + (data.error || '未知錯誤'));
         }
       } catch (error) {
-        showResult('error', '❌ 連線失敗: ' + error.message);
+        alert('連線失敗: ' + error.message);
       }
     }
 
     async function deleteTemplate(index) {
-      if (!confirm('⚠️ 確定刪除此模板？')) return;
+      if (!confirm('確定刪除此模板？')) return;
 
       try {
         var res = await fetch('/api/templates/' + index, { method: 'DELETE' });
         var data = await res.json();
         if (data.success) {
-          showResult('success', '✅ 已刪除模板');
           await loadTemplates();
           displayTemplates();
           loadCustomTemplates();
         } else {
-          showResult('error', '❌ 刪除失敗: ' + (data.error || '未知錯誤'));
+          alert('刪除失敗: ' + (data.error || '未知錯誤'));
         }
       } catch (error) {
-        showResult('error', '❌ 連線失敗: ' + error.message);
+        alert('連線失敗: ' + error.message);
       }
     }
 
-    // ========================================
-    // 快速查詢
-    // ========================================
     function quickSearchCustomer() {
       var query = document.getElementById('quickSearch').value.trim();
       if (!query) {
-        showResult('error', '❌ 請輸入編號或姓名');
+        alert('請輸入編號或姓名');
         return;
-      }
-
-      if (!isNaN(query)) {
-        query = String(parseInt(query)).padStart(3, '0');
       }
 
       if (savedCustomers[query]) {
         var c = savedCustomers[query];
         document.getElementById('userId').value = c.userId || '';
         document.getElementById('userName').value = c.name || '';
-        showCustomerCard(query, c.name, c.phone || '', c.userId);
+        showCustomerCard(query, c.name, c.userId);
         return;
       }
 
@@ -772,24 +483,20 @@
         var c = found[1];
         document.getElementById('userId').value = c.userId || '';
         document.getElementById('userName').value = c.name || '';
-        showCustomerCard(number, c.name, c.phone || '', c.userId);
+        showCustomerCard(number, c.name, c.userId);
         return;
       }
 
-      showResult('error', '❌ 找不到此客戶');
+      alert('找不到此客戶');
     }
 
-    function showCustomerCard(number, name, phone, userId) {
+    function showCustomerCard(number, name, userId) {
       document.getElementById('cardNumber').textContent = number;
       document.getElementById('cardName').textContent = name;
-      document.getElementById('cardPhone').textContent = phone || '未填寫';
       document.getElementById('cardUserId').textContent = userId;
       document.getElementById('customerCard').style.display = 'block';
     }
 
-    // ========================================
-    // 發送付款
-    // ========================================
     document.getElementById('paymentForm').addEventListener('submit', async function(e) {
       e.preventDefault();
       var userId = document.getElementById('userId').value.trim();
@@ -799,7 +506,7 @@
       var customMessage = document.getElementById('customMessage').value.trim().replace('{amount}', (amount || 0).toLocaleString());
 
       if (!userId || !userName || !amount) {
-        showResult('error', '❌ 請填寫所有必填欄位');
+        showResult('error', '請填寫所有必填欄位!');
         return;
       }
 
@@ -839,24 +546,20 @@
         document.getElementById('loading').style.display = 'none';
       }
     });
-
-    // ========================================
-    // 訂單管理（保留原功能）
-    // ========================================
-    async function loadOrders() {
+   async function loadOrders() {
       var orderListDiv = document.getElementById('orderList');
-      orderListDiv.innerHTML = '<p style="text-align:center; color:#999; padding:40px;">載入中...</p>';
+      orderListDiv.innerHTML = '<p style="text-align:center; color:#999;">載入中...</p>';
       try {
         var res = await fetch('/api/orders');
         var data = await res.json();
         if (!data.success) throw new Error(data.error || '載入失敗');
         allOrders = Array.isArray(data.orders) ? data.orders : [];
-        displayOrderStats(data.statistics || { total: 0, pending: 0, paid: 0, expired: 0 });
+        displayOrderStats(data.statistics || { total: 0, pending: 0, paid: 0, expired: 0, needReminder: 0 });
         displayOrders(allOrders);
       } catch (err) {
         allOrders = [];
-        displayOrderStats({ total: 0, pending: 0, paid: 0, expired: 0 });
-        orderListDiv.innerHTML = '<p style="color:#dc3545; text-align:center; padding:40px;">載入失敗：' + err.message + '</p>';
+        displayOrderStats({ total: 0, pending: 0, paid: 0, expired: 0, needReminder: 0 });
+        orderListDiv.innerHTML = '<p style="color:#dc3545; text-align:center;">載入失敗：' + err.message + '</p>';
       }
     }
 
@@ -864,31 +567,74 @@
       var s = stats || {};
       var el = document.getElementById('orderStats');
       el.innerHTML = 
-        '<div class="stat-card"><div class="stat-number">' + (s.total || 0) + '</div><div class="stat-label">總訂單</div></div>' +
-        '<div class="stat-card warning"><div class="stat-number">' + (s.pending || 0) + '</div><div class="stat-label">待付款</div></div>' +
-        '<div class="stat-card success"><div class="stat-number">' + (s.paid || 0) + '</div><div class="stat-label">已付款</div></div>' +
-        '<div class="stat-card" style="background:linear-gradient(135deg,#f8d7da,#dc3545);"><div class="stat-number">' + (s.expired || 0) + '</div><div class="stat-label">已過期</div></div>';
+        '<div style="background:#f0f4ff; padding:15px; border-radius:10px; text-align:center;">' +
+        '<div style="font-size:24px; font-weight:bold; color:#667eea;">' + (s.total || 0) + '</div>' +
+        '<div style="font-size:14px; color:#666;">總訂單數</div>' +
+        '</div>' +
+        '<div style="background:#fff3cd; padding:15px; border-radius:10px; text-align:center;">' +
+        '<div style="font-size:24px; font-weight:bold; color:#ffc107;">' + (s.pending || 0) + '</div>' +
+        '<div style="font-size:14px; color:#666;">待付款</div>' +
+        '</div>' +
+        '<div style="background:#d4edda; padding:15px; border-radius:10px; text-align:center;">' +
+        '<div style="font-size:24px; font-weight:bold; color:#28a745;">' + (s.paid || 0) + '</div>' +
+        '<div style="font-size:14px; color:#666;">已付款</div>' +
+        '</div>' +
+        '<div style="background:#f8d7da; padding:15px; border-radius:10px; text-align:center;">' +
+        '<div style="font-size:24px; font-weight:bold; color:#dc3545;">' + (s.expired || 0) + '</div>' +
+        '<div style="font-size:14px; color:#666;">已過期</div>' +
+        '</div>' +
+        '<div style="background:#e7f0ff; padding:15px; border-radius:10px; text-align:center;">' +
+        '<div style="font-size:24px; font-weight:bold; color:#0066cc;">' + (s.needReminder || 0) + '</div>' +
+        '<div style="font-size:14px; color:#666;">需提醒</div>' +
+        '</div>';
     }
 
     function displayOrders(orders) {
       var wrap = document.getElementById('orderList');
       if (!orders || orders.length === 0) {
-        wrap.innerHTML = '<p style="text-align:center; color:#999; padding:40px;">尚無訂單記錄</p>';
+        wrap.innerHTML = '<p style="text-align:center; color:#999;">尚無訂單記錄</p>';
         return;
       }
       var html = '';
       orders.forEach(function(order) {
         var createdDate = order.createdAt ? new Date(order.createdAt).toLocaleString('zh-TW') : '-';
-        var statusBadge = order.status === 'paid' ? '<span class="badge badge-completed">✅ 已付款</span>' : 
-                         order.isExpired ? '<span class="badge badge-warning">❌ 已過期</span>' :
-                         '<span class="badge badge-pending">⏰ ' + (order.remainingHours || 0) + ' 小時</span>';
+        var expiryDate = order.expiryTime ? new Date(order.expiryTime).toLocaleString('zh-TW') : '-';
+        var statusBadge = '';
+        var actionButtons = '';
 
-        html += '<div class="card"><div class="card-header"><div class="card-title">' + (order.userName || '-') + '</div><div>' + statusBadge + '<span style="margin-left:15px; font-size:20px; font-weight:bold; color:#667eea;">NT$ ' + ((order.amount || 0).toLocaleString()) + '</span></div></div>' +
-          '<div style="font-size:13px; color:#666; margin-bottom:15px;"><div>訂單編號: ' + (order.orderId || '-') + '</div><div>建立時間: ' + createdDate + '</div></div>' +
+        if (order.status === 'paid') {
+          statusBadge = '<span style="background:#28a745; color:#fff; padding:5px 10px; border-radius:5px; font-size:12px;">✅ 已付款</span>';
+        } else if (order.isExpired) {
+          statusBadge = '<span style="background:#dc3545; color:#fff; padding:5px 10px; border-radius:5px; font-size:12px;">❌ 已過期</span>';
+          actionButtons = '<button class="btn btn-small btn-secondary" onclick="renewOrder(\'' + (order.orderId || '') + '\')">🔄 續約重發</button>';
+        } else {
+          statusBadge = '<span style="background:#ffc107; color:#fff; padding:5px 10px; border-radius:5px; font-size:12px;">⏰ 剩餘 ' + (order.remainingHours || '-') + ' 小時</span>';
+          actionButtons = 
+            '<button class="btn btn-small btn-secondary" onclick="copyPaymentLink(\'' + (order.orderId || '') + '\')">📋 複製連結</button>' +
+            '<button class="btn btn-small btn-secondary" onclick="sendSingleReminder(\'' + (order.orderId || '') + '\')">⏰ 提醒</button>';
+        }
+        actionButtons += ' <button class="btn btn-small btn-danger" onclick="deleteOrder(\'' + (order.orderId || '') + '\')">刪除</button>';
+
+        html += 
+          '<div class="user-item" style="display:block;">' +
+          '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">' +
+          '<div>' +
+          '<strong style="font-size:16px; cursor:pointer; color:#667eea;" onclick="showCustomerHistory(\'' + (order.userId || '') + '\', \'' + (order.userName || '') + '\')" title="點擊查看付款歷史">' + (order.userName || '-') + '</strong>' +
+          statusBadge +
+          '</div>' +
+          '<div style="font-size:18px; font-weight:bold; color:#667eea;">NT$ ' + ((order.amount || 0).toLocaleString()) + '</div>' +
+          '</div>' +
+          '<div style="font-size:13px; color:#666; margin-bottom:10px;">' +
+          '<div>訂單編號: ' + (order.orderId || '-') + '</div>' +
+          '<div>建立時間: ' + createdDate + '</div>' +
+          '<div>過期時間: ' + expiryDate + '</div>' +
+          (order.retryCount > 0 ? '<div>重試次數: ' + order.retryCount + '</div>' : '') +
+          (order.paymentMethod ? '<div>付款方式: <span style="color:#28a745; font-weight:bold;">' + order.paymentMethod + '</span></div>' : '') +
+          '</div>' +
           '<div style="display:flex; gap:10px; flex-wrap:wrap;">' +
-          (!order.isExpired && order.status !== 'paid' ? '<button class="btn btn-small btn-secondary" onclick="renewOrder(\'' + (order.orderId || '') + '\')">🔄 重發</button>' : '') +
-          '<button class="btn btn-small btn-danger" onclick="deleteOrder(\'' + (order.orderId || '') + '\')">刪除</button>' +
-          '</div></div>';
+          actionButtons +
+          '</div>' +
+          '</div>';
       });
       wrap.innerHTML = html;
     }
@@ -903,6 +649,9 @@
         return (o.orderId || '').toLowerCase().includes(q) || (o.userName || '').toLowerCase().includes(q);
       });
       displayOrders(filtered);
+      if (filtered.length === 0) {
+        document.getElementById('orderList').innerHTML = '<p style="text-align:center; color:#999;">找不到符合的訂單</p>';
+      }
     }
 
     function filterOrders() {
@@ -923,583 +672,150 @@
         var r = await fetch('/api/orders/send-reminders', { method: 'POST' });
         var d = await r.json();
         if (d.success) {
-          showResult('success', '✅ ' + (d.message || '已發送提醒'));
+          showResult('success', d.message || ('✅ 已發送提醒：' + (d.sent || 0) + ' 筆'));
           loadOrders();
         } else {
           showResult('error', '❌ 發送失敗：' + (d.error || '未知錯誤'));
         }
       } catch (e) {
-        showResult('error', '❌ 連線失敗：' + e.message);
+        showResult('error', '❌ 無法連線提醒 API：' + e.message);
       }
     }
 
     async function cleanExpired() {
-      if (!confirm('⚠️ 確定要清理所有過期訂單嗎？')) return;
       try {
         var r = await fetch('/api/orders/clean-expired', { method: 'POST' });
         var d = await r.json();
         if (d.success) {
-          showResult('success', '✅ ' + (d.message || '已清理'));
+          showResult('success', d.message || ('🧹 已清理 ' + (d.cleaned || 0) + ' 筆過期訂單'));
           loadOrders();
         } else {
           showResult('error', '❌ 清理失敗：' + (d.error || '未知錯誤'));
         }
       } catch (e) {
-        showResult('error', '❌ 連線失敗：' + e.message);
+        showResult('error', '❌ 無法連線清理 API：' + e.message);
       }
     }
 
     async function renewOrder(orderId) {
-      if (!orderId) return;
+      if (!orderId) return alert('找不到訂單編號');
       try {
         var r = await fetch('/api/order/' + orderId + '/renew', { method: 'POST' });
         var d = await r.json();
         if (d.success) {
-          showResult('success', '✅ 已重新發送付款連結');
+          showResult('success', '🔄 已續約並重新發送付款連結');
           loadOrders();
         } else {
-          showResult('error', '❌ 失敗：' + (d.error || '未知錯誤'));
+          showResult('error', '❌ 續約失敗：' + (d.error || '未知錯誤'));
         }
       } catch (e) {
-        showResult('error', '❌ 連線失敗：' + e.message);
+        showResult('error', '❌ 無法連線續約 API：' + e.message);
       }
     }
 
+    function copyPaymentLink(orderId) {
+      var url = window.location.origin + '/payment/linepay/pay/' + orderId;
+      navigator.clipboard.writeText(url).then(
+        function() { showResult('success', '📋 已複製付款連結'); },
+        function() { showResult('error', '❌ 複製失敗，請手動複製：<br>' + url); }
+      );
+    }
+
+    function sendSingleReminder(orderId) {
+      return renewOrder(orderId);
+    }
+
     async function deleteOrder(orderId) {
-      if (!confirm('⚠️ 確定要刪除此訂單嗎？')) return;
+      if (!confirm('確定要刪除訂單：' + orderId + ' 嗎？')) return;
       try {
         var r = await fetch('/api/order/' + orderId, { method: 'DELETE' });
         var d = await r.json();
         if (d.success) {
-          showResult('success', '✅ 訂單已刪除');
+          showResult('success', '🗑️ 訂單已刪除');
           loadOrders();
         } else {
           showResult('error', '❌ 刪除失敗：' + (d.error || '未知錯誤'));
         }
       } catch (e) {
-        showResult('error', '❌ 連線失敗：' + e.message);
+        showResult('error', '❌ 無法連線刪除 API：' + e.message);
       }
     }
-    // ========================================
-    // 🧺 取件追蹤核心功能
-    // ========================================
-    async function loadPickupOrders() {
+
+    async function showCustomerHistory(userId, userName) {
+      var modal = document.getElementById('customerHistoryModal');
+      var content = document.getElementById('customerHistoryContent');
+      modal.style.display = 'block';
+      content.innerHTML = '<p style="text-align:center; color:#999;">載入中...</p>';
+
       try {
-        var res = await fetch('/api/tracked-orders');
-        var data = await res.json();
-        if (data.success) {
-          allPickupOrders = data.orders || [];
-          updatePickupStats();
-          displayPickupOrders(allPickupOrders);
+        var hist = (allOrders || []).filter(function(o) { return o.userId === userId; });
+        if (!hist || hist.length === 0) {
+          content.innerHTML = '<p style="text-align:center; color:#999;">客戶 ' + userName + ' 尚無訂單記錄</p>';
+          return;
         }
-      } catch (error) {
-        console.error('載入取件訂單失敗:', error);
-        showResult('error', '❌ 載入失敗：' + error.message);
+        var html = '<div class="customer-card"><h4>' + userName + '</h4><p>User ID：' + userId + '</p></div>';
+        hist.forEach(function(o) {
+          var created = o.createdAt ? new Date(o.createdAt).toLocaleString('zh-TW') : '-';
+          var status = o.status || (o.isExpired ? 'expired' : 'pending');
+          html += 
+            '<div class="template-item">' +
+            '<div><strong>訂單編號：</strong>' + (o.orderId || '-') + '</div>' +
+            '<div><strong>金額：</strong>NT$ ' + ((o.amount || 0).toLocaleString()) + '</div>' +
+            '<div><strong>狀態：</strong>' + status + '</div>' +
+            '<div><strong>建立時間：</strong>' + created + '</div>' +
+            '</div>';
+        });
+        content.innerHTML = html;
+      } catch (e) {
+        content.innerHTML = '<p style="color:#dc3545;">載入失敗：' + e.message + '</p>';
       }
     }
 
-    function updatePickupStats() {
-      var total = allPickupOrders.length;
-      var pending = allPickupOrders.filter(function(o) { return !o.pickedUp; }).length;
-      var completed = allPickupOrders.filter(function(o) { return o.pickedUp; }).length;
-      var needReminder = allPickupOrders.filter(function(o) {
-        if (o.pickedUp) return false;
-        var daysPassed = Math.floor((Date.now() - new Date(o.notifiedAt).getTime()) / (1000 * 60 * 60 * 24));
-        return daysPassed >= 7;
-      }).length;
-
-      document.getElementById('pickupTotal').textContent = total;
-      document.getElementById('pickupPending').textContent = pending;
-      document.getElementById('pickupCompleted').textContent = completed;
-      document.getElementById('pickupNeedReminder').textContent = needReminder;
+    function closeCustomerHistory() {
+      document.getElementById('customerHistoryModal').style.display = 'none';
     }
 
-    function displayPickupOrders(orders) {
-      var listDiv = document.getElementById('pickupOrderList');
-      if (!orders || orders.length === 0) {
-        listDiv.innerHTML = '<p style="text-align:center; color:#999; padding:40px;">尚無追蹤訂單</p>';
+    async function loadUsers() {
+      var wrap = document.getElementById('userList');
+      wrap.innerHTML = '<p style="text-align:center; color:#999;">載入中...</p>';
+      try {
+        var r = await fetch('/api/users');
+        var d = await r.json();
+        allUsers = Array.isArray(d.users) ? d.users : [];
+      } catch {
+        allUsers = Object.entries(savedCustomers).map(function(item) {
+          return { userId: item[1].userId, name: item[1].name, number: item[0] };
+        });
+      }
+
+      if (allUsers.length === 0) {
+        wrap.innerHTML = '<p style="text-align:center; color:#999;">尚無客戶資料</p>';
         return;
       }
-
-      var html = '';
-      orders.forEach(function(order) {
-        var notifiedDate = new Date(order.notifiedAt).toLocaleString('zh-TW');
-        var daysPassed = Math.floor((Date.now() - new Date(order.notifiedAt).getTime()) / (1000 * 60 * 60 * 24));
-        var needReminder = daysPassed >= 7 && !order.pickedUp;
-        
-        var statusBadge = order.pickedUp ? '<span class="badge badge-completed">✅ 已簽收</span>' :
-                         needReminder ? '<span class="badge badge-warning">🔔 需提醒（' + daysPassed + ' 天）</span>' :
-                         '<span class="badge badge-pending">⏰ 追蹤中（' + daysPassed + ' 天）</span>';
-
-        html += '<div class="card" style="' + (order.pickedUp ? 'opacity:0.6;' : '') + '">' +
-          '<div class="card-header">' +
-          '<div class="card-title">#' + (order.customerNumber || '-') + ' - ' + (order.customerName || '-') + '</div>' +
-          '<div>' + statusBadge + '</div>' +
+      wrap.innerHTML = allUsers.map(function(u) {
+        return '<div class="user-item">' +
+          '<div class="user-info" onclick="fillCustomer(\'' + (u.userId || '') + '\',\'' + (u.name || '') + '\')">' +
+          '<strong>' + (u.name || '-') + '</strong>' +
+          '<small>User ID: ' + (u.userId || '-') + (u.number ? ('｜編號: ' + u.number) : '') + '</small>' +
           '</div>' +
-          '<div style="font-size:13px; color:#666; margin-bottom:15px;">' +
-          '<div>📅 通知時間：' + notifiedDate + '</div>' +
-          '<div>⏰ 已過時間：' + daysPassed + ' 天</div>' +
-          '<div>🔔 已提醒次數：' + (order.reminderCount || 0) + ' 次</div>' +
-          (order.phone ? '<div>📞 電話：' + order.phone + '</div>' : '');
-
-        if (order.note) {
-          html += '<div class="note-section"><strong>📝 備註：</strong><br>' + order.note + '</div>';
-        }
-
-        if (order.reminderHistory && order.reminderHistory.length > 0) {
-          html += '<div class="reminder-log"><strong style="color:#667eea;">📋 提醒記錄：</strong><br>';
-          order.reminderHistory.forEach(function(log, index) {
-            var logTime = new Date(log.sentAt).toLocaleString('zh-TW');
-            html += '<div class="reminder-log-item">' +
-              '<div><strong>第 ' + (index + 1) + ' 次提醒</strong> - ' + logTime + '</div>' +
-              '<div style="color:#666; margin-top:5px;">' + log.message + '</div>' +
-              '</div>';
-          });
-          html += '</div>';
-        }
-
-        if (order.pickedUp) {
-          html += '<div>✅ 簽收時間：' + new Date(order.pickedUpAt).toLocaleString('zh-TW') + '</div>';
-        }
-
-        html += '</div><div style="display:flex; gap:10px; flex-wrap:wrap;">';
-        
-        if (!order.pickedUp) {
-          html += '<button class="btn btn-small btn-warning" onclick="manualSendReminder(\'' + order.customerNumber + '\')">🔔 立即提醒</button>' +
-                  '<button class="btn btn-small btn-info" onclick="showEditNote(\'' + order.customerNumber + '\', \'' + order.customerName + '\', \'' + (order.note || '') + '\')">📝 編輯備註</button>' +
-                  '<button class="btn btn-small btn-secondary" onclick="markPickupComplete(\'' + order.customerNumber + '\')">✅ 標記已簽收</button>';
-        }
-        
-        html += '<button class="btn btn-small btn-danger" onclick="removePickupTracking(\'' + order.customerNumber + '\')">🗑️ 刪除</button></div></div>';
-      });
-
-      listDiv.innerHTML = html;
+          '<button class="btn btn-small btn-secondary" onclick="fillCustomer(\'' + (u.userId || '') + '\',\'' + (u.name || '') + '\')">帶入</button>' +
+          '</div>';
+      }).join('');
     }
 
-    function filterPickupOrders() {
-      var filter = document.getElementById('pickupFilterStatus').value;
-      if (filter === 'all') {
-        displayPickupOrders(allPickupOrders);
-        return;
-      }
-
-      var filtered = allPickupOrders.filter(function(o) {
-        if (filter === 'pending') return !o.pickedUp;
-        if (filter === 'completed') return o.pickedUp;
-        if (filter === 'needReminder') {
-          var daysPassed = Math.floor((Date.now() - new Date(o.notifiedAt).getTime()) / (1000 * 60 * 60 * 24));
-          return daysPassed >= 7 && !o.pickedUp;
-        }
-        return true;
-      });
-
-      displayPickupOrders(filtered);
-    }
-
-    async function searchPickupCustomer() {
-      var query = document.getElementById('pickupSearchInput').value.trim();
-      var resultDiv = document.getElementById('pickupSearchResult');
-      
-      if (!query) {
-        resultDiv.innerHTML = '';
-        return;
-      }
-
-      if (!isNaN(query)) {
-        query = String(parseInt(query)).padStart(3, '0');
-      }
-
-      var found = savedCustomers[query] || Object.entries(savedCustomers).find(function(item) {
-        return (item[1].name || '').includes(query);
-      });
-
-      if (!found) {
-        resultDiv.innerHTML = '<div style="background:#f8d7da; padding:15px; border-radius:10px; color:#721c24;">❌ 找不到此客戶</div>';
-        return;
-      }
-
-      var number = Array.isArray(found) ? found[0] : query;
-      var customer = Array.isArray(found) ? found[1] : found;
-
-      resultDiv.innerHTML = 
-        '<div style="background:#f0f4ff; padding:20px; border-radius:15px; border-left:5px solid #667eea;">' +
-        '<h4 style="color:#667eea; margin-bottom:15px;">✅ 找到客戶</h4>' +
-        '<div style="font-size:14px;">' +
-        '<div style="margin:8px 0;"><strong>編號：</strong>' + number + '</div>' +
-        '<div style="margin:8px 0;"><strong>姓名：</strong>' + customer.name + '</div>' +
-        (customer.phone ? '<div style="margin:8px 0;"><strong>電話：</strong>' + customer.phone + '</div>' : '') +
-        '<div style="margin:8px 0;"><strong>User ID：</strong><span style="font-size:12px; color:#666;">' + customer.userId + '</span></div>' +
-        '</div>' +
-        '<button class="btn btn-small btn-secondary" style="margin-top:15px;" onclick="fillPickupCustomer(\'' + number + '\', \'' + customer.name + '\', \'' + customer.userId + '\', \'' + (customer.phone || '') + '\')">📥 帶入資料</button>' +
-        '</div>';
-    }
-
-    function fillPickupCustomer(number, name, userId, phone) {
-      document.getElementById('pickupCustomerNumber').value = number;
-      document.getElementById('pickupCustomerName').value = name;
-      document.getElementById('pickupUserID').value = userId;
-      document.getElementById('pickupPhone').value = phone || '';
-      showResult('success', '✅ 已帶入客戶資料');
-    }
-
-    async function startPickupTracking() {
-      var customerNumber = document.getElementById('pickupCustomerNumber').value.trim() || getNextCustomerNumber();
-      var customerName = document.getElementById('pickupCustomerName').value.trim();
-      var userID = document.getElementById('pickupUserID').value.trim();
-      var phone = document.getElementById('pickupPhone').value.trim();
-
-      if (!customerName || !userID) {
-        showResult('error', '❌ 請填寫姓名和 User ID');
-        return;
-      }
-
-      if (!isNaN(customerNumber)) {
-        customerNumber = String(parseInt(customerNumber)).padStart(3, '0');
-      }
-
-      try {
-        var res = await fetch('/api/track-pickup', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ customerNumber: customerNumber, customerName: customerName, userID: userID, phone: phone })
-        });
-
-        var data = await res.json();
-
-        if (data.success) {
-          showResult('success', '✅ 已開始追蹤取件！<br>系統將在 7 天後自動提醒客人取件。');
-          document.getElementById('pickupCustomerNumber').value = '';
-          document.getElementById('pickupCustomerName').value = '';
-          document.getElementById('pickupUserID').value = '';
-          document.getElementById('pickupPhone').value = '';
-          document.getElementById('pickupSearchInput').value = '';
-          document.getElementById('pickupSearchResult').innerHTML = '';
-          await loadPickupOrders();
-        } else {
-          showResult('error', '❌ ' + (data.error || data.message || '追蹤失敗'));
-        }
-      } catch (error) {
-        showResult('error', '❌ 連線失敗：' + error.message);
-      }
-    }
-
-    async function markPickupComplete(customerNumber) {
-      if (!confirm('⚠️ 確定標記為已簽收？\n標記後將停止發送提醒訊息。')) return;
-
-      try {
-        var res = await fetch('/api/pickup-complete', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ customerNumber: customerNumber })
-        });
-
-        var data = await res.json();
-
-        if (data.success) {
-          showResult('success', '✅ 已標記為已簽收，系統將停止發送提醒');
-          await loadPickupOrders();
-        } else {
-          showResult('error', '❌ ' + (data.error || '操作失敗'));
-        }
-      } catch (error) {
-        showResult('error', '❌ 連線失敗：' + error.message);
-      }
-    }
-
-    async function removePickupTracking(customerNumber) {
-      if (!confirm('⚠️ 確定移除此追蹤？\n此操作無法復原！')) return;
-
-      try {
-        var res = await fetch('/api/tracked-order/' + customerNumber, {
-          method: 'DELETE'
-        });
-
-        var data = await res.json();
-
-        if (data.success) {
-          showResult('success', '✅ 已移除追蹤');
-          await loadPickupOrders();
-        } else {
-          showResult('error', '❌ ' + (data.error || '操作失敗'));
-        }
-      } catch (error) {
-        showResult('error', '❌ 連線失敗：' + error.message);
-      }
-    }
-
-    async function manualSendReminder(customerNumber) {
-      if (!confirm('⚠️ 確定要立即發送提醒訊息嗎？')) return;
-
-      try {
-        var res = await fetch('/api/send-pickup-reminder/' + customerNumber, {
-          method: 'POST'
-        });
-
-        var data = await res.json();
-
-        if (data.success) {
-          showResult('success', '✅ 提醒訊息已發送！');
-          await loadPickupOrders();
-        } else {
-          showResult('error', '❌ ' + (data.error || '發送失敗'));
-        }
-      } catch (error) {
-        showResult('error', '❌ 連線失敗：' + error.message);
-      }
-    }
-
-    function showEditNote(customerNumber, customerName, currentNote) {
-      currentEditingCustomerNumber = customerNumber;
-      document.getElementById('noteCustomerNumber').textContent = customerNumber;
-      document.getElementById('noteCustomerName').textContent = customerName;
-      document.getElementById('noteContent').value = currentNote || '';
-      document.getElementById('editNoteModal').style.display = 'block';
-    }
-
-    function closeEditNote() {
-      document.getElementById('editNoteModal').style.display = 'none';
-      currentEditingCustomerNumber = '';
-    }
-
-    async function saveNote() {
-      var note = document.getElementById('noteContent').value.trim();
-
-      try {
-        var res = await fetch('/api/pickup-note', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ customerNumber: currentEditingCustomerNumber, note: note })
-        });
-
-        var data = await res.json();
-
-        if (data.success) {
-          showResult('success', '✅ 備註已儲存');
-          closeEditNote();
-          await loadPickupOrders();
-        } else {
-          showResult('error', '❌ ' + (data.error || '儲存失敗'));
-        }
-      } catch (error) {
-        showResult('error', '❌ 連線失敗：' + error.message);
-      }
-    }
-    // ========================================
-    // 提醒模板管理
-    // ========================================
-    async function loadPickupTemplate() {
-      try {
-        var res = await fetch('/api/pickup-template');
-        var data = await res.json();
-        if (data.success && data.template) {
-          pickupReminderTemplate = data.template;
-        }
-      } catch (error) {
-        console.error('載入提醒模板失敗:', error);
-      }
-    }
-
-    function showPickupTemplateEditor() {
-      document.getElementById('pickupTemplateContent').value = pickupReminderTemplate;
-      document.getElementById('pickupTemplateModal').style.display = 'block';
-    }
-
-    function closePickupTemplateModal() {
-      document.getElementById('pickupTemplateModal').style.display = 'none';
-    }
-
-    async function savePickupTemplate() {
-      var content = document.getElementById('pickupTemplateContent').value.trim();
-      if (!content) {
-        showResult('error', '❌ 請輸入模板內容');
-        return;
-      }
-
-      try {
-        var res = await fetch('/api/pickup-template', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ template: content })
-        });
-
-        var data = await res.json();
-
-        if (data.success) {
-          pickupReminderTemplate = content;
-          showResult('success', '✅ 提醒模板已儲存！系統將使用此模板發送提醒訊息。');
-          closePickupTemplateModal();
-        } else {
-          showResult('error', '❌ 儲存失敗：' + (data.error || '未知錯誤'));
-        }
-      } catch (error) {
-        showResult('error', '❌ 連線失敗：' + error.message);
-      }
-    }
-
-    function testPickupTemplate() {
-      var content = document.getElementById('pickupTemplateContent').value.trim();
-      if (!content) {
-        document.getElementById('templateTestResult').innerHTML = '<div class="result error" style="display:block;">❌ 請先輸入模板內容</div>';
-        return;
-      }
-
-      var testMessage = content
-        .replace(/{客戶姓名}/g, '王小明')
-        .replace(/{客戶編號}/g, '001')
-        .replace(/{已過天數}/g, '7');
-
-      document.getElementById('templateTestResult').innerHTML = 
-        '<div class="result info" style="display:block;">' +
-        '<strong>📱 預覽效果：</strong><br><br>' +
-        testMessage +
-        '</div>';
-    }
-
-    // ========================================
-    // 批量匯入
-    // ========================================
-    function showBatchImport() {
-      document.getElementById('importText').value = '';
-      document.getElementById('importResult').innerHTML = '';
-      document.getElementById('batchImportModal').style.display = 'block';
-    }
-
-    function closeBatchImport() {
-      document.getElementById('batchImportModal').style.display = 'none';
-    }
-
-    async function processBatchImport() {
-      var text = document.getElementById('importText').value.trim();
-      
-      if (!text) {
-        showResult('error', '❌ 請先貼上資料');
-        return;
-      }
-
-      var lines = text.split('\n').filter(function(line) { return line.trim(); });
-      var imported = [];
-      var failed = [];
-      var resultHTML = '';
-
-      for (var i = 0; i < lines.length; i++) {
-        var line = lines[i].trim();
-        var parts = line.split(',').map(function(p) { return p.trim(); });
-        
-        if (parts.length < 3) {
-          failed.push({ line: line, reason: '格式錯誤（至少需要：編號,姓名,User ID）' });
-          continue;
-        }
-
-        var number = parts[0] ? String(parseInt(parts[0])).padStart(3, '0') : '';
-        var name = parts[1] || '';
-        var phone = parts[2] || '';
-        var userId = parts[3] || '';
-
-        // 如果只有3個欄位，可能是 編號,姓名,User ID
-        if (parts.length === 3) {
-          userId = parts[2];
-          phone = '';
-        }
-
-        if (!number || !name || !userId) {
-          failed.push({ line: line, reason: '缺少必要欄位' });
-          continue;
-        }
-
-        // 檢查是否已存在
-        if (savedCustomers[number]) {
-          failed.push({ line: line, reason: '編號 ' + number + ' 已存在' });
-          continue;
-        }
-
-        try {
-          var res = await fetch('/api/track-pickup', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ customerNumber: number, customerName: name, userID: userId, phone: phone })
-          });
-
-          var data = await res.json();
-          if (data.success) {
-            imported.push(number + ' - ' + name);
-            resultHTML += '<div class="import-row success">✅ ' + number + ' - ' + name + '</div>';
-          } else {
-            failed.push({ line: line, reason: data.message || '已存在' });
-            resultHTML += '<div class="import-row error">❌ ' + line + '<br><span style="font-size:12px;">原因：' + (data.message || '已存在') + '</span></div>';
-          }
-        } catch (error) {
-          failed.push({ line: line, reason: error.message });
-          resultHTML += '<div class="import-row error">❌ ' + line + '<br><span style="font-size:12px;">原因：' + error.message + '</span></div>';
-        }
-      }
-
-      var summaryHTML = '<div class="result ' + (failed.length > 0 ? 'warning' : 'success') + '" style="display:block; margin-bottom:15px;">' +
-        '<strong>📊 匯入結果</strong><br><br>' +
-        '✅ 成功：' + imported.length + ' 筆<br>' +
-        (failed.length > 0 ? ('❌ 失敗：' + failed.length + ' 筆') : '') +
-        '</div>';
-
-      document.getElementById('importResult').innerHTML = summaryHTML + resultHTML;
-      await loadPickupOrders();
-      await loadCustomerNumbers();
-    }
-
-    // ========================================
-    // 匯出報表
-    // ========================================
-    function exportPickupData() {
-      if (allPickupOrders.length === 0) {
-        showResult('warning', '⚠️ 目前沒有追蹤資料可匯出');
-        return;
-      }
-
-      var csv = 'data:text/csv;charset=utf-8,\uFEFF編號,姓名,電話,User ID,通知時間,已過天數,提醒次數,狀態\n';
-      
-      allPickupOrders.forEach(function(order) {
-        var daysPassed = Math.floor((Date.now() - new Date(order.notifiedAt).getTime()) / (1000 * 60 * 60 * 24));
-        var status = order.pickedUp ? '已簽收' : (daysPassed >= 7 ? '需提醒' : '追蹤中');
-        var notifiedDate = new Date(order.notifiedAt).toLocaleString('zh-TW');
-        
-        csv += order.customerNumber + ',' + 
-               order.customerName + ',' + 
-               (order.phone || '未填寫') + ',' + 
-               order.userID + ',' + 
-               notifiedDate + ',' + 
-               daysPassed + ',' + 
-               (order.reminderCount || 0) + ',' + 
-               status + '\n';
-      });
-      
-      var link = document.createElement('a');
-      link.setAttribute('href', encodeURI(csv));
-      link.setAttribute('download', 'pickup_tracking_' + new Date().toISOString().split('T')[0] + '.csv');
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
-      showResult('success', '✅ 追蹤報表已匯出！共 ' + allPickupOrders.length + ' 筆資料');
-    }
-
-    // ========================================
-    // 訊息顯示
-    // ========================================
     function showResult(type, html) {
       var el = document.getElementById('result');
-      el.className = 'result ' + type;
+      el.className = 'result ' + (type === 'success' ? 'success' : 'error');
       el.innerHTML = html;
       el.style.display = 'block';
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      setTimeout(function() {
-        el.style.display = 'none';
-      }, 8000);
     }
 
-    // ========================================
-    // 初始化
-    // ========================================
     document.addEventListener('DOMContentLoaded', function() {
       initLoad();
     });
   </script>
+   <script src="/payment.js"></script>
+</body> 
 </body>
 </html>
