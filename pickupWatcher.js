@@ -1,115 +1,259 @@
-const pickupCustomerDB = require('./services/pickupCustomerDB');
-const line = require('@line/bot-sdk');
+// ========================================
+// 🧺 取件追蹤系統核心模組
+// ========================================
 const fs = require('fs');
 const path = require('path');
 
-const config = {
-  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
-  channelSecret: process.env.LINE_CHANNEL_SECRET
-};
+const PICKUP_FILE = '/data/pickup-tracking.json';
+const DEFAULT_TEMPLATE = '親愛的 {客戶姓名}，您的衣物已清洗完成，請盡快來取件！訂單編號：{客戶編號}';
 
-const client = new line.Client(config);
-
-const TEST_MODE = false;
-const CHECK_INTERVAL = TEST_MODE ? 2 * 60 * 1000 : 60 * 60 * 1000;
-const REMINDER_DAYS = TEST_MODE ? (20 / 60 / 24) : 7;
-
-function loadReminderTemplate() {
-  const templatePath = path.join(__dirname, 'data', 'pickup-template.json');
-  try {
-    if (fs.existsSync(templatePath)) {
-      const data = JSON.parse(fs.readFileSync(templatePath, 'utf8'));
-      return data.template || '親愛的 {客戶姓名}，您的衣物已清洗完成超過 {已過天數} 天，請盡快來領取！訂單編號：{客戶編號}';
-    }
-  } catch (error) {
-    console.error('[PICKUP] 載入模板失敗:', error.message);
+// 確保資料檔存在
+function ensurePickupFile() {
+  const dir = path.dirname(PICKUP_FILE);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
   }
-  return '親愛的 {客戶姓名}，您的衣物已清洗完成超過 {已過天數} 天，請盡快來領取！訂單編號：{客戶編號}';
-}
-
-function fillTemplate(template, data) {
-  return template
-    .replace(/{客戶姓名}/g, data.customerName || '')
-    .replace(/{客戶編號}/g, data.customerNumber || '')
-    .replace(/{已過天數}/g, data.daysPassed || 0);
-}
-
-async function sendReminder(order) {
-  try {
-    const daysPassed = Math.floor((Date.now() - new Date(order.notifiedAt).getTime()) / (1000 * 60 * 60 * 24));
-    const template = loadReminderTemplate();
-    const message = fillTemplate(template, {
-      customerName: order.customerName,
-      customerNumber: order.customerNumber,
-      daysPassed: daysPassed
-    });
-
-    await client.pushMessage(order.userID, {
-      type: 'text',
-      text: message
-    });
-
-    const reminderLog = {
-      sentAt: new Date().toISOString(),
-      message: message,
-      daysPassed: daysPassed
-    };
-
-    pickupCustomerDB.updateOrder(order.customerNumber, {
-      reminderSent: true,
-      reminderCount: (order.reminderCount || 0) + 1,
-      lastReminderAt: new Date().toISOString(),
-      reminderHistory: [...(order.reminderHistory || []), reminderLog]
-    });
-
-    console.log(`[PICKUP] ✅ 已發送提醒給 ${order.customerName} (${order.customerNumber})`);
-    return true;
-  } catch (error) {
-    console.error(`[PICKUP] ❌ 發送提醒失敗:`, error.message);
-    return false;
+  if (!fs.existsSync(PICKUP_FILE)) {
+    fs.writeFileSync(PICKUP_FILE, JSON.stringify({ 
+      orders: [], 
+      template: DEFAULT_TEMPLATE 
+    }, null, 2));
   }
 }
 
-async function checkAndSendReminders() {
-  const orders = pickupCustomerDB.getAllOrders();
+// 讀取資料
+function readData() {
+  ensurePickupFile();
+  try {
+    return JSON.parse(fs.readFileSync(PICKUP_FILE, 'utf8'));
+  } catch (error) {
+    return { orders: [], template: '親愛的 {客戶姓名}，您的衣物已清洗完成，請盡快來取件！訂單編號：{客戶編號}' };
+  }
+}
+
+// 儲存資料
+function saveData(data) {
+  ensurePickupFile();
+  fs.writeFileSync(PICKUP_FILE, JSON.stringify(data, null, 2));
+}
+
+// 新增取件追蹤
+function addPickupOrder(customerNumber, customerName, userId, phone = '') {
+  const data = readData();
   
-  if (orders.length === 0) {
-    console.log('[PICKUP] 沒有需要追蹤的訂單');
-    return;
+  // 檢查是否已存在
+  const exists = data.orders.find(o => o.customerNumber === customerNumber);
+  if (exists) {
+    return { success: false, message: '此訂單已在追蹤清單中' };
   }
+  
+  const order = {
+    customerNumber,
+    customerName,
+    userId,
+    phone,
+    createdAt: new Date().toISOString(),
+    nextReminderAt: getNextReminderTime(7), // 7天後的11:00
+    reminderCount: 0,
+    reminderHistory: [],
+    pickedUp: false,
+    note: ''
+  };
+  
+  data.orders.push(order);
+  saveData(data);
+  
+  console.log(`[PICKUP] ✅ 已加入追蹤：${customerNumber} - ${customerName}`);
+  return { success: true, message: '已加入取件追蹤', order };
+}
 
-  const now = Date.now();
-  let sentCount = 0;
+// 計算下次提醒時間(X天後的11:00)
+function getNextReminderTime(daysLater) {
+  const now = new Date();
+  const next = new Date(now.getTime() + daysLater * 24 * 60 * 60 * 1000);
+  next.setHours(11, 0, 0, 0);
+  return next.toISOString();
+}
 
-  for (const order of orders) {
-    if (order.pickedUp) continue;
+// 標記已簽收
+function markAsPickedUp(customerNumber) {
+  const data = readData();
+  const order = data.orders.find(o => o.customerNumber === customerNumber);
+  
+  if (!order) {
+    return { success: false, message: '找不到此訂單' };
+  }
+  
+  order.pickedUp = true;
+  order.pickedUpAt = new Date().toISOString();
+  saveData(data);
+  
+  console.log(`[PICKUP] ✅ 已簽收：${customerNumber} - ${order.customerName}`);
+  return { success: true, message: '已標記為已簽收' };
+}
 
-    const notifiedTime = new Date(order.notifiedAt).getTime();
-    const daysPassed = (now - notifiedTime) / (1000 * 60 * 60 * 24);
-    const reminderCount = order.reminderCount || 0;
-    const nextReminderDay = (reminderCount + 1) * REMINDER_DAYS;
+// 刪除追蹤
+function deleteOrder(customerNumber) {
+  const data = readData();
+  const index = data.orders.findIndex(o => o.customerNumber === customerNumber);
+  
+  if (index === -1) {
+    return { success: false, message: '找不到此訂單' };
+  }
+  
+  const removed = data.orders.splice(index, 1)[0];
+  saveData(data);
+  
+  console.log(`[PICKUP] 🗑️ 已刪除：${customerNumber} - ${removed.customerName}`);
+  return { success: true, message: '已刪除追蹤' };
+}
 
-    if (daysPassed >= nextReminderDay) {
-      console.log(`[PICKUP] 🔔 客戶 ${order.customerName} 已過 ${Math.floor(daysPassed)} 天，發送提醒...`);
-      const success = await sendReminder(order);
-      if (success) sentCount++;
+// 延遲提醒(改為14天後)
+function delayReminder(customerNumber) {
+  const data = readData();
+  const order = data.orders.find(o => o.customerNumber === customerNumber);
+  
+  if (!order) {
+    return { success: false, message: '找不到此訂單' };
+  }
+  
+  order.nextReminderAt = getNextReminderTime(14); // 14天後的11:00
+  saveData(data);
+  
+  console.log(`[PICKUP] ⏰ 已延遲：${customerNumber} - ${order.customerName} (延至 ${order.nextReminderAt})`);
+  return { success: true, message: '已延遲14天後提醒' };
+}
+
+// 立即發送提醒
+function sendReminderNow(customerNumber, client) {
+  const data = readData();
+  const order = data.orders.find(o => o.customerNumber === customerNumber);
+  
+  if (!order) {
+    return { success: false, message: '找不到此訂單' };
+  }
+  
+  if (order.pickedUp) {
+    return { success: false, message: '此訂單已簽收' };
+  }
+  
+  const message = data.template
+    .replace(/{客戶姓名}/g, order.customerName)
+    .replace(/{客戶編號}/g, order.customerNumber);
+  
+  return client.pushMessage(order.userId, {
+    type: 'text',
+    text: message
+  }).then(() => {
+    order.reminderCount++;
+    order.reminderHistory.push({
+      sentAt: new Date().toISOString(),
+      message: message
+    });
+    order.nextReminderAt = getNextReminderTime(7); // 下次7天後
+    saveData(data);
+    
+    console.log(`[PICKUP] 📨 已發送提醒：${customerNumber} - ${order.customerName}`);
+    return { success: true, message: '提醒已發送' };
+  }).catch(error => {
+    console.error(`[PICKUP] ❌ 發送失敗：${customerNumber}`, error);
+    return { success: false, message: '發送失敗：' + error.message };
+  });
+}
+
+// 自動檢查並發送提醒(每小時執行一次)
+function checkAndSendReminders(client) {
+  const data = readData();
+  const now = new Date();
+  let sent = 0;
+  
+  data.orders.forEach(order => {
+    if (order.pickedUp) return; // 已簽收的不提醒
+    
+    const nextReminder = new Date(order.nextReminderAt);
+    
+    // 如果到了提醒時間
+    if (now >= nextReminder) {
+      const message = data.template
+        .replace(/{客戶姓名}/g, order.customerName)
+        .replace(/{客戶編號}/g, order.customerNumber);
+      
+      client.pushMessage(order.userId, {
+        type: 'text',
+        text: message
+      }).then(() => {
+        order.reminderCount++;
+        order.reminderHistory.push({
+          sentAt: new Date().toISOString(),
+          message: message
+        });
+        order.nextReminderAt = getNextReminderTime(7); // 下次7天後
+        saveData(data);
+        sent++;
+        console.log(`[PICKUP] ✅ 自動提醒已發送：${order.customerNumber} - ${order.customerName}`);
+      }).catch(error => {
+        console.error(`[PICKUP] ❌ 自動提醒失敗：${order.customerNumber}`, error);
+      });
     }
-  }
-
-  if (sentCount > 0) {
-    console.log(`[PICKUP] ✅ 本次發送 ${sentCount} 則提醒`);
+  });
+  
+  if (sent > 0) {
+    console.log(`[PICKUP] 📊 本次共發送 ${sent} 筆取件提醒`);
   }
 }
 
-function startWatcher() {
-  console.log(`[PICKUP] 取件追蹤監控啟動 - ${TEST_MODE ? '測試模式 (20 分鐘)' : '正式模式 (7 天)'}`);
-  console.log(`[PICKUP] ${TEST_MODE ? '測試模式：每 2 分鐘檢查一次' : '正式模式：每 1 小時檢查一次'}`);
-  checkAndSendReminders();
-  setInterval(checkAndSendReminders, CHECK_INTERVAL);
+// 更新備註
+function updateNote(customerNumber, note) {
+  const data = readData();
+  const order = data.orders.find(o => o.customerNumber === customerNumber);
+  
+  if (!order) {
+    return { success: false, message: '找不到此訂單' };
+  }
+  
+  order.note = note;
+  saveData(data);
+  
+  return { success: true, message: '備註已更新' };
+}
+
+// 更新提醒模板
+function updateTemplate(template) {
+  const data = readData();
+  data.template = template;
+  saveData(data);
+  
+  console.log(`[PICKUP] 📝 提醒模板已更新`);
+  return { success: true, message: '模板已更新' };
+}
+
+// 取得所有訂單
+function getAllOrders() {
+  const data = readData();
+  return data.orders.map(order => {
+    const daysPassed = Math.floor((Date.now() - new Date(order.createdAt).getTime()) / (1000 * 60 * 60 * 24));
+    return {
+      ...order,
+      daysPassed
+    };
+  });
+}
+
+// 取得模板
+function getTemplate() {
+  const data = readData();
+  return data.template;
 }
 
 module.exports = {
-  startWatcher,
-  sendReminder,
-  loadReminderTemplate
+  addPickupOrder,
+  markAsPickedUp,
+  deleteOrder,
+  delayReminder,
+  sendReminderNow,
+  checkAndSendReminders,
+  updateNote,
+  updateTemplate,
+  getAllOrders,
+  getTemplate
 };
