@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>🧺 取件追蹤系統</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
+    .container { max-width: 1000px; margin: 0 auto; background: #fff; border-radius: 20px; padding: 30px; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+    h1 { color: #667eea; text-align: center; margin-bottom: 10px; font-size: 28px; }
+    .subtitle { text-align: center; color: #666; margin-bottom: 30px; font-size: 14px; }
+    .back-link { display: inline-block; margin-bottom: 20px; padding: 10px 20px; background: #f0f4ff; color: #667eea; text-decoration: none; border-radius: 8px; font-weight: 600; }
+    .back-link:hover { background: #667eea; color: #fff; }
+    .form-group { margin-bottom: 20px; }
+    label { display: block; margin-bottom: 8px; color: #333; font-weight: 600; font-size: 14px; }
+    input, textarea { width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 10px; font-size: 16px; transition: all .3s; font-family: inherit; }
+    textarea { min-height: 120px; resize: vertical; }
+    input:focus, textarea:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102,126,234,.1); }
+    .quick-search { display: flex; gap: 10px; }
+    .btn { width: 100%; padding: 15px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; border: none; border-radius: 12px; font-size: 18px; font-weight: 600; cursor: pointer; transition: all .3s; }
+    .btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(102,126,234,.6); }
+    .btn-small { padding: 10px 20px; font-size: 14px; width: auto; }
+    .btn-secondary { background: linear-gradient(135deg, #52c41a 0%, #389e0d 100%); }
+    .btn-danger { background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); }
+    .customer-card { background: #f0f4ff; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #667eea; }
+    .customer-card h4 { color: #667eea; margin-bottom: 10px; }
+    .customer-card p { margin: 5px 0; font-size: 14px; color: #333; }
+    .result { margin-top: 20px; padding: 20px; border-radius: 12px; display: none; }
+    .result.success { background: #d4edda; border: 2px solid #28a745; color: #155724; }
+    .result.error { background: #f8d7da; border: 2px solid #dc3545; color: #721c24; }
+    .user-item { background: #f8f9fa; padding: 15px; margin-bottom: 10px; border-radius: 8px; border: 1px solid #e0e0e0; transition: all .3s; }
+    .user-item:hover { border-color: #667eea; box-shadow: 0 2px 8px rgba(102,126,234,.2); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a href="/payment" class="back-link">← 返回付款系統</a>
+    
+    <h1>🧺 取件追蹤系統</h1>
+    <p class="subtitle">自動提醒客戶取件 - 7天後早上11點提醒</p>
+
+    <!-- 快速查詢 -->
+    <div class="form-group">
+      <label>🔍 快速查詢客戶（用客戶編號）</label>
+      <div class="quick-search">
+        <input type="text" id="pickupSearch" placeholder="輸入編號（例如: 001、625）">
+        <button class="btn btn-small" onclick="searchForPickup()">查詢</button>
+      </div>
+    </div>
+
+    <div id="pickupCustomerCard" class="customer-card" style="display:none;">
+      <h4>✅ 客戶資訊</h4>
+      <p><strong>編號:</strong> <span id="pickupCardNumber"></span></p>
+      <p><strong>姓名:</strong> <span id="pickupCardName"></span></p>
+      <p><strong>User ID:</strong> <span id="pickupCardUserId"></span></p>
+    </div>
+
+    <!-- 新增追蹤 -->
+    <div style="background:#f8f9fa; padding:20px; border-radius:10px; margin-bottom:20px;">
+      <h4 style="color:#667eea; margin-bottom:15px;">➕ 新增取件追蹤</h4>
+      <div class="form-group">
+        <label>客戶編號 *</label>
+        <input type="text" id="pickupNumber" placeholder="001">
+      </div>
+      <div class="form-group">
+        <label>客戶姓名 *</label>
+        <input type="text" id="pickupName" placeholder="王小明">
+      </div>
+      <div class="form-group">
+        <label>User ID *</label>
+        <input type="text" id="pickupUserId" placeholder="U123...">
+      </div>
+      <button class="btn btn-secondary" onclick="startPickup()">🎯 開始追蹤（7天後11點提醒）</button>
+    </div>
+
+    <!-- 操作按鈕 -->
+    <div style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
+      <button class="btn btn-small btn-secondary" onclick="loadPickups()">🔄 重新整理</button>
+      <button class="btn btn-small btn-secondary" onclick="editTemplate()">📝 編輯模板</button>
+    </div>
+
+    <!-- 追蹤列表 -->
+    <div id="pickupList"><p style="text-align:center; color:#999;">尚未載入，請點「重新整理」。</p></div>
+
+    <div id="result" class="result"></div>
+  </div>
+
+  <!-- 模板編輯 Modal -->
+  <div id="templateModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:9999;">
+    <div style="background:#fff; max-width:600px; margin:50px auto; padding:30px; border-radius:15px;">
+      <h3>📝 編輯提醒模板</h3>
+      <p style="font-size:13px; color:#666; margin-bottom:15px;">可用變數：{客戶姓名}、{客戶編號}、{已過天數}</p>
+      <textarea id="templateText" style="width:100%; min-height:120px; padding:10px; margin:15px 0; border:2px solid #e0e0e0; border-radius:8px;"></textarea>
+      <div style="display:flex; gap:10px;">
+        <button class="btn btn-secondary" onclick="saveTemplate()">💾 儲存</button>
+        <button class="btn" onclick="closeTemplateModal()">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    var savedCustomers = {};
+
+    // 載入客戶編號
+    async function loadCustomerNumbers() {
+      try {
+        var res = await fetch('/api/customer-numbers');
+        var data = await res.json();
+        if (data.success) {
+          savedCustomers = {};
+          (data.customers || []).forEach(function(c) {
+            savedCustomers[c.number] = { name: c.name, userId: c.userId };
+          });
+        }
+      } catch (error) {
+        console.error('載入客戶編號失敗:', error);
+      }
+    }
+
+    // 快速查詢客戶
+    function searchForPickup() {
+      var num = document.getElementById('pickupSearch').value.trim();
+      if (!num) return alert('請輸入編號');
+      
+      if (savedCustomers[num]) {
+        var c = savedCustomers[num];
+        document.getElementById('pickupNumber').value = num;
+        document.getElementById('pickupName').value = c.name;
+        document.getElementById('pickupUserId').value = c.userId;
+        showPickupCard(num, c.name, c.userId);
+      } else {
+        alert('找不到此客戶編號');
+      }
+    }
+
+    function showPickupCard(number, name, userId) {
+      document.getElementById('pickupCardNumber').textContent = number;
+      document.getElementById('pickupCardName').textContent = name;
+      document.getElementById('pickupCardUserId').textContent = userId;
+      document.getElementById('pickupCustomerCard').style.display = 'block';
+    }
+
+    // 開始追蹤
+    async function startPickup() {
+      var num = document.getElementById('pickupNumber').value.trim();
+      var name = document.getElementById('pickupName').value.trim();
+      var userId = document.getElementById('pickupUserId').value.trim();
+      
+      if (!num || !name || !userId) return alert('請填寫完整');
+      
+      try {
+        var res = await fetch('/api/pickup/add', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ customerNumber: num, customerName: name, userId: userId })
+        });
+        var data = await res.json();
+        
+        if (data.success) {
+          showResult('success', '✅ 已開始追蹤！7天後11點自動提醒');
+          document.getElementById('pickupNumber').value = '';
+          document.getElementById('pickupName').value = '';
+          document.getElementById('pickupUserId').value = '';
+          document.getElementById('pickupCustomerCard').style.display = 'none';
+          loadPickups();
+        } else {
+          showResult('error', '❌ ' + data.message);
+        }
+      } catch (e) {
+        showResult('error', '❌ 連線失敗');
+      }
+    }
+
+    // 載入追蹤訂單
+    async function loadPickups() {
+      try {
+        var res = await fetch('/api/pickup/orders');
+        var data = await res.json();
+        
+        if (data.success) {
+          var html = '';
+          if (data.orders.length === 0) {
+            html = '<p style="color:#999; text-align:center;">尚無追蹤訂單</p>';
+          } else {
+            data.orders.forEach(function(o) {
+              var status = o.pickedUp ? '✅ 已簽收' : '⏰ 追蹤中 (' + o.daysPassed + '天)';
+              html += '<div class="user-item" style="opacity:' + (o.pickedUp ? '0.6' : '1') + ';">' +
+                '<div style="margin-bottom:10px;"><strong style="font-size:16px;">#' + o.customerNumber + ' - ' + o.customerName + '</strong> <span style="background:' + (o.pickedUp ? '#28a745' : '#ffc107') + '; color:#fff; padding:5px 10px; border-radius:5px; font-size:12px;">' + status + '</span></div>' +
+                '<div style="font-size:13px; color:#666; margin-bottom:10px;">' +
+                '下次提醒: ' + new Date(o.nextReminderAt).toLocaleString('zh-TW') + '<br>' +
+                '已提醒: ' + o.reminderCount + ' 次</div>' +
+                '<div style="display:flex; gap:5px; flex-wrap:wrap;">';
+              
+              if (!o.pickedUp) {
+                html += '<button class="btn btn-small btn-secondary" onclick="remindNow(\'' + o.customerNumber + '\')">🔔 立即提醒</button>' +
+                        '<button class="btn btn-small" style="background:#ff9800;color:#fff;" onclick="delay14(\'' + o.customerNumber + '\')">⏰ 延14天</button>' +
+                        '<button class="btn btn-small btn-secondary" onclick="markDone(\'' + o.customerNumber + '\')">✅ 簽收</button>';
+              }
+              html += '<button class="btn btn-small btn-danger" onclick="deletePick(\'' + o.customerNumber + '\')">刪除</button>' +
+                      '</div></div>';
+            });
+          }
+          document.getElementById('pickupList').innerHTML = html;
+        }
+      } catch (e) {
+        showResult('error', '❌ 載入失敗');
+      }
+    }
+
+    // 立即提醒
+    async function remindNow(num) {
+      try {
+        var res = await fetch('/api/pickup/remind/' + num, { method: 'POST' });
+        var data = await res.json();
+        if (data.success) {
+          showResult('success', '✅ 提醒已發送');
+          loadPickups();
+        } else {
+          showResult('error', '❌ ' + data.message);
+        }
+      } catch (e) {
+        showResult('error', '❌ 發送失敗');
+      }
+    }
+
+    // 延遲14天
+    async function delay14(num) {
+      if (!confirm('延遲14天後提醒？')) return;
+      try {
+        var res = await fetch('/api/pickup/delay', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ customerNumber: num })
+        });
+        var data = await res.json();
+        if (data.success) {
+          showResult('success', '✅ 已延遲14天');
+          loadPickups();
+        } else {
+          showResult('error', '❌ ' + data.message);
+        }
+      } catch (e) {
+        showResult('error', '❌ 操作失敗');
+      }
+    }
+
+    // 標記已簽收
+    async function markDone(num) {
+      if (!confirm('標記為已簽收？')) return;
+      try {
+        var res = await fetch('/api/pickup/complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ customerNumber: num })
+        });
+        var data = await res.json();
+        if (data.success) {
+          showResult('success', '✅ 已簽收');
+          loadPickups();
+        } else {
+          showResult('error', '❌ ' + data.message);
+        }
+      } catch (e) {
+        showResult('error', '❌ 操作失敗');
+      }
+    }
+
+    // 刪除追蹤
+    async function deletePick(num) {
+      if (!confirm('刪除此追蹤？')) return;
+      try {
+        var res = await fetch('/api/pickup/order/' + num, { method: 'DELETE' });
+        var data = await res.json();
+        if (data.success) {
+          showResult('success', '✅ 已刪除');
+          loadPickups();
+        } else {
+          showResult('error', '❌ ' + data.message);
+        }
+      } catch (e) {
+        showResult('error', '❌ 刪除失敗');
+      }
+    }
+
+    // 編輯模板
+    async function editTemplate() {
+      try {
+        var res = await fetch('/api/pickup/template');
+        var data = await res.json();
+        if (data.success) {
+          document.getElementById('templateText').value = data.template;
+          document.getElementById('templateModal').style.display = 'block';
+        }
+      } catch (e) {
+        showResult('error', '❌ 載入失敗');
+      }
+    }
+
+    function closeTemplateModal() {
+      document.getElementById('templateModal').style.display = 'none';
+    }
+
+    // 儲存模板
+    async function saveTemplate() {
+      var text = document.getElementById('templateText').value.trim();
+      if (!text) return alert('請輸入模板');
+      
+      try {
+        var res = await fetch('/api/pickup/template', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ template: text })
+        });
+        var data = await res.json();
+        if (data.success) {
+          showResult('success', '✅ 模板已儲存');
+          closeTemplateModal();
+        } else {
+          showResult('error', '❌ 儲存失敗');
+        }
+      } catch (e) {
+        showResult('error', '❌ 連線失敗');
+      }
+    }
+
+    function showResult(type, html) {
+      var el = document.getElementById('result');
+      el.className = 'result ' + (type === 'success' ? 'success' : 'error');
+      el.innerHTML = html;
+      el.style.display = 'block';
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    // 初始化
+    document.addEventListener('DOMContentLoaded', function() {
+      loadCustomerNumbers();
+    });
+  </script>
+</body>
+</html>
