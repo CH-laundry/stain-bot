@@ -1,18 +1,22 @@
 // pickupWatcher.js
 const pickupCustomerDB = require('./services/pickupCustomerDB');
 const line = require('@line/bot-sdk');
-const client = new line.messagingApi.MessagingApiClient({
-  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN
-});
 const fs = require('fs');
 const path = require('path');
 
-// 測試模式：改成 7 天 = 20 分鐘
-const TEST_MODE = false; // 改成 false 就是正式模式
-const CHECK_INTERVAL = TEST_MODE ? 2 * 60 * 1000 : 60 * 60 * 1000; // 測試：2分鐘，正式：1小時
-const REMINDER_DAYS = TEST_MODE ? (20 / 60 / 24) : 7; // 測試：20分鐘，正式：7天
+// LINE Bot 設定
+const config = {
+  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
+  channelSecret: process.env.LINE_CHANNEL_SECRET
+};
 
-// 載入提醒模板
+const client = new line.Client(config);
+
+// 測試模式
+const TEST_MODE = false;
+const CHECK_INTERVAL = TEST_MODE ? 2 * 60 * 1000 : 60 * 60 * 1000;
+const REMINDER_DAYS = TEST_MODE ? (20 / 60 / 24) : 7;
+
 function loadReminderTemplate() {
   const templatePath = path.join(__dirname, 'data', 'pickup-template.json');
   try {
@@ -26,7 +30,6 @@ function loadReminderTemplate() {
   return '親愛的 {客戶姓名}，您的衣物已清洗完成超過 {已過天數} 天，請盡快來領取！訂單編號：{客戶編號}';
 }
 
-// 替換模板變數
 function fillTemplate(template, data) {
   return template
     .replace(/{客戶姓名}/g, data.customerName || '')
@@ -34,12 +37,9 @@ function fillTemplate(template, data) {
     .replace(/{已過天數}/g, data.daysPassed || 0);
 }
 
-// 發送提醒訊息
 async function sendReminder(order) {
   try {
     const daysPassed = Math.floor((Date.now() - new Date(order.notifiedAt).getTime()) / (1000 * 60 * 60 * 24));
-    
-    // 載入模板
     const template = loadReminderTemplate();
     const message = fillTemplate(template, {
       customerName: order.customerName,
@@ -47,20 +47,17 @@ async function sendReminder(order) {
       daysPassed: daysPassed
     });
 
-    // 發送 LINE 訊息
     await client.pushMessage(order.userID, {
       type: 'text',
       text: message
     });
 
-    // 記錄發送
     const reminderLog = {
       sentAt: new Date().toISOString(),
       message: message,
       daysPassed: daysPassed
     };
 
-    // 更新資料庫
     pickupCustomerDB.updateOrder(order.customerNumber, {
       reminderSent: true,
       reminderCount: (order.reminderCount || 0) + 1,
@@ -76,7 +73,6 @@ async function sendReminder(order) {
   }
 }
 
-// 檢查並發送提醒
 async function checkAndSendReminders() {
   const orders = pickupCustomerDB.getAllOrders();
   
@@ -89,13 +85,10 @@ async function checkAndSendReminders() {
   let sentCount = 0;
 
   for (const order of orders) {
-    // 跳過已取件的
     if (order.pickedUp) continue;
 
     const notifiedTime = new Date(order.notifiedAt).getTime();
     const daysPassed = (now - notifiedTime) / (1000 * 60 * 60 * 24);
-
-    // 每 7 天提醒一次
     const reminderCount = order.reminderCount || 0;
     const nextReminderDay = (reminderCount + 1) * REMINDER_DAYS;
 
@@ -111,15 +104,10 @@ async function checkAndSendReminders() {
   }
 }
 
-// 啟動監控
 function startWatcher() {
   console.log(`[PICKUP] 取件追蹤監控啟動 - ${TEST_MODE ? '測試模式 (20 分鐘)' : '正式模式 (7 天)'}`);
   console.log(`[PICKUP] ${TEST_MODE ? '測試模式：每 2 分鐘檢查一次' : '正式模式：每 1 小時檢查一次'}`);
-
-  // 立即執行一次
   checkAndSendReminders();
-
-  // 定時執行
   setInterval(checkAndSendReminders, CHECK_INTERVAL);
 }
 
@@ -128,3 +116,16 @@ module.exports = {
   sendReminder,
   loadReminderTemplate
 };
+```
+
+---
+
+## ✅ 確認檔案結構
+```
+專案根目錄/
+├── pickupWatcher.js          ← 用上面的代碼完整替換
+├── services/
+│   └── pickupCustomerDB.js   ← 確認存在
+├── public/
+│   └── payment.html          ← 確認已更新
+└── index.js                  ← 確認有加入 API
