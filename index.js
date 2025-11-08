@@ -1004,156 +1004,11 @@ app.delete('/api/templates/:index', (req, res) => {
 
 app.post('/send-payment', async (req, res) => {
   const { userId, userName, amount, paymentType, customMessage } = req.body;
-  logger.logToFile(`收到付款請求: userId=${userId}, userName=${userName}, amount=${amount}, type=${paymentType}`);
 
-  if (!userId || !userName || !amount) {
-    logger.logToFile(`參數驗證失敗`);
-    return res.status(400).json({ error: '缺少必要參數', required: ['userId', 'userName', 'amount'] });
-  }
-
-  const numAmount = parseInt(amount);
-  if (isNaN(numAmount) || numAmount <= 0) {
-    return res.status(400).json({ error: '金額必須是正整數' });
-  }
-
-  // ⭐⭐⭐ 新增：自動儲存客戶資料（獨立 try-catch，不影響付款流程）⭐⭐⭐
-  try {
-    const DATA_DIR = '/data';
-    const USERS_FILE = path.join(DATA_DIR, 'users.json');
-
-    // 確保目錄存在
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
-      logger.logToFile(`✅ 已建立 /data 目錄`);
-    }
-
-    // 確保檔案存在
-    if (!fs.existsSync(USERS_FILE)) {
-      fs.writeFileSync(USERS_FILE, '[]', 'utf8');
-      logger.logToFile(`✅ 已建立 users.json 檔案`);
-    }
-
-    // 讀取現有客戶資料
-    let userList = [];
-    try {
-      const fileContent = fs.readFileSync(USERS_FILE, 'utf8');
-      userList = JSON.parse(fileContent);
-    } catch (e) {
-      logger.logToFile(`⚠️ 讀取 users.json 失敗，使用空陣列`);
-      userList = [];
-    }
-
-    // 檢查客戶是否已存在
-    const existIndex = userList.findIndex(u => u.userId === userId);
-    const timestamp = new Date().toISOString();
-
-    if (existIndex >= 0) {
-      // 更新現有客戶
-      userList[existIndex] = {
-        userId: userId,
-        name: userName,
-        lastUpdate: timestamp,
-        createdAt: userList[existIndex].createdAt || timestamp
-      };
-      logger.logToFile(`♻️ 更新客戶資料: ${userName} (${userId})`);
-    } else {
-      // 新增客戶
-      userList.push({
-        userId: userId,
-        name: userName,
-        createdAt: timestamp,
-        lastUpdate: timestamp
-      });
-      logger.logToFile(`➕ 新增客戶資料: ${userName} (${userId})`);
-    }
-
-    // 寫回檔案
-    fs.writeFileSync(USERS_FILE, JSON.stringify(userList, null, 2), 'utf8');
-    logger.logToFile(`💾 已將客戶資料寫入 /data/users.json (總共 ${userList.length} 筆)`);
-
-    // 同時也存進 customerDB（雙重備份）
-    try {
-      await customerDB.saveCustomer(userId, userName);
-    } catch (e) {
-      logger.logToFile(`⚠️ customerDB 同步失敗: ${e.message}`);
-    }
-  } catch (saveError) {
-    // ⚠️ 重要：儲存客戶資料失敗不應影響付款流程，只記錄錯誤
-    logger.logError('儲存客戶資料失敗（不影響付款流程）', saveError);
-  }
-  // ⭐⭐⭐ 客戶資料儲存結束 ⭐⭐⭐
+  // ... 你原本的發送付款代碼 ...
 
   try {
-    const type = paymentType || 'both';
-
-    const rawBase = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.BASE_URL || process.env.PUBLIC_BASE_URL || '';
-    const baseURL = ensureHttpsBase(rawBase) || 'https://stain-bot-production-2593.up.railway.app';
-
-    let finalMessage = '';
-    let ecpayLink = '';
-    let linepayLink = '';
-    let ecpayOrderId = '';
-    let linePayOrderId = '';
-
-    if (type === 'ecpay' || type === 'both') {
-      ecpayOrderId = `EC${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
-      orderManager.createOrder(ecpayOrderId, { userId, userName, amount: numAmount });
-      logger.logToFile(`建立綠界訂單: ${ecpayOrderId}`);
-
-      const ecpayPersistentUrl = `${baseURL}/payment/ecpay/pay/${ecpayOrderId}`;
-      ecpayLink = ecpayPersistentUrl;
-
-      try {
-        const response = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(ecpayPersistentUrl)}`);
-        const result = await response.text();
-        if (result && result.startsWith('http')) ecpayLink = result;
-      } catch {
-        logger.logToFile(`短網址生成失敗,使用原網址`);
-      }
-    }
-
-    if (type === 'linepay' || type === 'both') {
-      const linePayResult = await createLinePayPayment(userId, userName, numAmount);
-
-      if (linePayResult.success) {
-        linePayOrderId = linePayResult.orderId;
-
-        orderManager.createOrder(linePayOrderId, { userId, userName, amount: numAmount });
-
-        const paymentUrl = linePayResult.paymentUrlApp || linePayResult.paymentUrlWeb || linePayResult.paymentUrl;
-        orderManager.updatePaymentInfo(linePayOrderId, {
-          linepayTransactionId: linePayResult.transactionId,
-          linepayPaymentUrl: paymentUrl,
-          lastLinePayRequestAt: Date.now()
-        });
-
-        
-        const persistentUrl = `${baseURL}/payment/linepay/pay/${linePayOrderId}`;
-        linepayLink = persistentUrl; 
-        logger.logToFile(`建立 LINE Pay 訂單(PERSISTENT): ${linePayOrderId}`);
-        
-      }
-    }
-
-    const userMsg = customMessage || '';
-    if (type === 'both' && ecpayLink && linepayLink) {
-      finalMessage = userMsg
-        ? `${userMsg}\n\n💙 付款連結如下:\n\n【信用卡付款】\n💙 ${ecpayLink}\n\n【LINE Pay】\n💙 ${linepayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`
-        : `💙 您好,${userName}\n\n您的專屬付款連結已生成\n金額:NT$ ${numAmount.toLocaleString()}\n\n請選擇付款方式:\n\n【信用卡付款】\n💙 ${ecpayLink}\n\n【LINE Pay】\n💙 ${linepayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
-    } else if (type === 'ecpay' && ecpayLink) {
-      finalMessage = userMsg
-        ? `${userMsg}\n\n💙 付款連結如下:\n💙 ${ecpayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`
-        : `💙 您好,${userName}\n\n您的專屬付款連結已生成\n付款方式:信用卡\n金額:NT$ ${numAmount.toLocaleString()}\n\n請點擊以下連結完成付款:\n💙 ${ecpayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
-    } else if (type === 'linepay' && linepayLink) {
-      finalMessage = userMsg
-        ? `${userMsg}\n\n💙 付款連結如下:\n💙 ${linepayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`
-        : `💙 您好,${userName}\n\n您的專屬付款連結已生成\n付款方式:LINE Pay\n金額:NT$ ${numAmount.toLocaleString()}\n\n請點擊以下連結完成付款:\n💙 ${linepayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
-    } else {
-      return res.status(500).json({ error: '付款連結生成失敗' });
-    }
-
-    await client.pushMessage(userId, { type: 'text', text: finalMessage });
-    logger.logToFile(`已發送付款連結: ${userName} - ${numAmount}元 (${type})`);
+    // ... 你原本的發送 LINE 訊息代碼 ...
 
     // ✅ 發送成功後，自動加入取件追蹤
     try {
@@ -1169,21 +1024,22 @@ app.post('/send-payment', async (req, res) => {
       }
       
       if (customerNumber) {
-        pickupCustomerDB.addOrder(customerNumber, userName, userId);
-        console.log(`[PICKUP] ✅ 已自動加入取件追蹤：${customerNumber} - ${userName}`);
+        const result = pickupCustomerDB.addOrder(customerNumber, userName, userId);
+        if (result.success) {
+          console.log(`[PICKUP] ✅ 已自動加入取件追蹤：${customerNumber} - ${userName}`);
+        }
       }
     } catch (err) {
       console.error('[PICKUP] 自動追蹤失敗:', err.message);
     }
 
     // 原本的回傳
-    res.json({ 
-      success: true,
-      message: '付款連結已發送'
-    });
-    res.json({
-      success: true,
-      message: '付款連結已發送',
+    res.json({ success: true, message: '付款連結已發送' });
+
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
       data: {
         userId,
         userName,
@@ -1553,7 +1409,7 @@ app.post('/api/pickup-template', (req, res) => {
 // ========================================
 // 你原本的 app.listen（不要動）
 // ========================================
-app.listen(PORT, () => {
+
   console.log('伺服器正在運行,端口:' + PORT);
   
   // 啟動取件追蹤
