@@ -1004,42 +1004,160 @@ app.delete('/api/templates/:index', (req, res) => {
 
 app.post('/send-payment', async (req, res) => {
   const { userId, userName, amount, paymentType, customMessage } = req.body;
+  logger.logToFile(`收到付款請求: userId=${userId}, userName=${userName}, amount=${amount}, type=${paymentType}`);
 
-  // ... 你原本的發送付款代碼 ...
+  if (!userId || !userName || !amount) {
+    logger.logToFile(`參數驗證失敗`);
+    return res.status(400).json({ error: '缺少必要參數', required: ['userId', 'userName', 'amount'] });
+  }
 
+  const numAmount = parseInt(amount);
+  if (isNaN(numAmount) || numAmount <= 0) {
+    return res.status(400).json({ error: '金額必須是正整數' });
+  }
+
+  // ⭐⭐⭐ 新增：自動儲存客戶資料（獨立 try-catch，不影響付款流程）⭐⭐⭐
   try {
-    // ... 你原本的發送 LINE 訊息代碼 ...
+    const DATA_DIR = '/data';
+    const USERS_FILE = path.join(DATA_DIR, 'users.json');
 
-    // ✅ 發送成功後，自動加入取件追蹤
-    try {
-      const pickupCustomerDB = require('./services/pickupCustomerDB');
-      
-      // 從客戶資料庫找編號
-      let customerNumber = null;
-      for (const [number, customer] of Object.entries(savedCustomers || {})) {
-        if (customer.userId === userId) {
-          customerNumber = number;
-          break;
-        }
-      }
-      
-      if (customerNumber) {
-        const result = pickupCustomerDB.addOrder(customerNumber, userName, userId);
-        if (result.success) {
-          console.log(`[PICKUP] ✅ 已自動加入取件追蹤：${customerNumber} - ${userName}`);
-        }
-      }
-    } catch (err) {
-      console.error('[PICKUP] 自動追蹤失敗:', err.message);
+    // 確保目錄存在
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+      logger.logToFile(`✅ 已建立 /data 目錄`);
     }
 
-    // 原本的回傳
-    res.json({ success: true, message: '付款連結已發送' });
+    // 確保檔案存在
+    if (!fs.existsSync(USERS_FILE)) {
+      fs.writeFileSync(USERS_FILE, '[]', 'utf8');
+      logger.logToFile(`✅ 已建立 users.json 檔案`);
+    }
 
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    // 讀取現有客戶資料
+    let userList = [];
+    try {
+      const fileContent = fs.readFileSync(USERS_FILE, 'utf8');
+      userList = JSON.parse(fileContent);
+    } catch (e) {
+      logger.logToFile(`⚠️ 讀取 users.json 失敗，使用空陣列`);
+      userList = [];
+    }
+
+    // 檢查客戶是否已存在
+    const existIndex = userList.findIndex(u => u.userId === userId);
+    const timestamp = new Date().toISOString();
+
+    if (existIndex >= 0) {
+      // 更新現有客戶
+      userList[existIndex] = {
+        userId: userId,
+        name: userName,
+        lastUpdate: timestamp,
+        createdAt: userList[existIndex].createdAt || timestamp
+      };
+      logger.logToFile(`♻️ 更新客戶資料: ${userName} (${userId})`);
+    } else {
+      // 新增客戶
+      userList.push({
+        userId: userId,
+        name: userName,
+        createdAt: timestamp,
+        lastUpdate: timestamp
+      });
+      logger.logToFile(`➕ 新增客戶資料: ${userName} (${userId})`);
+    }
+
+    // 寫回檔案
+    fs.writeFileSync(USERS_FILE, JSON.stringify(userList, null, 2), 'utf8');
+    logger.logToFile(`💾 已將客戶資料寫入 /data/users.json (總共 ${userList.length} 筆)`);
+
+    // 同時也存進 customerDB（雙重備份）
+    try {
+      await customerDB.saveCustomer(userId, userName);
+    } catch (e) {
+      logger.logToFile(`⚠️ customerDB 同步失敗: ${e.message}`);
+    }
+  } catch (saveError) {
+    // ⚠️ 重要：儲存客戶資料失敗不應影響付款流程，只記錄錯誤
+    logger.logError('儲存客戶資料失敗（不影響付款流程）', saveError);
   }
-});
+  // ⭐⭐⭐ 客戶資料儲存結束 ⭐⭐⭐
+
+  try {
+    const type = paymentType || 'both';
+
+    const rawBase = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.BASE_URL || process.env.PUBLIC_BASE_URL || '';
+    const baseURL = ensureHttpsBase(rawBase) || 'https://stain-bot-production-2593.up.railway.app';
+
+    let finalMessage = '';
+    let ecpayLink = '';
+    let linepayLink = '';
+    let ecpayOrderId = '';
+    let linePayOrderId = '';
+
+    if (type === 'ecpay' || type === 'both') {
+      ecpayOrderId = `EC${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
+      orderManager.createOrder(ecpayOrderId, { userId, userName, amount: numAmount });
+      logger.logToFile(`建立綠界訂單: ${ecpayOrderId}`);
+
+      const ecpayPersistentUrl = `${baseURL}/payment/ecpay/pay/${ecpayOrderId}`;
+      ecpayLink = ecpayPersistentUrl;
+
+      try {
+        const response = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(ecpayPersistentUrl)}`);
+        const result = await response.text();
+        if (result && result.startsWith('http')) ecpayLink = result;
+      } catch {
+        logger.logToFile(`短網址生成失敗,使用原網址`);
+      }
+    }
+
+    if (type === 'linepay' || type === 'both') {
+      const linePayResult = await createLinePayPayment(userId, userName, numAmount);
+
+      if (linePayResult.success) {
+        linePayOrderId = linePayResult.orderId;
+
+        orderManager.createOrder(linePayOrderId, { userId, userName, amount: numAmount });
+
+        const paymentUrl = linePayResult.paymentUrlApp || linePayResult.paymentUrlWeb || linePayResult.paymentUrl;
+        orderManager.updatePaymentInfo(linePayOrderId, {
+          linepayTransactionId: linePayResult.transactionId,
+          linepayPaymentUrl: paymentUrl,
+          lastLinePayRequestAt: Date.now()
+        });
+
+        
+        const persistentUrl = `${baseURL}/payment/linepay/pay/${linePayOrderId}`;
+        linepayLink = persistentUrl; 
+        logger.logToFile(`建立 LINE Pay 訂單(PERSISTENT): ${linePayOrderId}`);
+        
+      }
+    }
+
+    const userMsg = customMessage || '';
+    if (type === 'both' && ecpayLink && linepayLink) {
+      finalMessage = userMsg
+        ? `${userMsg}\n\n💙 付款連結如下:\n\n【信用卡付款】\n💙 ${ecpayLink}\n\n【LINE Pay】\n💙 ${linepayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`
+        : `💙 您好,${userName}\n\n您的專屬付款連結已生成\n金額:NT$ ${numAmount.toLocaleString()}\n\n請選擇付款方式:\n\n【信用卡付款】\n💙 ${ecpayLink}\n\n【LINE Pay】\n💙 ${linepayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
+    } else if (type === 'ecpay' && ecpayLink) {
+      finalMessage = userMsg
+        ? `${userMsg}\n\n💙 付款連結如下:\n💙 ${ecpayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`
+        : `💙 您好,${userName}\n\n您的專屬付款連結已生成\n付款方式:信用卡\n金額:NT$ ${numAmount.toLocaleString()}\n\n請點擊以下連結完成付款:\n💙 ${ecpayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
+    } else if (type === 'linepay' && linepayLink) {
+      finalMessage = userMsg
+        ? `${userMsg}\n\n💙 付款連結如下:\n💙 ${linepayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`
+        : `💙 您好,${userName}\n\n您的專屬付款連結已生成\n付款方式:LINE Pay\n金額:NT$ ${numAmount.toLocaleString()}\n\n請點擊以下連結完成付款:\n💙 ${linepayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
+    } else {
+      return res.status(500).json({ error: '付款連結生成失敗' });
+    }
+
+    await client.pushMessage(userId, { type: 'text', text: finalMessage });
+    logger.logToFile(`已發送付款連結: ${userName} - ${numAmount}元 (${type})`);
+
+    res.json({
+      success: true,
+      message: '付款連結已發送',
       data: {
         userId,
         userName,
@@ -1139,287 +1257,9 @@ return res.json({ success: true, paymentUrl: chosenUrl });
 }
 });
 
-// ========================================
-// 取件追蹤 API
-// ========================================
-const PICKUP_TRACKER_FILE = '/data/pickup-tracker.json';
 
-// 確保追蹤檔存在
-function ensurePickupTracker() {
-  const dir = '/data';
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  if (!fs.existsSync(PICKUP_TRACKER_FILE)) {
-    fs.writeFileSync(PICKUP_TRACKER_FILE, JSON.stringify({ items: [] }, null, 2));
-  }
-}
-
-// 讀取追蹤清單
-function readPickupTracker() {
-  ensurePickupTracker();
-  return JSON.parse(fs.readFileSync(PICKUP_TRACKER_FILE, 'utf8'));
-}
-
-// 儲存追蹤清單
-function writePickupTracker(tracker) {
-  fs.writeFileSync(PICKUP_TRACKER_FILE, JSON.stringify(tracker, null, 2));
-}
-
-// API: 開始追蹤訂單
-app.post('/api/track-pickup', (req, res) => {
-  const { customerNumber, customerName, userID } = req.body;
-  
-  if (!customerNumber || !customerName || !userID) {
-    return res.status(400).json({ 
-      success: false, 
-      error: '缺少必要參數' 
-    });
-  }
-  
-  try {
-    const tracker = readPickupTracker();
-    
-    // 檢查是否已存在
-    const exists = tracker.items.find(item => item.customerNumber === customerNumber);
-    if (exists) {
-      return res.json({ 
-        success: false, 
-        message: '此訂單已在追蹤清單中' 
-      });
-    }
-    
-    // 新增追蹤
-    tracker.items.push({
-      customerNumber,
-      customerName,
-      userID,
-      notifiedAt: new Date().toISOString(),
-      reminderSent: false,
-      pickedUp: false,
-      createdAt: new Date().toISOString()
-    });
-    
-    writePickupTracker(tracker);
-    logger.logToFile(`[PICKUP] 開始追蹤：${customerNumber} - ${customerName}`);
-    
-    res.json({ 
-      success: true, 
-      message: '已加入追蹤清單',
-      total: tracker.items.length 
-    });
-  } catch (error) {
-    logger.logError('追蹤訂單失敗', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// API: 標記已取件
-app.post('/api/pickup-complete', (req, res) => {
-  const { customerNumber } = req.body;
-  
-  if (!customerNumber) {
-    return res.status(400).json({ 
-      success: false, 
-      error: '缺少訂單編號' 
-    });
-  }
-  
-  try {
-    const tracker = readPickupTracker();
-    const order = tracker.items.find(item => item.customerNumber === customerNumber);
-    
-    if (!order) {
-      return res.status(404).json({ 
-        success: false, 
-        error: '找不到此訂單' 
-      });
-    }
-    
-    // 標記已取件
-    order.pickedUp = true;
-    order.pickedUpAt = new Date().toISOString();
-    
-    writePickupTracker(tracker);
-    logger.logToFile(`[PICKUP] 已取件：${customerNumber} - ${order.customerName}`);
-    
-    res.json({ 
-      success: true, 
-      message: '已標記為已取件' 
-    });
-  } catch (error) {
-    logger.logError('標記取件失敗', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// API: 移除追蹤
-app.delete('/api/tracked-order/:customerNumber', (req, res) => {
-  const { customerNumber } = req.params;
-  
-  try {
-    const tracker = readPickupTracker();
-    const index = tracker.items.findIndex(item => item.customerNumber === customerNumber);
-    
-    if (index === -1) {
-      return res.status(404).json({ 
-        success: false, 
-        error: '找不到此訂單' 
-      });
-    }
-    
-    const removed = tracker.items.splice(index, 1)[0];
-    writePickupTracker(tracker);
-    logger.logToFile(`[PICKUP] 移除追蹤：${customerNumber} - ${removed.customerName}`);
-    
-    res.json({ 
-      success: true, 
-      message: '已移除追蹤' 
-    });
-  } catch (error) {
-    logger.logError('移除追蹤失敗', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// API: 查看追蹤清單
-app.get('/api/tracked-orders', (req, res) => {
-  try {
-    const tracker = readPickupTracker();
-    
-    // 計算每筆訂單的經過時間
-    const ordersWithTime = tracker.items.map(order => ({
-      ...order,
-      minutesSince: Math.floor((Date.now() - new Date(order.notifiedAt).getTime()) / 60000)
-    }));
-    
-    res.json({ 
-      success: true, 
-      total: ordersWithTime.length,
-      orders: ordersWithTime 
-    });
-  } catch (error) {
-    logger.logError('查詢追蹤清單失敗', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// ========================================
-// 🧺 取件追蹤系統啟動
-// ========================================
-const pickupWatcher = require('./pickupWatcher');
 
 const PORT = process.env.PORT || 3000;
-// ========================================
-// 🧺 取件追蹤 API（不影響付款功能）
-// ========================================
-const pickupCustomerDB = require('./services/pickupCustomerDB');
-
-app.get('/api/tracked-orders', (req, res) => {
-  try {
-    const orders = pickupCustomerDB.getAllOrders();
-    res.json({ success: true, orders });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.post('/api/track-pickup', (req, res) => {
-  const { customerNumber, customerName, userID, phone } = req.body;
-  
-  if (!customerNumber || !customerName || !userID) {
-    return res.status(400).json({ success: false, message: '缺少必要欄位' });
-  }
-
-  const result = pickupCustomerDB.addOrder(customerNumber, customerName, userID, phone);
-  res.json(result);
-});
-
-app.post('/api/pickup-complete', (req, res) => {
-  const { customerNumber } = req.body;
-  if (!customerNumber) {
-    return res.status(400).json({ success: false, error: '缺少客戶編號' });
-  }
-  const result = pickupCustomerDB.markAsPickedUp(customerNumber);
-  res.json(result);
-});
-
-app.post('/api/pickup-note', (req, res) => {
-  const { customerNumber, note } = req.body;
-  if (!customerNumber) {
-    return res.status(400).json({ success: false, error: '缺少客戶編號' });
-  }
-  const result = pickupCustomerDB.updateNote(customerNumber, note || '');
-  res.json(result);
-});
-
-app.delete('/api/tracked-order/:customerNumber', (req, res) => {
-  const { customerNumber } = req.params;
-  const result = pickupCustomerDB.deleteOrder(customerNumber);
-  res.json(result);
-});
-
-app.post('/api/send-pickup-reminder/:customerNumber', async (req, res) => {
-  const { customerNumber } = req.params;
-  const orders = pickupCustomerDB.getAllOrders();
-  const order = orders.find(o => o.customerNumber === customerNumber);
-  
-  if (!order) {
-    return res.status(404).json({ success: false, error: '找不到此訂單' });
-  }
-
-  try {
-    const success = await pickupWatcher.sendReminder(order);
-    res.json({ success: success, message: success ? '提醒已發送' : '發送失敗' });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.get('/api/pickup-template', (req, res) => {
-  const templatePath = path.join(__dirname, 'data', 'pickup-template.json');
-  try {
-    if (fs.existsSync(templatePath)) {
-      const data = JSON.parse(fs.readFileSync(templatePath, 'utf8'));
-      res.json({ success: true, template: data.template });
-    } else {
-      res.json({ success: true, template: '親愛的 {客戶姓名}，您的衣物已清洗完成超過 {已過天數} 天，請盡快來領取！訂單編號：{客戶編號}' });
-    }
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.post('/api/pickup-template', (req, res) => {
-  const { template } = req.body;
-  if (!template) {
-    return res.status(400).json({ success: false, error: '缺少模板內容' });
-  }
-  const templatePath = path.join(__dirname, 'data', 'pickup-template.json');
-  try {
-    const dir = path.dirname(templatePath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    fs.writeFileSync(templatePath, JSON.stringify({ template }, null, 2), 'utf8');
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// ========================================
-// 你原本的 app.listen（不要動）
-// ========================================
-
-  console.log('伺服器正在運行,端口:' + PORT);
-  
-  // 啟動取件追蹤
-  try {
-    pickupWatcher.startWatcher();
-    console.log('✅ 取件追蹤系統已啟動');
-  } catch (error) {
-    console.error('❌ 取件追蹤啟動失敗:', error.message);
-  }
-});
 app.listen(PORT, async () => {
   console.log(`伺服器正在運行,端口:${PORT}`);
   logger.logToFile(`伺服器正在運行,端口:${PORT}`);
@@ -1431,14 +1271,6 @@ app.listen(PORT, async () => {
     console.error('客戶資料載入失敗:', error.message);
   }
 
-// 🧺 啟動取件追蹤監控
-  try {
-    pickupWatcher.startWatcher();
-    console.log('✅ 取件追蹤系統已啟動');
-  } catch (error) {
-    console.error('❌ 取件追蹤系統啟動失敗:', error.message);
-  }
-  
   setInterval(() => {
     orderManager.cleanExpiredOrders();
   }, 24 * 60 * 60 * 1000);
