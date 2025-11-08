@@ -360,19 +360,25 @@
       }
     }
 
-    function displaySavedCustomers() {
+   function displaySavedCustomers() {
       var wrap = document.getElementById('savedCustomers');
-      var entries = Object.entries(savedCustomers);
+      
+      // ✅ 按編號排序（001, 002, 003...）
+      var entries = Object.entries(savedCustomers).sort(function(a, b) {
+        return parseInt(a[0]) - parseInt(b[0]);
+      });
+      
       if (entries.length === 0) {
         wrap.innerHTML = '<p style="color:#999;">尚無資料</p>';
         return;
       }
+      
       wrap.innerHTML = entries.map(function(item) {
         var no = item[0];
         var c = item[1];
         return '<div class="user-item" style="justify-content:space-between;">' +
           '<div class="user-info" onclick="fillCustomer(\'' + c.userId + '\',\'' + c.name + '\')">' +
-          '<strong>#' + no + '　' + c.name + '</strong>' +
+          '<strong>#' + no + ' - ' + c.name + '</strong>' +
           '<small>User ID: ' + c.userId + '</small>' +
           '</div>' +
           '<button class="btn btn-small btn-danger" onclick="removeSavedCustomer(\'' + no + '\')">刪除</button>' +
