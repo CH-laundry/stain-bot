@@ -1,10 +1,8 @@
-// pickupWatcher.js
 const pickupCustomerDB = require('./services/pickupCustomerDB');
 const line = require('@line/bot-sdk');
 const fs = require('fs');
 const path = require('path');
 
-// LINE Bot 設定
 const config = {
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
   channelSecret: process.env.LINE_CHANNEL_SECRET
@@ -12,7 +10,6 @@ const config = {
 
 const client = new line.Client(config);
 
-// 測試模式
 const TEST_MODE = false;
 const CHECK_INTERVAL = TEST_MODE ? 2 * 60 * 1000 : 60 * 60 * 1000;
 const REMINDER_DAYS = TEST_MODE ? (20 / 60 / 24) : 7;
@@ -116,16 +113,3 @@ module.exports = {
   sendReminder,
   loadReminderTemplate
 };
-```
-
----
-
-## ✅ 確認檔案結構
-```
-專案根目錄/
-├── pickupWatcher.js          ← 用上面的代碼完整替換
-├── services/
-│   └── pickupCustomerDB.js   ← 確認存在
-├── public/
-│   └── payment.html          ← 確認已更新
-└── index.js                  ← 確認有加入 API
