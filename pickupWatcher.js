@@ -1,6 +1,9 @@
 // pickupWatcher.js
 const pickupCustomerDB = require('./services/pickupCustomerDB');
-const client = require('./lineClient');
+const line = require('@line/bot-sdk');
+const client = new line.messagingApi.MessagingApiClient({
+  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN
+});
 const fs = require('fs');
 const path = require('path');
 
