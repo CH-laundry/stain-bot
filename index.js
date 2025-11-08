@@ -1155,6 +1155,32 @@ app.post('/send-payment', async (req, res) => {
     await client.pushMessage(userId, { type: 'text', text: finalMessage });
     logger.logToFile(`已發送付款連結: ${userName} - ${numAmount}元 (${type})`);
 
+    // ✅ 發送成功後，自動加入取件追蹤
+    try {
+      const pickupCustomerDB = require('./services/pickupCustomerDB');
+      
+      // 從客戶資料庫找編號
+      let customerNumber = null;
+      for (const [number, customer] of Object.entries(savedCustomers || {})) {
+        if (customer.userId === userId) {
+          customerNumber = number;
+          break;
+        }
+      }
+      
+      if (customerNumber) {
+        pickupCustomerDB.addOrder(customerNumber, userName, userId);
+        console.log(`[PICKUP] ✅ 已自動加入取件追蹤：${customerNumber} - ${userName}`);
+      }
+    } catch (err) {
+      console.error('[PICKUP] 自動追蹤失敗:', err.message);
+    }
+
+    // 原本的回傳
+    res.json({ 
+      success: true,
+      message: '付款連結已發送'
+    });
     res.json({
       success: true,
       message: '付款連結已發送',
