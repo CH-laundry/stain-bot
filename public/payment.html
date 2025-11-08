@@ -73,6 +73,7 @@
       <button class="tab" onclick="switchTab(event,'customers')">📋 客戶編號</button>
       <button class="tab" onclick="switchTab(event,'templates')">📝 訊息模板</button>
       <button class="tab" onclick="switchTab(event,'users')">👥 客戶列表</button>
+      <button class="tab" onclick="switchTab(event,'pickup')">🧺 取件追蹤</button>
     </div>
 
     <div id="payment-tab" class="tab-content active">
@@ -225,12 +226,68 @@
       <div id="userList"><p style="text-align:center; color:#999;">尚未載入，請點「重新載入」。</p></div>
     </div>
   </div>
+<!-- 🧺 取件追蹤分頁 -->
+    <div id="pickup-tab" class="tab-content">
+      <h3 style="color:#667eea; margin-bottom:20px;">🧺 取件追蹤管理</h3>
+      
+      <div class="form-group">
+        <label>🔍 快速查詢客戶（用客戶編號）</label>
+        <div class="quick-search">
+          <input type="text" id="pickupSearch" placeholder="輸入編號（例如: 001、625）">
+          <button class="btn btn-small" onclick="searchForPickup()">查詢</button>
+        </div>
+      </div>
 
+      <div id="pickupCustomerCard" class="customer-card" style="display:none;">
+        <h4>✅ 客戶資訊</h4>
+        <p><strong>編號:</strong> <span id="pickupCardNumber"></span></p>
+        <p><strong>姓名:</strong> <span id="pickupCardName"></span></p>
+        <p><strong>User ID:</strong> <span id="pickupCardUserId"></span></p>
+      </div>
+
+      <div style="background:#f8f9fa; padding:20px; border-radius:10px; margin-bottom:20px;">
+        <h4 style="color:#667eea; margin-bottom:15px;">➕ 新增取件追蹤</h4>
+        <div class="form-group">
+          <label>客戶編號 *</label>
+          <input type="text" id="pickupNumber" placeholder="001">
+        </div>
+        <div class="form-group">
+          <label>客戶姓名 *</label>
+          <input type="text" id="pickupName" placeholder="王小明">
+        </div>
+        <div class="form-group">
+          <label>User ID *</label>
+          <input type="text" id="pickupUserId" placeholder="U123...">
+        </div>
+        <button class="btn btn-secondary" onclick="startPickup()">🎯 開始追蹤（7天後11點提醒）</button>
+      </div>
+
+      <div style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
+        <button class="btn btn-small btn-secondary" onclick="loadPickups()">🔄 重新整理</button>
+        <button class="btn btn-small btn-secondary" onclick="editTemplate()">📝 編輯模板</button>
+      </div>
+
+      <div id="pickupList"><p style="text-align:center; color:#999;">尚未載入，請點「重新整理」。</p></div>
+    </div>
+
+    <!-- 模板編輯 Modal -->
+    <div id="templateModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:9999;">
+      <div style="background:#fff; max-width:600px; margin:50px auto; padding:30px; border-radius:15px;">
+        <h3>📝 編輯提醒模板</h3>
+        <p style="font-size:13px; color:#666; margin-bottom:15px;">可用變數：{客戶姓名}、{客戶編號}、{已過天數}</p>
+        <textarea id="templateText" style="width:100%; min-height:120px; padding:10px; margin:15px 0; border:2px solid #e0e0e0; border-radius:8px;"></textarea>
+        <div style="display:flex; gap:10px;">
+          <button class="btn btn-secondary" onclick="saveTemplatePickup()">💾 儲存</button>
+          <button class="btn" onclick="closeTemplateModal()">取消</button>
+        </div>
+      </div>
+    </div>
   <script>
     var allUsers = [];
     var allOrders = [];
     var savedCustomers = {};
     var savedTemplates = [];
+    var allPickupOrders = [];
 
     async function initLoad() {
       try {
@@ -254,6 +311,7 @@
       if (tabName === 'templates') displayTemplates();
       if (tabName === 'users') loadUsers();
       if (tabName === 'orders') loadOrders();
+      if (tabName === 'pickup') loadPickups();
     }
 
     async function loadCustomerNumbers() {
@@ -814,6 +872,203 @@
     document.addEventListener('DOMContentLoaded', function() {
       initLoad();
     });
+    // ========================================
+    // 🧺 取件追蹤功能
+    // ========================================
+
+    function searchForPickup() {
+      var num = document.getElementById('pickupSearch').value.trim();
+      if (!num) return alert('請輸入編號');
+      
+      if (savedCustomers[num]) {
+        var c = savedCustomers[num];
+        document.getElementById('pickupNumber').value = num;
+        document.getElementById('pickupName').value = c.name;
+        document.getElementById('pickupUserId').value = c.userId;
+        document.getElementById('pickupCardNumber').textContent = num;
+        document.getElementById('pickupCardName').textContent = c.name;
+        document.getElementById('pickupCardUserId').textContent = c.userId;
+        document.getElementById('pickupCustomerCard').style.display = 'block';
+      } else {
+        alert('找不到此客戶編號');
+      }
+    }
+
+    async function startPickup() {
+      var num = document.getElementById('pickupNumber').value.trim();
+      var name = document.getElementById('pickupName').value.trim();
+      var userId = document.getElementById('pickupUserId').value.trim();
+      
+      if (!num || !name || !userId) return alert('請填寫完整');
+      
+      try {
+        var res = await fetch('/api/pickup/add', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ customerNumber: num, customerName: name, userId: userId })
+        });
+        var data = await res.json();
+        
+        if (data.success) {
+          showResult('success', '✅ 已開始追蹤！7天後11點自動提醒');
+          document.getElementById('pickupNumber').value = '';
+          document.getElementById('pickupName').value = '';
+          document.getElementById('pickupUserId').value = '';
+          document.getElementById('pickupCustomerCard').style.display = 'none';
+          loadPickups();
+        } else {
+          showResult('error', '❌ ' + data.message);
+        }
+      } catch (e) {
+        showResult('error', '❌ 連線失敗');
+      }
+    }
+
+    async function loadPickups() {
+      try {
+        var res = await fetch('/api/pickup/orders');
+        var data = await res.json();
+        
+        if (data.success) {
+          allPickupOrders = data.orders || [];
+          var html = '';
+          if (allPickupOrders.length === 0) {
+            html = '<p style="color:#999; text-align:center;">尚無追蹤訂單</p>';
+          } else {
+            allPickupOrders.forEach(function(o) {
+              var status = o.pickedUp ? '✅ 已簽收' : '⏰ 追蹤中 (' + o.daysPassed + '天)';
+              html += '<div class="user-item" style="display:block; opacity:' + (o.pickedUp ? '0.6' : '1') + ';">' +
+                '<div style="margin-bottom:10px;"><strong style="font-size:16px;">#' + o.customerNumber + ' - ' + o.customerName + '</strong> <span style="background:' + (o.pickedUp ? '#28a745' : '#ffc107') + '; color:#fff; padding:5px 10px; border-radius:5px; font-size:12px;">' + status + '</span></div>' +
+                '<div style="font-size:13px; color:#666; margin-bottom:10px;">' +
+                '下次提醒: ' + new Date(o.nextReminderAt).toLocaleString('zh-TW') + '<br>' +
+                '已提醒: ' + o.reminderCount + ' 次</div>' +
+                '<div style="display:flex; gap:5px; flex-wrap:wrap;">';
+              
+              if (!o.pickedUp) {
+                html += '<button class="btn btn-small btn-secondary" onclick="remindNow(\'' + o.customerNumber + '\')">🔔 立即提醒</button>' +
+                        '<button class="btn btn-small" style="background:#ff9800;color:#fff;" onclick="delay14(\'' + o.customerNumber + '\')">⏰ 延14天</button>' +
+                        '<button class="btn btn-small btn-secondary" onclick="markDone(\'' + o.customerNumber + '\')">✅ 簽收</button>';
+              }
+              html += '<button class="btn btn-small btn-danger" onclick="deletePick(\'' + o.customerNumber + '\')">刪除</button>' +
+                      '</div></div>';
+            });
+          }
+          document.getElementById('pickupList').innerHTML = html;
+        }
+      } catch (e) {
+        showResult('error', '❌ 載入失敗');
+      }
+    }
+
+    async function remindNow(num) {
+      try {
+        var res = await fetch('/api/pickup/remind/' + num, { method: 'POST' });
+        var data = await res.json();
+        if (data.success) {
+          showResult('success', '✅ 提醒已發送');
+          loadPickups();
+        } else {
+          showResult('error', '❌ ' + data.message);
+        }
+      } catch (e) {
+        showResult('error', '❌ 發送失敗');
+      }
+    }
+
+    async function delay14(num) {
+      if (!confirm('延遲14天後提醒？')) return;
+      try {
+        var res = await fetch('/api/pickup/delay', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ customerNumber: num })
+        });
+        var data = await res.json();
+        if (data.success) {
+          showResult('success', '✅ 已延遲14天');
+          loadPickups();
+        } else {
+          showResult('error', '❌ ' + data.message);
+        }
+      } catch (e) {
+        showResult('error', '❌ 操作失敗');
+      }
+    }
+
+    async function markDone(num) {
+      if (!confirm('標記為已簽收？')) return;
+      try {
+        var res = await fetch('/api/pickup/complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ customerNumber: num })
+        });
+        var data = await res.json();
+        if (data.success) {
+          showResult('success', '✅ 已簽收');
+          loadPickups();
+        } else {
+          showResult('error', '❌ ' + data.message);
+        }
+      } catch (e) {
+        showResult('error', '❌ 操作失敗');
+      }
+    }
+
+    async function deletePick(num) {
+      if (!confirm('刪除此追蹤？')) return;
+      try {
+        var res = await fetch('/api/pickup/order/' + num, { method: 'DELETE' });
+        var data = await res.json();
+        if (data.success) {
+          showResult('success', '✅ 已刪除');
+          loadPickups();
+        } else {
+          showResult('error', '❌ ' + data.message);
+        }
+      } catch (e) {
+        showResult('error', '❌ 刪除失敗');
+      }
+    }
+
+    async function editTemplate() {
+      try {
+        var res = await fetch('/api/pickup/template');
+        var data = await res.json();
+        if (data.success) {
+          document.getElementById('templateText').value = data.template;
+          document.getElementById('templateModal').style.display = 'block';
+        }
+      } catch (e) {
+        showResult('error', '❌ 載入失敗');
+      }
+    }
+
+    function closeTemplateModal() {
+      document.getElementById('templateModal').style.display = 'none';
+    }
+
+    async function saveTemplatePickup() {
+      var text = document.getElementById('templateText').value.trim();
+      if (!text) return alert('請輸入模板');
+      
+      try {
+        var res = await fetch('/api/pickup/template', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ template: text })
+        });
+        var data = await res.json();
+        if (data.success) {
+          showResult('success', '✅ 模板已儲存');
+          closeTemplateModal();
+        } else {
+          showResult('error', '❌ 儲存失敗');
+        }
+      } catch (e) {
+        showResult('error', '❌ 連線失敗');
+      }
+    }
   </script>
    <script src="/payment.js"></script>
 </body> 
