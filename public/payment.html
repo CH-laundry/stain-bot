@@ -842,27 +842,26 @@
     async function loadUsers() {
       var wrap = document.getElementById('userList');
       wrap.innerHTML = '<p style="text-align:center; color:#999;">載入中...</p>';
-      try {
-        var r = await fetch('/api/users');
-        var d = await r.json();
-        allUsers = Array.isArray(d.users) ? d.users : [];
-      } catch {
-        allUsers = Object.entries(savedCustomers).map(function(item) {
-          return { userId: item[1].userId, name: item[1].name, number: item[0] };
-        });
-      }
-
-      if (allUsers.length === 0) {
+      
+      // ✅ 直接從 savedCustomers 讀取並排序
+      var entries = Object.entries(savedCustomers).sort(function(a, b) {
+        return parseInt(a[0]) - parseInt(b[0]);
+      });
+      
+      if (entries.length === 0) {
         wrap.innerHTML = '<p style="text-align:center; color:#999;">尚無客戶資料</p>';
         return;
       }
-      wrap.innerHTML = allUsers.map(function(u) {
+      
+      wrap.innerHTML = entries.map(function(item) {
+        var no = item[0];
+        var c = item[1];
         return '<div class="user-item">' +
-          '<div class="user-info" onclick="fillCustomer(\'' + (u.userId || '') + '\',\'' + (u.name || '') + '\')">' +
-          '<strong>' + (u.name || '-') + '</strong>' +
-          '<small>User ID: ' + (u.userId || '-') + (u.number ? ('｜編號: ' + u.number) : '') + '</small>' +
+          '<div class="user-info" onclick="fillCustomer(\'' + c.userId + '\',\'' + c.name + '\')">' +
+          '<strong>#' + no + ' - ' + c.name + '</strong>' +
+          '<small>User ID: ' + c.userId + '</small>' +
           '</div>' +
-          '<button class="btn btn-small btn-secondary" onclick="fillCustomer(\'' + (u.userId || '') + '\',\'' + (u.name || '') + '\')">帶入</button>' +
+          '<button class="btn btn-small btn-secondary" onclick="fillCustomer(\'' + c.userId + '\',\'' + c.name + '\')">帶入</button>' +
           '</div>';
       }).join('');
     }
