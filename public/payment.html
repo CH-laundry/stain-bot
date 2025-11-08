@@ -69,10 +69,6 @@
     .customer-name { font-size: 16px; color: #333; margin-bottom: 3px; }
     .customer-id { font-size: 12px; color: #999; }
     .customer-actions { display: flex; gap: 10px; }
-    .import-area { background: #f8f9fa; padding: 30px; border-radius: 15px; border: 3px dashed #ccc; text-align: center; margin-bottom: 20px; transition: all .3s; }
-    .import-area.active { border-color: #667eea; background: #f0f4ff; }
-    .import-area textarea { display: none; min-height: 200px; margin-top: 15px; }
-    .import-area.show-textarea textarea { display: block; }
     .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 1000; padding: 20px; overflow: auto; }
     .modal-content { background: #fff; max-width: 700px; margin: 50px auto; border-radius: 20px; padding: 30px; position: relative; box-shadow: 0 10px 40px rgba(0,0,0,.3); }
     .modal-close { position: absolute; top: 15px; right: 15px; background: #dc3545; color: #fff; border: none; padding: 8px 15px; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold; }
@@ -80,10 +76,9 @@
     .help-text { font-size: 13px; color: #666; margin-top: 5px; line-height: 1.5; }
     .section-header { background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 15px 20px; border-radius: 10px; margin-bottom: 20px; }
     .section-header h3 { margin: 0; font-size: 20px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-    table th { background: #f8f9fa; padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e0e0e0; }
-    table td { padding: 12px; border-bottom: 1px solid #e0e0e0; }
-    table tr:hover { background: #f8f9fa; }
+    .reminder-log { margin-top: 10px; padding: 10px; background: #f8f9fa; border-radius: 8px; }
+    .reminder-log-item { margin: 8px 0; padding: 10px; background: white; border-left: 3px solid #667eea; font-size: 12px; }
+    .note-section { margin-top: 10px; padding: 10px; background: #fff3cd; border-radius: 8px; border-left: 4px solid #ff9800; }
     @media (max-width: 768px){
       .container{padding:20px}
       h1{font-size:24px}
@@ -122,11 +117,11 @@
 
       <div id="customerCard" style="display:none; background:#f0f4ff; padding:20px; border-radius:15px; margin-bottom:20px; border-left:5px solid #667eea;">
         <h4 style="color:#667eea; margin-bottom:15px;">✅ 客戶資訊</h4>
-        <table style="margin:0;">
-          <tr><td style="border:none; padding:8px;"><strong>編號：</strong></td><td style="border:none; padding:8px;" id="cardNumber"></td></tr>
-          <tr><td style="border:none; padding:8px;"><strong>姓名：</strong></td><td style="border:none; padding:8px;" id="cardName"></td></tr>
-          <tr><td style="border:none; padding:8px;"><strong>User ID：</strong></td><td style="border:none; padding:8px; font-size:12px; color:#666;" id="cardUserId"></td></tr>
-        </table>
+        <div style="font-size:14px;">
+          <div style="margin:8px 0;"><strong>編號：</strong><span id="cardNumber"></span></div>
+          <div style="margin:8px 0;"><strong>姓名：</strong><span id="cardName"></span></div>
+          <div style="margin:8px 0;"><strong>User ID：</strong><span id="cardUserId" style="font-size:12px; color:#666;"></span></div>
+        </div>
       </div>
 
       <form id="paymentForm">
@@ -295,7 +290,6 @@
 
       <div style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
         <button class="btn btn-secondary btn-small" onclick="loadCustomerNumbers()">🔄 重新整理</button>
-        <button class="btn btn-warning btn-small" onclick="sortCustomers()">🔢 重新排序編號</button>
       </div>
 
       <div class="card">
@@ -366,14 +360,30 @@
     <div class="modal-content">
       <button class="modal-close" onclick="closeBatchImport()">✕</button>
       <h3 style="color:#667eea; margin-bottom:20px;">📦 批量匯入客戶</h3>
-      <div class="import-area" id="importArea">
+      <div style="background:#f8f9fa; padding:20px; border-radius:15px; margin-bottom:20px;">
         <p style="font-size:16px; margin-bottom:15px;">請貼上洗衣軟件的客戶資料</p>
         <p class="help-text">格式：編號: 625, 姓名: 小林王子</p>
-        <button class="btn btn-warning btn-small" onclick="showImportTextarea()">📋 點此開始貼上</button>
-        <textarea id="importText" placeholder="例如：&#10;編號: 625, 姓名: 小林王子&#10;編號: 626, 姓名: 王小明"></textarea>
+        <textarea id="importText" style="min-height:200px; margin-top:15px;" placeholder="例如：&#10;編號: 625, 姓名: 小林王子&#10;編號: 626, 姓名: 王小明"></textarea>
       </div>
       <button class="btn btn-secondary" onclick="processBatchImport()">📥 開始匯入</button>
       <div id="importResult" style="margin-top:20px;"></div>
+    </div>
+  </div>
+
+  <!-- 編輯備註 Modal -->
+  <div id="editNoteModal" class="modal">
+    <div class="modal-content">
+      <button class="modal-close" onclick="closeEditNote()">✕</button>
+      <h3 style="color:#667eea; margin-bottom:20px;">📝 編輯備註</h3>
+      <div class="form-group">
+        <label>客戶編號：<span id="noteCustomerNumber"></span></label>
+        <label>客戶姓名：<span id="noteCustomerName"></span></label>
+      </div>
+      <div class="form-group">
+        <label>備註內容</label>
+        <textarea id="noteContent" style="min-height:120px;" placeholder="輸入備註內容..."></textarea>
+      </div>
+      <button class="btn btn-secondary" onclick="saveNote()">💾 儲存備註</button>
     </div>
   </div>
 
@@ -384,6 +394,7 @@
     var savedCustomers = {};
     var savedTemplates = [];
     var pickupReminderTemplate = '親愛的 {客戶姓名}，您的衣物已清洗完成超過 {已過天數} 天，請盡快來領取！訂單編號：{客戶編號}';
+    var currentEditingCustomerNumber = '';
 
     async function initLoad() {
       try {
@@ -445,7 +456,6 @@
         return;
       }
 
-      // 自動補 0
       if (number && !isNaN(number)) {
         number = String(parseInt(number)).padStart(3, '0');
       }
@@ -523,11 +533,6 @@
       document.getElementById('userId').value = userId;
       document.getElementById('userName').value = name;
       switchTab({ currentTarget: document.querySelector('.tab') }, 'payment');
-    }
-
-    function sortCustomers() {
-      if (!confirm('確定要重新排序所有客戶編號嗎？\n將會從 001 開始重新編號。')) return;
-      showResult('info', '🔢 重新排序功能開發中...');
     }
 
     // ========================================
@@ -661,7 +666,6 @@
         return;
       }
 
-      // 補 0
       if (!isNaN(query)) {
         query = String(parseInt(query)).padStart(3, '0');
       }
@@ -935,7 +939,6 @@
       orders.forEach(function(order) {
         var notifiedDate = new Date(order.notifiedAt).toLocaleString('zh-TW');
         var daysPassed = Math.floor((Date.now() - new Date(order.notifiedAt).getTime()) / (1000 * 60 * 60 * 24));
-        var hoursPassed = Math.floor((Date.now() - new Date(order.notifiedAt).getTime()) / (1000 * 60 * 60));
         var needReminder = daysPassed >= 7 && !order.pickedUp;
         
         var statusBadge = order.pickedUp ? '<span class="badge badge-completed">✅ 已取件</span>' :
@@ -949,14 +952,43 @@
           '</div>' +
           '<div style="font-size:13px; color:#666; margin-bottom:15px;">' +
           '<div>📅 通知時間：' + notifiedDate + '</div>' +
-          '<div>⏰ 已過時間：' + daysPassed + ' 天 ' + (hoursPassed % 24) + ' 小時</div>' +
-          (order.reminderSent ? '<div>🔔 已提醒次數：' + (order.reminderCount || 1) + ' 次</div>' : '') +
-          (order.reminderSent && order.lastReminderAt ? '<div>📌 最後提醒：' + new Date(order.lastReminderAt).toLocaleString('zh-TW') + '</div>' : '') +
-          (order.pickedUp ? '<div>✅ 取件時間：' + new Date(order.pickedUpAt).toLocaleString('zh-TW') + '</div>' : '') +
-          '</div>' +
-          '<div style="display:flex; gap:10px; flex-wrap:wrap;">' +
-          (!order.pickedUp ? '<button class="btn btn-small btn-secondary" onclick="markPickupComplete(\'' + order.customerNumber + '\')">✅ 標記已取件</button>' : '') +
-          '<button class="btn btn-small btn-danger" onclick="removePickupTracking(\'' + order.customerNumber + '\')">🗑️ 刪除</button>' +
+          '<div>⏰ 已過時間：' + daysPassed + ' 天</div>' +
+          '<div>🔔 已提醒次數：' + (order.reminderCount || 0) + ' 次</div>';
+
+        // 顯示備註
+        if (order.note) {
+          html += '<div class="note-section"><strong>📝 備註：</strong><br>' + order.note + '</div>';
+        }
+
+        // 顯示提醒歷史
+        if (order.reminderHistory && order.reminderHistory.length > 0) {
+          html += '<div class="reminder-log"><strong style="color:#667eea;">📋 提醒記錄：</strong><br>';
+          
+          order.reminderHistory.forEach(function(log, index) {
+            var logTime = new Date(log.sentAt).toLocaleString('zh-TW');
+            html += '<div class="reminder-log-item">' +
+              '<div><strong>第 ' + (index + 1) + ' 次提醒</strong> - ' + logTime + '</div>' +
+              '<div style="color:#666; margin-top:5px;">' + log.message + '</div>' +
+              '</div>';
+          });
+          
+          html += '</div>';
+        }
+
+        if (order.pickedUp) {
+          html += '<div>✅ 取件時間：' + new Date(order.pickedUpAt).toLocaleString('zh-TW') + '</div>';
+        }
+
+        html += '</div>' +
+          '<div style="display:flex; gap:10px; flex-wrap:wrap;">';
+        
+        if (!order.pickedUp) {
+          html += '<button class="btn btn-small btn-warning" onclick="manualSendReminder(\'' + order.customerNumber + '\')">🔔 立即提醒</button>' +
+                  '<button class="btn btn-small btn-secondary" onclick="showEditNote(\'' + order.customerNumber + '\', \'' + order.customerName + '\', \'' + (order.note || '') + '\')">📝 編輯備註</button>' +
+                  '<button class="btn btn-small btn-secondary" onclick="markPickupComplete(\'' + order.customerNumber + '\')">✅ 標記已取件</button>';
+        }
+        
+        html += '<button class="btn btn-small btn-danger" onclick="removePickupTracking(\'' + order.customerNumber + '\')">🗑️ 刪除</button>' +
           '</div>' +
           '</div>';
       });
@@ -993,7 +1025,6 @@
         return;
       }
 
-      // 補 0
       if (!isNaN(query)) {
         query = String(parseInt(query)).padStart(3, '0');
       }
@@ -1013,9 +1044,11 @@
       resultDiv.innerHTML = 
         '<div style="background:#f0f4ff; padding:20px; border-radius:15px; border-left:5px solid #667eea;">' +
         '<h4 style="color:#667eea; margin-bottom:15px;">✅ 找到客戶</h4>' +
-        '<table style="margin:0;"><tr><td style="border:none; padding:8px;"><strong>編號：</strong></td><td style="border:none; padding:8px;">' + number + '</td></tr>' +
-        '<tr><td style="border:none; padding:8px;"><strong>姓名：</strong></td><td style="border:none; padding:8px;">' + customer.name + '</td></tr>' +
-        '<tr><td style="border:none; padding:8px;"><strong>User ID：</strong></td><td style="border:none; padding:8px; font-size:12px; color:#666;">' + customer.userId + '</td></tr></table>' +
+        '<div style="font-size:14px;">' +
+        '<div style="margin:8px 0;"><strong>編號：</strong>' + number + '</div>' +
+        '<div style="margin:8px 0;"><strong>姓名：</strong>' + customer.name + '</div>' +
+        '<div style="margin:8px 0;"><strong>User ID：</strong><span style="font-size:12px; color:#666;">' + customer.userId + '</span></div>' +
+        '</div>' +
         '<button class="btn btn-small btn-secondary" style="margin-top:15px;" onclick="fillPickupCustomer(\'' + number + '\', \'' + customer.name + '\', \'' + customer.userId + '\')">📥 帶入資料</button>' +
         '</div>';
     }
@@ -1037,7 +1070,6 @@
         return;
       }
 
-      // 補 0
       if (!isNaN(customerNumber)) {
         customerNumber = String(parseInt(customerNumber)).padStart(3, '0');
       }
@@ -1068,7 +1100,7 @@
     }
 
     async function markPickupComplete(customerNumber) {
-      if (!confirm('確定標記為已取件？')) return;
+      if (!confirm('確定標記為已取件？標記後將不再發送提醒訊息。')) return;
 
       try {
         var res = await fetch('/api/pickup-complete', {
@@ -1080,7 +1112,7 @@
         var data = await res.json();
 
         if (data.success) {
-          showResult('success', '✅ 已標記為已取件');
+          showResult('success', '✅ 已標記為已取件，系統將停止發送提醒');
           await loadPickupOrders();
         } else {
           showResult('error', '❌ ' + (data.error || '操作失敗'));
@@ -1105,6 +1137,66 @@
           await loadPickupOrders();
         } else {
           showResult('error', '❌ ' + (data.error || '操作失敗'));
+        }
+      } catch (error) {
+        showResult('error', '❌ 連線失敗：' + error.message);
+      }
+    }
+
+    // 手動發送提醒
+    async function manualSendReminder(customerNumber) {
+      if (!confirm('確定要立即發送提醒訊息嗎？')) return;
+
+      try {
+        var res = await fetch('/api/send-pickup-reminder/' + customerNumber, {
+          method: 'POST'
+        });
+
+        var data = await res.json();
+
+        if (data.success) {
+          showResult('success', '✅ 提醒訊息已發送！');
+          await loadPickupOrders();
+        } else {
+          showResult('error', '❌ ' + (data.error || '發送失敗'));
+        }
+      } catch (error) {
+        showResult('error', '❌ 連線失敗：' + error.message);
+      }
+    }
+
+    // 編輯備註
+    function showEditNote(customerNumber, customerName, currentNote) {
+      currentEditingCustomerNumber = customerNumber;
+      document.getElementById('noteCustomerNumber').textContent = customerNumber;
+      document.getElementById('noteCustomerName').textContent = customerName;
+      document.getElementById('noteContent').value = currentNote || '';
+      document.getElementById('editNoteModal').style.display = 'block';
+    }
+
+    function closeEditNote() {
+      document.getElementById('editNoteModal').style.display = 'none';
+      currentEditingCustomerNumber = '';
+    }
+
+    async function saveNote() {
+      var note = document.getElementById('noteContent').value.trim();
+
+      try {
+        var res = await fetch('/api/pickup-note', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ customerNumber: currentEditingCustomerNumber, note: note })
+        });
+
+        var data = await res.json();
+
+        if (data.success) {
+          showResult('success', '✅ 備註已儲存');
+          closeEditNote();
+          await loadPickupOrders();
+        } else {
+          showResult('error', '❌ ' + (data.error || '儲存失敗'));
         }
       } catch (error) {
         showResult('error', '❌ 連線失敗：' + error.message);
@@ -1165,17 +1257,11 @@
     function showBatchImport() {
       document.getElementById('importText').value = '';
       document.getElementById('importResult').innerHTML = '';
-      document.getElementById('importArea').classList.remove('show-textarea');
       document.getElementById('batchImportModal').style.display = 'block';
     }
 
     function closeBatchImport() {
       document.getElementById('batchImportModal').style.display = 'none';
-    }
-
-    function showImportTextarea() {
-      document.getElementById('importArea').classList.add('show-textarea');
-      document.getElementById('importText').focus();
     }
 
     async function processBatchImport() {
