@@ -130,8 +130,39 @@
           <textarea id="customMessage" placeholder="輸入訊息內容,使用 {amount} 會自動替換成金額&#10;&#10;例如: 您好,已收回衣物,金額 NT$ {amount},請儘速付款,謝謝!"></textarea>
         </div>
 
-        <button type="submit" class="btn" id="submitBtn">💙 發送付款連結</button>
+       <button type="submit" class="btn" id="submitBtn">💙 發送付款連結</button>
       </form>
+
+      <!-- ⭐⭐⭐ 新增：純文字通知功能 ⭐⭐⭐ -->
+      <div style="margin-top: 40px; padding-top: 30px; border-top: 3px dashed #e0e0e0;">
+        <h3 style="color: #667eea; margin-bottom: 20px;">📢 純文字通知（無付款連結）</h3>
+        <p style="color: #666; font-size: 14px; margin-bottom: 15px;">適用於：已付款客戶、僅需通知送達等情況</p>
+        
+        <form id="notificationForm">
+          <div class="form-group">
+            <label>客戶 User ID *</label>
+            <input type="text" id="notifyUserId" placeholder="U1234567890abcdef" required>
+          </div>
+          <div class="form-group">
+            <label>客戶姓名 *</label>
+            <input type="text" id="notifyUserName" placeholder="王小明" required>
+          </div>
+          
+          <div class="form-group">
+            <label>通知訊息模板</label>
+            <div id="notifyTemplates" class="message-templates"></div>
+            <textarea id="notifyMessage" placeholder="輸入通知內容，例如：&#10;&#10;親愛的客戶您好，您的衣物已送達店內，歡迎取件，謝謝！" required></textarea>
+          </div>
+
+          <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+            <button type="button" class="btn btn-secondary btn-small" onclick="saveNotifyTemplate()">💾 儲存此訊息為模板</button>
+            <button type="button" class="btn btn-small" style="background: #ff9800;" onclick="loadNotifyTemplates()">🔄 重新載入模板</button>
+          </div>
+
+          <button type="submit" class="btn" style="background: linear-gradient(135deg, #52c41a 0%, #389e0d 100%);">📢 發送純文字通知</button>
+        </form>
+      </div>
+      <!-- ⭐⭐⭐ 純文字通知結束 ⭐⭐⭐ -->
 
       <div class="loading" id="loading">
         <div class="loading-spinner"></div>
@@ -329,14 +360,29 @@
       }
     }
 
-    async function saveCustomerNumber() {
-      var number = document.getElementById('newCustomerNumber').value.trim();
-      var name = document.getElementById('newCustomerName').value.trim();
-      var userId = document.getElementById('newCustomerUserId').value.trim();
-      if (!number || !name || !userId) {
-        alert('請完整輸入 編號 / 姓名 / User ID');
-        return;
-      }
+   async function saveCustomerNumber() {
+     var number = document.getElementById('newCustomerNumber').value.trim();
+     var name = document.getElementById('newCustomerName').value.trim();
+     var userId = document.getElementById('newCustomerUserId').value.trim();
+     if (!number || !name || !userId) {
+       alert('請完整輸入 編號 / 姓名 / User ID');
+       return;
+     }
+
+     // ⭐ 新增：檢查編號是否重複
+     if (savedCustomers[number]) {
+       showResult('error', '❌ 此編號已存在：#' + number + ' (' + savedCustomers[number].name + ')');
+       return;
+     }
+
+     // ⭐ 新增：檢查 User ID 是否重複
+     var existingUser = Object.entries(savedCustomers).find(function(item) {
+       return item[1].userId === userId;
+     });
+     if (existingUser) {
+       showResult('error', '❌ 此 User ID 已存在：#' + existingUser[0] + ' (' + existingUser[1].name + ')');
+       return;
+     }
 
       try {
         var res = await fetch('/api/customer-numbers', {
@@ -1074,6 +1120,123 @@
         showResult('error', '❌ 連線失敗');
       }
     }
+    // ========================================
+    // 📢 純文字通知功能
+    // ========================================
+
+    var notifyTemplatesData = [];
+
+    // 載入通知模板
+    async function loadNotifyTemplates() {
+      try {
+        var res = await fetch('/api/notify-templates');
+        var data = await res.json();
+        if (data.success) {
+          notifyTemplatesData = data.templates || [];
+          displayNotifyTemplates();
+        }
+      } catch (error) {
+        console.error('載入通知模板失敗:', error);
+      }
+    }
+
+    // 顯示通知模板按鈕
+    function displayNotifyTemplates() {
+      var container = document.getElementById('notifyTemplates');
+      if (!container) return;
+      
+      if (notifyTemplatesData.length === 0) {
+        container.innerHTML = '<p style="color:#999; font-size:13px;">尚無模板，發送後可儲存為模板</p>';
+        return;
+      }
+      
+      var html = '';
+      notifyTemplatesData.forEach(function(template, index) {
+        var preview = template.length > 25 ? template.substring(0, 25) + '...' : template;
+        html += '<button type="button" class="template-btn" onclick="selectNotifyTemplate(' + index + ')">' + preview + '</button>';
+      });
+      container.innerHTML = html;
+    }
+
+    // 選擇通知模板
+    function selectNotifyTemplate(index) {
+      var el = document.getElementById('notifyMessage');
+      if (el) el.value = notifyTemplatesData[index] || '';
+      document.querySelectorAll('#notifyTemplates .template-btn').forEach(function(btn) {
+        btn.classList.remove('active');
+      });
+      document.querySelectorAll('#notifyTemplates .template-btn')[index].classList.add('active');
+    }
+
+    // 儲存通知模板
+    async function saveNotifyTemplate() {
+      var content = document.getElementById('notifyMessage').value.trim();
+      if (!content) {
+        alert('請先輸入訊息內容');
+        return;
+      }
+
+      try {
+        var res = await fetch('/api/notify-templates', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: content })
+        });
+        var data = await res.json();
+        if (data.success) {
+          showResult('success', '✅ 已儲存為通知模板');
+          await loadNotifyTemplates();
+        } else {
+          showResult('error', '❌ 儲存失敗: ' + (data.error || '未知錯誤'));
+        }
+      } catch (error) {
+        showResult('error', '❌ 連線失敗: ' + error.message);
+      }
+    }
+
+    // 發送純文字通知
+    document.getElementById('notificationForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      
+      var userId = document.getElementById('notifyUserId').value.trim();
+      var userName = document.getElementById('notifyUserName').value.trim();
+      var message = document.getElementById('notifyMessage').value.trim();
+
+      if (!userId || !userName || !message) {
+        showResult('error', '❌ 請填寫所有欄位！');
+        return;
+      }
+
+      try {
+        var res = await fetch('/send-notification', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: userId,
+            userName: userName,
+            message: message
+          })
+        });
+
+        var data = await res.json();
+
+        if (data.success) {
+          showResult('success', '✅ 通知已成功發送給 ' + userName + '！<br><br>訊息內容：<br>' + message);
+          document.getElementById('notificationForm').reset();
+        } else {
+          showResult('error', '❌ 發送失敗: ' + (data.error || '伺服器無回應'));
+        }
+      } catch (err) {
+        showResult('error', '❌ 錯誤: ' + err.message);
+      }
+    });
+
+    // 頁面載入時初始化通知模板
+    document.addEventListener('DOMContentLoaded', function() {
+      initLoad();
+      loadNotifyTemplates(); // ⭐ 新增
+    });
+    
   </script>
    <script src="/payment.js"></script>
 </body> 
