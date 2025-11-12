@@ -1,4 +1,4 @@
-// ====== Bootstraps / 基礎設定 ======
+app.post('/api/notify-templates', (req, res) => {// ====== Bootstraps / 基礎設定 ======
 require('./bootstrap/storageBridge');
 console.log('RAILWAY_VOLUME_MOUNT_PATH =', process.env.RAILWAY_VOLUME_MOUNT_PATH);
 
@@ -1030,52 +1030,6 @@ app.post('/api/notify-templates', (req, res) => {
   }
 });
 
-app.put('/api/notify-templates/:index', (req, res) => {
-  try {
-    const index = parseInt(req.params.index);
-    const { content } = req.body;
-    if (!content || !content.trim()) {
-      return res.status(400).json({ success: false, error: '模板內容不能為空' });
-    }
-    
-    const templates = loadNotifyTemplates();
-    if (index < 0 || index >= templates.length) {
-      return res.status(404).json({ success: false, error: '找不到此模板' });
-    }
-    
-    templates[index] = content.trim();
-    
-    if (saveNotifyTemplatesFile(templates)) {
-      res.json({ success: true, message: '模板已更新' });
-    } else {
-      res.status(500).json({ success: false, error: '更新失敗' });
-    }
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.delete('/api/notify-templates/:index', (req, res) => {
-  try {
-    const index = parseInt(req.params.index);
-    const templates = loadNotifyTemplates();
-    
-    if (index < 0 || index >= templates.length) {
-      return res.status(404).json({ success: false, error: '找不到此模板' });
-    }
-    
-    templates.splice(index, 1);
-    
-    if (saveNotifyTemplatesFile(templates)) {
-      res.json({ success: true, message: '模板已刪除' });
-    } else {
-      res.status(500).json({ success: false, error: '刪除失敗' });
-    }
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
 // ====== 發送純文字通知 ======
 app.post('/send-notification', async (req, res) => {
   const { userId, userName, message } = req.body;
@@ -1117,6 +1071,7 @@ app.post('/send-notification', async (req, res) => {
     });
   }
 });
+
 // ====== 發送付款連結 ======
 app.post('/send-payment', async (req, res) => {
   const { userId, userName, amount, paymentType, customMessage } = req.body;
