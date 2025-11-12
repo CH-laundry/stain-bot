@@ -1004,6 +1004,147 @@ app.delete('/api/templates/:index', (req, res) => {
   }
 });
 
+// ====== 純文字通知模板管理 ======
+const NOTIFY_TEMPLATES_FILE = '/data/notify-templates.json';
+
+function loadNotifyTemplates() {
+  try {
+    if (fs.existsSync(NOTIFY_TEMPLATES_FILE)) {
+      const data = fs.readFileSync(NOTIFY_TEMPLATES_FILE, 'utf8');
+      return JSON.parse(data);
+    }
+  } catch (error) {
+    logger.logError('載入通知模板失敗', error);
+  }
+  return [];
+}
+
+function saveNotifyTemplatesFile(templates) {
+  try {
+    fs.writeFileSync(NOTIFY_TEMPLATES_FILE, JSON.stringify(templates, null, 2), 'utf8');
+    return true;
+  } catch (error) {
+    logger.logError('儲存通知模板失敗', error);
+    return false;
+  }
+}
+
+app.get('/api/notify-templates', (req, res) => {
+  try {
+    const templates = loadNotifyTemplates();
+    res.json({ success: true, templates });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/notify-templates', (req, res) => {
+  try {
+    const { content } = req.body;
+    if (!content || !content.trim()) {
+      return res.status(400).json({ success: false, error: '模板內容不能為空' });
+    }
+    
+    const templates = loadNotifyTemplates();
+    templates.push(content.trim());
+    
+    if (saveNotifyTemplatesFile(templates)) {
+      res.json({ success: true, message: '模板已儲存' });
+    } else {
+      res.status(500).json({ success: false, error: '儲存失敗' });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.put('/api/notify-templates/:index', (req, res) => {
+  try {
+    const index = parseInt(req.params.index);
+    const { content } = req.body;
+    if (!content || !content.trim()) {
+      return res.status(400).json({ success: false, error: '模板內容不能為空' });
+    }
+    
+    const templates = loadNotifyTemplates();
+    if (index < 0 || index >= templates.length) {
+      return res.status(404).json({ success: false, error: '找不到此模板' });
+    }
+    
+    templates[index] = content.trim();
+    
+    if (saveNotifyTemplatesFile(templates)) {
+      res.json({ success: true, message: '模板已更新' });
+    } else {
+      res.status(500).json({ success: false, error: '更新失敗' });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.delete('/api/notify-templates/:index', (req, res) => {
+  try {
+    const index = parseInt(req.params.index);
+    const templates = loadNotifyTemplates();
+    
+    if (index < 0 || index >= templates.length) {
+      return res.status(404).json({ success: false, error: '找不到此模板' });
+    }
+    
+    templates.splice(index, 1);
+    
+    if (saveNotifyTemplatesFile(templates)) {
+      res.json({ success: true, message: '模板已刪除' });
+    } else {
+      res.status(500).json({ success: false, error: '刪除失敗' });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ====== 發送純文字通知 ======
+app.post('/send-notification', async (req, res) => {
+  const { userId, userName, message } = req.body;
+  
+  logger.logToFile(`收到純文字通知請求: userId=${userId}, userName=${userName}`);
+
+  if (!userId || !userName || !message) {
+    logger.logToFile(`參數驗證失敗`);
+    return res.status(400).json({ 
+      success: false, 
+      error: '缺少必要參數', 
+      required: ['userId', 'userName', 'message'] 
+    });
+  }
+
+  try {
+    await client.pushMessage(userId, { 
+      type: 'text', 
+      text: message 
+    });
+    
+    logger.logToFile(`已發送純文字通知給: ${userName} (${userId})`);
+
+    res.json({
+      success: true,
+      message: '通知已發送',
+      data: {
+        userId,
+        userName,
+        messageLength: message.length
+      }
+    });
+  } catch (err) {
+    logger.logError('發送純文字通知失敗', err);
+    res.status(500).json({ 
+      success: false, 
+      error: '發送失敗', 
+      details: err.message 
+    });
+  }
+});
 app.post('/send-payment', async (req, res) => {
   const { userId, userName, amount, paymentType, customMessage } = req.body;
   logger.logToFile(`收到付款請求: userId=${userId}, userName=${userName}, amount=${amount}, type=${paymentType}`);
