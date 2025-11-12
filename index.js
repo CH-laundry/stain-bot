@@ -1030,28 +1030,6 @@ app.post('/api/notify-templates', (req, res) => {
   }
 });
 
-app.post('/api/notify-templates', (req, res) => {
-  try {
-    const { content } = req.body;
-    if (!content || !content.trim()) {
-      return res.status(400).json({ success: false, error: '模板內容不能為空' });
-    }
-    
-    const templates = loadNotifyTemplates();
-    templates.push(content.trim());
-    
-    if (saveNotifyTemplatesFile(templates)) {
-      res.json({ success: true, message: '模板已儲存' });
-    } else {
-      res.status(500).json({ success: false, error: '儲存失敗' });
-    }
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// ⬇️⬇️⬇️ 在這裡新增 ⬇️⬇️⬇️
-
 app.put('/api/notify-templates/:index', (req, res) => {
   try {
     const index = parseInt(req.params.index);
@@ -1098,11 +1076,6 @@ app.delete('/api/notify-templates/:index', (req, res) => {
   }
 });
 
-// ⬆️⬆️⬆️ 新增結束 ⬆️⬆️⬆️
-
-// ====== 發送純文字通知 ======
-app.post('/send-notification', async (req, res) => {
-
 // ====== 發送純文字通知 ======
 app.post('/send-notification', async (req, res) => {
   const { userId, userName, message } = req.body;
@@ -1144,7 +1117,6 @@ app.post('/send-notification', async (req, res) => {
     });
   }
 });
-
 // ====== 發送付款連結 ======
 app.post('/send-payment', async (req, res) => {
   const { userId, userName, amount, paymentType, customMessage } = req.body;
