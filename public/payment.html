@@ -69,6 +69,7 @@
 
     <div class="tabs">
       <button class="tab active" onclick="switchTab(event,'payment')">💳 發送付款</button>
+      <button class="tab" onclick="switchTab(event,'notify')">📢 純文字通知</button>
       <button class="tab" onclick="switchTab(event,'orders')">📦 訂單管理</button>
       <button class="tab" onclick="switchTab(event,'customers')">📋 客戶編號</button>
       <button class="tab" onclick="switchTab(event,'templates')">📝 訊息模板</button>
@@ -133,37 +134,7 @@
        <button type="submit" class="btn" id="submitBtn">💙 發送付款連結</button>
       </form>
 
-      <!-- ⭐⭐⭐ 新增：純文字通知功能 ⭐⭐⭐ -->
-      <div style="margin-top: 40px; padding-top: 30px; border-top: 3px dashed #e0e0e0;">
-        <h3 style="color: #667eea; margin-bottom: 20px;">📢 純文字通知（無付款連結）</h3>
-        <p style="color: #666; font-size: 14px; margin-bottom: 15px;">適用於：已付款客戶、僅需通知送達等情況</p>
-        
-        <form id="notificationForm">
-          <div class="form-group">
-            <label>客戶 User ID *</label>
-            <input type="text" id="notifyUserId" placeholder="U1234567890abcdef" required>
-          </div>
-          <div class="form-group">
-            <label>客戶姓名 *</label>
-            <input type="text" id="notifyUserName" placeholder="王小明" required>
-          </div>
-          
-          <div class="form-group">
-            <label>通知訊息模板</label>
-            <div id="notifyTemplates" class="message-templates"></div>
-            <textarea id="notifyMessage" placeholder="輸入通知內容，例如：&#10;&#10;親愛的客戶您好，您的衣物已送達店內，歡迎取件，謝謝！" required></textarea>
-          </div>
-
-          <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-            <button type="button" class="btn btn-secondary btn-small" onclick="saveNotifyTemplate()">💾 儲存此訊息為模板</button>
-            <button type="button" class="btn btn-small" style="background: #ff9800;" onclick="loadNotifyTemplates()">🔄 重新載入模板</button>
-          </div>
-
-          <button type="submit" class="btn" style="background: linear-gradient(135deg, #52c41a 0%, #389e0d 100%);">📢 發送純文字通知</button>
-        </form>
-      </div>
-      <!-- ⭐⭐⭐ 純文字通知結束 ⭐⭐⭐ -->
-
+     
       <div class="loading" id="loading">
         <div class="loading-spinner"></div>
         <p>正在發送...</p>
@@ -301,6 +272,66 @@
       <div id="pickupList"><p style="text-align:center; color:#999;">尚未載入，請點「重新整理」。</p></div>
     </div>
 
+  <!-- 📢 純文字通知分頁 -->
+<div id="notify-tab" class="tab-content">
+  <h3 style="color:#667eea; margin-bottom:20px;">📢 純文字通知（無付款連結）</h3>
+  <p style="color: #666; font-size: 14px; margin-bottom: 20px;">適用於：已付款客戶、僅需通知送達等情況</p>
+
+  <!-- 快速搜尋 -->
+  <div class="form-group">
+    <label>🔍 快速查詢客戶</label>
+    <div class="quick-search">
+      <input type="text" id="notifySearch" placeholder="輸入編號或姓名">
+      <button class="btn btn-small" onclick="searchForNotify()">查詢</button>
+    </div>
+  </div>
+
+  <!-- 客戶資訊卡片 -->
+  <div id="notifyCustomerCard" class="customer-card" style="display:none;">
+    <h4>✅ 客戶資訊</h4>
+    <p><strong>編號:</strong> <span id="notifyCardNumber"></span></p>
+    <p><strong>姓名:</strong> <span id="notifyCardName"></span></p>
+    <p><strong>User ID:</strong> <span id="notifyCardUserId"></span></p>
+  </div>
+
+  <!-- 發送表單 -->
+  <form id="notificationForm">
+    <div class="form-group">
+      <label>客戶 User ID *</label>
+      <input type="text" id="notifyUserId" placeholder="U1234567890abcdef" required>
+    </div>
+    <div class="form-group">
+      <label>客戶姓名 *</label>
+      <input type="text" id="notifyUserName" placeholder="王小明" required>
+    </div>
+    
+    <div class="form-group">
+      <label>通知訊息模板</label>
+      <div id="notifyTemplateList" style="max-height: 300px; overflow-y: auto; border: 2px solid #e0e0e0; border-radius: 10px; padding: 15px; background: #f8f9fa; margin-bottom: 15px;">
+        <p style="color:#999; text-align:center;">尚無模板，請先新增模板</p>
+      </div>
+      <textarea id="notifyMessage" placeholder="輸入通知內容，例如：&#10;&#10;親愛的客戶您好，您的衣物已送達店內，歡迎取件，謝謝！" required style="min-height: 150px;"></textarea>
+    </div>
+
+    <button type="submit" class="btn" style="background: linear-gradient(135deg, #52c41a 0%, #389e0d 100%);">📢 發送純文字通知</button>
+  </form>
+
+  <!-- 模板管理區 -->
+  <div style="margin-top: 40px; padding-top: 30px; border-top: 3px solid #e0e0e0;">
+    <h4 style="color:#667eea; margin-bottom:20px;">📝 管理通知模板</h4>
+    
+    <div class="form-group">
+      <label>新增通知模板</label>
+      <textarea id="newNotifyTemplate" placeholder="輸入新模板內容&#10;&#10;例如：親愛的客戶您好，您的衣物已送達店內，歡迎取件！" style="min-height: 100px;"></textarea>
+    </div>
+    
+    <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+      <button type="button" class="btn btn-secondary" onclick="addNotifyTemplate()">➕ 新增模板</button>
+      <button type="button" class="btn btn-small" style="background: #ff9800;" onclick="loadNotifyTemplates()">🔄 重新載入</button>
+    </div>
+  </div>
+</div>
+
     <!-- 模板編輯 Modal -->
     <div id="templateModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:9999;">
       <div style="background:#fff; max-width:600px; margin:50px auto; padding:30px; border-radius:15px;">
@@ -343,6 +374,7 @@
       if (tabName === 'users') loadUsers();
       if (tabName === 'orders') loadOrders();
       if (tabName === 'pickup') loadPickups();
+      if (tabName === 'notify') loadNotifyTemplates();
     }
 
     async function loadCustomerNumbers() {
@@ -1121,121 +1153,213 @@
       }
     }
     // ========================================
-    // 📢 純文字通知功能
-    // ========================================
+   // ========================================
+// 📢 純文字通知功能（獨立分頁版）
+// ========================================
 
-    var notifyTemplatesData = [];
+var notifyTemplatesData = [];
 
-    // 載入通知模板
-    async function loadNotifyTemplates() {
-      try {
-        var res = await fetch('/api/notify-templates');
-        var data = await res.json();
-        if (data.success) {
-          notifyTemplatesData = data.templates || [];
-          displayNotifyTemplates();
-        }
-      } catch (error) {
-        console.error('載入通知模板失敗:', error);
-      }
+// 快速搜尋客戶（純文字通知用）
+function searchForNotify() {
+  var query = document.getElementById('notifySearch').value.trim();
+  if (!query) {
+    alert('請輸入編號或姓名');
+    return;
+  }
+
+  // 先找編號
+  if (savedCustomers[query]) {
+    var c = savedCustomers[query];
+    document.getElementById('notifyUserId').value = c.userId || '';
+    document.getElementById('notifyUserName').value = c.name || '';
+    document.getElementById('notifyCardNumber').textContent = query;
+    document.getElementById('notifyCardName').textContent = c.name;
+    document.getElementById('notifyCardUserId').textContent = c.userId;
+    document.getElementById('notifyCustomerCard').style.display = 'block';
+    return;
+  }
+
+  // 再找姓名
+  var found = Object.entries(savedCustomers).find(function(item) {
+    return (item[1].name || '').includes(query);
+  });
+  if (found) {
+    var number = found[0];
+    var c = found[1];
+    document.getElementById('notifyUserId').value = c.userId || '';
+    document.getElementById('notifyUserName').value = c.name || '';
+    document.getElementById('notifyCardNumber').textContent = number;
+    document.getElementById('notifyCardName').textContent = c.name;
+    document.getElementById('notifyCardUserId').textContent = c.userId;
+    document.getElementById('notifyCustomerCard').style.display = 'block';
+    return;
+  }
+
+  alert('找不到此客戶');
+}
+
+// 載入通知模板
+async function loadNotifyTemplates() {
+  try {
+    var res = await fetch('/api/notify-templates');
+    var data = await res.json();
+    if (data.success) {
+      notifyTemplatesData = data.templates || [];
+      displayNotifyTemplates();
     }
+  } catch (error) {
+    console.error('載入通知模板失敗:', error);
+  }
+}
 
-    // 顯示通知模板按鈕
-    function displayNotifyTemplates() {
-      var container = document.getElementById('notifyTemplates');
-      if (!container) return;
-      
-      if (notifyTemplatesData.length === 0) {
-        container.innerHTML = '<p style="color:#999; font-size:13px;">尚無模板，發送後可儲存為模板</p>';
-        return;
-      }
-      
-      var html = '';
-      notifyTemplatesData.forEach(function(template, index) {
-        var preview = template.length > 25 ? template.substring(0, 25) + '...' : template;
-        html += '<button type="button" class="template-btn" onclick="selectNotifyTemplate(' + index + ')">' + preview + '</button>';
-      });
-      container.innerHTML = html;
+// 顯示通知模板列表（可選擇、編輯、刪除）
+function displayNotifyTemplates() {
+  var container = document.getElementById('notifyTemplateList');
+  if (!container) return;
+  
+  if (notifyTemplatesData.length === 0) {
+    container.innerHTML = '<p style="color:#999; text-align:center;">尚無模板，請先新增模板</p>';
+    return;
+  }
+  
+  var html = '';
+  notifyTemplatesData.forEach(function(template, index) {
+    html += '<div class="template-item" style="margin-bottom: 10px;">' +
+      '<div style="background: #fff; padding: 12px; border-radius: 8px; border: 2px solid #e0e0e0;">' +
+      '<div style="white-space: pre-wrap; margin-bottom: 10px; color: #333; line-height: 1.6;">' + template + '</div>' +
+      '<div style="display: flex; gap: 8px; flex-wrap: wrap;">' +
+      '<button class="btn btn-small" style="background: #667eea;" onclick="useNotifyTemplate(' + index + ')">✅ 使用</button>' +
+      '<button class="btn btn-small btn-secondary" onclick="editNotifyTemplate(' + index + ')">✏️ 編輯</button>' +
+      '<button class="btn btn-small btn-danger" onclick="deleteNotifyTemplate(' + index + ')">🗑️ 刪除</button>' +
+      '</div>' +
+      '</div>' +
+      '</div>';
+  });
+  container.innerHTML = html;
+}
+
+// 使用模板
+function useNotifyTemplate(index) {
+  var el = document.getElementById('notifyMessage');
+  if (el) el.value = notifyTemplatesData[index] || '';
+  showResult('success', '✅ 已套用模板');
+}
+
+// 新增通知模板
+async function addNotifyTemplate() {
+  var content = document.getElementById('newNotifyTemplate').value.trim();
+  if (!content) {
+    alert('請輸入模板內容');
+    return;
+  }
+
+  try {
+    var res = await fetch('/api/notify-templates', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: content })
+    });
+    var data = await res.json();
+    if (data.success) {
+      showResult('success', '✅ 已新增通知模板');
+      document.getElementById('newNotifyTemplate').value = '';
+      await loadNotifyTemplates();
+    } else {
+      showResult('error', '❌ 新增失敗: ' + (data.error || '未知錯誤'));
     }
+  } catch (error) {
+    showResult('error', '❌ 連線失敗: ' + error.message);
+  }
+}
 
-    // 選擇通知模板
-    function selectNotifyTemplate(index) {
-      var el = document.getElementById('notifyMessage');
-      if (el) el.value = notifyTemplatesData[index] || '';
-      document.querySelectorAll('#notifyTemplates .template-btn').forEach(function(btn) {
-        btn.classList.remove('active');
-      });
-      document.querySelectorAll('#notifyTemplates .template-btn')[index].classList.add('active');
+// 編輯通知模板
+async function editNotifyTemplate(index) {
+  var newContent = prompt('修改模板內容：', notifyTemplatesData[index] || '');
+  if (newContent === null) return;
+  if (!newContent.trim()) {
+    alert('模板內容不能為空');
+    return;
+  }
+
+  try {
+    var res = await fetch('/api/notify-templates/' + index, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: newContent.trim() })
+    });
+    var data = await res.json();
+    if (data.success) {
+      showResult('success', '✅ 模板已更新');
+      await loadNotifyTemplates();
+    } else {
+      showResult('error', '❌ 更新失敗: ' + (data.error || '未知錯誤'));
     }
+  } catch (error) {
+    showResult('error', '❌ 連線失敗: ' + error.message);
+  }
+}
 
-    // 儲存通知模板
-    async function saveNotifyTemplate() {
-      var content = document.getElementById('notifyMessage').value.trim();
-      if (!content) {
-        alert('請先輸入訊息內容');
-        return;
-      }
+// 刪除通知模板
+async function deleteNotifyTemplate(index) {
+  if (!confirm('確定刪除此模板？')) return;
 
-      try {
-        var res = await fetch('/api/notify-templates', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: content })
-        });
-        var data = await res.json();
-        if (data.success) {
-          showResult('success', '✅ 已儲存為通知模板');
-          await loadNotifyTemplates();
-        } else {
-          showResult('error', '❌ 儲存失敗: ' + (data.error || '未知錯誤'));
-        }
-      } catch (error) {
-        showResult('error', '❌ 連線失敗: ' + error.message);
-      }
+  try {
+    var res = await fetch('/api/notify-templates/' + index, { method: 'DELETE' });
+    var data = await res.json();
+    if (data.success) {
+      showResult('success', '✅ 模板已刪除');
+      await loadNotifyTemplates();
+    } else {
+      showResult('error', '❌ 刪除失敗: ' + (data.error || '未知錯誤'));
     }
+  } catch (error) {
+    showResult('error', '❌ 連線失敗: ' + error.message);
+  }
+}
 
-    // 發送純文字通知
-    document.getElementById('notificationForm').addEventListener('submit', async function(e) {
-      e.preventDefault();
-      
-      var userId = document.getElementById('notifyUserId').value.trim();
-      var userName = document.getElementById('notifyUserName').value.trim();
-      var message = document.getElementById('notifyMessage').value.trim();
+// 發送純文字通知
+document.getElementById('notificationForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  
+  var userId = document.getElementById('notifyUserId').value.trim();
+  var userName = document.getElementById('notifyUserName').value.trim();
+  var message = document.getElementById('notifyMessage').value.trim();
 
-      if (!userId || !userName || !message) {
-        showResult('error', '❌ 請填寫所有欄位！');
-        return;
-      }
+  if (!userId || !userName || !message) {
+    showResult('error', '❌ 請填寫所有欄位！');
+    return;
+  }
 
-      try {
-        var res = await fetch('/send-notification', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: userId,
-            userName: userName,
-            message: message
-          })
-        });
-
-        var data = await res.json();
-
-        if (data.success) {
-          showResult('success', '✅ 通知已成功發送給 ' + userName + '！<br><br>訊息內容：<br>' + message);
-          document.getElementById('notificationForm').reset();
-        } else {
-          showResult('error', '❌ 發送失敗: ' + (data.error || '伺服器無回應'));
-        }
-      } catch (err) {
-        showResult('error', '❌ 錯誤: ' + err.message);
-      }
+  try {
+    var res = await fetch('/send-notification', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: userId,
+        userName: userName,
+        message: message
+      })
     });
 
-    // 頁面載入時初始化通知模板
-    document.addEventListener('DOMContentLoaded', function() {
-      initLoad();
-      loadNotifyTemplates(); // ⭐ 新增
-    });
+    var data = await res.json();
+
+    if (data.success) {
+      showResult('success', '✅ 通知已成功發送給 ' + userName + '！<br><br>訊息內容：<br>' + message);
+      document.getElementById('notificationForm').reset();
+      document.getElementById('notifyCustomerCard').style.display = 'none';
+    } else {
+      showResult('error', '❌ 發送失敗: ' + (data.error || '伺服器無回應'));
+    }
+  } catch (err) {
+    showResult('error', '❌ 錯誤: ' + err.message);
+  }
+});
+
+// 頁面載入時初始化
+document.addEventListener('DOMContentLoaded', function() {
+  initLoad();
+  loadNotifyTemplates();
+});
     
   </script>
    <script src="/payment.js"></script>
