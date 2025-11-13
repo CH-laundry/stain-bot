@@ -75,6 +75,7 @@
       <button class="tab" onclick="switchTab(event,'templates')">📝 訊息模板</button>
       <button class="tab" onclick="switchTab(event,'users')">👥 客戶列表</button>
       <button class="tab" onclick="switchTab(event,'pickup')">🧺 取件追蹤</button>
+      <button class="tab" onclick="switchTab(event,'delivery')">🚚 外送排程</button>
     </div>
 
     <div id="payment-tab" class="tab-content active">
@@ -272,6 +273,85 @@
       <div id="pickupList"><p style="text-align:center; color:#999;">尚未載入，請點「重新整理」。</p></div>
     </div>
 
+  <!-- 🚚 外送排程分頁 -->
+<div id="delivery-tab" class="tab-content">
+  <h3 style="color:#667eea; margin-bottom:20px;">🚚 外送排程 / 紀錄</h3>
+  
+  <!-- 快速查詢 -->
+  <div class="form-group">
+    <label>🔍 快速查詢客戶（用客戶編號）</label>
+    <div class="quick-search">
+      <input type="text" id="deliverySearch" placeholder="輸入編號（例如: 001、625）">
+      <button class="btn btn-small" onclick="searchForDelivery()">查詢</button>
+    </div>
+  </div>
+
+  <!-- 客戶資訊卡片 -->
+  <div id="deliveryCustomerCard" class="customer-card" style="display:none;">
+    <h4>✅ 客戶資訊</h4>
+    <p><strong>編號:</strong> <span id="deliveryCardNumber"></span></p>
+    <p><strong>姓名:</strong> <span id="deliveryCardName"></span></p>
+  </div>
+
+  <!-- 新增外送紀錄 -->
+  <div style="background:#f8f9fa; padding:20px; border-radius:10px; margin-bottom:20px;">
+    <h4 style="color:#667eea; margin-bottom:15px;">➕ 新增外送紀錄</h4>
+
+    <div class="form-group">
+      <label>客戶編號 *</label>
+      <input type="text" id="deliveryNumber" placeholder="001">
+    </div>
+
+    <div class="form-group">
+      <label>客戶姓名 *</label>
+      <input type="text" id="deliveryName" placeholder="王小明">
+    </div>
+
+    <div class="form-group">
+      <label>金額 (NT$) *</label>
+      <input type="number" id="deliveryAmount" min="0" placeholder="300">
+    </div>
+
+    <div class="form-group">
+      <label>通知狀態</label>
+      <div style="display:flex; gap:15px; flex-wrap:wrap;">
+        <label style="display:flex; align-items:center; gap:5px; font-size:14px;">
+          <input type="radio" name="deliveryNotifyStatus" value="not_sent" checked> 未發送自動通知
+        </label>
+        <label style="display:flex; align-items:center; gap:5px; font-size:14px;">
+          <input type="radio" name="deliveryNotifyStatus" value="sent"> 已發送自動通知
+        </label>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>指定外送日期（可選）</label>
+      <input type="date" id="deliveryDate">
+      <small style="display:block; color:#999; margin-top:5px;">
+        若有指定，當天打開系統會自動提醒你今天有哪些外送。
+      </small>
+    </div>
+
+    <div class="form-group">
+      <label>備註</label>
+      <textarea id="deliveryNote" placeholder="例如：晚上 8 點前送達、需先電話聯絡等"></textarea>
+    </div>
+
+    <button class="btn btn-secondary" onclick="addDelivery()">💾 新增外送紀錄</button>
+  </div>
+
+  <!-- 操作列 -->
+  <div style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
+    <button class="btn btn-small btn-secondary" onclick="loadDeliveries(true)">🔄 重新整理</button>
+  </div>
+
+  <!-- 外送紀錄列表（依日期分組） -->
+  <div id="deliveryList">
+    <p style="text-align:center; color:#999;">尚未載入，請點「重新整理」。</p>
+  </div>
+</div>
+
+
   <!-- 📢 純文字通知分頁 -->
 <div id="notify-tab" class="tab-content">
   <h3 style="color:#667eea; margin-bottom:20px;">📢 純文字通知（無付款連結）</h3>
@@ -350,6 +430,7 @@
     var savedCustomers = {};
     var savedTemplates = [];
     var allPickupOrders = [];
+    var allDeliveries = [];
 
     async function initLoad() {
       try {
@@ -375,6 +456,7 @@
       if (tabName === 'orders') loadOrders();
       if (tabName === 'pickup') loadPickups();
       if (tabName === 'notify') loadNotifyTemplates();
+      if (tabName === 'delivery') loadDeliveries(true);
     }
 
     async function loadCustomerNumbers() {
@@ -1152,6 +1234,335 @@
         showResult('error', '❌ 連線失敗');
       }
     }
+
+    // ========================================
+// 🚚 外送排程 / 紀錄 功能
+// ========================================
+
+// 依客戶編號快速帶入
+function searchForDelivery() {
+  var num = document.getElementById('deliverySearch').value.trim();
+  if (!num) return alert('請輸入編號');
+
+  if (savedCustomers[num]) {
+    var c = savedCustomers[num];
+    document.getElementById('deliveryNumber').value = num;
+    document.getElementById('deliveryName').value = c.name || '';
+    document.getElementById('deliveryCardNumber').textContent = num;
+    document.getElementById('deliveryCardName').textContent = c.name || '';
+    document.getElementById('deliveryCustomerCard').style.display = 'block';
+  } else {
+    alert('找不到此客戶編號');
+  }
+}
+
+// 新增外送紀錄
+async function addDelivery() {
+  var num   = document.getElementById('deliveryNumber').value.trim();
+  var name  = document.getElementById('deliveryName').value.trim();
+  var amt   = document.getElementById('deliveryAmount').value.trim();
+  var note  = document.getElementById('deliveryNote').value.trim();
+  var date  = document.getElementById('deliveryDate').value || null;
+  var notifyStatus = document.querySelector('input[name="deliveryNotifyStatus"]:checked').value; // 'not_sent' or 'sent'
+
+  if (!num || !name || !amt) {
+    alert('請至少填寫 編號 / 姓名 / 金額');
+    return;
+  }
+
+  var amount = parseInt(amt, 10);
+  if (isNaN(amount) || amount < 0) {
+    alert('金額格式不正確');
+    return;
+  }
+
+  try {
+    var res = await fetch('/api/delivery/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customerNumber: num,
+        customerName : name,
+        amount       : amount,
+        notifyStatus : notifyStatus,  // 'not_sent' | 'sent'
+        note         : note,
+        scheduledDate: date          // 'YYYY-MM-DD' 或 null
+      })
+    });
+
+    var data = await res.json();
+    if (data.success) {
+      showResult('success', '✅ 已新增外送紀錄');
+      document.getElementById('deliveryNumber').value = '';
+      document.getElementById('deliveryName').value  = '';
+      document.getElementById('deliveryAmount').value = '';
+      document.getElementById('deliveryNote').value = '';
+      document.getElementById('deliveryDate').value = '';
+      document.querySelector('input[name="deliveryNotifyStatus"][value="not_sent"]').checked = true;
+      document.getElementById('deliveryCustomerCard').style.display = 'none';
+      loadDeliveries(false);
+    } else {
+      showResult('error', '❌ 新增失敗：' + (data.error || '未知錯誤'));
+    }
+  } catch (e) {
+    showResult('error', '❌ 連線失敗：' + e.message);
+  }
+}
+
+// 載入外送紀錄
+async function loadDeliveries(showAlert) {
+  var wrap = document.getElementById('deliveryList');
+  if (!wrap) return;
+
+  wrap.innerHTML = '<p style="text-align:center; color:#999;">載入中...</p>';
+
+  try {
+    var res = await fetch('/api/delivery/orders');
+    var data = await res.json();
+    if (!data.success) throw new Error(data.error || '載入失敗');
+
+    allDeliveries = Array.isArray(data.orders) ? data.orders : [];
+    renderDeliveryList();
+
+    if (showAlert) {
+      checkTodayDeliveryAlerts();
+    }
+  } catch (e) {
+    allDeliveries = [];
+    wrap.innerHTML = '<p style="text-align:center; color:#dc3545;">載入失敗：' + e.message + '</p>';
+  }
+}
+
+// 依日期分組顯示外送紀錄
+function renderDeliveryList() {
+  var wrap = document.getElementById('deliveryList');
+  if (!wrap) return;
+
+  if (!allDeliveries || allDeliveries.length === 0) {
+    wrap.innerHTML = '<p style="text-align:center; color:#999;">目前沒有外送紀錄</p>';
+    return;
+  }
+
+  // 依日期分組（只取日期，不含時間）
+  var groups = {};
+  allDeliveries.forEach(function(o) {
+    var rawDate =
+      (o.createdDate || o.createdAt || '').toString().substring(0, 10) ||
+      '未指定日期';
+    if (!groups[rawDate]) groups[rawDate] = [];
+    groups[rawDate].push(o);
+  });
+
+  var dates = Object.keys(groups).sort().reverse(); // 新的日期在前
+  var todayStr = new Date().toISOString().substring(0, 10);
+
+  var html = '';
+  dates.forEach(function(dk) {
+    var tag = (dk === todayStr) ? '（今天）' : '';
+    html +=
+      '<h4 style="margin-top:10px; margin-bottom:8px; color:#667eea;">📅 ' +
+      dk +
+      ' ' +
+      tag +
+      '</h4>';
+
+    groups[dk].forEach(function(o) {
+      var id = o.id || o.recordId || '';
+      var notifyStatus = o.notifyStatus || 'not_sent';
+      var signed = !!(o.signed || o.isSigned);
+      var badgeNotify =
+        notifyStatus === 'sent'
+          ? '<span style="background:#1890ff;color:#fff;padding:3px 8px;border-radius:5px;font-size:12px;">📨 已發送自動通知</span>'
+          : '<span style="background:#faad14;color:#fff;padding:3px 8px;border-radius:5px;font-size:12px;">⌛ 未發送自動通知</span>';
+
+      var badgeSigned = signed
+        ? '<span style="background:#52c41a;color:#fff;padding:3px 8px;border-radius:5px;font-size:12px;margin-left:5px;">✅ 已簽收</span>'
+        : '';
+
+      var scheduled = o.scheduledDate
+        ? new Date(o.scheduledDate).toLocaleDateString('zh-TW')
+        : '未指定';
+
+      html +=
+        '<div class="user-item" style="display:block; margin-bottom:8px; opacity:' +
+        (signed ? '0.6' : '1') +
+        ';">' +
+        '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">' +
+        '<div>' +
+        '<strong style="font-size:15px;">#' +
+        (o.customerNumber || '') +
+        ' - ' +
+        (o.customerName || '') +
+        '</strong> ' +
+        badgeNotify +
+        badgeSigned +
+        '</div>' +
+        '<div style="font-size:18px; font-weight:bold; color:#667eea;">NT$ ' +
+        ((o.amount || 0).toLocaleString()) +
+        '</div>' +
+        '</div>' +
+        '<div style="font-size:13px; color:#666; margin-bottom:8px;">' +
+        '<div>指定外送日期：' +
+        scheduled +
+        '</div>' +
+        (o.note
+          ? '<div>備註：' + (o.note || '').replace(/\n/g, '<br>') + '</div>'
+          : '') +
+        '</div>' +
+        '<div style="display:flex; gap:5px; flex-wrap:wrap;">';
+
+      if (!signed) {
+        html +=
+          '<button class="btn btn-small btn-secondary" onclick="markDeliverySigned(\'' +
+          id +
+          '\')">✅ 已簽收</button>';
+      }
+
+      html +=
+        '<button class="btn btn-small" style="background:#ff9800;color:#fff;" onclick="editDelivery(\'' +
+        id +
+        '\')">✏️ 編輯</button>' +
+        '<button class="btn btn-small btn-danger" onclick="deleteDelivery(\'' +
+        id +
+        '\')">🗑️ 刪除</button>' +
+        '</div>' +
+        '</div>';
+    });
+  });
+
+  wrap.innerHTML = html;
+}
+
+// 依 ID 找到紀錄
+function findDeliveryById(id) {
+  return (allDeliveries || []).find(function(o) {
+    return (o.id || o.recordId || '') === id;
+  });
+}
+
+// 標記為已簽收
+async function markDeliverySigned(id) {
+  if (!id) return;
+  if (!confirm('確認將此外送紀錄標記為「已簽收」？')) return;
+
+  try {
+    var res = await fetch('/api/delivery/mark-signed', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: id })
+    });
+    var data = await res.json();
+    if (data.success) {
+      showResult('success', '✅ 已標記為已簽收');
+      loadDeliveries(false);
+    } else {
+      showResult('error', '❌ 更新失敗：' + (data.error || '未知錯誤'));
+    }
+  } catch (e) {
+    showResult('error', '❌ 連線失敗：' + e.message);
+  }
+}
+
+// 刪除外送紀錄
+async function deleteDelivery(id) {
+  if (!id) return;
+  if (!confirm('確定要刪除此外送紀錄？')) return;
+
+  try {
+    var res = await fetch('/api/delivery/order/' + encodeURIComponent(id), {
+      method: 'DELETE'
+    });
+    var data = await res.json();
+    if (data.success) {
+      showResult('success', '✅ 已刪除外送紀錄');
+      loadDeliveries(false);
+    } else {
+      showResult('error', '❌ 刪除失敗：' + (data.error || '未知錯誤'));
+    }
+  } catch (e) {
+    showResult('error', '❌ 連線失敗：' + e.message);
+  }
+}
+
+// 編輯外送紀錄（簡單版，用 prompt）
+async function editDelivery(id) {
+  var record = findDeliveryById(id);
+  if (!record) {
+    alert('找不到此紀錄');
+    return;
+  }
+
+  var amountStr = prompt('修改金額（目前：' + (record.amount || 0) + '）', record.amount || 0);
+  if (amountStr === null) return;
+  var amount = parseInt(amountStr, 10);
+  if (isNaN(amount) || amount < 0) {
+    alert('金額格式不正確');
+    return;
+  }
+
+  var note = prompt('修改備註（可以留空）', record.note || '');
+  if (note === null) note = record.note || '';
+
+  var notifyOk = confirm('是否已發送自動通知？\n「確定」= 已發送自動通知\n「取消」= 未發送自動通知');
+  var notifyStatus = notifyOk ? 'sent' : 'not_sent';
+
+  var dateStr = prompt(
+    '指定外送日期（格式：YYYY-MM-DD，可留空表示不變）\n目前：' +
+      (record.scheduledDate || '未指定'),
+    record.scheduledDate || ''
+  );
+  if (dateStr !== null && dateStr.trim() === '') dateStr = null;
+
+  try {
+    var res = await fetch('/api/delivery/update', {
+      method: 'POST', // 也可以改成 PUT，看你後端怎麼寫
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id          : id,
+        amount      : amount,
+        note        : note,
+        notifyStatus: notifyStatus,
+        scheduledDate: dateStr
+      })
+    });
+    var data = await res.json();
+    if (data.success) {
+      showResult('success', '✅ 外送紀錄已更新');
+      loadDeliveries(false);
+    } else {
+      showResult('error', '❌ 更新失敗：' + (data.error || '未知錯誤'));
+    }
+  } catch (e) {
+    showResult('error', '❌ 連線失敗：' + e.message);
+  }
+}
+
+// 今天有排程就自動跳提醒
+function checkTodayDeliveryAlerts() {
+  if (!allDeliveries || allDeliveries.length === 0) return;
+
+  var today = new Date().toISOString().substring(0, 10);
+
+  var todayList = allDeliveries.filter(function(o) {
+    var sd = (o.scheduledDate || '').toString().substring(0, 10);
+    var signed = !!(o.signed || o.isSigned);
+    return sd === today && !signed;
+  });
+
+  if (todayList.length === 0) return;
+
+  var msg = '📣 今天共有 ' + todayList.length + ' 筆外送排程：\n\n';
+  todayList.forEach(function(o) {
+    msg +=
+      '#'+ (o.customerNumber || '') +
+      ' ' + (o.customerName || '') +
+      ' 金額 NT$ ' + ((o.amount || 0).toLocaleString()) +
+      '\n';
+  });
+
+  alert(msg);
+}
+
     // ========================================
    // ========================================
 // 📢 純文字通知功能（獨立分頁版）
@@ -1359,6 +1770,7 @@ document.getElementById('notificationForm').addEventListener('submit', async fun
 document.addEventListener('DOMContentLoaded', function() {
   initLoad();
   loadNotifyTemplates();
+  loadDeliveries(true);
 });
     
   </script>
