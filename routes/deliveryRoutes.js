@@ -11,13 +11,19 @@ const FILE_PATH = path.join(DATA_DIR, 'delivery.json');
 
 // 確保資料夾 & 檔案存在
 function ensureFile() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
+  // 建資料夾
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+
+  // 如果檔案不存在就初始化一份
   if (!fs.existsSync(FILE_PATH)) {
-    fs.writeFileSync(FILE_PATH, JSON.stringify({ orders: [] }, null, 2), 'utf8');
+    fs.writeFileSync(
+      FILE_PATH,
+      JSON.stringify({ orders: [] }, null, 2),
+      'utf8'
+    );
   }
 }
+
 
 function loadData() {
   ensureFile();
