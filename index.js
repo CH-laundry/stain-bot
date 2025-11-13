@@ -627,7 +627,6 @@ async function handleLinePayConfirm(transactionId, orderId, parentOrderId) {
 }
 
 // ====== 綠界 ReturnURL（伺服器背景通知）======
-// 支援 POST / GET；為避免綠界重試，先回 "1|OK"（若你想嚴謹驗章後再回，也可移到成功分支最後）
 function generateECPayCheckMacValue(params) {
   const { ECPAY_HASH_KEY, ECPAY_HASH_IV } = process.env;
   const data = { ...params };
@@ -658,85 +657,284 @@ function generateECPayCheckMacValue(params) {
 
 app.all('/payment/ecpay/callback', async (req, res) => {
   try {
-    // 1) 先回覆綠界，避免重試
-    res.type('text').send('1|OK');
-
-    // 2) 取得回傳資料（綠界可能用 POST，也可能 GET）
+    // 1) 取得回傳資料（綠界可能用 POST，也可能 GET）
     const data = { ...req.body, ...req.query };
 
-    // 3) 驗證 CheckMacValue
+    // 2) 驗證 CheckMacValue
     const mac = String(data.CheckMacValue || '');
     const calc = generateECPayCheckMacValue(data);
+    
     if (!mac || mac.toUpperCase() !== calc.toUpperCase()) {
       logger.logToFile('[ECPAY][WARN] CheckMacValue 不一致，疑似假通知或金鑰不符');
-      return; // 不處理
+      return res.status(400).send(`
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>驗證失敗</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      padding: 50px 20px;
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      color: white;
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .container {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 20px;
+      padding: 40px;
+      max-width: 500px;
+    }
+    h1 { font-size: 32px; margin-bottom: 20px; }
+    p { font-size: 18px; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>⚠️ 驗證失敗</h1>
+    <p>付款資料驗證失敗<br>請聯繫客服確認</p>
+  </div>
+</body>
+</html>
+      `);
     }
 
-    // 4) 僅在成功時處理：RtnCode === '1'
-    if (String(data.RtnCode) !== '1') {
+    // 3) 判斷是否為付款成功
+    const isSuccess = String(data.RtnCode) === '1';
+    
+    // 4) 先回傳美化的頁面給用戶看
+    if (isSuccess) {
+      const amount = Number(data.TradeAmt || data.Amount || 0);
+      const payType = data.PaymentType || 'ECPay';
+      
+      res.status(200).send(`
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>付款成功 - 綠界</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      padding: 50px 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .container {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 20px;
+      padding: 40px;
+      max-width: 500px;
+      margin: 0 auto;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    }
+    .success-icon {
+      font-size: 80px;
+      margin-bottom: 20px;
+      animation: scaleIn 0.5s ease-out;
+    }
+    h1 {
+      color: #fff;
+      font-size: 32px;
+      margin: 20px 0;
+      font-weight: 700;
+    }
+    p {
+      font-size: 18px;
+      line-height: 1.6;
+      margin: 15px 0;
+    }
+    .amount {
+      font-size: 28px;
+      font-weight: 700;
+      background: rgba(255, 255, 255, 0.25);
+      padding: 15px;
+      border-radius: 12px;
+      margin: 20px 0;
+    }
+    .note {
+      font-size: 14px;
+      opacity: 0.9;
+      margin-top: 25px;
+    }
+    @keyframes scaleIn {
+      0% { transform: scale(0); }
+      50% { transform: scale(1.1); }
+      100% { transform: scale(1); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="success-icon">✅</div>
+    <h1>付款成功！</h1>
+    <p>您的付款已完成</p>
+    <div class="amount">NT$ ${amount.toLocaleString()}</div>
+    <p>付款方式：${payType}</p>
+    <p class="note">感謝您的支付 💙<br>我們已收到您的付款通知<br>系統會自動為您處理訂單<br><br>您可以關閉此頁面了</p>
+  </div>
+</body>
+</html>
+      `);
+    } else {
+      // 付款失敗頁面
+      res.status(200).send(`
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>付款失敗</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      padding: 50px 20px;
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      color: white;
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .container {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 20px;
+      padding: 40px;
+      max-width: 500px;
+    }
+    .icon { font-size: 80px; margin-bottom: 20px; }
+    h1 { font-size: 32px; margin: 20px 0; }
+    p { font-size: 18px; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="icon">❌</div>
+    <h1>付款未完成</h1>
+    <p>${data.RtnMsg || '付款處理失敗'}</p>
+    <p style="font-size: 14px; margin-top: 25px;">如有問題請聯繫客服</p>
+  </div>
+</body>
+</html>
+      `);
       logger.logToFile(`[ECPAY][INFO] 非成功回傳：RtnCode=${data.RtnCode} Msg=${data.RtnMsg || ''}`);
       return;
     }
 
-    // ✅【新增這段：更新訂單狀態為已付款】
-    const allOrders = orderManager.getAllOrders();
-    for (const order of allOrders) {
-      const oid = order.orderId; // ← 用真正的訂單編號，而不是陣列索引
-      if (
-        order.userId === data.CustomField1 &&
-        Number(order.amount) === Number(data.TradeAmt || data.Amount || 0) &&
-        order.status !== 'paid'
-      ) {
-        orderManager.updateOrderStatus(oid, 'paid', 'ECPay');
-        logger.logToFile(`[ECPAY][UPDATE] 訂單 ${oid} 狀態更新為已付款`);
-        break;
+    // 5) 背景處理訂單更新（不阻塞回應）
+    setImmediate(async () => {
+      try {
+        const merchantTradeNo = data.MerchantTradeNo;
+        const amount = Number(data.TradeAmt || data.Amount || 0);
+        const payType = data.PaymentType || 'ECPay';
+        const payTime = data.PaymentDate || '';
+        const userId = data.CustomField1 || '';
+        const userName = data.CustomField2 || '';
+
+        logger.logToFile(`[ECPAY][SUCCESS] ${merchantTradeNo} 成功 NT$${amount} ${payType} ${payTime} user=${userName}/${userId}`);
+
+        // 更新訂單狀態
+        const allOrders = orderManager.getAllOrders();
+        for (const order of allOrders) {
+          const oid = order.orderId;
+          if (
+            order.userId === userId &&
+            Number(order.amount) === amount &&
+            order.status !== 'paid'
+          ) {
+            orderManager.updateOrderStatus(oid, 'paid', 'ECPay');
+            logger.logToFile(`[ECPAY][UPDATE] 訂單 ${oid} 狀態更新為已付款`);
+            break;
+          }
+        }
+
+        // 通知老闆
+        if (process.env.ADMIN_USER_ID) {
+          client.pushMessage(process.env.ADMIN_USER_ID, {
+            type: 'text',
+            text:
+              `✅ 綠界付款成功\n\n` +
+              `客戶：${userName || '-'}\n` +
+              `金額：NT$ ${amount.toLocaleString()}\n` +
+              `方式：${payType}\n` +
+              `綠界單號：${merchantTradeNo}\n` +
+              (payTime ? `時間：${payTime}\n` : '') +
+              `狀態：已付款`
+          }).catch(() => {});
+        }
+
+        // 通知客人
+        if (userId && userId !== 'undefined') {
+          client.pushMessage(userId, {
+            type: 'text',
+            text:
+              `✅ 付款成功（綠界）\n\n` +
+              (userName ? `感謝 ${userName} 的支付\n` : '') +
+              `金額：NT$ ${amount.toLocaleString()}\n` +
+              `非常謝謝您，感謝您的支持 💙`
+          }).catch(() => {});
+        }
+      } catch (err) {
+        logger.logError('[ECPAY][ERROR] 背景處理失敗', err);
       }
-    }
+    });
 
-
-
-    // 5) 取必要欄位（依你送單時的 CustomField）
-    const merchantTradeNo = data.MerchantTradeNo;
-    const amount = Number(data.TradeAmt || data.Amount || 0);
-    const payType = data.PaymentType || 'ECPay';
-    const payTime = data.PaymentDate || '';
-    const userId = data.CustomField1 || '';   // 你送單時塞入的 LINE userId
-    const userName = data.CustomField2 || ''; // 你送單時塞入的客戶姓名
-
-    logger.logToFile(`[ECPAY][SUCCESS] ${merchantTradeNo} 成功 NT$${amount} ${payType} ${payTime} user=${userName}/${userId}`);
-
-    // 6)（可選）若有自家訂單對應，這裡更新狀態
-    // const orderId = mapEcpayToOrderId(merchantTradeNo); // 若你有建立 mapping
-    // orderManager.updateOrderStatus(orderId, 'paid', 'ECPay');
-
-    // 7) 通知老闆（ADMIN_USER_ID）
-    if (process.env.ADMIN_USER_ID) {
-      client.pushMessage(process.env.ADMIN_USER_ID, {
-        type: 'text',
-        text:
-          `✅ 綠界付款成功\n\n` +
-          `客戶：${userName || '-'}\n` +
-          `金額：NT$ ${amount.toLocaleString()}\n` +
-          `方式：${payType}\n` +
-          `綠界單號：${merchantTradeNo}\n` +
-          (payTime ? `時間：${payTime}\n` : '') +
-          `狀態：已付款`
-      }).catch(() => {});
-    }
-
-    // 8) 通知客人（以 CustomField1 的 userId 推播）
-    if (userId && userId !== 'undefined') {
-      client.pushMessage(userId, {
-        type: 'text',
-        text:
-          `✅ 付款成功（綠界）\n\n` +
-          (userName ? `感謝 ${userName} 的支付\n` : '') +
-          `金額：NT$ ${amount.toLocaleString()}\n` +
-          `非常謝謝您，感謝您的支持 💙`
-      }).catch(() => {});
-    }
   } catch (err) {
     logger.logError('[ECPAY][ERROR] 回調處理失敗', err);
+    res.status(500).send(`
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>系統錯誤</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      padding: 50px 20px;
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      color: white;
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .container {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 20px;
+      padding: 40px;
+      max-width: 500px;
+    }
+    h1 { font-size: 32px; margin-bottom: 20px; }
+    p { font-size: 18px; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>⚠️ 系統錯誤</h1>
+    <p>處理付款時發生錯誤<br>請聯繫客服確認付款狀態</p>
+  </div>
+</body>
+</html>
+    `);
   }
 });
 
