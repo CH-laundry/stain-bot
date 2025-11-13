@@ -299,7 +299,7 @@ async function detectBrandFromImageB64(base64Image) {
           }
         ],
         temperature: 0,
-        max_tokens: 120
+        max_completion_tokens: 120
       });
       return resp;
     });
@@ -348,7 +348,7 @@ async function detectBrandFromText(text) {
           { role: "user", content: text }
         ],
         temperature: 0,
-        max_tokens: 80
+       max_completion_tokens: 80
       });
       return resp;
     });
@@ -495,7 +495,7 @@ async function analyzeStainWithAI(imageBuffer, materialInfo = "", labelImageBuff
           { role: "user", content: userContent },
         ],
         temperature: 0.5,
-        max_tokens: 2000, // 增加 tokens 以容納完整表格
+        max_completion_tokens: 2000, // 增加 tokens 以容納完整表格
       });
     });
 
@@ -700,7 +700,7 @@ async function smartAutoReply(inputText) {
               { role: "user", content: text },
             ],
             temperature: 0.85,
-            max_tokens: 220,
+            max_completion_tokens: 220,
           });
           return resp;
         });
