@@ -283,12 +283,12 @@ async function detectBrandFromImageB64(base64Image) {
   try {
     const result = await retryWithBackoff(async () => {
       const resp = await openaiClient.chat.completions.create({
-        model: "gpt-5-mini",
+        model: "gpt-4o",
         messages: [
           {
             role: "system",
             content:
-              "你是精品品牌辨識首席顧問。請只回傳 JSON,格式為 {\"brand\":\"品牌英文名或中文名\",\"confidence\":0-100}。若無把握,brand 填 \"無\"、confidence 給 0。"
+              "你是精品品牌辨識助手。請只回傳 JSON,格式為 {\"brand\":\"品牌英文名或中文名\",\"confidence\":0-100}。若無把握,brand 填 \"無\"、confidence 給 0。"
           },
           {
             role: "user",
@@ -299,7 +299,7 @@ async function detectBrandFromImageB64(base64Image) {
           }
         ],
         temperature: 0,
-        max_completion_tokens: 120
+        max_tokens: 120
       });
       return resp;
     });
@@ -338,7 +338,7 @@ async function detectBrandFromText(text) {
   try {
     const result = await retryWithBackoff(async () => {
       const resp = await openaiClient.chat.completions.create({
-        model: "gpt-5-mini",
+        model: "gpt-4o-mini",
         messages: [
           {
             role: "system",
@@ -348,7 +348,7 @@ async function detectBrandFromText(text) {
           { role: "user", content: text }
         ],
         temperature: 0,
-       max_completion_tokens: 80
+        max_tokens: 80
       });
       return resp;
     });
@@ -374,7 +374,7 @@ async function detectBrandFromText(text) {
   }
 }
 
-/* =================== 污漬智能分析(GPT-5 版本)=================== */
+/* =================== 污漬智能分析 =================== */
 async function analyzeStainWithAI(imageBuffer, materialInfo = "", labelImageBuffer = null) {
   log('ANALYZE', 'Starting stain analysis', { 
     hasImage: !!imageBuffer, 
@@ -384,7 +384,7 @@ async function analyzeStainWithAI(imageBuffer, materialInfo = "", labelImageBuff
 
   if (IS_DEVELOPMENT && USE_MOCK) {
     log('MOCK', 'Using mock stain analysis');
-    return "【測試模式】這是模擬的污漬分析結果";
+    return "【測試模式】這是模擬的污漬分析結果\n\n【分析】\n物品為深色外套,右袖有明顯油性污漬。\n\n【清潔建議】\n建議交給 C.H 精緻洗衣專業處理 💙";
   }
 
   const validation = validateImage(imageBuffer);
@@ -406,122 +406,95 @@ async function analyzeStainWithAI(imageBuffer, materialInfo = "", labelImageBuff
     const base64Label = labelImageBuffer ? labelImageBuffer.toString("base64") : "";
     
     const userContent = [
-      { type: "text", text: "請詳細分析此物品與污漬,並提供專業清潔評估。" },
-      ...(materialInfo ? [{ type: "text", text: `材質資訊:${materialInfo}` }] : []),
+      { type: "text", text: "請盡可能詳細分析此物品與污漬,並提供簡短清潔建議。" },
+      ...(materialInfo ? [{ type: "text", text: `衣物材質:${materialInfo}` }] : []),
       { type: "image_url", image_url: { url: `data:image/png;base64,${base64Image}` } },
     ];
     
     if (base64Label) {
-      userContent.push({ type: "text", text: "以下是洗滌標籤供參考:" });
+      userContent.push({ type: "text", text: "以下是洗滌標籤,僅供參考:" });
       userContent.push({ type: "image_url", image_url: { url: `data:image/png;base64,${base64Label}` } });
     }
 
+    const maxTokens = base64Label ? 1200 : 1000;
+
     const resp = await retryWithBackoff(async () => {
       return await openaiClient.chat.completions.create({
-        model: "gpt-5-mini", // ✅ 改用 GPT-5 Mini(性價比最佳)
+        model: "gpt-4o",
         messages: [
           {
             role: "system",
             content: `
-你是 C.H 精緻洗衣的專業清潔顧問。請用繁體中文進行專業分析。
+你是 C.H 精緻洗衣的專業清潔顧問,請用口語化繁體中文分析。
 
-**回覆格式(必須嚴格遵守):**
+**分析步驟:**
+1. 首先判斷物品類型(包包/鞋子/衣服/其他)
+2. 識別品牌(參考已知品牌列表)
+3. 分析污漬種類與嚴重程度
+4. 評估清洗成功率
+5. 給出專業建議
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-一、基本資訊(圖像辨識結果)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-| 項目 | 辨識結果 |
-|------|----------|
-| 品牌 | [品牌名稱或"無法確定"] |
-| 物品類型 | [包包/精品包/鞋子/衣物/其他] |
-| 材質 | [詳細材質組成與比例] |
-| 特殊設計 | [五金/拉鍊/塗層/刺繡等] |
-| 使用年限 | [估計使用時間與狀況] |
+**回覆格式:**
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-二、整體品質評估(滿分 10 分)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-| 項目 | 評分 | 說明 |
-|------|------|------|
-| 結構完整性 | X.X / 10 | [變形/破損/五金狀況] |
-| 磨損程度 | X.X / 10 | [依物品類型分析] |
-| 材質老化 | X.X / 10 | [變色/龜裂/起毛球] |
-| 衛生狀況 | X.X / 10 | [異味/霉斑/細菌] |
-| 整體外觀 | X.X / 10 | [視覺新穎度] |
+📦 物品類型:[包包/鞋子/衣服/其他]
+🏷️ 品牌:[品牌名稱或"無法確定"]
 
-**總評:** [綜合評語,50字內]
+【分析】
+- 物品與污漬狀況(2–4 句:位置、範圍、顏色、滲入深度)
+- 材質特性與注意(縮水/掉色/塗層/皮革護理等)
+- 污漬可能來源(油/汗/化妝/墨水/咖啡…)
+- 清潔成功機率(可附百分比,但偏保守;用「有機會改善/可望提升外觀」)
+- 結尾:我們會根據材質特性進行適當清潔,確保最佳效果。
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-三、污漬類型與分佈(高解析圖像分割)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-| 區域 | 污漬類型 | 成因 | 附著深度 |
-|------|----------|------|----------|
-| [位置1] | [污漬種類] | [可能原因] | [表層/中層/深層] |
-| [位置2] | [污漬種類] | [可能原因] | [表層/中層/深層] |
-| [位置3] | [污漬種類] | [可能原因] | [表層/中層/深層] |
+【清潔建議】
+- 只寫 1–2 句,不提供 DIY 比例,不使用「保證/一定」字眼
+- 可說「若擔心,建議交給 C.H 精緻洗衣專業處理,避免自行操作造成二次損傷 💙」
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-四、有效清潔率預測(AI 推理模擬)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-| 清潔方式 | 預計恢復度 | 有效清潔率 | 備註 |
-|----------|------------|------------|------|
-| 1. 乾刷 + 吸塵 | XX% | XX% | [簡易說明] |
-| 2. 專業深層清潔 | XX% | XX% | **推薦!** [原因] |
-| 3. 手洗處理 | XX% | XX% | [風險提示] |
-| 4. 機洗(若適用) | XX% | XX% | [注意事項] |
-| 5. 僅表面擦拭 | XX% | XX% | [效果說明] |
-
-**結論:** 最高有效清潔率 = XX%(專業處理)
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-五、C.H 精緻洗衣專業建議
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-**建議處理方式:** [2-3句專業建議]
-
-**注意事項:** [材質特殊性/風險提示]
-
-**預期效果:** [保守評估改善幅度]
-
-💙 我們會根據材質特性進行適當清潔,確保最佳效果。
-
-**分析要點:**
-- 針對「包包/精品包」:分析皮革種類(牛皮/羊皮/麂皮)、五金氧化、內襯狀況
-- 針對「鞋子」:分析鞋面/鞋底/鞋墊分別狀況、防水層、黃變程度
-- 針對「衣物」:分析布料特性、縮水風險、染色問題、鈕扣/拉鍊狀況
-- 污漬成功率需保守評估,避免過度承諾
-- 表格必須對齊,使用全形空格調整
+**注意事項:**
+- 包包:特別注意皮革/帆布材質差異
+- 鞋子:留意鞋底/鞋面材質與清潔方式
+- 衣服:分析布料種類與染色風險
 `.trim(),
           },
           { role: "user", content: userContent },
         ],
-        temperature: 0.5,
-        max_completion_tokens: 2000, // 增加 tokens 以容納完整表格
+        temperature: 0.6,
+        max_tokens: maxTokens,
       });
     });
 
     let out = resp?.choices?.[0]?.message?.content || "建議交給 C.H 精緻洗衣評估與處理喔 😊";
-    
-    // 清理格式
     out = out.replace(/\*\*/g, "");
     out = reducePercentages(out, 5);
     
-    // 確保結尾提示
     if (!/我們會根據材質特性進行適當清潔,確保最佳效果。/.test(out)) {
-      out += `\n\n💙 我們會根據材質特性進行適當清潔,確保最佳效果。`;
+      out += `\n我們會根據材質特性進行適當清潔,確保最佳效果。`;
     }
 
-    // 品牌辨識補充(如果 AI 沒識別出來)
-    if (!out.includes("| 品牌 |") || out.includes("無法確定")) {
+    // ✅ 修正:如果 AI 沒有識別出品牌,嘗試用品牌辨識
+    if (!out.includes("🏷️ 品牌:")) {
       let best = await detectBrandFromImageB64(base64Image);
       if (!best) best = await detectBrandFromText(out);
       
       if (best && best.brand) {
         const conf = Math.round(Math.max(0, Math.min(100, best.confidence)));
-        out = out.replace(
-          /\| 品牌 \|.*?\|/,
-          `| 品牌 | ${best.brand}(信心度 ${conf}%) |`
-        );
-        log('ANALYZE', `Brand added: ${best.brand}`);
+        const lines = out.split('\n');
+        if (lines[0] && lines[0].includes('📦 物品類型:')) {
+          lines.splice(1, 0, `🏷️ 品牌:${best.brand}(信心約 ${conf}%)`);
+          out = lines.join('\n');
+        } else {
+          out = `🏷️ 品牌:${best.brand}(信心約 ${conf}%)\n\n${out}`;
+        }
+        log('ANALYZE', `Brand added to analysis: ${best.brand}`);
+      }
+    } else if (out.includes("無法確定")) {
+      let best = await detectBrandFromImageB64(base64Image);
+      if (!best) best = await detectBrandFromText(out);
+      
+      if (best && best.brand) {
+        const conf = Math.round(Math.max(0, Math.min(100, best.confidence)));
+        out = out.replace(/🏷️ 品牌:.*?無法確定.*?\n/, `🏷️ 品牌:${best.brand}(信心約 ${conf}%)\n`);
+        log('ANALYZE', `Brand updated in analysis: ${best.brand}`);
       }
     }
 
@@ -691,7 +664,7 @@ async function smartAutoReply(inputText) {
       try {
         const aiReply = await retryWithBackoff(async () => {
           const resp = await openaiClient.chat.completions.create({
-            model: "gpt-5-mini",
+            model: "gpt-4",
             messages: [
               { 
                 role: "system", 
@@ -700,7 +673,7 @@ async function smartAutoReply(inputText) {
               { role: "user", content: text },
             ],
             temperature: 0.85,
-            max_completion_tokens: 220,
+            max_tokens: 220,
           });
           return resp;
         });
