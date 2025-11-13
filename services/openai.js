@@ -418,7 +418,13 @@ async function analyzeStainWithAI(imageBuffer, materialInfo = "", labelImageBuff
 
     const maxTokens = 2500;
 
-   content: `
+const resp = await retryWithBackoff(async () => {
+  return await openaiClient.chat.completions.create({
+    model: "gpt-4o",
+    messages: [
+      {
+        role: "system",
+        content: `
 你是 C.H 精緻洗衣的專業清潔顧問,擁有超過 15 年精品護理經驗。請用繁體中文進行深度專業分析。
 
 **重要:請先判斷物品類型(鞋子/包包/精品包/衣物),然後使用對應的分析格式**
@@ -617,12 +623,13 @@ async function analyzeStainWithAI(imageBuffer, materialInfo = "", labelImageBuff
 - 評分需客觀,避免全給高分或低分
 - 最後一定要導向「建議交給 C.H 精緻洗衣」
 `.trim(),
-          { role: "user", content: userContent },
-        ],
-        temperature: 0.6,
-        max_tokens: maxTokens,
-      });
-    });
+      },
+      { role: "user", content: userContent },
+    ],
+    temperature: 0.6,
+    max_tokens: maxTokens,
+  });
+});
 
     let out = resp?.choices?.[0]?.message?.content || "建議交給 C.H 精緻洗衣評估與處理喔 😊";
     out = out.replace(/\*\*/g, "");
