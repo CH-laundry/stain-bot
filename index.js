@@ -741,18 +741,92 @@ app.all('/payment/ecpay/callback', async (req, res) => {
 });
 
 // ====== 修正：GET + POST 都支援，立即回應 200 ======
+// ====== 修正：GET + POST 都支援，立即回應美化頁面 ======
 app.all('/payment/linepay/confirm', async (req, res) => {
   const { transactionId, orderId, parentOrderId } = { ...req.query, ...req.body };
   
-  // 立即回應，阻止 LINE Pay 重試
-  res.status(200).send('OK');
+  // 立即回應美化的成功頁面給用戶看
+  res.status(200).send(`
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>付款成功 - LINE Pay</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      padding: 50px 20px;
+      background: linear-gradient(135deg, #06C755 0%, #00B900 100%);
+      color: white;
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .container {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 20px;
+      padding: 40px;
+      max-width: 500px;
+      margin: 0 auto;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    }
+    .success-icon {
+      font-size: 80px;
+      margin-bottom: 20px;
+      animation: scaleIn 0.5s ease-out;
+    }
+    h1 {
+      color: #fff;
+      font-size: 32px;
+      margin: 20px 0;
+      font-weight: 700;
+    }
+    p {
+      font-size: 18px;
+      line-height: 1.6;
+      margin: 15px 0;
+    }
+    .amount {
+      font-size: 28px;
+      font-weight: 700;
+      background: rgba(255, 255, 255, 0.25);
+      padding: 15px;
+      border-radius: 12px;
+      margin: 20px 0;
+    }
+    .note {
+      font-size: 14px;
+      opacity: 0.9;
+      margin-top: 25px;
+    }
+    @keyframes scaleIn {
+      0% { transform: scale(0); }
+      50% { transform: scale(1.1); }
+      100% { transform: scale(1); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="success-icon">✅</div>
+    <h1>付款成功！</h1>
+    <p>您的 LINE Pay 付款已完成</p>
+    <div class="amount">感謝您的支付 💙</div>
+    <p class="note">我們已收到您的付款通知<br>系統會自動為您處理訂單<br><br>您可以關閉此頁面了</p>
+  </div>
+</body>
+</html>
+  `);
 
-  // 背景處理
+  // 背景處理確認邏輯（不影響用戶體驗）
   setImmediate(() => {
     handleLinePayConfirm(transactionId, orderId, parentOrderId).catch(() => {});
   });
 });
-
 // ====== 其餘 API 保持不變（以下全部保留） ======
 app.get('/api/orders', (req, res) => {
   const { status } = req.query;
