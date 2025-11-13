@@ -283,7 +283,7 @@ async function detectBrandFromImageB64(base64Image) {
   try {
     const result = await retryWithBackoff(async () => {
       const resp = await openaiClient.chat.completions.create({
-        model: "gpt-5",
+        model: "gpt-4o",
         messages: [
           {
             role: "system",
@@ -298,7 +298,8 @@ async function detectBrandFromImageB64(base64Image) {
             ]
           }
         ],
-        max_completion_tokens: 120
+        temperature: 0,
+        max_tokens: 120
       });
       return resp;
     });
@@ -337,7 +338,7 @@ async function detectBrandFromText(text) {
   try {
     const result = await retryWithBackoff(async () => {
       const resp = await openaiClient.chat.completions.create({
-        model: "gpt-5-mini",
+        model: "gpt-4o-mini",
         messages: [
           {
             role: "system",
@@ -346,7 +347,8 @@ async function detectBrandFromText(text) {
           },
           { role: "user", content: text }
         ],
-        max_completion_tokens: 80
+        temperature: 0,
+        max_tokens: 80
       });
       return resp;
     });
@@ -418,7 +420,7 @@ async function analyzeStainWithAI(imageBuffer, materialInfo = "", labelImageBuff
 
     const resp = await retryWithBackoff(async () => {
       return await openaiClient.chat.completions.create({
-        model: "gpt-5",
+        model: "gpt-4o",
         messages: [
           {
             role: "system",
@@ -456,7 +458,8 @@ async function analyzeStainWithAI(imageBuffer, materialInfo = "", labelImageBuff
           },
           { role: "user", content: userContent },
         ],
-        max_completion_tokens: maxTokens,
+        temperature: 0.6,
+        max_tokens: maxTokens,
       });
     });
 
