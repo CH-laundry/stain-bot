@@ -269,11 +269,26 @@ function setCachedResult(key, data) {
   }, CACHE_EXPIRY);
 }
 
-/* ---------------- 品牌辨識 ---------------- */
+/* ---------------- 品牌辨識（升級版：完整鑑定報告） ---------------- */
 async function detectBrandFromImageB64(base64Image) {
   if (IS_DEVELOPMENT && USE_MOCK) {
     log('MOCK', 'Using mock brand detection from image');
-    return { brand: "Nike", confidence: 85 };
+    return {
+      report: `---
+【鑑定報告】
+
+| 項目 | 結果 |
+|------|------|
+| 物品類型 | 鞋子 |
+| 品牌 | Nike |
+| 推估年份 | 2022–2024 |
+| 材質特徵 | 網布 + 橡膠大底 |
+| 磨損程度 | 輕微 |
+
+鑑定師結語：
+這雙鞋保存狀況良好，適合日常使用。
+請將此物品送至 C.H 精緻洗衣，我們將提供專業鑑定與報價。`
+    };
   }
 
   const cacheKey = getCacheKey(base64Image);
@@ -282,38 +297,63 @@ async function detectBrandFromImageB64(base64Image) {
 
   try {
     const result = await retryWithBackoff(async () => {
-      const resp = await openaiClient.chat.completions.create({
+      return await openaiClient.chat.completions.create({
         model: "gpt-4o",
         messages: [
           {
             role: "system",
-            content:
-              "你是精品品牌辨識助手。請只回傳 JSON,格式為 {\"brand\":\"品牌英文名或中文名\",\"confidence\":0-100}。若無把握,brand 填 \"無\"、confidence 給 0。"
+            content: `你現在是「C.H 精緻洗衣」的首席鑑定師，使用 GPT-5.1 Thinking 級深度推理模式，語氣權威、精準、專業。
+
+任務（嚴格執行）：
+1. 精確辨識物品類型（鞋子 / 包包 / 衣服 / 其他）
+2. 從 Logo、字樣、縫線、設計風格、材質紋理，100% 準確辨識品牌
+3. 根據設計年代、磨損程度、材質老化，推估年份範圍（例如 2018–2020）
+4. 絕對不教任何清潔方法、不提「髒汙」「污漬」「清洗」
+5. 結尾強制說：「可將此物品送至 C.H 精緻洗衣，我們將提供清潔處理。」
+
+輸出格式（必須一模一樣，禁止多餘文字）：
+---
+【鑑定報告】
+
+| 項目 | 結果 |
+|------|------|
+| 物品類型 | [鞋子 / 包包 / 衣服] |
+| 品牌 | [品牌名稱] |
+| 推估年份 | [XXXX–XXXX] |
+| 材質特徵 | [簡述，如：小牛皮 + 帆布拼接] |
+| 磨損程度 | [輕微 / 中度 / 嚴重] |
+
+鑑定師結語：
+這件[物品]保存狀況[良好/尚可/需維護]，[極具收藏價值 / 適合日常使用]。
+請將此物品送至 C.H 精緻洗衣，我們將提供專業鑑定與報價。`
           },
           {
             role: "user",
             content: [
-              { type: "text", text: "請辨識圖片中的品牌(包包、鞋子、衣服都可以)。" },
+              { type: "text", text: "請嚴格按照上面的格式，分析這張圖片中的物品。" },
               { type: "image_url", image_url: { url: `data:image/png;base64,${base64Image}` } }
             ]
           }
         ],
-        temperature: 0,
-        max_tokens: 120
+        temperature: 0.2,
+        max_tokens: 800
       });
-      return resp;
     });
 
     const raw = result?.choices?.[0]?.message?.content || "";
-    const data = parseJSONSafe(raw) || {};
-    let brand = standardizeBrandName(String(data.brand || "").trim());
-    const conf = Math.max(0, Math.min(100, Number(data.confidence || 0)));
-    
-    if (!brand || brand.toLowerCase() === "無") {
-      setCachedResult(cacheKey, null);
-      return null;
-    }
+    const finalReport = raw.trim();
 
+    const finalResult = { report: finalReport };
+    setCachedResult(cacheKey, finalResult);
+    log('BRAND', '完整鑑定報告生成成功');
+    return finalResult;
+
+  } catch (error) {
+    log('ERROR', '鑑定報告生成失敗', error);
+    setCachedResult(cacheKey, null);
+    return null;
+  }
+}
     const finalResult = { brand, confidence: conf };
     setCachedResult(cacheKey, finalResult);
     log('BRAND', `Detected brand from image: ${brand} (${conf}%)`);
