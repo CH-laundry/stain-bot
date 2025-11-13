@@ -298,7 +298,6 @@ async function detectBrandFromImageB64(base64Image) {
             ]
           }
         ],
-        temperature: 0,
         max_completion_tokens: 120
       });
       return resp;
@@ -347,7 +346,6 @@ async function detectBrandFromText(text) {
           },
           { role: "user", content: text }
         ],
-        temperature: 0,
         max_completion_tokens: 80
       });
       return resp;
@@ -458,7 +456,6 @@ async function analyzeStainWithAI(imageBuffer, materialInfo = "", labelImageBuff
           },
           { role: "user", content: userContent },
         ],
-        temperature: 0.6,
         max_completion_tokens: maxTokens,
       });
     });
