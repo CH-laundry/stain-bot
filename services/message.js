@@ -42,7 +42,7 @@ function normalize(text = '') {
 
 /* ======================= 只允許「關鍵字命中」才回覆 ======================= */
 // 嚴格關鍵字模式：AI 僅在白名單命中時回
-const STRICT_KEYWORD_MODE = false;
+const STRICT_KEYWORD_MODE = true;
 
 // 服務動詞 / 汙漬詞 / 類別
 const SERVICE_VERBS = ['洗','清洗','清潔','去污','去漬','除臭','保養','整燙','燙','修補','修復'];
