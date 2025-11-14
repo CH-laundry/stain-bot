@@ -406,7 +406,7 @@ app.get('/payment/redirect', (req, res) => {
   }
 });
 
-app.get('/payment/success', (req, res) => {
+app.all('/payment/success', (req, res) => {
   res.send(`<!DOCTYPE html>
 <html>
 <head>
