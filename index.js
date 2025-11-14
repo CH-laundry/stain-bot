@@ -407,13 +407,77 @@ app.get('/payment/redirect', (req, res) => {
 });
 
 app.get('/payment/success', (req, res) => {
-  res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>付款完成</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white}h1{color:#fff;font-size:32px}p{font-size:18px}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}</style></head><body><div class="container"><h1>付款已完成</h1><p>感謝您的支付,我們會盡快處理您的訂單</p><p>您可以關閉此頁面了</p></div></body></html>');
-});
-
-app.get('/payment/linepay/cancel', (req, res) => {
-  const { transactionId, orderId, parentOrderId } = req.query;
-  logger.logToFile(`[LINEPAY][CANCEL_HIT] tx=${transactionId} payOrderId=${orderId} parentOrderId=${parentOrderId}`);
-  res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>付款取消</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:linear-gradient(135deg,#f093fb 0%,#f5576c 100%);color:white}.container{background:rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:500px;margin:0 auto}</style></head><body><div class="container"><h1>付款已取消</h1><p>您已取消此次付款</p><p>如需協助請聯繫客服</p></div></body></html>');
+  res.send(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>付款成功</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      padding: 50px 20px;
+      background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+      color: white;
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .container {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 20px;
+      padding: 40px;
+      max-width: 500px;
+      margin: 0 auto;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    }
+    .success-icon {
+      font-size: 80px;
+      margin-bottom: 20px;
+      animation: scaleIn 0.5s ease-out;
+    }
+    @keyframes scaleIn {
+      from { transform: scale(0); }
+      to { transform: scale(1); }
+    }
+    h1 {
+      color: #fff;
+      font-size: 48px;
+      margin: 20px 0;
+      font-weight: bold;
+    }
+    p {
+      font-size: 20px;
+      line-height: 1.6;
+      margin: 15px 0;
+    }
+    .highlight {
+      background: rgba(255, 255, 255, 0.25);
+      padding: 20px;
+      border-radius: 12px;
+      margin: 25px 0;
+      font-size: 18px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="success-icon">✅</div>
+    <h1>付款成功！</h1>
+    <div class="highlight">
+      <p><strong>感謝您的支付</strong></p>
+      <p>我們已收到您的付款</p>
+    </div>
+    <p style="font-size: 16px; opacity: 0.9;">
+      系統會自動通知我們處理您的訂單<br>
+      您可以關閉此頁面了
+    </p>
+  </div>
+</body>
+</html>`);
 });
 
 // ====== 綠界持久付款頁 ======
