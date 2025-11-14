@@ -621,13 +621,14 @@ async function analyzeStainWithAI(imageBuffer, materialInfo = "", labelImageBuff
 - 表格必須對齊,使用 | 分隔符
 - 評分需客觀,避免全給高分或低分
 - 最後一定要導向「建議交給 C.H 精緻洗衣」
-`.trim(),
-          { role: "user", content: userContent },
-        ],
-        temperature: 0.6,
-        max_tokens: maxTokens,
-      });
-    });
+`.trim()
+      },
+      { role: "user", content: userContent }
+    ],
+    temperature: 0.6,
+    max_tokens: maxTokens
+  });
+});
 
     let out = resp?.choices?.[0]?.message?.content || "建議交給 C.H 精緻洗衣評估與處理喔 😊";
     out = out.replace(/\*\*/g, "");
