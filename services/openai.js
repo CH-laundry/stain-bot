@@ -423,7 +423,7 @@ async function analyzeStainWithAI(imageBuffer, materialInfo = "", labelImageBuff
         messages: [
           {
             role: "system",
-            content: ` `
+            content: ` 
 你是 C.H 精緻洗衣的專業清潔顧問,擁有超過 15 年精品護理經驗。請用繁體中文進行深度專業分析。
 
 **重要:請先判斷物品類型(鞋子/包包/精品包/衣物),然後使用對應的分析格式**
