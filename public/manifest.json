@@ -2,7 +2,7 @@
   "name": "C.H精緻洗衣 付款管理頁面",
   "short_name": "C.H洗衣",
   "description": "C.H 精緻洗衣 - 付款管理系統",
-  "start_url": "/",
+  "start_url": "/payment",
   "display": "standalone",
   "background_color": "#667eea",
   "theme_color": "#667eea",
