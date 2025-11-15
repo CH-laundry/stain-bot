@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>C.H 洗衣｜快速登入</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Microsoft JhengHei', Arial, sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.container {
+  background: white;
+  padding: 50px 40px;
+  border-radius: 30px;
+  max-width: 450px;
+  width: 100%;
+  box-shadow: 0 25px 70px rgba(0,0,0,0.35);
+  text-align: center;
+}
+
+.logo {
+  font-size: 80px;
+  margin-bottom: 20px;
+}
+
+h1 {
+  color: #333;
+  font-size: 32px;
+  margin-bottom: 15px;
+  font-weight: 700;
+}
+
+.subtitle {
+  color: #666;
+  font-size: 16px;
+  margin-bottom: 40px;
+}
+
+.btn {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  border: none;
+  padding: 20px 40px;
+  border-radius: 50px;
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+  margin: 12px 0;
+  transition: all 0.3s;
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.btn:active {
+  transform: translateY(3px);
+  box-shadow: 0 3px 12px rgba(102, 126, 234, 0.5);
+}
+
+.btn-icon {
+  font-size: 24px;
+}
+
+.info {
+  background: #e7f5ff;
+  padding: 20px;
+  border-radius: 15px;
+  margin-top: 30px;
+  font-size: 14px;
+  color: #1971c2;
+  line-height: 1.8;
+  text-align: left;
+}
+
+.info strong {
+  display: block;
+  margin-bottom: 10px;
+  color: #1864ab;
+  font-size: 15px;
+}
+
+.status {
+  color: #28a745;
+  font-weight: bold;
+  margin-top: 20px;
+  font-size: 14px;
+}
+
+.version {
+  color: #999;
+  font-size: 12px;
+  margin-top: 20px;
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <div class="logo">🧺</div>
+  <h1>C.H 精緻洗衣</h1>
+  <div class="subtitle">快速登入系統</div>
+  
+  <button class="btn" onclick="openInLine()">
+    <span class="btn-icon">📱</span>
+    在 LINE 中開啟
+  </button>
+  
+  <button class="btn" onclick="openWebsite()">
+    <span class="btn-icon">🌐</span>
+    直接前往網站
+  </button>
+
+  <div class="info">
+    <strong>📲 使用說明</strong>
+    • 點「在 LINE 中開啟」最穩定<br>
+    • 首次使用需要授權 LINE 帳號<br>
+    • 授權後即可快速進入<br>
+    • 建議加入手機桌面使用
+  </div>
+
+  <div class="status" id="status"></div>
+  <div class="version">v1.0 - 測試版</div>
+</div>
+
+<script>
+const LIFF_ID = '2004612704';
+const TARGET_URL = 'https://chlaundryshop.com/';
+
+function openInLine() {
+  updateStatus('🚀 正在開啟 LINE App...');
+  window.location.href = `line://app/${LIFF_ID}`;
+  setTimeout(() => {
+    window.location.href = TARGET_URL;
+  }, 2000);
+}
+
+function openWebsite() {
+  updateStatus('🌐 正在前往網站...');
+  setTimeout(() => {
+    window.location.href = TARGET_URL;
+  }, 500);
+}
+
+function updateStatus(message) {
+  document.getElementById('status').textContent = message;
+}
+</script>
+
+</body>
+</html>
