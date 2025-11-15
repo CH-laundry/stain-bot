@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>C.H 精緻洗衣｜快速登入</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  
+  body {
+    font-family: 'Segoe UI', 'Microsoft JhengHei', Arial, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  
+  .container {
+    background: white;
+    padding: 40px 30px;
+    border-radius: 25px;
+    max-width: 400px;
+    width: 100%;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    text-align: center;
+  }
+  
+  .logo {
+    width: 100px;
+    height: 100px;
+    margin: 0 auto 20px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    border-radius: 25px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 50px;
+    box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+  }
+  
+  h1 {
+    color: #333;
+    font-size: 28px;
+    margin-bottom: 10px;
+    font-weight: 700;
+  }
+  
+  .subtitle {
+    color: #666;
+    font-size: 14px;
+    margin-bottom: 30px;
+  }
+  
+  .status {
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 15px;
+    margin-bottom: 20px;
+    min-height: 80px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .spinner {
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #667eea;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+    margin-bottom: 10px;
+  }
+  
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  
+  .status-text {
+    color: #495057;
+    font-size: 16px;
+    font-weight: 500;
+  }
+  
+  .status-sub {
+    color: #868e96;
+    font-size: 14px;
+    margin-top: 5px;
+  }
+  
+  .btn {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    border: none;
+    padding: 16px 30px;
+    border-radius: 50px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    width: 100%;
+    margin: 8px 0;
+    transition: all 0.3s;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+  }
+  
+  .btn:active {
+    transform: translateY(2px);
+    box-shadow: 0 2px 10px rgba(102, 126, 234, 0.4);
+  }
+  
+  .btn-secondary {
+    background: white;
+    color: #667eea;
+    border: 2px solid #667eea;
+    box-shadow: none;
+  }
+  
+  .btn-secondary:active {
+    background: #f8f9fa;
+  }
+  
+  .btn-clear {
+    background: #ff6b6b;
+    box-shadow: 0 4px 15px rgba(255, 107, 107, 0.4);
+  }
+  
+  .actions {
+    display: none;
+  }
+  
+  .info {
+    background: #e7f5ff;
+    padding: 15px;
+    border-radius: 12px;
+    margin-top: 20px;
+    font-size: 13px;
+    color: #1971c2;
+    line-height: 1.6;
+    text-align: left;
+  }
+  
+  .info strong {
+    display: block;
+    margin-bottom: 8px;
+    color: #1864ab;
+  }
+  
+  .warning {
+    background: #fff3cd;
+    color: #856404;
+    padding: 12px;
+    border-radius: 10px;
+    margin-top: 15px;
+    font-size: 12px;
+    display: none;
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <!-- Logo -->
+  <div class="logo">🧺</div>
+  
+  <!-- 標題 -->
+  <h1>C.H 精緻洗衣</h1>
+  <div class="subtitle">快速登入系統</div>
+  
+  <!-- 狀態區 -->
+  <div class="status" id="status">
+    <div class="spinner"></div>
+    <div class="status-text">正在檢查登入狀態...</div>
+  </div>
+  
+  <!-- 按鈕區 -->
+  <div class="actions" id="actions">
+    <button class="btn" onclick="openInLine()">
+      📱 在 LINE 中開啟
+    </button>
+    <button class="btn btn-secondary" onclick="openWebsite()">
+      🌐 直接前往網站
+    </button>
+    <button class="btn btn-clear" onclick="clearCache()">
+      🗑️ 清除快取重置
+    </button>
+  </div>
+
+  <!-- 警告訊息 -->
+  <div class="warning" id="warning">
+    ⚠️ 注意：此頁面無法繞過 LINE 官方的登入驗證。首次使用仍需授權。
+  </div>
+
+  <!-- 使用說明 -->
+  <div class="info">
+    <strong>📲 使用說明</strong>
+    <strong>加入桌面：</strong><br>
+    • Android: Chrome 選單 → 加到主畫面<br>
+    • iPhone: Safari 分享 → 加入主畫面<br>
+    <br>
+    <strong>登入方式：</strong><br>
+    • 建議點「在 LINE 中開啟」最穩定<br>
+    • 首次需要授權，之後會保持登入<br>
+    • 遇到問題可清除快取重試
+  </div>
+</div>
+
+<script>
+// 設定
+const LIFF_ID = '2004612704';
+const TARGET_URL = 'https://chlaundryshop.com/';
+
+// 頁面載入時執行
+window.onload = function() {
+  checkLoginState();
+};
+
+// 檢查登入狀態
+function checkLoginState() {
+  const savedToken = localStorage.getItem('line_access_token');
+  const savedProfile = localStorage.getItem('line_user_profile');
+  
+  if (savedToken && savedProfile) {
+    try {
+      const profile = JSON.parse(savedProfile);
+      updateStatus('✅ 歡迎回來', profile.name || '已登入用戶', false);
+      
+      // 1.5 秒後自動跳轉
+      setTimeout(() => {
+        openWebsite();
+      }, 1500);
+    } catch (e) {
+      showLoginOptions();
+    }
+  } else {
+    showLoginOptions();
+  }
+}
+
+// 顯示登入選項
+function showLoginOptions() {
+  updateStatus('👋 您好', '請選擇登入方式', false);
+  document.getElementById('actions').style.display = 'block';
+  document.getElementById('warning').style.display = 'block';
+}
+
+// 更新狀態
+function updateStatus(title, message, showSpinner) {
+  const statusDiv = document.getElementById('status');
+  statusDiv.innerHTML = `
+    ${showSpinner ? '<div class="spinner"></div>' : ''}
+    <div class="status-text">${title}</div>
+    ${message ? `<div class="status-sub">${message}</div>` : ''}
+  `;
+}
+
+// 在 LINE 中開啟（推薦方式）
+function openInLine() {
+  updateStatus('🚀 正在開啟 LINE', '請稍候...', true);
+  
+  // 嘗試開啟 LINE App
+  window.location.href = `line://app/${LIFF_ID}`;
+  
+  // 備用方案：2 秒後導向網站
+  setTimeout(() => {
+    window.location.href = TARGET_URL;
+  }, 2000);
+}
+
+// 直接開啟網站
+function openWebsite() {
+  updateStatus('🌐 正在前往網站', '', true);
+  setTimeout(() => {
+    window.location.href = TARGET_URL;
+  }, 500);
+}
+
+// 清除快取
+function clearCache() {
+  if (confirm('確定要清除所有登入資訊嗎？\n清除後需要重新登入。')) {
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+      updateStatus('✅ 清除成功', '請重新登入', false);
+      
+      setTimeout(() => {
+        location.reload();
+      }, 1500);
+    } catch (e) {
+      updateStatus('❌ 清除失敗', e.message, false);
+    }
+  }
+}
+
+// 監聽來自網站的訊息（如果網站有實作）
+window.addEventListener('message', function(event) {
+  if (event.origin === 'https://chlaundryshop.com') {
+    if (event.data.type === 'login_success' && event.data.token) {
+      try {
+        localStorage.setItem('line_access_token', event.data.token);
+        if (event.data.profile) {
+          localStorage.setItem('line_user_profile', JSON.stringify(event.data.profile));
+        }
+        updateStatus('✅ 登入成功', '已儲存登入資訊', false);
+      } catch (e) {
+        console.error('儲存失敗:', e);
+      }
+    }
+  }
+});
+</script>
+
+</body>
+</html>
