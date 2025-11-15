@@ -1,4 +1,3 @@
-if (/(棉被|被子|羽絨被)/.test(raw)) {// services/message.js
 const { Client } = require('@line/bot-sdk');
 const { analyzeStainWithAI, smartAutoReply, createECPayPaymentLink } = require('./openai');
 const logger = require('./logger');
@@ -490,6 +489,7 @@ if (/(地毯清|地墊清|毯子清|塊毯清|腳踏清|洗地毯|清洗地毯|�
 
 ✨ 含到府收送服務
 ✨ 7-10個工作天完成
+📷 蒸汽殺菌!溫和洗劑不傷材質`;
   
   await client.pushMessage(userId, { type: 'text', text: carpetReply });
   logger.logBotResponse(userId, originalMessage, carpetReply, 'Bot (Rule: carpet-detailed)');
