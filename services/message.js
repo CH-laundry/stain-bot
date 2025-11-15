@@ -1,4 +1,4 @@
-// services/message.js
+if (/(棉被|被子|羽絨被)/.test(raw)) {// services/message.js
 const { Client } = require('@line/bot-sdk');
 const { analyzeStainWithAI, smartAutoReply, createECPayPaymentLink } = require('./openai');
 const logger = require('./logger');
@@ -161,11 +161,7 @@ const TPL_CURTAIN = [
   "可清潔;若有特殊塗層會先做小範圍測試,處理後更清爽 💙",
   "窗簾可以清洗,會注意尺寸穩定與垂墜感,完成後更俐落 ✨",
 ];
-const TPL_RUG = [
-  "地毯可以清潔,我們會分區與深層清潔,兼顧纖維與色澤,整體觀感可望提升 ✨",
-  "地毯可處理;會先做局部測試再進行深層清潔與除味,讓居家更清爽 😊",
-  "可以清潔地毯;針對藏汙位置與邊緣收邊會特別留意,完成後更舒適 👍",
-];
+  
 const TPL_QUILT = [
   "棉被可以清潔;我們會兼顧蓬鬆度與乾爽度,睡感可望更舒適 😊",
   "被子可處理;流程會保護纖維結構並充分烘透,使用上更衛生 💙",
@@ -423,13 +419,6 @@ class MessageHandler {
       return;
     }
     
-    // 地毯（規則命中）
-    if (/(地毯|地墊)/.test(raw)) {
-      const msg = pick(TPL_RUG);
-      await client.pushMessage(userId, { type: 'text', text: msg });
-      logger.logBotResponse(userId, originalMessage, msg, 'Bot (Template: rug)');
-      return;
-    }
     
     // 棉被（規則命中）
     if (/(棉被|被子|羽絨被)/.test(raw)) {
@@ -438,6 +427,75 @@ class MessageHandler {
       logger.logBotResponse(userId, originalMessage, msg, 'Bot (Template: quilt)');
       return;
     }
+
+    // ⬇️⬇️⬇️ 新增:地毯清洗(詳細價目表) ⬇️⬇️⬇️
+if (/(地毯清|地墊清|毯子清|塊毯清|腳踏清|洗地毯|清洗地毯|地毯清洗|地毯洗|洗毯子|地毯可以洗|地毯能洗|有洗地毯|有地毯清洗|地毯多少|地毯價格|地毯費用|洗地毯多少錢|地毯清洗價格|地毯清洗費用|地毯清洗多少|地毯怎麼洗|地毯如何清潔|地毯髒|地毯很髒|地毯有味道|地毯臭|地毯發霉|地毯有霉味|地毯寵物|地毯尿味|地毯除臭|地毯除蟎|小地毯|大地毯|客廳地毯|臥室地毯|玄關地毯)/.test(raw)) {
+  const carpetReply = `💙 有的!我們有專業地毯清洗服務
+
+【🔵 專業清洗流程】
+
+1️⃣ 多重清洗程序
+   • 除塵吸蟎(去除 90% 塵蟎)
+   • 高溫蒸氣深層清潔
+   • 專業環保藥劑
+   • 二次過水確保無殘留
+
+2️⃣ 殺菌除臭
+   • 高溫殺菌(99.9% 細菌)
+   • 寵物異味深度處理
+   • 使用天然柑橘除臭
+
+3️⃣ 專業烘乾
+   • 完全乾燥,不發霉
+   • 防止二次污染
+
+━━━━━━━━━━━━━━━
+
+【💰 清洗價格參考】
+
+🔸 60×90cm - $800
+   (玄關小地墊)
+
+🔸 80×120cm - $1,000
+   (床邊小地毯)
+
+🔸 120×180cm - $1,300
+   (臥室地毯)
+
+🔸 140×200cm - $1,500
+   (標準臥室)
+
+🔸 160×230cm - $1,800
+   (大臥室/小客廳)
+
+🔸 180×270cm - $2,000 ⭐
+   (標準客廳)
+
+🔸 200×290cm - $2,300
+   (大客廳)
+
+🔸 240×300cm - $3,000
+   (豪宅客廳)
+
+🔸 240×340cm - $3,300
+   (超大客廳)
+
+🔸 270×360cm - $4,000
+   (別墅/辦公室)
+
+🔸 300×400cm - $5,000
+   (商業空間)
+
+━━━━━━━━━━━━━━━
+
+✨ 含到府收送服務
+✨ 7-10個工作天完成
+  
+  await client.pushMessage(userId, { type: 'text', text: carpetReply });
+  logger.logBotResponse(userId, originalMessage, carpetReply, 'Bot (Rule: carpet-detailed)');
+  return;
+}
+// ⬆️⬆️⬆️ 地毯清洗結束 ⬆️⬆️⬆️
 
     // ---------------- AI 回覆（只有命中「硬觸發白名單」才放行） ----------------
     if (STRICT_KEYWORD_MODE && !isHardTriggered(raw)) {
