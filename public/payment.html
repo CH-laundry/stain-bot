@@ -1446,7 +1446,104 @@ function findDeliveryById(id) {
   });
 }
 
+// 依 ID 找到紀錄
+function findDeliveryById(id) {
+  return (allDeliveries || []).find(function(o) {
+    return (o.id || o.recordId || '') === id;
+  });
+}
 
+// ⭐⭐⭐ 加上這個函數 ⭐⭐⭐
+async function markDeliverySigned(id) {
+  if (!id) return;
+  
+  var record = findDeliveryById(id);
+  if (!record) {
+    alert('找不到此紀錄');
+    return;
+  }
+
+  var amount = parseInt(record.amount || 0, 10);
+  var customerNumber = record.customerNumber;
+  var customerName = record.customerName;
+  
+  // 情況 1: 金額 = 0 → 只發送簡單訊息
+  if (amount === 0) {
+    if (!confirm('確認將此外送紀錄標記為「已簽收」?\n\n將發送訊息:\n「已經送回管理室了💙謝謝您」')) {
+      return;
+    }
+    
+    try {
+      var res = await fetch('/api/delivery/mark-signed-simple', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          id: id,
+          customerNumber: customerNumber,
+          customerName: customerName
+        })
+      });
+      
+      var data = await res.json();
+      
+      if (data.success) {
+        showResult('success', '✅ 已標記為已簽收並發送通知');
+        loadDeliveries(false);
+      } else {
+        showResult('error', '❌ 操作失敗: ' + (data.error || '未知錯誤'));
+      }
+    } catch (e) {
+      showResult('error', '❌ 連線失敗: ' + e.message);
+    }
+    return;
+  }
+
+  // 情況 2: 金額 > 0 → 發送支付連結
+  if (!confirm(
+    '確認將此外送紀錄標記為「已簽收」?\n\n' +
+    '客戶: #' + customerNumber + ' - ' + customerName + '\n' +
+    '金額: NT$ ' + amount.toLocaleString() + '\n\n' +
+    '將自動:\n' +
+    '1. 發送付款訊息 + LINE Pay 和 ECPay 連結\n' +
+    '2. 開始 2 天自動提醒追蹤\n' +
+    '3. 直到客戶付款為止'
+  )) {
+    return;
+  }
+
+  try {
+    var res = await fetch('/api/delivery/mark-signed-with-payment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        id: id,
+        customerNumber: customerNumber,
+        customerName: customerName,
+        amount: amount
+      })
+    });
+    
+    var data = await res.json();
+    
+    if (data.success) {
+      showResult('success', 
+        '✅ 已標記為已簽收並發送付款連結\n\n' +
+        '訂單編號: ' + (data.orderId || '-') + '\n' +
+        '金額: NT$ ' + amount.toLocaleString()
+      );
+      
+      loadDeliveries(false);
+      loadOrders();
+    } else {
+      showResult('error', '❌ 操作失敗: ' + (data.error || '未知錯誤'));
+    }
+  } catch (e) {
+    showResult('error', '❌ 連線失敗: ' + e.message);
+  }
+}
+
+// 刪除外送紀錄
+async function deleteDelivery(id) {
 
 // 刪除外送紀錄
 async function deleteDelivery(id) {
