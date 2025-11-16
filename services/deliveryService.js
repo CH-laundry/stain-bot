@@ -1,6 +1,5 @@
 const messageService = require('./message');
 const orderManager = require('./orderManager');
-const customerDB = require('./customerDB');
 
 // ========================================
 // 功能1: 金額=0時的簡單通知
@@ -8,7 +7,9 @@ const customerDB = require('./customerDB');
 async function markSignedSimple(deliveryId, customerNumber, customerName) {
   try {
     // 1. 從客戶編號查詢 userId
-    const customer = await customerDB.getCustomerByNumber(customerNumber);
+    const customers = orderManager.getAllCustomerNumbers();
+    const customer = customers.find(c => c.number === customerNumber);
+    
     if (!customer || !customer.userId) {
       throw new Error('找不到客戶 User ID');
     }
@@ -16,10 +17,6 @@ async function markSignedSimple(deliveryId, customerNumber, customerName) {
     // 2. 發送 LINE 訊息
     const message = '已經送回管理室了💙謝謝您';
     await messageService.sendTextMessage(customer.userId, message);
-
-    // 3. 標記外送紀錄為已簽收
-    // 這裡需要你有外送紀錄的資料庫操作
-    // await deliveryDB.update(deliveryId, { signed: true });
 
     console.log(`✅ 已簽收(金額=0): ${customerName}`);
     return { success: true };
@@ -36,47 +33,41 @@ async function markSignedSimple(deliveryId, customerNumber, customerName) {
 async function markSignedWithPayment(deliveryId, customerNumber, customerName, amount) {
   try {
     // 1. 從客戶編號查詢 userId
-    const customer = await customerDB.getCustomerByNumber(customerNumber);
+    const customers = orderManager.getAllCustomerNumbers();
+    const customer = customers.find(c => c.number === customerNumber);
+    
     if (!customer || !customer.userId) {
       throw new Error('找不到客戶 User ID');
     }
 
     const userId = customer.userId;
 
-    // 2. 創建訂單 (使用現有的 orderManager)
-    const orderResult = await orderManager.createOrder({
+    // 2. 創建訂單編號
+    const orderId = `DL${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
+
+    // 3. 創建訂單
+    orderManager.createOrder(orderId, {
       userId: userId,
       userName: customerName,
-      amount: amount,
-      paymentType: 'both', // 兩種支付方式都發
-      customMessage: '', // 不需要額外訊息
-      deliveryRecordId: deliveryId, // ⭐ 關聯外送紀錄
-      autoReminderEnabled: true, // ⭐ 啟用自動提醒
-      nextReminderAt: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000) // ⭐ 2天後提醒
+      amount: amount
     });
 
-    if (!orderResult.success) {
-      throw new Error('創建訂單失敗: ' + orderResult.error);
-    }
+    console.log(`✅ 已創建訂單: ${orderId}`);
 
-    const orderId = orderResult.orderId;
-    const linePayUrl = orderResult.linePayUrl;
-    const ecpayUrl = orderResult.ecpayUrl;
+    // 4. 生成支付連結
+    const rawBase = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.BASE_URL || 'https://stain-bot-production-2593.up.railway.app';
+    const baseURL = rawBase.startsWith('http') ? rawBase : 'https://' + rawBase;
+    
+    const ecpayUrl = `${baseURL}/payment/ecpay/pay/${orderId}`;
+    const linepayUrl = `${baseURL}/payment/linepay/pay/${orderId}`;
 
-    // 3. 發送 LINE 訊息 + 支付連結
+    // 5. 發送 LINE 訊息 + 支付連結
     const message = 
       `已經送回管理室了💙金額是 NT$ ${amount.toLocaleString()},以下提供兩種付款方式,您可以依方便選擇 謝謝您\n\n` +
-      `💚 LINE Pay 付款:\n${linePayUrl}\n\n` +
+      `💚 LINE Pay 付款:\n${linepayUrl}\n\n` +
       `💳 信用卡付款:\n${ecpayUrl}`;
 
     await messageService.sendTextMessage(userId, message);
-
-    // 4. 標記外送紀錄為已簽收並關聯訂單
-    // await deliveryDB.update(deliveryId, {
-    //   signed: true,
-    //   orderId: orderId,
-    //   paymentSentAt: new Date()
-    // });
 
     console.log(`✅ 已簽收+發送支付: ${customerName}, 訂單: ${orderId}`);
     
