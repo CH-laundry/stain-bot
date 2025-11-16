@@ -1,5 +1,5 @@
 const messageService = require('./message');
-const orderManagerDB = require('./orderManagerDB');
+const orderManager = require('./orderManager');
 const customerDB = require('./customerDB');
 
 // ========================================
@@ -44,7 +44,7 @@ async function markSignedWithPayment(deliveryId, customerNumber, customerName, a
     const userId = customer.userId;
 
     // 2. 創建訂單 (使用現有的 orderManager)
-    const orderResult = await orderManagerDB.createOrder({
+    const orderResult = await orderManager.createOrder({
       userId: userId,
       userName: customerName,
       amount: amount,
