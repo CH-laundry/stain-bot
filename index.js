@@ -1245,6 +1245,7 @@ app.delete('/api/notify-templates/:index', (req, res) => {
 });
 
 const deliveryService = require('./services/deliveryService');
+deliveryService.setLineClient(client);
 
 // ========================================
 // API 1: 金額=0的簡單通知
