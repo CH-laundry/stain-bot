@@ -1244,6 +1244,72 @@ app.delete('/api/notify-templates/:index', (req, res) => {
   }
 });
 
+const deliveryService = require('./services/deliveryService');
+
+// ========================================
+// API 1: 金額=0的簡單通知
+// POST /api/delivery/mark-signed-simple
+// ========================================
+app.post('/api/delivery/mark-signed-simple', async (req, res) => {
+  try {
+    const { id, customerNumber, customerName } = req.body;
+
+    if (!id || !customerNumber || !customerName) {
+      return res.json({
+        success: false,
+        error: '缺少必要參數'
+      });
+    }
+
+    await deliveryService.markSignedSimple(id, customerNumber, customerName);
+
+    res.json({ success: true });
+
+  } catch (error) {
+    console.error('API Error:', error);
+    res.json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// ========================================
+// API 2: 金額>0發送支付連結
+// POST /api/delivery/mark-signed-with-payment
+// ========================================
+app.post('/api/delivery/mark-signed-with-payment', async (req, res) => {
+  try {
+    const { id, customerNumber, customerName, amount } = req.body;
+
+    if (!id || !customerNumber || !customerName || !amount) {
+      return res.json({
+        success: false,
+        error: '缺少必要參數'
+      });
+    }
+
+    const result = await deliveryService.markSignedWithPayment(
+      id,
+      customerNumber,
+      customerName,
+      amount
+    );
+
+    res.json({
+      success: true,
+      orderId: result.orderId
+    });
+
+  } catch (error) {
+    console.error('API Error:', error);
+    res.json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // ====== 發送純文字通知 ======
 app.post('/send-notification', async (req, res) => {
   const { userId, userName, message } = req.body;
