@@ -1248,8 +1248,8 @@ const deliveryService = require('./services/deliveryService');
 deliveryService.setLineClient(client);
 
 // ========================================
+// ========================================
 // API 1: 金額=0的簡單通知
-// POST /api/delivery/mark-signed-simple
 // ========================================
 app.post('/api/delivery/mark-signed-simple', async (req, res) => {
   try {
@@ -1260,6 +1260,20 @@ app.post('/api/delivery/mark-signed-simple', async (req, res) => {
         success: false,
         error: '缺少必要參數'
       });
+    }
+
+    // ✅ 更新外送紀錄為已簽收
+    const deliveryRoutes = require('./routes/deliveryRoutes');
+    const fs = require('fs');
+    const path = require('path');
+    const FILE_PATH = path.join(__dirname, 'data', 'delivery.json');
+    
+    const data = JSON.parse(fs.readFileSync(FILE_PATH, 'utf8'));
+    const order = data.orders.find(o => o.id === id);
+    
+    if (order) {
+      order.signed = true;
+      fs.writeFileSync(FILE_PATH, JSON.stringify(data, null, 2), 'utf8');
     }
 
     await deliveryService.markSignedSimple(id, customerNumber, customerName);
@@ -1277,7 +1291,6 @@ app.post('/api/delivery/mark-signed-simple', async (req, res) => {
 
 // ========================================
 // API 2: 金額>0發送支付連結
-// POST /api/delivery/mark-signed-with-payment
 // ========================================
 app.post('/api/delivery/mark-signed-with-payment', async (req, res) => {
   try {
@@ -1288,6 +1301,19 @@ app.post('/api/delivery/mark-signed-with-payment', async (req, res) => {
         success: false,
         error: '缺少必要參數'
       });
+    }
+
+    // ✅ 更新外送紀錄為已簽收
+    const fs = require('fs');
+    const path = require('path');
+    const FILE_PATH = path.join(__dirname, 'data', 'delivery.json');
+    
+    const data = JSON.parse(fs.readFileSync(FILE_PATH, 'utf8'));
+    const order = data.orders.find(o => o.id === id);
+    
+    if (order) {
+      order.signed = true;
+      fs.writeFileSync(FILE_PATH, JSON.stringify(data, null, 2), 'utf8');
     }
 
     const result = await deliveryService.markSignedWithPayment(
