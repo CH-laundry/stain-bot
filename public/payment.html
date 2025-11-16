@@ -1446,7 +1446,111 @@ function findDeliveryById(id) {
   });
 }
 
+const orderManager = require('./orderManager');
+const logger = require('./logger');
 
+let lineClient = null;
+
+function setLineClient(client) {
+  lineClient = client;
+}
+
+// ========================================
+// 功能1: 金額=0時的簡單通知
+// ========================================
+async function markSignedSimple(deliveryId, customerNumber, customerName) {
+  try {
+    const customers = orderManager.getAllCustomerNumbers();
+    const customer = customers.find(c => c.number === customerNumber);
+    
+    if (!customer || !customer.userId) {
+      throw new Error('找不到客戶 User ID');
+    }
+
+    const message = '已經送回管理室了💙謝謝您';
+    
+    if (!lineClient) {
+      throw new Error('LINE Client 未初始化');
+    }
+    
+    await lineClient.pushMessage(customer.userId, {
+      type: 'text',
+      text: message
+    });
+
+    logger.logToFile(`✅ 已簽收(金額=0): ${customerName} (#${customerNumber})`);
+    return { success: true };
+  } catch (error) {
+    logger.logError('❌ markSignedSimple 失敗', error);
+    throw error;
+  }
+}
+
+// ========================================
+// 功能2: 金額>0時發送支付連結+追蹤
+// ========================================
+async function markSignedWithPayment(deliveryId, customerNumber, customerName, amount) {
+  try {
+    const customers = orderManager.getAllCustomerNumbers();
+    const customer = customers.find(c => c.number === customerNumber);
+    
+    if (!customer || !customer.userId) {
+      throw new Error('找不到客戶 User ID');
+    }
+
+    const userId = customer.userId;
+
+    // 創建訂單
+    const orderId = `DL${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
+    
+    orderManager.createOrder(orderId, {
+      userId: userId,
+      userName: customerName,
+      amount: parseInt(amount, 10)
+    });
+
+    logger.logToFile(`✅ 外送簽收創建訂單: ${orderId} - ${customerName} - NT$${amount}`);
+
+    // 生成支付連結
+    const rawBase = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.BASE_URL || 'https://stain-bot-production-2593.up.railway.app';
+    const baseURL = rawBase.startsWith('http') ? rawBase : 'https://' + rawBase;
+    
+    const ecpayUrl = `${baseURL}/payment/ecpay/pay/${orderId}`;
+    const linepayUrl = `${baseURL}/payment/linepay/pay/${orderId}`;
+
+    // ✅ 修正訊息格式 - 完全按照你的要求
+    const message = 
+      `已經送回管理室了💙金額是 NT$ ${amount.toLocaleString()}\n` +
+      `以下提供兩種付款方式,您可以依方便選擇 謝謝您\n\n` +
+      `💚 LINE Pay 付款:\n${linepayUrl}\n\n` +
+      `💳 信用卡付款:\n${ecpayUrl}`;
+
+    if (!lineClient) {
+      throw new Error('LINE Client 未初始化');
+    }
+
+    await lineClient.pushMessage(userId, {
+      type: 'text',
+      text: message
+    });
+
+    logger.logToFile(`✅ 已發送外送付款連結: ${customerName} (#${customerNumber}) - 訂單: ${orderId}`);
+    
+    return {
+      success: true,
+      orderId: orderId
+    };
+  } catch (error) {
+    logger.logError('❌ markSignedWithPayment 失敗', error);
+    throw error;
+  }
+}
+
+module.exports = {
+  setLineClient,
+  markSignedSimple,
+  markSignedWithPayment
+};
 // 刪除外送紀錄
 async function deleteDelivery(id) {
   if (!id) return;
