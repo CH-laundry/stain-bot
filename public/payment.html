@@ -1446,12 +1446,6 @@ function findDeliveryById(id) {
   });
 }
 
-// 依 ID 找到紀錄
-function findDeliveryById(id) {
-  return (allDeliveries || []).find(function(o) {
-    return (o.id || o.recordId || '') === id;
-  });
-}
 
 // ✅ 標記已簽收
 async function markDeliverySigned(id) {
@@ -1547,10 +1541,6 @@ async function deleteDelivery(id) {
   if (!id) return;
   if (!confirm('確定要刪除此外送紀錄？')) return;
   // ... 下面保持不變
-// 刪除外送紀錄
-async function deleteDelivery(id) {
-  if (!id) return;
-  if (!confirm('確定要刪除此外送紀錄？')) return;
 
   try {
     var res = await fetch('/api/delivery/order/' + encodeURIComponent(id), {
