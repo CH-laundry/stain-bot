@@ -1,5 +1,11 @@
-const messageService = require('./message');
 const orderManager = require('./orderManager');
+
+// LINE Client 會從外部傳入
+let lineClient = null;
+
+function setLineClient(client) {
+  lineClient = client;
+}
 
 // ========================================
 // 功能1: 金額=0時的簡單通知
@@ -16,7 +22,15 @@ async function markSignedSimple(deliveryId, customerNumber, customerName) {
 
     // 2. 發送 LINE 訊息
     const message = '已經送回管理室了💙謝謝您';
-    await messageService.sendTextMessage(customer.userId, message);
+    
+    if (!lineClient) {
+      throw new Error('LINE Client 未初始化');
+    }
+    
+    await lineClient.pushMessage(customer.userId, {
+      type: 'text',
+      text: message
+    });
 
     console.log(`✅ 已簽收(金額=0): ${customerName}`);
     return { success: true };
@@ -67,7 +81,14 @@ async function markSignedWithPayment(deliveryId, customerNumber, customerName, a
       `💚 LINE Pay 付款:\n${linepayUrl}\n\n` +
       `💳 信用卡付款:\n${ecpayUrl}`;
 
-    await messageService.sendTextMessage(userId, message);
+    if (!lineClient) {
+      throw new Error('LINE Client 未初始化');
+    }
+
+    await lineClient.pushMessage(userId, {
+      type: 'text',
+      text: message
+    });
 
     console.log(`✅ 已簽收+發送支付: ${customerName}, 訂單: ${orderId}`);
     
@@ -83,6 +104,7 @@ async function markSignedWithPayment(deliveryId, customerNumber, customerName, a
 }
 
 module.exports = {
+  setLineClient,
   markSignedSimple,
   markSignedWithPayment
 };
