@@ -18,6 +18,7 @@ const multer = require('multer');
 const orderManager = require('./services/orderManager');
 const pickupRoutes = require('./pickupRoutes');
 const deliveryRoutes = require('./routes/deliveryRoutes');
+const urgentRoutes = require('./routes/urgentRoutes');
 const upload = multer({ storage: multer.memoryStorage() });
 
 // ★ 你的 LIFF ID
@@ -52,6 +53,7 @@ app.use(express.static('public'));
 app.use('/debug', require('./services/debugStorage'));
 app.use('/api/pickup', pickupRoutes.router);
 app.use('/api/delivery', deliveryRoutes);
+app.use('/api/urgent', urgentRoutes);
 
 // ====== LINE Client ======
 const client = new Client({
