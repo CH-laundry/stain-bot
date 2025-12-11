@@ -283,7 +283,7 @@ async function detectBrandFromImageB64(base64Image) {
   try {
     const result = await retryWithBackoff(async () => {
       const resp = await openaiClient.chat.completions.create({
-        model: "gpt-5",
+        model: "gpt-4o",
         messages: [
           {
             role: "system",
@@ -338,7 +338,7 @@ async function detectBrandFromText(text) {
   try {
     const result = await retryWithBackoff(async () => {
       const resp = await openaiClient.chat.completions.create({
-        model: "gpt-5",
+        model: "gpt-4o-mini",
         messages: [
           {
             role: "system",
@@ -420,7 +420,7 @@ async function analyzeStainWithAI(imageBuffer, materialInfo = "", labelImageBuff
 
     const resp = await retryWithBackoff(async () => {
       return await openaiClient.chat.completions.create({
-        model: "gpt-5",
+        model: "gpt-4o",
         messages: [
           {
             role: "system",
@@ -664,7 +664,7 @@ async function smartAutoReply(inputText) {
       try {
         const aiReply = await retryWithBackoff(async () => {
           const resp = await openaiClient.chat.completions.create({
-            model: "gpt-5",
+            model: "gpt-4",
             messages: [
               { 
                 role: "system", 
