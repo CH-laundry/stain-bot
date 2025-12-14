@@ -268,19 +268,45 @@ app.post('/webhook', async (req, res) => {
         if (event.type !== 'message' || !event.source.userId) continue;
         const userId = event.source.userId;
         await saveUserProfile(userId);
-
+        
+        // ========== 處理文字訊息 ==========
         if (event.message.type === 'text') {
           const userMessage = event.message.text.trim();
           logger.logUserMessage(userId, userMessage);
+          
+          // ⭐ Claude AI 優先處理
+          try {
+            const claudeAI = require('./services/claudeAI');
+            const aiReply = await claudeAI.handleTextMessage(userMessage);
+            if (aiReply) {
+              await client.pushMessage(userId, { type: 'text', text: aiReply });
+              logger.logToFile(`[Claude AI] 已回覆: ${userId}`);
+              continue;
+            }
+          } catch (err) {
+            logger.logError('[Claude AI] 失敗', err);
+          }
+          
+          // 只有 Claude AI 沒回覆才執行
           await messageHandler.handleTextMessage(userId, userMessage, userMessage);
-        } else if (event.message.type === 'image') {
+        } 
+        
+        // ========== 處理圖片訊息 ==========
+        else if (event.message.type === 'image') {
           logger.logUserMessage(userId, '上傳了一張圖片');
           await messageHandler.handleImageMessage(userId, event.message.id);
-        } else if (event.message.type === 'sticker') {
+        } 
+        
+        // ========== 處理貼圖訊息 ==========
+        else if (event.message.type === 'sticker') {
           logger.logUserMessage(userId, `發送了貼圖 (${event.message.stickerId})`);
-        } else {
+        } 
+        
+        // ========== 其他訊息 ==========
+        else {
           logger.logUserMessage(userId, '發送了其他類型的訊息');
         }
+        
       } catch (err) {
         logger.logError('處理事件時出錯', err, event.source?.userId);
       }
