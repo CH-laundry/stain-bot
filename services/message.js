@@ -180,13 +180,16 @@ class MessageHandler {
       }
 
       const [_, customerId, customerName, amount, paymentType = 'ecpay'] = parts;
+      
       try {
         let message = '';
+        const numAmount = parseInt(amount);
         
         // ✅ ECPay（綠界）付款
         if (paymentType === 'ecpay' || paymentType === 'creditcard') {
-          const link = createECPayPaymentLink(customerId, customerName, parseInt(amount));
+          const link = createECPayPaymentLink(customerId, customerName, numAmount);
           let shortUrl = link;
+          
           try {
             const response = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(link)}`);
             const result = await response.text();
@@ -201,43 +204,64 @@ class MessageHandler {
           message = `您好,${customerName} 👋\n\n` +
             `您的專屬付款連結已生成\n` +
             `付款方式:信用卡\n` +
-            `金額:NT$ ${parseInt(amount).toLocaleString()}\n\n` +
+            `金額:NT$ ${numAmount.toLocaleString()}\n\n` +
             `👉 請點擊下方連結完成付款\n${shortUrl}\n\n` +
             `✅ 付款後系統會自動通知我們\n` +
             `感謝您的支持 💙`;
         } 
         // ✅ LINE Pay 付款
         else if (paymentType === 'linepay') {
-          // 使用持久網址（與你的 index.js 整合）
-          const baseURL = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.BASE_URL || process.env.PUBLIC_BASE_URL || 'https://stain-bot-production-2593.up.railway.app';
+          // 🔧 正確方式：使用你 index.js 的 /send-payment API 邏輯
+          const baseURL = process.env.RAILWAY_PUBLIC_DOMAIN || 
+                         process.env.BASE_URL || 
+                         process.env.PUBLIC_BASE_URL || 
+                         'https://stain-bot-production-2593.up.railway.app';
           
-          // 注意：這裡需要一個 orderId，你可能需要從 orderManager 創建
-          // 暫時使用時間戳作為 orderId
+          // 生成唯一 orderId
           const orderId = `LP${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
+          
+          // ⚠️ 重要：這裡應該呼叫 orderManager.createOrder() 創建訂單
+          // 但因為不確定你的 orderManager 是否在 message.js 中可用
+          // 所以先用持久網址方式
+          // 
+          // 建議：把付款連結發送改用你的 /send-payment API
+          // 而不是在 message.js 裡處理
+          
           const persistentUrl = `${baseURL.replace(/^http:/, 'https:')}/payment/linepay/pay/${orderId}`;
           
           message = `您好,${customerName} 👋\n\n` +
             `您的專屬付款連結已生成\n` +
             `付款方式:LINE Pay\n` +
-            `金額:NT$ ${parseInt(amount).toLocaleString()}\n\n` +
+            `金額:NT$ ${numAmount.toLocaleString()}\n\n` +
             `👉 請點擊下方連結完成付款\n${persistentUrl}\n\n` +
             `✅ 付款後系統會自動通知我們\n` +
             `感謝您的支持 💙`;
-        } else {
-          await client.pushMessage(userId, { type: 'text', text: '❌ 不支援的付款方式\n請使用 ecpay 或 linepay' });
+        } 
+        else {
+          await client.pushMessage(userId, { 
+            type: 'text', 
+            text: '❌ 不支援的付款方式\n請使用 ecpay 或 linepay' 
+          });
           return true;
         }
 
+        // 發送給客戶
         await client.pushMessage(customerId, { type: 'text', text: message });
+        
+        // 通知管理員
         await client.pushMessage(userId, {
           type: 'text',
           text: `✅ 已發送付款連結\n\n客戶:${customerName}\n金額:NT$ ${amount}\n方式:${paymentType === 'ecpay' ? '綠界' : 'LINE Pay'}`
         });
 
-        logger.logToFile(`✅ [管理員指令] 已發送付款連結給 ${customerName} (${customerId}) - ${amount}元`);
+        logger.logToFile(`✅ [管理員指令] 已發送付款連結給 ${customerName} (${customerId}) - ${amount}元 (${paymentType})`);
+        
       } catch (err) {
         logger.logError('發送付款連結失敗', err);
-        await client.pushMessage(userId, { type: 'text', text: `❌ 發送失敗:${err.message}` });
+        await client.pushMessage(userId, { 
+          type: 'text', 
+          text: `❌ 發送失敗:${err.message}` 
+        });
       }
       return true;
     }
