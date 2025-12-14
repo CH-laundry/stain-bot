@@ -16,6 +16,7 @@
     "node": "18.x"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.30.0",
     "@google-cloud/local-auth": "^3.0.1",
     "@line/bot-sdk": "^7.7.0",
     "axios": "^1.12.2",
