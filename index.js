@@ -274,6 +274,17 @@ app.post('/webhook', async (req, res) => {
           logger.logUserMessage(userId, userMessage);
           await messageHandler.handleTextMessage(userId, userMessage, userMessage);
         } else if (event.message.type === 'image') {
+          // ⭐ 新增：Claude AI 優先處理
+  try {
+    const claudeAI = require('./services/claudeAI');
+    const aiReply = await claudeAI.handleTextMessage(userMessage);
+    if (aiReply) {
+      await client.pushMessage(userId, { type: 'text', text: aiReply });
+      continue; // 跳過原系統
+    }
+  } catch (err) {
+    logger.logError('[Claude AI] 失敗', err);
+  }
           logger.logUserMessage(userId, '上傳了一張圖片');
           await messageHandler.handleImageMessage(userId, event.message.id);
         } else if (event.message.type === 'sticker') {
