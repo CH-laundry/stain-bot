@@ -271,18 +271,17 @@ app.post('/webhook', async (req, res) => {
         
         // ========== 處理文字訊息 ==========
         if (event.message.type === 'text') {
-          const userMessage = event.message.text.trim();
-          logger.logUserMessage(userId, userMessage);
-          
-          // ⭐ Claude AI 優先處理
-          try {
-            const claudeAI = require('./services/claudeAI');
-            const aiReply = await claudeAI.handleTextMessage(userMessage);
-            if (aiReply) {
-              await client.pushMessage(userId, { type: 'text', text: aiReply });
-              logger.logToFile(`[Claude AI] 已回覆: ${userId}`);
-              continue;
-            }
+  const userMessage = event.message.text.trim();
+  logger.logUserMessage(userId, userMessage);
+  
+  // ⚠️ 新增：按 1 不經過 Claude AI
+  if (userMessage === '1' || userMessage === '１') {
+    await messageHandler.handleTextMessage(userId, userMessage, userMessage);
+    continue;
+  }
+  
+  // ⭐ 其他文字才給 Claude AI
+  try {
           } catch (err) {
             logger.logError('[Claude AI] 失敗', err);
           }
