@@ -271,23 +271,33 @@ app.post('/webhook', async (req, res) => {
         
         // ========== 處理文字訊息 ==========
         if (event.message.type === 'text') {
-  const userMessage = event.message.text.trim();
-  logger.logUserMessage(userId, userMessage);
-  
-  // ⚠️ 新增：按 1 不經過 Claude AI
-  if (userMessage === '1' || userMessage === '１') {
-    await messageHandler.handleTextMessage(userId, userMessage, userMessage);
-    continue;
-  }
-  
-  // ⭐ 其他文字才給 Claude AI
-  try {
+          const userMessage = event.message.text.trim();
+          logger.logUserMessage(userId, userMessage);
+          
+          // ⚠️ 按 1 直接給 messageHandler（智能汙漬分析）
+          if (userMessage === '1' || userMessage === '１') {
+            await messageHandler.handleTextMessage(userId, userMessage, userMessage);
+            continue;
+          }
+          
+          // ⭐ Claude AI 優先處理
+          let claudeReplied = false;
+          try {
+            const claudeAI = require('./services/claudeAI');
+            const aiReply = await claudeAI.handleTextMessage(userMessage);
+            if (aiReply) {
+              await client.pushMessage(userId, { type: 'text', text: aiReply });
+              logger.logToFile(`[Claude AI] 已回覆: ${userId}`);
+              claudeReplied = true;
+            }
           } catch (err) {
             logger.logError('[Claude AI] 失敗', err);
           }
           
-          // 只有 Claude AI 沒回覆才執行
-          await messageHandler.handleTextMessage(userId, userMessage, userMessage);
+          // ✅ 只有 Claude AI 沒回覆才執行原系統
+          if (!claudeReplied) {
+            await messageHandler.handleTextMessage(userId, userMessage, userMessage);
+          }
         } 
         
         // ========== 處理圖片訊息 ==========
