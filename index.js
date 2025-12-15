@@ -65,7 +65,6 @@ async function saveUserProfile(userId) {
   try {
     const profile = await client.getProfile(userId);
     await customerDB.saveCustomer(userId, profile.displayName);
-    saveUserToSheet(userId, profile.displayName);
   } catch (error) {
     logger.logError('記錄用戶資料失敗', error, userId);
   }
@@ -268,9 +267,6 @@ app.post('/webhook', async (req, res) => {
       try {
         if (event.type !== 'message' || !event.source.userId) continue;
         const userId = event.source.userId;
-        
-}
-
         await saveUserProfile(userId);
         
         // ========== 處理文字訊息 ==========
@@ -1750,22 +1746,3 @@ app.listen(PORT, async () => {
     }
   }, 2 * 60 * 60 * 1000);
 });
-
-async function saveUserToSheet(userId, name) {
-  const url = process.env.GOOGLE_SCRIPT_URL;
-  if (!url) return;
-
-  try {
-    await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        userId,
-        name: name || "",
-        lastSeen: new Date().toISOString(),
-      }),
-    });
-  } catch (err) {
-    console.log("saveUserToSheet error:", err.message);
-  }
-}
