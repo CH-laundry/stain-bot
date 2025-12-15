@@ -268,9 +268,7 @@ app.post('/webhook', async (req, res) => {
       try {
         if (event.type !== 'message' || !event.source.userId) continue;
         const userId = event.source.userId;
-        if (userId) {
-        const name = await getLineDisplayName(userId);
-        saveUserToSheet(userId, name); // 不要 await，避免影響回覆速度
+        
 }
 
         await saveUserProfile(userId);
@@ -1752,45 +1750,6 @@ app.listen(PORT, async () => {
     }
   }, 2 * 60 * 60 * 1000);
 });
-
-async function saveUserToSheet(userId, name) {
-  const url = process.env.GOOGLE_SCRIPT_URL;
-  if (!url) return;
-
-  try {
-    await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        userId,
-        name: name || "",
-        lastSeen: new Date().toISOString(),
-      }),
-    });
-  } catch (err) {
-    console.log("saveUserToSheet error:", err.message);
-  }
-}
-
-async function getLineDisplayName(userId) {
-  try {
-    const token =
-      process.env.LINE_CHANNEL_ACCESS_TOKEN || process.env.CHANNEL_ACCESS_TOKEN;
-
-    if (!token) return "";
-
-    const res = await fetch(`https://api.line.me/v2/bot/profile/${userId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-
-    if (!res.ok) return "";
-    const profile = await res.json();
-    return profile.displayName || "";
-  } catch (err) {
-    console.log("getLineDisplayName error:", err.message);
-    return "";
-  }
-}
 
 async function saveUserToSheet(userId, name) {
   const url = process.env.GOOGLE_SCRIPT_URL;
