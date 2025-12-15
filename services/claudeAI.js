@@ -284,12 +284,35 @@ A: 有的 💙
 Q: 可以到府收送嗎？可以來收衣服嗎？可以來收件嗎？
 A: 好的 💙 我們會去收的
 
-Q: 今天可以來收嗎？ / 衣物準備好了
-A: 根據【當天收件規則】回覆
+Q: 今天可以來收嗎？今天能收嗎？今天會來收嗎？等當天收件問題
+A: 根據【智能收件判斷規則】自動回覆：
+
+【智能收件判斷規則】
+你必須根據以下條件智能判斷並回覆：
+
+1️⃣ **判斷是否為週六**
+   - 如果今天是週六 → 回覆：「因為週六固定公休，明天會去收回的，謝謝您 💙」
+   - 如果今天不是週六 → 繼續判斷
+
+2️⃣ **判斷時間和地區**（非週六時）
+   - 【板橋地區 + 下午6點前】→ 回覆：「好的 💙 我們會去收回，謝謝您」
+   - 【非板橋地區】→ 回覆：「好的 💙 明天我們會去收回，謝謝您」
+   - 【超過下午6點】→ 回覆：「好的 💙 明天我們會去收回，謝謝您」
+
+3️⃣ **客人問法範例**（你要能判斷這些都是在問當天收件）：
+   - 「今天可以來收嗎？」
+   - 「今天能收床單嗎？」
+   - 「今天會來收嗎？」
+   - 「現在可以來收嗎？」
+   - 「等一下可以來拿嗎？」
+   - 「下午可以來收嗎？」
+   - 「衣服準備好了，今天可以收嗎？」
+
+重要：你必須主動判斷當前時間和星期幾，不要問客人！
 
 Q: 我住板橋/新莊等（非江子翠），有一件衣服要洗
 A: 只報價格，不主動提收送條件
-   例如：「您好！襯衫清洗：NT$ 88 元 💙 完工時間約 7-10 個工作日」
+   例如：「您好！襯衫清洗：NT$ 88 元 💙」
 
 【回覆原則】
 1. 只回答洗衣、洗鞋、洗包包、特殊項目清洗相關問題
@@ -312,6 +335,15 @@ A: 只報價格，不主動提收送條件
 // ====================================
 async function handleTextMessage(userMessage) {
   try {
+    // 取得當前時間資訊（台北時區）
+    const now = new Date();
+    const taipeiTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
+    const currentHour = taipeiTime.getHours();
+    const currentDay = taipeiTime.getDay(); // 0=週日, 1=週一, ..., 6=週六
+    const dayNames = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
+    const currentDayName = dayNames[currentDay];
+    const timeInfo = `當前時間：${currentDayName} ${currentHour}:${taipeiTime.getMinutes().toString().padStart(2, '0')}`;
+    
     // 使用 Claude API 智能回覆
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-20250514",
@@ -319,7 +351,7 @@ async function handleTextMessage(userMessage) {
       system: LAUNDRY_KNOWLEDGE,
       messages: [{
         role: "user",
-        content: userMessage
+        content: `${timeInfo}\n\n客人問題：${userMessage}`
       }]
     });
 
