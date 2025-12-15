@@ -65,6 +65,7 @@ async function saveUserProfile(userId) {
   try {
     const profile = await client.getProfile(userId);
     await customerDB.saveCustomer(userId, profile.displayName);
+    saveUserToSheet(userId, profile.displayName);
   } catch (error) {
     logger.logError('記錄用戶資料失敗', error, userId);
   }
@@ -1788,5 +1789,24 @@ async function getLineDisplayName(userId) {
   } catch (err) {
     console.log("getLineDisplayName error:", err.message);
     return "";
+  }
+}
+
+async function saveUserToSheet(userId, name) {
+  const url = process.env.GOOGLE_SCRIPT_URL;
+  if (!url) return;
+
+  try {
+    await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userId,
+        name: name || "",
+        lastSeen: new Date().toISOString(),
+      }),
+    });
+  } catch (err) {
+    console.log("saveUserToSheet error:", err.message);
   }
 }
