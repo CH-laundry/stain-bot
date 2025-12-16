@@ -1671,6 +1671,30 @@ return res.json({ success: true, paymentUrl: chosenUrl });
 });
 
 
+// ==========================================
+// 🚀 新增功能：洗衣店地端同步 API
+// ==========================================
+
+// 1. 建立一個全域變數，用來暫存「已付款但尚未同步」的訂單
+// 注意：如果 Railway 重啟，這個變數會清空。如果要永久保存，需要存到資料庫。
+// 但對於即時同步來說，用記憶體陣列 (Array) 通常就夠用了。
+global.pendingSyncOrders = [];
+
+// 2. API: 讓店裡電腦查詢「有哪些新付款？」
+app.get('/api/get-pending-payments', (req, res) => {
+    res.json(global.pendingSyncOrders);
+});
+
+// 3. API: 店裡電腦同步完成後，呼叫這個把它刪掉
+app.post('/api/mark-synced', (req, res) => {
+    const { orderId } = req.body;
+    console.log(`[Sync] 店裡電腦已同步訂單: ${orderId}`);
+    
+    // 從清單中移除這筆訂單
+    global.pendingSyncOrders = global.pendingSyncOrders.filter(o => o.orderId !== orderId);
+    
+    res.json({ success: true });
+});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
