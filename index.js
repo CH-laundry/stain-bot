@@ -768,12 +768,13 @@ function generateECPayCheckMacValue(params) {
     .toUpperCase();
 }
 
+// ====== 綠界 ReturnURL（伺服器背景通知）修正版 ======
 app.all('/payment/ecpay/callback', async (req, res) => {
   try {
     // 1) 先回覆綠界，避免重試
     res.type('text').send('1|OK');
 
-    // 2) 取得回傳資料（綠界可能用 POST，也可能 GET）
+    // 2) 取得回傳資料
     const data = { ...req.body, ...req.query };
 
     // 3) 驗證 CheckMacValue
@@ -781,7 +782,7 @@ app.all('/payment/ecpay/callback', async (req, res) => {
     const calc = generateECPayCheckMacValue(data);
     if (!mac || mac.toUpperCase() !== calc.toUpperCase()) {
       logger.logToFile('[ECPAY][WARN] CheckMacValue 不一致，疑似假通知或金鑰不符');
-      return; // 不處理
+      return; 
     }
 
     // 4) 僅在成功時處理：RtnCode === '1'
@@ -790,80 +791,64 @@ app.all('/payment/ecpay/callback', async (req, res) => {
       return;
     }
 
-    // ✅【新增這段：更新訂單狀態為已付款】
+    // ✅【更新訂單狀態為已付款】
     const allOrders = orderManager.getAllOrders();
     for (const order of allOrders) {
-      const oid = order.orderId; // ← 用真正的訂單編號，而不是陣列索引
+      const oid = order.orderId; // 取得正確的訂單編號
       if (
         order.userId === data.CustomField1 &&
         Number(order.amount) === Number(data.TradeAmt || data.Amount || 0) &&
         order.status !== 'paid'
       ) {
+        // 更新狀態
         orderManager.updateOrderStatus(oid, 'paid', 'ECPay');
         logger.logToFile(`[ECPAY][UPDATE] 訂單 ${oid} 狀態更新為已付款`);
-        break;
-      }
-    }
 
-// 🔥🔥🔥 【請貼在這裡：綠界成功後加入同步清單】 🔥🔥🔥
+        // 🔥🔥🔥 【這裡才是正確的位置】 🔥🔥🔥
+        // 告訴洗衣店電腦：這張單已經付錢了 (信用卡)
         if (global.pendingSyncOrders) {
             global.pendingSyncOrders.push({
-                orderId: oid,   // 這裡的 oid 就是你在上面迴圈抓到的訂單編號
+                orderId: oid,   // 這裡抓得到 oid 了！
                 amount: Number(order.amount),
-                payType: 'CREDIT' // 告訴 Python 這是信用卡/綠界付款
+                payType: 'CREDIT' 
             });
             console.log(`[Payment] 綠界訂單 ${oid} 已加入同步佇列`);
         }
         // 🔥🔥🔥 【結束】 🔥🔥🔥
 
-    // 5) 取必要欄位（依你送單時的 CustomField）
+        break; // 跳出迴圈
+      }
+    }
+
+    // 5) 記錄日誌
     const merchantTradeNo = data.MerchantTradeNo;
     const amount = Number(data.TradeAmt || data.Amount || 0);
     const payType = data.PaymentType || 'ECPay';
     const payTime = data.PaymentDate || '';
-    const userId = data.CustomField1 || '';   // 你送單時塞入的 LINE userId
-    const userName = data.CustomField2 || ''; // 你送單時塞入的客戶姓名
+    const userId = data.CustomField1 || '';   
+    const userName = data.CustomField2 || ''; 
 
     logger.logToFile(`[ECPAY][SUCCESS] ${merchantTradeNo} 成功 NT$${amount} ${payType} ${payTime} user=${userName}/${userId}`);
 
-    // 6)（可選）若有自家訂單對應，這裡更新狀態
-    // const orderId = mapEcpayToOrderId(merchantTradeNo); // 若你有建立 mapping
-    // orderManager.updateOrderStatus(orderId, 'paid', 'ECPay');
-
-    // 7) 通知老闆（ADMIN_USER_ID）
+    // 7) 通知老闆
     if (process.env.ADMIN_USER_ID) {
       client.pushMessage(process.env.ADMIN_USER_ID, {
         type: 'text',
-        text:
-          `✅ 綠界付款成功\n\n` +
-          `客戶：${userName || '-'}\n` +
-          `金額：NT$ ${amount.toLocaleString()}\n` +
-          `方式：${payType}\n` +
-          `綠界單號：${merchantTradeNo}\n` +
-          (payTime ? `時間：${payTime}\n` : '') +
-          `狀態：已付款`
+        text: `✅ 綠界付款成功\n\n客戶：${userName || '-'}\n金額：NT$ ${amount.toLocaleString()}\n方式：${payType}\n綠界單號：${merchantTradeNo}\n狀態：已付款`
       }).catch(() => {});
     }
 
-    // 8) 通知客人（以 CustomField1 的 userId 推播）
+    // 8) 通知客人
     if (userId && userId !== 'undefined') {
       client.pushMessage(userId, {
         type: 'text',
-        text:
-          `✅ 付款成功（綠界）\n\n` +
-          (userName ? `感謝 ${userName} 的支付\n` : '') +
-          `金額：NT$ ${amount.toLocaleString()}\n` +
-          `非常謝謝您，感謝您的支持 💙`
+        text: `✅ 付款成功（綠界）\n\n${userName ? `感謝 ${userName} 的支付\n` : ''}金額：NT$ ${amount.toLocaleString()}\n非常謝謝您，感謝您的支持 💙`
       }).catch(() => {});
     }
   } catch (err) {
     logger.logError('[ECPAY][ERROR] 回調處理失敗', err);
   }
 });
-
-// ====== 修正：GET + POST 都支援，立即回應 200 ======
-// ====== 修正：GET + POST 都支援，立即回應美化頁面 ======
-app.all('/payment/linepay/confirm', async (req, res) => {
   const { transactionId, orderId, parentOrderId } = { ...req.query, ...req.body };
   
   // 立即回應美化的成功頁面給用戶看
