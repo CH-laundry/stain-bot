@@ -849,6 +849,15 @@ app.all('/payment/ecpay/callback', async (req, res) => {
     logger.logError('[ECPAY][ERROR] 回調處理失敗', err);
   }
 });
+// ... (上面是綠界 ECPay 的程式碼) ...
+  } catch (err) {
+    logger.logError('[ECPAY][ERROR] 回調處理失敗', err);
+  }
+});
+  // 😱 這裡少了一行！導致下一行報錯 "req is not defined"
+  const { transactionId, orderId, parentOrderId } = { ...req.query, ...req.body };
+  
+  // ...
   const { transactionId, orderId, parentOrderId } = { ...req.query, ...req.body };
   
   // 立即回應美化的成功頁面給用戶看
