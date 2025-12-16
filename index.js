@@ -706,6 +706,17 @@ async function handleLinePayConfirm(transactionId, orderId, parentOrderId) {
       orderManager.updateOrderStatus(order.orderId, 'paid', 'LINE Pay');
       logger.logToFile(`[LINEPAY][SUCCESS] ${order.orderId} 付款成功`);
 
+    // 🔥🔥🔥 【請貼在這裡：LINE Pay 成功後加入同步清單】 🔥🔥🔥
+    if (global.pendingSyncOrders) {
+         global.pendingSyncOrders.push({
+              orderId: order.orderId,  // ⚠️ 請確認這裡的 orderId 是對應到洗衣店的單號 (例如 001005680)
+              amount: order.amount,
+              payType: 'LINE'
+          });
+          console.log(`[Payment] LINE Pay 訂單 ${order.orderId} 已加入同步佇列`);
+      }
+      // 🔥🔥🔥 【結束】 🔥🔥🔥
+      
       if (process.env.ADMIN_USER_ID) {
         client.pushMessage(process.env.ADMIN_USER_ID, {
           type: 'text',
@@ -794,7 +805,16 @@ app.all('/payment/ecpay/callback', async (req, res) => {
       }
     }
 
-
+// 🔥🔥🔥 【請貼在這裡：綠界成功後加入同步清單】 🔥🔥🔥
+        if (global.pendingSyncOrders) {
+            global.pendingSyncOrders.push({
+                orderId: oid,   // 這裡的 oid 就是你在上面迴圈抓到的訂單編號
+                amount: Number(order.amount),
+                payType: 'CREDIT' // 告訴 Python 這是信用卡/綠界付款
+            });
+            console.log(`[Payment] 綠界訂單 ${oid} 已加入同步佇列`);
+        }
+        // 🔥🔥🔥 【結束】 🔥🔥🔥
 
     // 5) 取必要欄位（依你送單時的 CustomField）
     const merchantTradeNo = data.MerchantTradeNo;
