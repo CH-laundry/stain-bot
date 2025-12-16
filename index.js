@@ -1435,8 +1435,11 @@ app.post('/send-notification', async (req, res) => {
     });
   }
 });
+// ====== 修改後的發送付款 API (整合 #指定單號 + 自動存客戶資料) ======
 app.post('/send-payment', async (req, res) => {
   const { userId, userName, amount, paymentType, customMessage } = req.body;
+  
+  // 1. 記錄請求
   logger.logToFile(`收到付款請求: userId=${userId}, userName=${userName}, amount=${amount}, type=${paymentType}`);
 
   if (!userId || !userName || !amount) {
@@ -1449,7 +1452,19 @@ app.post('/send-payment', async (req, res) => {
     return res.status(400).json({ error: '金額必須是正整數' });
   }
 
-  // ⭐⭐⭐ 新增：自動儲存客戶資料（獨立 try-catch，不影響付款流程）⭐⭐⭐
+  // 🔥🔥🔥 【魔術代碼功能】 🔥🔥🔥
+  // 檢查訊息內容是否有 #單號
+  let manualOrderId = null;
+  if (customMessage && customMessage.includes('#')) {
+      const match = customMessage.match(/#([a-zA-Z0-9]+)/);
+      if (match) {
+          manualOrderId = match[1]; // 抓出 # 後面的號碼
+          logger.logToFile(`🎯 偵測到指定單號: ${manualOrderId}`);
+      }
+  }
+  // 🔥🔥🔥 結束 🔥🔥🔥
+
+  // ⭐⭐⭐ 自動儲存客戶資料 (原本的功能) ⭐⭐⭐
   try {
     const DATA_DIR = '/data';
     const USERS_FILE = path.join(DATA_DIR, 'users.json');
@@ -1516,6 +1531,7 @@ app.post('/send-payment', async (req, res) => {
   }
   // ⭐⭐⭐ 客戶資料儲存結束 ⭐⭐⭐
 
+  // ====== 開始處理付款連結 ======
   try {
     const type = paymentType || 'both';
 
@@ -1528,8 +1544,14 @@ app.post('/send-payment', async (req, res) => {
     let ecpayOrderId = '';
     let linePayOrderId = '';
 
+    // 🔥 決定單號：如果有抓到 #單號 就用它，沒有就自動產生亂碼 🔥
+    const commonOrderId = manualOrderId || `ORDER${Date.now()}`;
+
+    // --- 1. 綠界 (ECPay) ---
     if (type === 'ecpay' || type === 'both') {
-      ecpayOrderId = `EC${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
+      // 若有指定單號，就用指定的；否則產生 EC 開頭亂碼
+      ecpayOrderId = manualOrderId ? manualOrderId : `EC${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
+      
       orderManager.createOrder(ecpayOrderId, { userId, userName, amount: numAmount });
       logger.logToFile(`建立綠界訂單: ${ecpayOrderId}`);
 
@@ -1545,12 +1567,16 @@ app.post('/send-payment', async (req, res) => {
       }
     }
 
+    // --- 2. LINE Pay ---
     if (type === 'linepay' || type === 'both') {
-      const linePayResult = await createLinePayPayment(userId, userName, numAmount);
+      // 🔥 若有指定單號，就強制讓 Line Pay 使用這個單號 (讓 Python 機器人認得)
+      linePayOrderId = manualOrderId ? manualOrderId : `LP${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
+
+      // 建立交易
+      // ⚠️ 關鍵：這裡傳進去的 linePayOrderId 就是將來 Python 會收到的 ID
+      const linePayResult = await createLinePayPayment(userId, userName, numAmount, linePayOrderId);
 
       if (linePayResult.success) {
-        linePayOrderId = linePayResult.orderId;
-
         orderManager.createOrder(linePayOrderId, { userId, userName, amount: numAmount });
 
         const paymentUrl = linePayResult.paymentUrlApp || linePayResult.paymentUrlWeb || linePayResult.paymentUrl;
@@ -1560,27 +1586,30 @@ app.post('/send-payment', async (req, res) => {
           lastLinePayRequestAt: Date.now()
         });
 
-        
         const persistentUrl = `${baseURL}/payment/linepay/pay/${linePayOrderId}`;
         linepayLink = persistentUrl; 
         logger.logToFile(`建立 LINE Pay 訂單(PERSISTENT): ${linePayOrderId}`);
-        
       }
     }
 
+    // --- 3. 組合回傳訊息 ---
     const userMsg = customMessage || '';
+    
+    // 如果有指定單號，在訊息裡偷標註一下，方便你確認
+    const orderNote = manualOrderId ? `(單號:${manualOrderId})` : '';
+
     if (type === 'both' && ecpayLink && linepayLink) {
       finalMessage = userMsg
-        ? `${userMsg}\n\n💙 付款連結如下:\n\n【信用卡付款】\n💙 ${ecpayLink}\n\n【LINE Pay】\n💙 ${linepayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`
-        : `💙 您好,${userName}\n\n您的專屬付款連結已生成\n金額:NT$ ${numAmount.toLocaleString()}\n\n請選擇付款方式:\n\n【信用卡付款】\n💙 ${ecpayLink}\n\n【LINE Pay】\n💙 ${linepayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
+        ? `${userMsg}\n\n💙 付款連結 ${orderNote}:\n\n【信用卡付款】\n💙 ${ecpayLink}\n\n【LINE Pay】\n💙 ${linepayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`
+        : `💙 您好,${userName}\n\n您的專屬付款連結已生成 ${orderNote}\n金額:NT$ ${numAmount.toLocaleString()}\n\n請選擇付款方式:\n\n【信用卡付款】\n💙 ${ecpayLink}\n\n【LINE Pay】\n💙 ${linepayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
     } else if (type === 'ecpay' && ecpayLink) {
       finalMessage = userMsg
-        ? `${userMsg}\n\n💙 付款連結如下:\n💙 ${ecpayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`
-        : `💙 您好,${userName}\n\n您的專屬付款連結已生成\n付款方式:信用卡\n金額:NT$ ${numAmount.toLocaleString()}\n\n請點擊以下連結完成付款:\n💙 ${ecpayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
+        ? `${userMsg}\n\n💙 付款連結 ${orderNote}:\n💙 ${ecpayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`
+        : `💙 您好,${userName}\n\n您的專屬付款連結已生成 ${orderNote}\n付款方式:信用卡\n金額:NT$ ${numAmount.toLocaleString()}\n\n請點擊以下連結完成付款:\n💙 ${ecpayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
     } else if (type === 'linepay' && linepayLink) {
       finalMessage = userMsg
-        ? `${userMsg}\n\n💙 付款連結如下:\n💙 ${linepayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`
-        : `💙 您好,${userName}\n\n您的專屬付款連結已生成\n付款方式:LINE Pay\n金額:NT$ ${numAmount.toLocaleString()}\n\n請點擊以下連結完成付款:\n💙 ${linepayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
+        ? `${userMsg}\n\n💙 付款連結 ${orderNote}:\n💙 ${linepayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`
+        : `💙 您好,${userName}\n\n您的專屬付款連結已生成 ${orderNote}\n付款方式:LINE Pay\n金額:NT$ ${numAmount.toLocaleString()}\n\n請點擊以下連結完成付款:\n💙 ${linepayLink}\n\n✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
     } else {
       return res.status(500).json({ error: '付款連結生成失敗' });
     }
