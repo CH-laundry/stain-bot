@@ -56,8 +56,15 @@ async function markSignedWithPayment(deliveryId, customerNumber, customerName, a
 
     const userId = customer.userId;
 
-    // 2. 創建訂單編號
-    const orderId = `DL${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
+    // 🔥🔥🔥 【關鍵修改】不再產生亂碼，直接使用外送單號作為訂單編號 🔥🔥🔥
+    // 這樣 Python 機器人才能拿著這個號碼去洗衣店軟體入帳
+    let orderId = deliveryId;
+
+    // 防呆機制：如果 deliveryId 是空的，才不得已產生亂碼
+    if (!orderId) {
+        orderId = `DL${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
+        console.log('⚠️ 警告: 沒有外送單號，系統自動產生了亂碼 ID (無法自動同步)');
+    }
 
     // 3. 創建訂單
     orderManager.createOrder(orderId, {
@@ -66,7 +73,7 @@ async function markSignedWithPayment(deliveryId, customerNumber, customerName, a
       amount: amount
     });
 
-    console.log(`✅ 已創建訂單: ${orderId}`);
+    console.log(`✅ 已創建訂單(外送): ${orderId}`);
 
     // 4. 生成支付連結
     const rawBase = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.BASE_URL || 'https://stain-bot-production-2593.up.railway.app';
@@ -78,6 +85,7 @@ async function markSignedWithPayment(deliveryId, customerNumber, customerName, a
     // 5. 發送 LINE 訊息 + 支付連結
     const message = 
       `已經送回管理室了💙金額是 NT$ ${amount.toLocaleString()},以下提供兩種付款方式,您可以依方便選擇 謝謝您\n\n` +
+      `訂單編號: ${orderId}\n\n` +
       `💚 LINE Pay 付款:\n${linepayUrl}\n\n` +
       `💳 信用卡付款:\n${ecpayUrl}`;
 
