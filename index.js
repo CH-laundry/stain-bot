@@ -768,7 +768,7 @@ function generateECPayCheckMacValue(params) {
     .toUpperCase();
 }
 
-// ====== 綠界 ReturnURL（伺服器背景通知）修正版 ======
+// ====== 綠界 ReturnURL (伺服器背景通知) [已修復] ======
 app.all('/payment/ecpay/callback', async (req, res) => {
   try {
     // 1) 先回覆綠界，避免重試
@@ -781,166 +781,97 @@ app.all('/payment/ecpay/callback', async (req, res) => {
     const mac = String(data.CheckMacValue || '');
     const calc = generateECPayCheckMacValue(data);
     if (!mac || mac.toUpperCase() !== calc.toUpperCase()) {
-      logger.logToFile('[ECPAY][WARN] CheckMacValue 不一致，疑似假通知或金鑰不符');
+      logger.logToFile('[ECPAY][WARN] CheckMacValue 不一致');
       return; 
     }
 
-    // 4) 僅在成功時處理：RtnCode === '1'
+    // 4) 僅在成功時處理
     if (String(data.RtnCode) !== '1') {
-      logger.logToFile(`[ECPAY][INFO] 非成功回傳：RtnCode=${data.RtnCode} Msg=${data.RtnMsg || ''}`);
+      logger.logToFile(`[ECPAY][INFO] 非成功回傳：RtnCode=${data.RtnCode}`);
       return;
     }
 
-    // ✅【更新訂單狀態為已付款】
+    // ✅【更新訂單狀態】
     const allOrders = orderManager.getAllOrders();
     for (const order of allOrders) {
-      const oid = order.orderId; // 取得正確的訂單編號
+      const oid = order.orderId;
       if (
         order.userId === data.CustomField1 &&
         Number(order.amount) === Number(data.TradeAmt || data.Amount || 0) &&
         order.status !== 'paid'
       ) {
-        // 更新狀態
         orderManager.updateOrderStatus(oid, 'paid', 'ECPay');
         logger.logToFile(`[ECPAY][UPDATE] 訂單 ${oid} 狀態更新為已付款`);
 
-        // 🔥🔥🔥 【這裡才是正確的位置】 🔥🔥🔥
-        // 告訴洗衣店電腦：這張單已經付錢了 (信用卡)
+        // 🔥 通知店裡電腦 (同步清單)
         if (global.pendingSyncOrders) {
             global.pendingSyncOrders.push({
-                orderId: oid,   // 這裡抓得到 oid 了！
+                orderId: oid,
                 amount: Number(order.amount),
                 payType: 'CREDIT' 
             });
             console.log(`[Payment] 綠界訂單 ${oid} 已加入同步佇列`);
         }
-        // 🔥🔥🔥 【結束】 🔥🔥🔥
-
-        break; // 跳出迴圈
+        break; 
       }
     }
 
-    // 5) 記錄日誌
+    // 5) 記錄日誌與通知
     const merchantTradeNo = data.MerchantTradeNo;
     const amount = Number(data.TradeAmt || data.Amount || 0);
     const payType = data.PaymentType || 'ECPay';
-    const payTime = data.PaymentDate || '';
     const userId = data.CustomField1 || '';   
     const userName = data.CustomField2 || ''; 
 
-    logger.logToFile(`[ECPAY][SUCCESS] ${merchantTradeNo} 成功 NT$${amount} ${payType} ${payTime} user=${userName}/${userId}`);
+    logger.logToFile(`[ECPAY][SUCCESS] ${merchantTradeNo} 成功 NT$${amount}`);
 
-    // 7) 通知老闆
     if (process.env.ADMIN_USER_ID) {
       client.pushMessage(process.env.ADMIN_USER_ID, {
         type: 'text',
-        text: `✅ 綠界付款成功\n\n客戶：${userName || '-'}\n金額：NT$ ${amount.toLocaleString()}\n方式：${payType}\n綠界單號：${merchantTradeNo}\n狀態：已付款`
+        text: `✅ 綠界付款成功\n客戶：${userName}\n金額：NT$ ${amount}`
       }).catch(() => {});
     }
 
-    // 8) 通知客人
     if (userId && userId !== 'undefined') {
       client.pushMessage(userId, {
         type: 'text',
-        text: `✅ 付款成功（綠界）\n\n${userName ? `感謝 ${userName} 的支付\n` : ''}金額：NT$ ${amount.toLocaleString()}\n非常謝謝您，感謝您的支持 💙`
+        text: `✅ 付款成功（綠界）\n感謝您的支持 💙`
       }).catch(() => {});
     }
   } catch (err) {
     logger.logError('[ECPAY][ERROR] 回調處理失敗', err);
   }
 });
-// ... (上面是綠界 ECPay 的程式碼) ...
-  } catch (err) {
-    logger.logError('[ECPAY][ERROR] 回調處理失敗', err);
-  }
-});
-  // 😱 這裡少了一行！導致下一行報錯 "req is not defined"
+
+// ====== Line Pay Confirm (付款確認頁面) [已修復] ======
+app.all('/payment/linepay/confirm', async (req, res) => {
   const { transactionId, orderId, parentOrderId } = { ...req.query, ...req.body };
   
-  // ...
-  const { transactionId, orderId, parentOrderId } = { ...req.query, ...req.body };
-  
-  // 立即回應美化的成功頁面給用戶看
+  // 顯示成功頁面
   res.status(200).send(`
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>付款成功 - LINE Pay</title>
+  <title>付款成功</title>
   <style>
-    body {
-      font-family: sans-serif;
-      text-align: center;
-      padding: 50px 20px;
-      background: linear-gradient(135deg, #06C755 0%, #00B900 100%);
-      color: white;
-      margin: 0;
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .container {
-      background: rgba(255, 255, 255, 0.15);
-      border-radius: 20px;
-      padding: 40px;
-      max-width: 500px;
-      margin: 0 auto;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-    }
-    .success-icon {
-      font-size: 80px;
-      margin-bottom: 20px;
-      animation: scaleIn 0.5s ease-out;
-    }
-    h1 {
-      color: #fff;
-      font-size: 32px;
-      margin: 20px 0;
-      font-weight: 700;
-    }
-    p {
-      font-size: 18px;
-      line-height: 1.6;
-      margin: 15px 0;
-    }
-    .amount {
-      font-size: 28px;
-      font-weight: 700;
-      background: rgba(255, 255, 255, 0.25);
-      padding: 15px;
-      border-radius: 12px;
-      margin: 20px 0;
-    }
-    .note {
-      font-size: 14px;
-      opacity: 0.9;
-      margin-top: 25px;
-    }
-    @keyframes scaleIn {
-      0% { transform: scale(0); }
-      50% { transform: scale(1.1); }
-      100% { transform: scale(1); }
-    }
+    body { font-family: sans-serif; text-align: center; padding: 50px 20px; background: #06C755; color: white; }
+    h1 { font-size: 32px; font-weight: bold; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="success-icon">✅</div>
-    <h1>付款成功！</h1>
-    <p>您的 LINE Pay 付款已完成</p>
-    <div class="amount">感謝您的支付 💙</div>
-    <p class="note">我們已收到您的付款通知<br>系統會自動通知我們<br><br>您可以關閉此頁面了</p>
-  </div>
+  <h1>✅ 付款成功！</h1>
+  <p>LINE Pay 付款已完成，感謝您的支持。</p>
 </body>
 </html>
   `);
 
-  // 背景處理確認邏輯（不影響用戶體驗）
+  // 背景處理確認
   setImmediate(() => {
     handleLinePayConfirm(transactionId, orderId, parentOrderId).catch(() => {});
   });
+});
 // ====== 其餘 API 保持不變（以下全部保留） ======
 app.get('/api/orders', (req, res) => {
   const { status } = req.query;
