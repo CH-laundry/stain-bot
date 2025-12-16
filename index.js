@@ -932,7 +932,6 @@ app.all('/payment/ecpay/callback', async (req, res) => {
   setImmediate(() => {
     handleLinePayConfirm(transactionId, orderId, parentOrderId).catch(() => {});
   });
-});
 // ====== 其餘 API 保持不變（以下全部保留） ======
 app.get('/api/orders', (req, res) => {
   const { status } = req.query;
