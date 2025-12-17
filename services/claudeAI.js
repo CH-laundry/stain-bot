@@ -365,9 +365,24 @@ A: 只報價格，不主動提收送條件
 `;
 
 // ====================================
+// 收件回覆記憶（避免重複）
+// ====================================
+const pickupRepliedUsers = new Map(); // 記住已回覆過的客人
+
+// 清理過期記憶（30分鐘後清除）
+setInterval(() => {
+  const now = Date.now();
+  for (const [userId, timestamp] of pickupRepliedUsers.entries()) {
+    if (now - timestamp > 30 * 60 * 1000) { // 30分鐘
+      pickupRepliedUsers.delete(userId);
+    }
+  }
+}, 5 * 60 * 1000); // 每5分鐘檢查一次
+
+// ====================================
 // 處理文字訊息（Claude AI）
 // ====================================
-async function handleTextMessage(userMessage) {
+async function handleTextMessage(userMessage, userId = null) {
   try {
     // 取得當前時間資訊（台北時區）
     const now = new Date();
@@ -377,6 +392,14 @@ async function handleTextMessage(userMessage) {
     const dayNames = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
     const currentDayName = dayNames[currentDay];
     const timeInfo = `當前時間：${currentDayName} ${currentHour}:${taipeiTime.getMinutes().toString().padStart(2, '0')}`;
+    
+    // 檢查是否為收件相關問題
+    const isPickupQuestion = /收|來收|收件|到府|收衣|收送/.test(userMessage);
+    
+    // 如果是收件問題，且已回覆過，則不再回覆
+    if (isPickupQuestion && userId && pickupRepliedUsers.has(userId)) {
+      return null; // 已回覆過，不再回應
+    }
     
     // 使用 Claude API 智能回覆
     const message = await anthropic.messages.create({
@@ -394,6 +417,11 @@ async function handleTextMessage(userMessage) {
     // 檢查是否為無關問題
     if (claudeReply.includes('UNRELATED')) {
       return null; // 完全不回應
+    }
+
+    // 如果是收件問題且有回覆，記住這個客人
+    if (isPickupQuestion && userId && claudeReply) {
+      pickupRepliedUsers.set(userId, Date.now());
     }
 
     return claudeReply;
