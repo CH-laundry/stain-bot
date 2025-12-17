@@ -284,7 +284,7 @@ app.post('/webhook', async (req, res) => {
           let claudeReplied = false;
           try {
             const claudeAI = require('./services/claudeAI');
-            const aiReply = await claudeAI.handleTextMessage(userMessage);
+            const aiReply = await claudeAI.handleTextMessage(userMessage, userId);
             if (aiReply) {
               await client.pushMessage(userId, { type: 'text', text: aiReply });
               logger.logToFile(`[Claude AI] 已回覆: ${userId}`);
