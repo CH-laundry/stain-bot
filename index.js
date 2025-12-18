@@ -1669,6 +1669,56 @@ app.post('/api/mark-synced', (req, res) => {
     res.json({ success: true });
 });
 
+// ==========================================
+// 🚚 外送行程接收接口 (給 Python 機器人用的)
+// ==========================================
+app.post('/api/create-delivery-task', async (req, res) => {
+    try {
+        const { orderNo, customerNo, name, userId, mobile, status } = req.body;
+        
+        console.log(`[API] 收到 POS 完工通知: ${name} (${orderNo})`);
+
+        // 1. 讀取現有的外送資料 (delivery.json)
+        const fs = require('fs');
+        const path = require('path');
+        const FILE_PATH = path.join(__dirname, 'data', 'delivery.json');
+        
+        let deliveryData = { orders: [] };
+        if (fs.existsSync(FILE_PATH)) {
+            deliveryData = JSON.parse(fs.readFileSync(FILE_PATH, 'utf8'));
+        }
+
+        // 2. 檢查是否已經存在 (避免重複)
+        const exists = deliveryData.orders.some(o => o.orderNo === orderNo);
+        
+        if (!exists) {
+            // 3. 新增到外送清單
+            deliveryData.orders.push({
+                id: `DELIVERY_${Date.now()}`, // 自動產生 ID
+                orderNo,
+                customerNumber: customerNo,
+                customerName: name,
+                mobile,
+                status: 'Ready', // 狀態: 待外送
+                createdAt: new Date().toISOString(),
+                signed: false
+            });
+
+            // 4. 存檔
+            fs.writeFileSync(FILE_PATH, JSON.stringify(deliveryData, null, 2), 'utf8');
+            console.log(`✅ 已自動加入外送行程: ${orderNo}`);
+        } else {
+            console.log(`⚠️ 訂單已存在於外送清單，略過: ${orderNo}`);
+        }
+
+        res.status(200).json({ success: true, message: "已接收並加入行程" });
+
+    } catch (error) {
+        console.error("外送排程錯誤:", error);
+        res.status(500).send("Server Error");
+    }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
   console.log(`伺服器正在運行,端口:${PORT}`);
