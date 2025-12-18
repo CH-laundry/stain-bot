@@ -1672,13 +1672,15 @@ app.post('/api/mark-synced', (req, res) => {
 // ==========================================
 // 🚚 外送行程接收接口 (給 Python 機器人用的)
 // ==========================================
+// ==========================================
+// 🚚 外送行程接收接口 (修正版：預設為未簽收 Pending)
+// ==========================================
 app.post('/api/create-delivery-task', async (req, res) => {
     try {
         const { orderNo, customerNo, name, userId, mobile, status } = req.body;
         
         console.log(`[API] 收到 POS 完工通知: ${name} (${orderNo})`);
 
-        // 1. 讀取現有的外送資料 (delivery.json)
         const fs = require('fs');
         const path = require('path');
         const FILE_PATH = path.join(__dirname, 'data', 'delivery.json');
@@ -1688,27 +1690,25 @@ app.post('/api/create-delivery-task', async (req, res) => {
             deliveryData = JSON.parse(fs.readFileSync(FILE_PATH, 'utf8'));
         }
 
-        // 2. 檢查是否已經存在 (避免重複)
         const exists = deliveryData.orders.some(o => o.orderNo === orderNo);
         
         if (!exists) {
-            // 3. 新增到外送清單
             deliveryData.orders.push({
-                id: `DELIVERY_${Date.now()}`, // 自動產生 ID
+                id: `DELIVERY_${Date.now()}`,
                 orderNo,
                 customerNumber: customerNo,
                 customerName: name,
                 mobile,
-                status: 'Ready', // 狀態: 待外送
+                // 🔥 這裡改了！改成 Pending 代表「待處理/未簽收」
+                status: 'Pending', 
                 createdAt: new Date().toISOString(),
-                signed: false
+                // 🔥 這裡確認是 false
+                signed: false 
             });
-
-            // 4. 存檔
             fs.writeFileSync(FILE_PATH, JSON.stringify(deliveryData, null, 2), 'utf8');
-            console.log(`✅ 已自動加入外送行程: ${orderNo}`);
+            console.log(`✅ 已加入外送行程 (未簽收): ${orderNo}`);
         } else {
-            console.log(`⚠️ 訂單已存在於外送清單，略過: ${orderNo}`);
+            console.log(`⚠️ 訂單已存在，略過: ${orderNo}`);
         }
 
         res.status(200).json({ success: true, message: "已接收並加入行程" });
