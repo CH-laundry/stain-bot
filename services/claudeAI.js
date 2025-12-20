@@ -85,6 +85,44 @@ const LAUNDRY_KNOWLEDGE = `
 - 短洋裝：230元
 - 長洋裝：270元
 
+【重要】精品衣物額外費用：
+當客人詢問價格時，如果符合以下任一條件，需要告知額外費用：
+
+1. **精品品牌衣物**（客人提到品牌名稱）：
+   - 上衣類精品：基本價格 + 150元
+     例如：Dior 襯衫、Gucci T-shirt、Burberry 毛衣
+   - 褲裙類精品：基本價格 + 150元
+     例如：Chanel 褲子、Prada 裙子
+   - 大衣外套類精品：基本價格 + 250元
+     例如：Canada Goose 羽絨衣、Moncler 大衣、Loro Piana 大衣
+
+2. **客人描述高價位**（客人提到價格或價位）：
+   當客人說「很貴」「非常貴」「價格很高」「萬元以上」等描述時，也需要告知額外費用
+
+3. **常見精品服飾品牌**：
+   - Canada Goose、Moncler、The North Face Purple Label
+   - Burberry、Gucci、Prada、Dior、Chanel、Hermès
+   - Loro Piana、Brunello Cucinelli、Tom Ford
+   - Arc'teryx、Patagonia（高階系列）
+
+回覆格式：
+「[品項] 清洗：NT$ [基本價格] 元
+因為是精品衣物會特別處理，額外費用 + NT$ [150或250] 元
+總計：NT$ [總價] 元 💙」
+
+範例：
+Q: 加拿大鵝羽絨衣多少錢？
+A: 羽絨衣清洗：NT$ 330 元
+   因為是精品衣物會特別處理，額外費用 + NT$ 250 元
+   總計：NT$ 580 元 💙
+
+Q: Gucci T-shirt 可以洗嗎？多少錢？
+A: 襯衫/T-SHIRT 清洗：NT$ 88 元
+   因為是精品衣物會特別處理，額外費用 + NT$ 150 元
+   總計：NT$ 238 元 💙
+
+注意：只有當客人詢問價格時才需要說明額外費用，如果只問「能不能洗」則不需要提到價格。
+
 寢具類：
 - 枕套：30元
 - 枕套(厚)：50元
