@@ -1,60 +1,58 @@
-const { google } = require('googleapis');
-const googleAuth = require('./googleAuth');
 const logger = require('./logger');
+const fs = require('fs');
+const path = require('path');
 
 class CustomerDatabase {
     constructor() {
-        this.SHEET_NAME = '客戶列表';
+        this.DATA_FILE = '/data/customers.json';
         this.cache = new Map();
+        this.ensureDataFile();
     }
 
-    async getSheets() {
-        const auth = googleAuth.getOAuth2Client();
-        return google.sheets({ version: 'v4', auth });
+    // 確保資料檔案存在
+    ensureDataFile() {
+        const dir = path.dirname(this.DATA_FILE);
+        
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+        
+        if (!fs.existsSync(this.DATA_FILE)) {
+            fs.writeFileSync(this.DATA_FILE, JSON.stringify([]), 'utf8');
+        }
     }
 
+    // 從檔案載入所有客戶
     async loadAllCustomers() {
         try {
-            if (!googleAuth.isAuthorized()) {
-                logger.logToFile('⚠️ Google 未授權,跳過載入客戶資料');
+            if (!fs.existsSync(this.DATA_FILE)) {
+                logger.logToFile('⚠️ 客戶資料檔案不存在，建立新檔案');
+                this.ensureDataFile();
                 return;
             }
 
-            const sheets = await this.getSheets();
-            const spreadsheetId = process.env.GOOGLE_SHEETS_ID_CUSTOMER;
-
-            if (!spreadsheetId) {
-                logger.logToFile('⚠️ 未設定 GOOGLE_SHEETS_ID_CUSTOMER');
-                return;
-            }
-
-            const response = await sheets.spreadsheets.values.get({
-                spreadsheetId: spreadsheetId,
-                range: `${this.SHEET_NAME}!A2:I`  // ⭐ 改成 I 欄（新增3個欄位）
-            });
-
-            const rows = response.data.values || [];
+            const data = fs.readFileSync(this.DATA_FILE, 'utf8');
+            const customers = JSON.parse(data);
             
-            rows.forEach(row => {
-                if (row[1]) {
-                    this.cache.set(row[1], {
-                        userId: row[1],
-                        displayName: row[2] || '',
-                        realName: row[3] || '',
-                        lastSeen: row[4] || new Date().toISOString(),
-                        interactionCount: parseInt(row[5]) || 0,
-                        customName: !!row[3],
-                        // ⭐ 新增對話追蹤欄位
-                        firstContact: row[6] || new Date().toISOString(),
-                        lastContact: row[7] || new Date().toISOString(),
-                        messageCount: parseInt(row[8]) || 0
-                    });
+            customers.forEach(customer => {
+                if (customer.userId) {
+                    this.cache.set(customer.userId, customer);
                 }
             });
 
-            logger.logToFile(`✅ 已從 Google Sheets 載入 ${rows.length} 位客戶`);
+            logger.logToFile(`✅ 已從檔案載入 ${customers.length} 位客戶`);
         } catch (error) {
             logger.logError('載入客戶資料失敗', error);
+        }
+    }
+
+    // 儲存所有客戶到檔案
+    saveToFile() {
+        try {
+            const customers = Array.from(this.cache.values());
+            fs.writeFileSync(this.DATA_FILE, JSON.stringify(customers, null, 2), 'utf8');
+        } catch (error) {
+            logger.logError('儲存客戶資料到檔案失敗', error);
         }
     }
 
@@ -70,82 +68,15 @@ class CustomerDatabase {
                 lastSeen: now,
                 interactionCount: (existing?.interactionCount || 0) + 1,
                 customName: !!(realName || existing?.realName),
-                // ⭐ 新增對話追蹤欄位
                 firstContact: existing?.firstContact || now,
                 lastContact: now,
                 messageCount: existing?.messageCount || 0
             };
 
             this.cache.set(userId, customerData);
+            this.saveToFile();
 
-            if (!googleAuth.isAuthorized()) {
-                return customerData;
-            }
-
-            const sheets = await this.getSheets();
-            const spreadsheetId = process.env.GOOGLE_SHEETS_ID_CUSTOMER;
-
-            if (!spreadsheetId) {
-                return customerData;
-            }
-
-            const timestamp = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
-
-            if (existing) {
-                const response = await sheets.spreadsheets.values.get({
-                    spreadsheetId: spreadsheetId,
-                    range: `${this.SHEET_NAME}!B:B`
-                });
-
-                const rows = response.data.values || [];
-                const rowIndex = rows.findIndex(row => row[0] === userId);
-
-                if (rowIndex !== -1) {
-                    await sheets.spreadsheets.values.update({
-                        spreadsheetId: spreadsheetId,
-                        range: `${this.SHEET_NAME}!A${rowIndex + 2}:I${rowIndex + 2}`,  // ⭐ 改成 I 欄
-                        valueInputOption: 'USER_ENTERED',
-                        resource: {
-                            values: [[
-                                timestamp,
-                                userId,
-                                displayName,
-                                customerData.realName,
-                                now,
-                                customerData.interactionCount,
-                                // ⭐ 新增3個欄位
-                                customerData.firstContact,
-                                customerData.lastContact,
-                                customerData.messageCount
-                            ]]
-                        }
-                    });
-                    logger.logToFile(`✅ 已更新客戶: ${displayName} (${userId})`);
-                    return customerData;
-                }
-            }
-
-            await sheets.spreadsheets.values.append({
-                spreadsheetId: spreadsheetId,
-                range: `${this.SHEET_NAME}!A:I`,  // ⭐ 改成 I 欄
-                valueInputOption: 'USER_ENTERED',
-                resource: {
-                    values: [[
-                        timestamp,
-                        userId,
-                        displayName,
-                        customerData.realName,
-                        now,
-                        customerData.interactionCount,
-                        // ⭐ 新增3個欄位
-                        customerData.firstContact,
-                        customerData.lastContact,
-                        customerData.messageCount
-                    ]]
-                }
-            });
-
-            logger.logToFile(`✅ 已新增客戶: ${displayName} (${userId})`);
+            logger.logToFile(`✅ 已儲存客戶: ${displayName} (${userId})`);
             return customerData;
 
         } catch (error) {
@@ -154,7 +85,7 @@ class CustomerDatabase {
         }
     }
 
-    // ⭐ 新增：更新客人活動紀錄
+    // 更新客人活動紀錄
     async updateCustomerActivity(userId, message) {
         try {
             const existing = this.cache.get(userId);
@@ -162,55 +93,15 @@ class CustomerDatabase {
             if (existing) {
                 const now = new Date().toISOString();
                 
-                // 更新快取資料
                 existing.lastContact = now;
                 existing.messageCount = (existing.messageCount || 0) + 1;
                 
-                // 記錄最後一則訊息（僅文字訊息）
                 if (message && message.type === 'text') {
                     existing.lastMessage = message.text;
                 }
                 
                 this.cache.set(userId, existing);
-                
-                // 如果有授權 Google Sheets，也更新到試算表
-                if (googleAuth.isAuthorized()) {
-                    const sheets = await this.getSheets();
-                    const spreadsheetId = process.env.GOOGLE_SHEETS_ID_CUSTOMER;
-                    
-                    if (spreadsheetId) {
-                        const response = await sheets.spreadsheets.values.get({
-                            spreadsheetId: spreadsheetId,
-                            range: `${this.SHEET_NAME}!B:B`
-                        });
-                        
-                        const rows = response.data.values || [];
-                        const rowIndex = rows.findIndex(row => row[0] === userId);
-                        
-                        if (rowIndex !== -1) {
-                            const timestamp = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
-                            
-                            await sheets.spreadsheets.values.update({
-                                spreadsheetId: spreadsheetId,
-                                range: `${this.SHEET_NAME}!A${rowIndex + 2}:I${rowIndex + 2}`,
-                                valueInputOption: 'USER_ENTERED',
-                                resource: {
-                                    values: [[
-                                        timestamp,
-                                        existing.userId,
-                                        existing.displayName,
-                                        existing.realName,
-                                        now,
-                                        existing.interactionCount,
-                                        existing.firstContact,
-                                        existing.lastContact,
-                                        existing.messageCount
-                                    ]]
-                                }
-                            });
-                        }
-                    }
-                }
+                this.saveToFile();
                 
                 logger.logToFile(`✅ 客人活動已更新: ${existing.displayName} (訊息數: ${existing.messageCount})`);
             }
@@ -235,7 +126,7 @@ class CustomerDatabase {
 
     getAllCustomers() {
         return Array.from(this.cache.values()).sort((a, b) => 
-            new Date(b.lastSeen) - new Date(a.lastSeen)
+            new Date(b.lastContact || b.lastSeen) - new Date(a.lastContact || a.lastSeen)
         );
     }
 
