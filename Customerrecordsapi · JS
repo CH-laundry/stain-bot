@@ -1,0 +1,76 @@
+// ====================================
+// 客人紀錄 API - 完全獨立
+// ====================================
+
+const express = require('express');
+const router = express.Router();
+const customerLogger = require('./simpleCustomerLogger');
+
+// 取得所有客人紀錄
+router.get('/records', (req, res) => {
+  try {
+    const customers = customerLogger.getAllCustomers();
+    
+    // 計算統計資訊
+    const now = Date.now();
+    const oneDayMs = 24 * 60 * 60 * 1000;
+    const oneWeekMs = 7 * oneDayMs;
+    
+    let todayCount = 0;
+    let weekCount = 0;
+    
+    customers.forEach(customer => {
+      if (customer.firstContact) {
+        const diff = now - new Date(customer.firstContact).getTime();
+        if (diff <= oneDayMs) todayCount++;
+        if (diff <= oneWeekMs) weekCount++;
+      }
+    });
+    
+    res.json({
+      success: true,
+      total: customers.length,
+      records: customers,
+      statistics: {
+        total: customers.length,
+        today: todayCount,
+        week: weekCount
+      }
+    });
+  } catch (error) {
+    console.error('取得客人紀錄失敗:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// 搜尋客人
+router.get('/search', (req, res) => {
+  try {
+    const { q } = req.query;
+    if (!q) {
+      return res.status(400).json({
+        success: false,
+        error: '請提供搜尋關鍵字'
+      });
+    }
+    
+    const results = customerLogger.searchCustomers(q);
+    
+    res.json({
+      success: true,
+      total: results.length,
+      records: results
+    });
+  } catch (error) {
+    console.error('搜尋客人失敗:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+module.exports = router;
