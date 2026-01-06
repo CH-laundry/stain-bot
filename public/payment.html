@@ -83,6 +83,7 @@
       <button class="tab" onclick="switchTab(event,'pickup')">🧺 取件追蹤</button>
       <button class="tab" onclick="switchTab(event,'delivery')">🚚 外送排程</button>
       <button class="tab" onclick="switchTab(event,'manual')">📝 人工通知</button>
+      <button class="tab" onclick="switchTab(event,'records')">👤 客人紀錄</button>
       <button class="tab" onclick="switchTab(event,'urgent')">⚡ 急件追蹤</button>
     </div>
 
@@ -500,8 +501,48 @@
     <p style="text-align:center; color:#999;">尚未載入，請點「重新整理」。</p>
   </div>
 </div>
-  <!-- 📢 純文字通知分頁 -->
-<div id="notify-tab" class="tab-content">
+
+<!-- 👤 客人紀錄分頁 -->
+<div id="records-tab" class="tab-content">
+  <h3 style="color:#667eea; margin-bottom:20px;">👤 客人對話紀錄</h3>
+  <p style="color:#666; font-size:14px; margin-bottom:20px;">
+    自動記錄所有在 LINE 官方帳號與您對話過的客人
+  </p>
+
+  <!-- 搜尋功能 -->
+  <div class="form-group">
+    <label>🔍 搜尋客人</label>
+    <input type="text" id="recordSearchInput" placeholder="輸入姓名或 User ID" oninput="searchRecords()">
+  </div>
+
+  <!-- 統計資訊 -->
+  <div id="recordStats" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:15px; margin-bottom:20px;">
+    <div style="background:#f0f4ff; padding:15px; border-radius:10px; text-align:center;">
+      <div style="font-size:24px; font-weight:bold; color:#667eea;" id="totalRecords">0</div>
+      <div style="font-size:14px; color:#666;">總客人數</div>
+    </div>
+    <div style="background:#e7f0ff; padding:15px; border-radius:10px; text-align:center;">
+      <div style="font-size:24px; font-weight:bold; color:#1890ff;" id="todayRecords">0</div>
+      <div style="font-size:14px; color:#666;">今日新增</div>
+    </div>
+    <div style="background:#d4edda; padding:15px; border-radius:10px; text-align:center;">
+      <div style="font-size:24px; font-weight:bold; color:#28a745;" id="weekRecords">0</div>
+      <div style="font-size:14px; color:#666;">本週新增</div>
+    </div>
+  </div>
+
+  <!-- 操作列 -->
+  <div style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
+    <button class="btn btn-small btn-secondary" onclick="loadRecords()">🔄 重新整理</button>
+    <button class="btn btn-small" style="background:#52c41a;" onclick="exportRecords()">📊 匯出資料</button>
+  </div>
+
+  <!-- 客人列表 -->
+  <div id="recordList">
+    <p style="text-align:center; color:#999;">尚未載入，請點「重新整理」。</p>
+  </div>
+</div>  
+
   
   <!-- 📢 純文字通知分頁 -->
 <div id="notify-tab" class="tab-content">
@@ -584,6 +625,7 @@
     var allDeliveries = [];
     var allUrgents = [];
     var allManuals = [];
+    var allRecords = [];
 
     async function initLoad() {
       try {
@@ -612,6 +654,7 @@
       if (tabName === 'delivery') loadDeliveries(true);
       if (tabName === 'urgent') loadUrgents(true);
       if (tabName === 'manual') loadManuals();
+      if (tabName === 'records') loadRecords();
     }
 
     async function loadCustomerNumbers() {
@@ -1997,6 +2040,194 @@ document.addEventListener('DOMContentLoaded', function() {
   checkTodayDeliveryAlerts();
 });
 
+// ========================================
+// 👤 客人紀錄功能
+// ========================================
+
+// 載入客人紀錄
+async function loadRecords() {
+  var wrap = document.getElementById('recordList');
+  if (!wrap) return;
+  
+  wrap.innerHTML = '<p style="text-align:center; color:#999;">載入中...</p>';
+  
+  try {
+    var res = await fetch('/api/customer-records');
+    var data = await res.json();
+    
+    if (!data.success) throw new Error(data.error || '載入失敗');
+    
+    allRecords = Array.isArray(data.records) ? data.records : [];
+    updateRecordStats(data.statistics || {});
+    displayRecords(allRecords);
+  } catch (e) {
+    allRecords = [];
+    wrap.innerHTML = '<p style="text-align:center; color:#dc3545;">載入失敗：' + e.message + '</p>';
+  }
+}
+
+// 更新統計資訊
+function updateRecordStats(stats) {
+  document.getElementById('totalRecords').textContent = stats.total || 0;
+  document.getElementById('todayRecords').textContent = stats.today || 0;
+  document.getElementById('weekRecords').textContent = stats.week || 0;
+}
+
+// 顯示客人紀錄列表
+function displayRecords(records) {
+  var wrap = document.getElementById('recordList');
+  if (!wrap) return;
+  
+  if (!records || records.length === 0) {
+    wrap.innerHTML = '<p style="text-align:center; color:#999;">尚無客人紀錄</p>';
+    return;
+  }
+  
+  var html = '';
+  records.forEach(function(r) {
+    var firstContactDate = r.firstContact ? new Date(r.firstContact).toLocaleString('zh-TW') : '-';
+    var lastContactDate = r.lastContact ? new Date(r.lastContact).toLocaleString('zh-TW') : '-';
+    var messageCount = r.messageCount || 0;
+    
+    // 判斷是否為新客人（7天內）
+    var isNew = false;
+    if (r.firstContact) {
+      var daysDiff = (Date.now() - new Date(r.firstContact).getTime()) / (1000 * 60 * 60 * 24);
+      isNew = daysDiff <= 7;
+    }
+    
+    var newBadge = isNew 
+      ? '<span style="background:#52c41a;color:#fff;padding:3px 8px;border-radius:5px;font-size:12px;margin-left:5px;">🆕 新客人</span>'
+      : '';
+    
+    html +=
+      '<div class="user-item" style="display:block; margin-bottom:10px;">' +
+      '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">' +
+      '<div>' +
+      '<strong style="font-size:16px;">' + (r.displayName || '未知') + '</strong> ' +
+      newBadge +
+      '</div>' +
+      '<div style="font-size:14px; color:#667eea; font-weight:600;">對話 ' + messageCount + ' 次</div>' +
+      '</div>' +
+      '<div style="font-size:13px; color:#666; margin-bottom:8px;">' +
+      '<div><strong>User ID:</strong> ' + (r.userId || '-') + '</div>' +
+      '<div><strong>首次對話:</strong> ' + firstContactDate + '</div>' +
+      '<div><strong>最後對話:</strong> ' + lastContactDate + '</div>' +
+      '</div>' +
+      '<div style="display:flex; gap:5px; flex-wrap:wrap;">' +
+      '<button class="btn btn-small btn-secondary" onclick="copyUserId(\'' + (r.userId || '') + '\')">📋 複製 User ID</button>' +
+      '<button class="btn btn-small" style="background:#1890ff;color:#fff;" onclick="viewRecordDetail(\'' + (r.userId || '') + '\')">👁️ 查看詳情</button>' +
+      '</div>' +
+      '</div>';
+  });
+  
+  wrap.innerHTML = html;
+}
+
+// 搜尋客人紀錄
+function searchRecords() {
+  var query = (document.getElementById('recordSearchInput').value || '').toLowerCase().trim();
+  
+  if (!query) {
+    displayRecords(allRecords);
+    return;
+  }
+  
+  var filtered = (allRecords || []).filter(function(r) {
+    return (r.displayName || '').toLowerCase().includes(query) || 
+           (r.userId || '').toLowerCase().includes(query);
+  });
+  
+  displayRecords(filtered);
+  
+  if (filtered.length === 0) {
+    document.getElementById('recordList').innerHTML = '<p style="text-align:center; color:#999;">找不到符合的客人</p>';
+  }
+}
+
+// 複製 User ID
+function copyUserId(userId) {
+  if (!userId) return;
+  
+  navigator.clipboard.writeText(userId).then(
+    function() { 
+      showResult('success', '📋 已複製 User ID'); 
+    },
+    function() { 
+      showResult('error', '❌ 複製失敗，User ID: ' + userId); 
+    }
+  );
+}
+
+// 查看客人詳情
+async function viewRecordDetail(userId) {
+  if (!userId) return;
+  
+  try {
+    var res = await fetch('/api/customer-records/' + encodeURIComponent(userId));
+    var data = await res.json();
+    
+    if (!data.success) {
+      alert('無法載入客人詳情');
+      return;
+    }
+    
+    var record = data.record;
+    var msg = 
+      '👤 客人詳細資訊\n\n' +
+      '姓名：' + (record.displayName || '未知') + '\n' +
+      'User ID：' + (record.userId || '-') + '\n' +
+      '首次對話：' + (record.firstContact ? new Date(record.firstContact).toLocaleString('zh-TW') : '-') + '\n' +
+      '最後對話：' + (record.lastContact ? new Date(record.lastContact).toLocaleString('zh-TW') : '-') + '\n' +
+      '對話次數：' + (record.messageCount || 0) + ' 次\n';
+    
+    if (record.lastMessage) {
+      msg += '\n最後訊息：\n' + record.lastMessage;
+    }
+    
+    alert(msg);
+  } catch (e) {
+    alert('載入失敗：' + e.message);
+  }
+}
+
+// 匯出客人資料
+function exportRecords() {
+  if (!allRecords || allRecords.length === 0) {
+    alert('目前沒有客人紀錄可匯出');
+    return;
+  }
+  
+  // 建立 CSV 內容
+  var csv = '姓名,User ID,首次對話,最後對話,對話次數\n';
+  
+  allRecords.forEach(function(r) {
+    var name = (r.displayName || '未知').replace(/,/g, '');
+    var userId = r.userId || '';
+    var first = r.firstContact ? new Date(r.firstContact).toLocaleString('zh-TW') : '';
+    var last = r.lastContact ? new Date(r.lastContact).toLocaleString('zh-TW') : '';
+    var count = r.messageCount || 0;
+    
+    csv += name + ',' + userId + ',' + first + ',' + last + ',' + count + '\n';
+  });
+  
+  // 下載 CSV
+  var blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  var link = document.createElement('a');
+  var url = URL.createObjectURL(blob);
+  var timestamp = new Date().toISOString().substring(0, 10);
+  
+  link.setAttribute('href', url);
+  link.setAttribute('download', 'customer_records_' + timestamp + '.csv');
+  link.style.visibility = 'hidden';
+  
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  
+  showResult('success', '✅ 客人紀錄已匯出');
+}
+    
 // ========================================
 // 📝 人工通知功能
 // ========================================
