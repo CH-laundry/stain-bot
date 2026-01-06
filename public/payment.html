@@ -2053,14 +2053,30 @@ async function loadRecords() {
   
   try {
     var res = await fetch('/api/customer-records');
+    
+    // ⭐ 先檢查 HTTP 狀態
+    if (!res.ok) {
+      throw new Error('HTTP ' + res.status + ': ' + res.statusText);
+    }
+    
+    // ⭐ 檢查回應格式
+    var contentType = res.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      throw new Error('伺服器回應格式錯誤（非 JSON）');
+    }
+    
     var data = await res.json();
     
-    if (!data.success) throw new Error(data.error || '載入失敗');
+    if (!data.success) {
+      throw new Error(data.error || '載入失敗');
+    }
     
     allRecords = Array.isArray(data.records) ? data.records : [];
     updateRecordStats(data.statistics || {});
     displayRecords(allRecords);
+    
   } catch (e) {
+    console.error('載入客人紀錄失敗:', e);
     allRecords = [];
     wrap.innerHTML = '<p style="text-align:center; color:#dc3545;">載入失敗：' + e.message + '</p>';
   }
