@@ -1,0 +1,101 @@
+// ====================================
+// 簡單客人紀錄系統 - 完全獨立運作
+// ====================================
+
+const fs = require('fs');
+const path = require('path');
+
+const LOG_FILE = '/data/customer-messages.json';
+
+// 確保檔案存在
+function ensureFile() {
+  const dir = path.dirname(LOG_FILE);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  if (!fs.existsSync(LOG_FILE)) {
+    fs.writeFileSync(LOG_FILE, JSON.stringify([]), 'utf8');
+  }
+}
+
+// 讀取所有客人紀錄
+function loadCustomers() {
+  try {
+    ensureFile();
+    const data = fs.readFileSync(LOG_FILE, 'utf8');
+    return JSON.parse(data);
+  } catch (error) {
+    console.error('讀取客人紀錄失敗:', error);
+    return [];
+  }
+}
+
+// 儲存客人紀錄
+function saveCustomers(customers) {
+  try {
+    fs.writeFileSync(LOG_FILE, JSON.stringify(customers, null, 2), 'utf8');
+  } catch (error) {
+    console.error('儲存客人紀錄失敗:', error);
+  }
+}
+
+// 記錄客人訊息
+function logCustomer(userId, displayName, messageText = '') {
+  try {
+    const customers = loadCustomers();
+    const now = new Date().toISOString();
+    
+    // 找現有客人
+    let customer = customers.find(c => c.userId === userId);
+    
+    if (customer) {
+      // 更新現有客人
+      customer.displayName = displayName;
+      customer.lastContact = now;
+      customer.messageCount = (customer.messageCount || 0) + 1;
+      if (messageText) {
+        customer.lastMessage = messageText;
+      }
+    } else {
+      // 新增客人
+      customers.push({
+        userId: userId,
+        displayName: displayName,
+        firstContact: now,
+        lastContact: now,
+        messageCount: 1,
+        lastMessage: messageText
+      });
+    }
+    
+    saveCustomers(customers);
+    console.log(`✅ 已記錄客人: ${displayName} (訊息數: ${customer ? customer.messageCount : 1})`);
+    
+  } catch (error) {
+    console.error('記錄客人失敗:', error);
+  }
+}
+
+// 取得所有客人（按最後聯絡時間排序）
+function getAllCustomers() {
+  const customers = loadCustomers();
+  return customers.sort((a, b) => 
+    new Date(b.lastContact) - new Date(a.lastContact)
+  );
+}
+
+// 搜尋客人
+function searchCustomers(keyword) {
+  const customers = loadCustomers();
+  const term = keyword.toLowerCase();
+  return customers.filter(c => 
+    c.displayName.toLowerCase().includes(term) ||
+    c.userId.toLowerCase().includes(term)
+  );
+}
+
+module.exports = {
+  logCustomer,
+  getAllCustomers,
+  searchCustomers
+};
