@@ -1651,55 +1651,6 @@ app.get('/health', (req, res) => {
   });
 });
 
-// 🔍 測試：直接讀取客戶資料檔案
-app.get('/test-customer-file', (req, res) => {
-  try {
-    const fs = require('fs');
-    const filePath = '/data/customers.json';
-    
-    if (!fs.existsSync(filePath)) {
-      return res.json({
-        success: false,
-        message: '檔案不存在',
-        path: filePath
-      });
-    }
-    
-    const data = fs.readFileSync(filePath, 'utf8');
-    const customers = JSON.parse(data);
-    
-    res.json({
-      success: true,
-      total: customers.length,
-      customers: customers,
-      path: filePath
-    });
-  } catch (e) {
-    res.json({
-      success: false,
-      error: e.message
-    });
-  }
-});
-```
-
-### **步驟 2: 重新啟動伺服器**
-
-### **步驟 3: 測試**
-
-在瀏覽器中訪問：
-```
-https://stain-bot-production-2593.up.railway.app/test-customer-file
-```
-
-**應該會看到客戶資料的 JSON。**
-
-### **步驟 4: 如果看到資料，再測試原本的 API**
-
-訪問：
-```
-https://stain-bot-production-2593.up.railway.app/api/customer-records
-
 app.get('/liff/payment', (req, res) => {
   res.sendFile('liff-payment.html', { root: './public' });
 });
