@@ -82,6 +82,7 @@
       <button class="tab" onclick="switchTab(event,'users')">👥 客戶列表</button>
       <button class="tab" onclick="switchTab(event,'pickup')">🧺 取件追蹤</button>
       <button class="tab" onclick="switchTab(event,'delivery')">🚚 外送排程</button>
+      <button class="tab" onclick="switchTab(event,'manual')">📝 人工通知</button>
       <button class="tab" onclick="switchTab(event,'urgent')">⚡ 急件追蹤</button>
     </div>
 
@@ -435,7 +436,70 @@
   </div>
 </div>
 
+<!-- 📝 人工通知分頁 -->
+<div id="manual-tab" class="tab-content">
+  <h3 style="color:#667eea; margin-bottom:20px;">📝 人工通知紀錄</h3>
+  
+  <!-- 快速查詢 -->
+  <div class="form-group">
+    <label>🔍 快速查詢客戶（用客戶編號）</label>
+    <div class="quick-search">
+      <input type="text" id="manualSearch" placeholder="輸入編號（例如: 001、625）">
+      <button class="btn btn-small" onclick="searchForManual()">查詢</button>
+    </div>
+  </div>
 
+  <!-- 客戶資訊卡片 -->
+  <div id="manualCustomerCard" class="customer-card" style="display:none;">
+    <h4>✅ 客戶資訊</h4>
+    <p><strong>編號:</strong> <span id="manualCardNumber"></span></p>
+    <p><strong>姓名:</strong> <span id="manualCardName"></span></p>
+  </div>
+
+  <!-- 新增人工通知 -->
+  <div style="background:#f8f9fa; padding:20px; border-radius:10px; margin-bottom:20px;">
+    <h4 style="color:#667eea; margin-bottom:15px;">➕ 新增人工通知紀錄</h4>
+
+    <div class="form-group">
+      <label>客戶編號 *</label>
+      <input type="text" id="manualNumber" placeholder="001">
+    </div>
+
+    <div class="form-group">
+      <label>客戶姓名 *</label>
+      <input type="text" id="manualName" placeholder="王小明">
+    </div>
+
+    <div class="form-group">
+      <label>是否需要外送 *</label>
+      <div style="display:flex; gap:15px; flex-wrap:wrap;">
+        <label style="display:flex; align-items:center; gap:5px; font-size:14px;">
+          <input type="radio" name="manualNeedDelivery" value="yes" checked> 需要外送
+        </label>
+        <label style="display:flex; align-items:center; gap:5px; font-size:14px;">
+          <input type="radio" name="manualNeedDelivery" value="no"> 不需要外送
+        </label>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>通知內容</label>
+      <textarea id="manualContent" placeholder="例如：已通知客戶衣物處理完成、已告知取件時間等"></textarea>
+    </div>
+
+    <button class="btn btn-secondary" onclick="addManual()">💾 新增人工通知紀錄</button>
+  </div>
+
+  <!-- 操作列 -->
+  <div style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
+    <button class="btn btn-small btn-secondary" onclick="loadManuals()">🔄 重新整理</button>
+  </div>
+
+  <!-- 人工通知列表（依日期分組） -->
+  <div id="manualList">
+    <p style="text-align:center; color:#999;">尚未載入，請點「重新整理」。</p>
+  </div>
+</div>
   <!-- 📢 純文字通知分頁 -->
 <div id="notify-tab" class="tab-content">
   
@@ -519,6 +583,7 @@
     var allPickupOrders = [];
     var allDeliveries = [];
     var allUrgents = [];
+    var allManuals = [];
 
     async function initLoad() {
       try {
@@ -546,6 +611,7 @@
       if (tabName === 'notify') loadNotifyTemplates();
       if (tabName === 'delivery') loadDeliveries(true);
       if (tabName === 'urgent') loadUrgents(true);
+      if (tabName === 'manual') loadManuals();
     }
 
     async function loadCustomerNumbers() {
@@ -1931,6 +1997,254 @@ document.addEventListener('DOMContentLoaded', function() {
   checkTodayDeliveryAlerts();
 });
 
+// ========================================
+// 📝 人工通知功能
+// ========================================
+
+// 快速搜尋客戶
+function searchForManual() {
+  var num = document.getElementById('manualSearch').value.trim();
+  if (!num) return alert('請輸入編號');
+  
+  if (savedCustomers[num]) {
+    var c = savedCustomers[num];
+    document.getElementById('manualNumber').value = num;
+    document.getElementById('manualName').value = c.name || '';
+    document.getElementById('manualCardNumber').textContent = num;
+    document.getElementById('manualCardName').textContent = c.name || '';
+    document.getElementById('manualCustomerCard').style.display = 'block';
+  } else {
+    alert('找不到此客戶編號');
+  }
+}
+
+// 新增人工通知紀錄
+async function addManual() {
+  var num = document.getElementById('manualNumber').value.trim();
+  var name = document.getElementById('manualName').value.trim();
+  var needDelivery = document.querySelector('input[name="manualNeedDelivery"]:checked').value;
+  var content = document.getElementById('manualContent').value.trim();
+  
+  if (!num || !name) {
+    alert('請至少填寫 編號 / 姓名');
+    return;
+  }
+  
+  try {
+    var res = await fetch('/api/manual/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customerNumber: num,
+        customerName: name,
+        needDelivery: needDelivery,
+        content: content
+      })
+    });
+    
+    var data = await res.json();
+    if (data.success) {
+      showResult('success', '✅ 已新增人工通知紀錄');
+      document.getElementById('manualNumber').value = '';
+      document.getElementById('manualName').value = '';
+      document.querySelector('input[name="manualNeedDelivery"][value="yes"]').checked = true;
+      document.getElementById('manualContent').value = '';
+      document.getElementById('manualCustomerCard').style.display = 'none';
+      loadManuals();
+    } else {
+      showResult('error', '❌ 新增失敗：' + (data.error || '未知錯誤'));
+    }
+  } catch (e) {
+    showResult('error', '❌ 連線失敗：' + e.message);
+  }
+}
+
+// 載入人工通知列表
+async function loadManuals() {
+  var wrap = document.getElementById('manualList');
+  if (!wrap) return;
+  
+  wrap.innerHTML = '<p style="text-align:center; color:#999;">載入中...</p>';
+  
+  try {
+    var res = await fetch('/api/manual/orders');
+    var data = await res.json();
+    if (!data.success) throw new Error(data.error || '載入失敗');
+    
+    allManuals = Array.isArray(data.orders) ? data.orders : [];
+    renderManualList();
+  } catch (e) {
+    allManuals = [];
+    wrap.innerHTML = '<p style="text-align:center; color:#dc3545;">載入失敗：' + e.message + '</p>';
+  }
+}
+
+// 顯示人工通知列表（依日期分組）
+function renderManualList() {
+  var wrap = document.getElementById('manualList');
+  if (!wrap) return;
+  
+  if (!allManuals || allManuals.length === 0) {
+    wrap.innerHTML = '<p style="text-align:center; color:#999;">目前沒有人工通知紀錄</p>';
+    return;
+  }
+  
+  // 依日期分組
+  var groups = {};
+  allManuals.forEach(function(o) {
+    var rawDate = (o.createdDate || o.createdAt || '').toString().substring(0, 10) || '未指定日期';
+    if (!groups[rawDate]) groups[rawDate] = [];
+    groups[rawDate].push(o);
+  });
+  
+  var dates = Object.keys(groups).sort().reverse(); // 新的日期在前
+  var todayStr = new Date().toISOString().substring(0, 10);
+  
+  var html = '';
+  dates.forEach(function(dk) {
+    var tag = (dk === todayStr) ? '（今天）' : '';
+    html += '<h4 style="margin-top:10px; margin-bottom:8px; color:#667eea;">📅 ' + dk + ' ' + tag + '</h4>';
+    
+    groups[dk].forEach(function(o) {
+      var id = o.id || o.recordId || '';
+      var notified = !!(o.notified || o.isNotified);
+      var needDelivery = o.needDelivery === 'yes' ? '需要外送' : '不需要外送';
+      
+      var badgeNotified = notified
+        ? '<span style="background:#52c41a;color:#fff;padding:3px 8px;border-radius:5px;font-size:12px;margin-left:5px;">✅ 已通知</span>'
+        : '<span style="background:#faad14;color:#fff;padding:3px 8px;border-radius:5px;font-size:12px;margin-left:5px;">⌛ 未通知</span>';
+      
+      var badgeDelivery = o.needDelivery === 'yes'
+        ? '<span style="background:#1890ff;color:#fff;padding:3px 8px;border-radius:5px;font-size:12px;margin-left:5px;">🚚 需外送</span>'
+        : '<span style="background:#999;color:#fff;padding:3px 8px;border-radius:5px;font-size:12px;margin-left:5px;">📦 不需外送</span>';
+      
+      var createdTime = '';
+      if (o.createdDate || o.createdAt) {
+        var d = new Date(o.createdDate || o.createdAt);
+        createdTime = d.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+      }
+      
+      html +=
+        '<div class="user-item" style="display:block; margin-bottom:8px; opacity:' +
+        (notified ? '0.7' : '1') +
+        ';">' +
+        '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">' +
+        '<div>' +
+        '<strong style="font-size:15px;">#' +
+        (o.customerNumber || '') +
+        ' - ' +
+        (o.customerName || '') +
+        '</strong> ' +
+        badgeNotified +
+        badgeDelivery +
+        '</div>' +
+        '<div style="font-size:12px; color:#999;">' + createdTime + '</div>' +
+        '</div>' +
+        '<div style="font-size:13px; color:#666; margin-bottom:8px;">' +
+        (o.content ? '<div>📝 內容：' + (o.content || '').replace(/\n/g, '<br>') + '</div>' : '<div style="color:#999;">（無通知內容）</div>') +
+        '</div>' +
+        '<div style="display:flex; gap:5px; flex-wrap:wrap;">';
+      
+      if (!notified) {
+        html +=
+          '<button class="btn btn-small btn-secondary" onclick="markManualNotified(\'' + id + '\')">✅ 已通知</button>';
+      }
+      
+      html +=
+        '<button class="btn btn-small" style="background:#ff9800;color:#fff;" onclick="editManual(\'' + id + '\')">✏️ 編輯</button>' +
+        '<button class="btn btn-small btn-danger" onclick="deleteManual(\'' + id + '\')">🗑️ 刪除</button>' +
+        '</div>' +
+        '</div>';
+    });
+  });
+  
+  wrap.innerHTML = html;
+}
+
+// 標記已通知
+async function markManualNotified(id) {
+  if (!confirm('確認標記為「已通知」？')) return;
+  
+  try {
+    var res = await fetch('/api/manual/mark-notified', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: id })
+    });
+    
+    var data = await res.json();
+    if (data.success) {
+      showResult('success', '✅ 已標記為已通知');
+      loadManuals();
+    } else {
+      showResult('error', '❌ 操作失敗：' + (data.error || '未知錯誤'));
+    }
+  } catch (e) {
+    showResult('error', '❌ 連線失敗：' + e.message);
+  }
+}
+
+// 編輯人工通知
+async function editManual(id) {
+  var manual = allManuals.find(function(o) {
+    return (o.id || o.recordId) === id;
+  });
+  
+  if (!manual) {
+    alert('找不到此紀錄');
+    return;
+  }
+  
+  var needDelivery = confirm('是否需要外送？\n「確定」= 需要外送\n「取消」= 不需要外送');
+  var needDeliveryValue = needDelivery ? 'yes' : 'no';
+  
+  var content = prompt('修改通知內容（可以留空）', manual.content || '');
+  if (content === null) content = manual.content || '';
+  
+  try {
+    var res = await fetch('/api/manual/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: id,
+        needDelivery: needDeliveryValue,
+        content: content
+      })
+    });
+    
+    var data = await res.json();
+    if (data.success) {
+      showResult('success', '✅ 人工通知已更新');
+      loadManuals();
+    } else {
+      showResult('error', '❌ 更新失敗：' + (data.error || '未知錯誤'));
+    }
+  } catch (e) {
+    showResult('error', '❌ 連線失敗：' + e.message);
+  }
+}
+
+// 刪除人工通知
+async function deleteManual(id) {
+  if (!confirm('確定要刪除此人工通知紀錄？')) return;
+  
+  try {
+    var res = await fetch('/api/manual/order/' + encodeURIComponent(id), {
+      method: 'DELETE'
+    });
+    
+    var data = await res.json();
+    if (data.success) {
+      showResult('success', '✅ 已刪除人工通知紀錄');
+      loadManuals();
+    } else {
+      showResult('error', '❌ 刪除失敗：' + (data.error || '未知錯誤'));
+    }
+  } catch (e) {
+    showResult('error', '❌ 連線失敗：' + e.message);
+  }
+}    
+    
 // ========================================
 // ⚡ 急件追蹤功能
 // ========================================
