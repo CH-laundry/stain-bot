@@ -171,30 +171,6 @@ app.get('/api/customer-records/:userId', (req, res) => {
   }
 });
 
-  try {
-    const USERS_FILE = '/data/users.json';
-    if (fs.existsSync(USERS_FILE)) {
-      const data = fs.readFileSync(USERS_FILE, 'utf8');
-      const users = JSON.parse(data);
-      res.json({
-        success: true,
-        total: users.length,
-        users: users
-      });
-    } else {
-      res.json({
-        success: false,
-        message: '尚未有任何客戶資料'
-      });
-    }
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
-// ⭐⭐⭐ 客戶資料查詢結束 ⭐⭐⭐
 
 // ====== LINE Pay 設定 ======
 const LINE_PAY_CONFIG = {
