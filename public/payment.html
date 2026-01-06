@@ -2133,6 +2133,7 @@ function displayRecords(records) {
       '<div style="display:flex; gap:5px; flex-wrap:wrap;">' +
       '<button class="btn btn-small btn-secondary" onclick="copyUserId(\'' + (r.userId || '') + '\')">📋 複製 User ID</button>' +
       '<button class="btn btn-small" style="background:#1890ff;color:#fff;" onclick="viewRecordDetail(\'' + (r.userId || '') + '\')">👁️ 查看詳情</button>' +
+      '<button class="btn btn-small" style="background:#52c41a;color:#fff;" onclick="addCustomerNumber(\'' + (r.userId || '') + '\', \'' + (r.displayName || '') + '\')">➕ 新增編號</button>' +
       '</div>' +
       '</div>';
   });
@@ -2175,7 +2176,7 @@ function copyUserId(userId) {
   );
 }
 
-// 查看客人詳情
+// 查看客人詳情（改進版 - 顯示在視窗中）
 async function viewRecordDetail(userId) {
   if (!userId) return;
   
@@ -2189,19 +2190,45 @@ async function viewRecordDetail(userId) {
     }
     
     var record = data.record;
-    var msg = 
-      '👤 客人詳細資訊\n\n' +
-      '姓名：' + (record.displayName || '未知') + '\n' +
-      'User ID：' + (record.userId || '-') + '\n' +
-      '首次對話：' + (record.firstContact ? new Date(record.firstContact).toLocaleString('zh-TW') : '-') + '\n' +
-      '最後對話：' + (record.lastContact ? new Date(record.lastContact).toLocaleString('zh-TW') : '-') + '\n' +
-      '對話次數：' + (record.messageCount || 0) + ' 次\n';
+    
+    // 建立彈出視窗
+    var modal = document.createElement('div');
+    modal.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:9999; display:flex; align-items:center; justify-content:center; padding:20px;';
+    
+    var content = document.createElement('div');
+    content.style.cssText = 'background:#fff; border-radius:20px; padding:30px; max-width:600px; width:100%; max-height:80vh; overflow-y:auto;';
+    
+    var html = '<h3 style="color:#667eea; margin-bottom:20px;">👤 客人詳細資訊</h3>';
+    html += '<div style="background:#f0f4ff; padding:20px; border-radius:10px; margin-bottom:20px;">';
+    html += '<p style="margin:8px 0;"><strong>姓名：</strong>' + (record.displayName || '未知') + '</p>';
+    html += '<p style="margin:8px 0;"><strong>User ID：</strong><br><span style="font-size:12px; word-break:break-all;">' + (record.userId || '-') + '</span></p>';
+    html += '<p style="margin:8px 0;"><strong>首次對話：</strong>' + (record.firstContact ? new Date(record.firstContact).toLocaleString('zh-TW') : '-') + '</p>';
+    html += '<p style="margin:8px 0;"><strong>最後對話：</strong>' + (record.lastContact ? new Date(record.lastContact).toLocaleString('zh-TW') : '-') + '</p>';
+    html += '<p style="margin:8px 0;"><strong>對話次數：</strong>' + (record.messageCount || 0) + ' 次</p>';
+    html += '</div>';
     
     if (record.lastMessage) {
-      msg += '\n最後訊息：\n' + record.lastMessage;
+      html += '<div style="background:#f8f9fa; padding:15px; border-radius:10px; margin-bottom:20px;">';
+      html += '<p style="margin:0 0 8px 0; font-weight:600; color:#333;">📝 最後訊息：</p>';
+      html += '<p style="margin:0; color:#666; white-space:pre-wrap; line-height:1.6;">' + record.lastMessage + '</p>';
+      html += '</div>';
     }
     
-    alert(msg);
+    html += '<div style="display:flex; gap:10px;">';
+    html += '<button class="btn btn-secondary" style="flex:1;" onclick="this.closest(\'[data-modal]\').remove()">關閉</button>';
+    html += '<button class="btn" style="flex:1; background:#52c41a;" onclick="addCustomerNumberFromDetail(\'' + record.userId + '\', \'' + (record.displayName || '') + '\')">➕ 新增編號</button>';
+    html += '</div>';
+    
+    content.innerHTML = html;
+    modal.setAttribute('data-modal', 'true');
+    modal.appendChild(content);
+    document.body.appendChild(modal);
+    
+    // 點擊背景關閉
+    modal.addEventListener('click', function(e) {
+      if (e.target === modal) modal.remove();
+    });
+    
   } catch (e) {
     alert('載入失敗：' + e.message);
   }
@@ -2824,6 +2851,74 @@ function checkTodayUrgentAlerts() {
   }
 }
   </script>
+  // ========================================
+// 👤 客人紀錄 - 新增客戶編號功能
+// ========================================
+
+// 新增客戶編號（從客人紀錄）
+function addCustomerNumber(userId, displayName) {
+  if (!userId) return;
+  
+  var number = prompt('請輸入客戶編號（例如：001、625）：', '');
+  
+  if (!number || !number.trim()) {
+    return;
+  }
+  
+  number = number.trim();
+  
+  // 檢查編號是否已存在
+  if (savedCustomers[number]) {
+    if (!confirm('此編號已存在：#' + number + ' (' + savedCustomers[number].name + ')\n\n是否要覆蓋？')) {
+      return;
+    }
+  }
+  
+  // 儲存客戶編號
+  saveCustomerNumberDirect(number, displayName, userId);
+}
+
+// 從詳情視窗新增客戶編號
+function addCustomerNumberFromDetail(userId, displayName) {
+  // 先關閉詳情視窗
+  var modals = document.querySelectorAll('[data-modal]');
+  modals.forEach(function(m) { m.remove(); });
+  
+  // 呼叫新增編號
+  addCustomerNumber(userId, displayName);
+}
+
+// 直接儲存客戶編號（不需填表單）
+async function saveCustomerNumberDirect(number, name, userId) {
+  try {
+    var res = await fetch('/api/customer-numbers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        number: number, 
+        name: name, 
+        userId: userId 
+      })
+    });
+    
+    var data = await res.json();
+    
+    if (data.success) {
+      showResult('success', '✅ 客戶編號已儲存：#' + number);
+      await loadCustomerNumbers();
+      loadRecords(); // 重新載入客人紀錄
+    } else {
+      showResult('error', '❌ 儲存失敗: ' + (data.error || '未知錯誤'));
+    }
+  } catch (error) {
+    showResult('error', '❌ 連線失敗: ' + error.message);
+  }
+}
+  </script>
+   <script src="/payment.js"></script>
+</body> 
+</body>
+</html>
    <script src="/payment.js"></script>
 </body> 
 </body>
