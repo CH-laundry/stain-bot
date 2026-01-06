@@ -57,10 +57,6 @@ app.use('/api/delivery', deliveryRoutes);
 app.use('/api/urgent', urgentRoutes);
 app.use('/api/manual', manualRoutes);
 
-// ⭐ 客人紀錄 API（完全獨立）
-const customerRecordsApi = require('./customerRecordsApi');
-app.use('/api/customer-records', customerRecordsApi);
-
 // ====== LINE Client ======
 const client = new Client({
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
@@ -339,14 +335,6 @@ app.post('/webhook', async (req, res) => {
         if (event.type !== 'message' || !event.source.userId) continue;
         const userId = event.source.userId;
         await saveUserProfile(userId);
-
-// ⭐ 記錄客人訊息（完全獨立）
-        const customerLogger = require('./simpleCustomerLogger');
-        if (event.message.type === 'text') {
-          customerLogger.logCustomer(userId, (await client.getProfile(userId)).displayName, event.message.text);
-        } else {
-          customerLogger.logCustomer(userId, (await client.getProfile(userId)).displayName);
-        }
   // ⭐ 更新客人對話紀錄
         try {
           await customerDB.updateCustomerActivity(userId, event.message);
