@@ -105,8 +105,6 @@ app.get('/api/search/user', (req, res) => {
   res.json({ total: results.length, users: results });
 });
 
-// ⭐⭐⭐ 新增：查看已儲存的客戶資料 ⭐⭐⭐
-app.get('/api/saved-users', (req, res) => {
 // ⭐ 客人紀錄 API - 取得所有紀錄
 app.get('/api/customer-records', (req, res) => {
   try {
@@ -172,6 +170,7 @@ app.get('/api/customer-records/:userId', (req, res) => {
     });
   }
 });
+
   try {
     const USERS_FILE = '/data/users.json';
     if (fs.existsSync(USERS_FILE)) {
