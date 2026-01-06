@@ -9,7 +9,6 @@ class CustomerDatabase {
         this.ensureDataFile();
     }
 
-    // 確保資料檔案存在
     ensureDataFile() {
         const dir = path.dirname(this.DATA_FILE);
         
@@ -22,7 +21,6 @@ class CustomerDatabase {
         }
     }
 
-    // 從檔案載入所有客戶
     async loadAllCustomers() {
         try {
             if (!fs.existsSync(this.DATA_FILE)) {
@@ -46,7 +44,6 @@ class CustomerDatabase {
         }
     }
 
-    // 儲存所有客戶到檔案
     saveToFile() {
         try {
             const customers = Array.from(this.cache.values());
@@ -85,7 +82,6 @@ class CustomerDatabase {
         }
     }
 
-    // 更新客人活動紀錄
     async updateCustomerActivity(userId, message) {
         try {
             const existing = this.cache.get(userId);
