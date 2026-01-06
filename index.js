@@ -107,6 +107,71 @@ app.get('/api/search/user', (req, res) => {
 
 // ⭐⭐⭐ 新增：查看已儲存的客戶資料 ⭐⭐⭐
 app.get('/api/saved-users', (req, res) => {
+// ⭐ 客人紀錄 API - 取得所有紀錄
+app.get('/api/customer-records', (req, res) => {
+  try {
+    const customers = customerDB.getAllCustomers();
+    
+    // 計算統計資訊
+    const now = Date.now();
+    const oneDayMs = 24 * 60 * 60 * 1000;
+    const oneWeekMs = 7 * oneDayMs;
+    
+    let todayCount = 0;
+    let weekCount = 0;
+    
+    customers.forEach(customer => {
+      if (customer.firstContact) {
+        const diff = now - new Date(customer.firstContact).getTime();
+        if (diff <= oneDayMs) todayCount++;
+        if (diff <= oneWeekMs) weekCount++;
+      }
+    });
+    
+    res.json({
+      success: true,
+      total: customers.length,
+      records: customers,
+      statistics: {
+        total: customers.length,
+        today: todayCount,
+        week: weekCount
+      }
+    });
+  } catch (error) {
+    console.error('取得客人紀錄失敗:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// ⭐ 客人紀錄 API - 取得單一客人詳情
+app.get('/api/customer-records/:userId', (req, res) => {
+  try {
+    const { userId } = req.params;
+    const customer = customerDB.getCustomer(userId);
+    
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        error: '找不到此客人'
+      });
+    }
+    
+    res.json({
+      success: true,
+      record: customer
+    });
+  } catch (error) {
+    console.error('取得客人詳情失敗:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
   try {
     const USERS_FILE = '/data/users.json';
     if (fs.existsSync(USERS_FILE)) {
@@ -270,6 +335,12 @@ app.post('/webhook', async (req, res) => {
         if (event.type !== 'message' || !event.source.userId) continue;
         const userId = event.source.userId;
         await saveUserProfile(userId);
+  // ⭐ 更新客人對話紀錄
+        try {
+          await customerDB.updateCustomerActivity(userId, event.message);
+        } catch (err) {
+          logger.logError('更新客人活動失敗', err, userId);
+        }
         
         // ========== 處理文字訊息 ==========
         if (event.message.type === 'text') {
