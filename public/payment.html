@@ -2485,6 +2485,31 @@ async function markManualNotified(id) {
   }
 }
 
+// ⭐⭐⭐ 在這裡加入新函數 ⭐⭐⭐
+// 標記已付款
+async function markManualPaid(id) {
+  if (!confirm('確認標記為「已付款」？')) return;
+  
+  try {
+    var res = await fetch('/api/manual/mark-paid', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: id })
+    });
+    
+    var data = await res.json();
+    if (data.success) {
+      showResult('success', '✅ 已標記為已付款');
+      loadManuals();
+    } else {
+      showResult('error', '❌ 操作失敗：' + (data.error || '未知錯誤'));
+    }
+  } catch (e) {
+    showResult('error', '❌ 連線失敗：' + e.message);
+  }
+}
+// ⭐⭐⭐ 新函數結束 ⭐⭐⭐
+    
 // 編輯人工通知
 async function editManual(id) {
   var manual = allManuals.find(function(o) {
