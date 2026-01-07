@@ -2323,7 +2323,7 @@ async function addManual() {
         customerNumber: num,
         customerName: name,
         needDelivery: needDelivery,
-        content: content
+        content: content,
         amount: amountValue,
       })
     });
@@ -2540,7 +2540,7 @@ async function editManual(id) {
       body: JSON.stringify({
         id: id,
         needDelivery: needDeliveryValue,
-        content: content
+        content: content,
         amount: amount,
       })
     });
