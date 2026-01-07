@@ -436,7 +436,12 @@ setInterval(() => {
 // ====================================
 async function handleTextMessage(userMessage, userId = null) {
   try {
-// ⭐⭐⭐ 新增：過濾 6宮格固定模板訊息
+// ⭐ 加入 Debug 日誌
+    console.log('📩 收到訊息:', userMessage);
+    console.log('📩 訊息長度:', userMessage.length);
+    console.log('📩 訊息前50字:', userMessage.substring(0, 50));
+    
+    // ⭐⭐⭐ 新增：過濾 6宮格固定模板訊息
     const ignoredPhrases = [
       '預約收送',
       '請提供以下訊息或進入連結預約',
@@ -462,13 +467,19 @@ async function handleTextMessage(userMessage, userId = null) {
     ];
     
     // 如果訊息包含任何固定模板關鍵字，就不回覆
-    const isTemplateMessage = ignoredPhrases.some(phrase => 
-      userMessage.includes(phrase)
-    );
+    const isTemplateMessage = ignoredPhrases.some(phrase => {
+      const matched = userMessage.includes(phrase);
+      if (matched) {
+        console.log('🎯 匹配到關鍵字:', phrase);
+      }
+      return matched;
+    });
     
     if (isTemplateMessage) {
       console.log('🔇 偵測到 6宮格固定模板訊息，不回覆');
-      return null; // 返回 null 表示不需要回覆
+      return null;
+    } else {
+      console.log('✅ 非模板訊息，繼續處理');
     }
     // ⭐⭐⭐ 過濾代碼結束
     const now = new Date();
