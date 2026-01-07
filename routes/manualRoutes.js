@@ -56,7 +56,8 @@ router.post('/add', (req, res) => {
       customerNumber,
       customerName,
       needDelivery = 'no',
-      content = ''
+      content = '',
+      amount = 0  // ⭐ 新增金額欄位
     } = req.body || {};
 
     if (!customerNumber || !customerName) {
@@ -70,6 +71,8 @@ router.post('/add', (req, res) => {
       customerName: String(customerName),
       needDelivery: needDelivery === 'yes' ? 'yes' : 'no',
       content: String(content || ''),
+      amount: parseInt(amount) || 0,  // ⭐ 新增金額
+      paid: false,  // ⭐ 新增付款狀態
       createdDate: new Date().toISOString(),
       notified: false
     };
@@ -83,6 +86,30 @@ router.post('/add', (req, res) => {
     res.json({ success: false, error: e.message || '新增失敗' });
   }
 });
+
+// ⭐⭐⭐ 新增：標記已付款 API ⭐⭐⭐
+router.post('/mark-paid', (req, res) => {
+  try {
+    const { id } = req.body || {};
+    if (!id) return res.json({ success: false, error: '缺少 id' });
+
+    const data = loadData();
+    const idx = data.orders.findIndex(o => o.id === id);
+    if (idx === -1) {
+      return res.json({ success: false, error: '找不到此紀錄' });
+    }
+
+    data.orders[idx].paid = true;
+    data.orders[idx].paidDate = new Date().toISOString();
+    saveData(data);
+
+    res.json({ success: true });
+  } catch (e) {
+    console.error('標記已付款失敗', e);
+    res.json({ success: false, error: e.message || '操作失敗' });
+  }
+});
+// ⭐⭐⭐ 新增 API 結束 ⭐⭐⭐
 
 // POST - 標記已通知
 router.post('/mark-notified', (req, res) => {
@@ -110,7 +137,7 @@ router.post('/mark-notified', (req, res) => {
 // POST - 更新人工通知
 router.post('/update', (req, res) => {
   try {
-    const { id, needDelivery, content } = req.body || {};
+    const { id, needDelivery, content, amount } = req.body || {};  // ⭐ 新增 amount
     if (!id) return res.json({ success: false, error: '缺少 id' });
 
     const data = loadData();
@@ -125,6 +152,9 @@ router.post('/update', (req, res) => {
     }
     if (typeof content === 'string') {
       target.content = content;
+    }
+    if (amount !== undefined) {  // ⭐ 新增金額更新
+      target.amount = parseInt(amount) || 0;
     }
 
     saveData(data);
