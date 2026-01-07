@@ -471,6 +471,15 @@
       <input type="text" id="manualName" placeholder="王小明">
     </div>
 
+<!-- ⭐ 新增金額欄位 -->
+    <div class="form-group">
+      <label>金額 (NT$)</label>
+      <input type="number" id="manualAmount" min="0" placeholder="300">
+      <small style="display:block; color:#999; margin-top:5px;">
+        若不需要收費，請填 0 或留空
+      </small>
+    </div>
+    
     <div class="form-group">
       <label>是否需要外送 *</label>
       <div style="display:flex; gap:15px; flex-wrap:wrap;">
@@ -2298,11 +2307,13 @@ async function addManual() {
   var name = document.getElementById('manualName').value.trim();
   var needDelivery = document.querySelector('input[name="manualNeedDelivery"]:checked').value;
   var content = document.getElementById('manualContent').value.trim();
+  var amount = document.getElementById('manualAmount').value.trim();
   
   if (!num || !name) {
     alert('請至少填寫 編號 / 姓名');
     return;
   }
+  var amountValue = parseInt(amount) || 0; // ⭐ 轉換金額
   
   try {
     var res = await fetch('/api/manual/add', {
@@ -2321,6 +2332,7 @@ async function addManual() {
       showResult('success', '✅ 已新增人工通知紀錄');
       document.getElementById('manualNumber').value = '';
       document.getElementById('manualName').value = '';
+      document.getElementById('manualAmount').value = ''; // ⭐ 清空金額
       document.querySelector('input[name="manualNeedDelivery"][value="yes"]').checked = true;
       document.getElementById('manualContent').value = '';
       document.getElementById('manualCustomerCard').style.display = 'none';
@@ -2382,6 +2394,8 @@ function renderManualList() {
     groups[dk].forEach(function(o) {
       var id = o.id || o.recordId || '';
       var notified = !!(o.notified || o.isNotified);
+      var paid = !!(o.paid || o.isPaid); // ⭐ 付款狀態
+      var amount = parseInt(o.amount) || 0; // ⭐ 金額
       var needDelivery = o.needDelivery === 'yes' ? '需要外送' : '不需要外送';
       
       var badgeNotified = notified
@@ -2391,6 +2405,14 @@ function renderManualList() {
       var badgeDelivery = o.needDelivery === 'yes'
         ? '<span style="background:#1890ff;color:#fff;padding:3px 8px;border-radius:5px;font-size:12px;margin-left:5px;">🚚 需外送</span>'
         : '<span style="background:#999;color:#fff;padding:3px 8px;border-radius:5px;font-size:12px;margin-left:5px;">📦 不需外送</span>';
+
+       // ⭐ 付款狀態標記
+      var badgePaid = '';
+      if (amount > 0) {
+        badgePaid = paid
+          ? '<span style="background:#52c41a;color:#fff;padding:3px 8px;border-radius:5px;font-size:12px;margin-left:5px;">💰 已付款</span>'
+          : '<span style="background:#ff4d4f;color:#fff;padding:3px 8px;border-radius:5px;font-size:12px;margin-left:5px;">💳 未付款</span>';
+      }
       
       var createdTime = '';
       if (o.createdDate || o.createdAt) {
@@ -2422,6 +2444,11 @@ function renderManualList() {
       if (!notified) {
         html +=
           '<button class="btn btn-small btn-secondary" onclick="markManualNotified(\'' + id + '\')">✅ 已通知</button>';
+      }
+
+      // ⭐ 付款按鈕（只在有金額且未付款時顯示）
+      if (amount > 0 && !paid) {
+        html += '<button class="btn btn-small" style="background:#52c41a;color:#fff;" onclick="markManualPaid(\'' + id + '\')">💰 已付款</button>';
       }
       
       html +=
@@ -2468,6 +2495,11 @@ async function editManual(id) {
     alert('找不到此紀錄');
     return;
   }
+
+  / ⭐ 新增金額編輯
+  var amountStr = prompt('修改金額（目前：' + (manual.amount || 0) + '）', manual.amount || 0);
+  if (amountStr === null) return;
+  var amount = parseInt(amountStr) || 0;
   
   var needDelivery = confirm('是否需要外送？\n「確定」= 需要外送\n「取消」= 不需要外送');
   var needDeliveryValue = needDelivery ? 'yes' : 'no';
@@ -2483,6 +2515,7 @@ async function editManual(id) {
         id: id,
         needDelivery: needDeliveryValue,
         content: content
+        amount: amount // ⭐ 新增金額
       })
     });
     
