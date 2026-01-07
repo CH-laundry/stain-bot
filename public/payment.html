@@ -2324,6 +2324,7 @@ async function addManual() {
         customerName: name,
         needDelivery: needDelivery,
         content: content
+        amount: amountValue
       })
     });
     
@@ -2540,7 +2541,7 @@ async function editManual(id) {
         id: id,
         needDelivery: needDeliveryValue,
         content: content
-        amount: amount, // ⭐ 新增金額
+        amount: amount
       })
     });
     
