@@ -470,6 +470,7 @@ async function handleTextMessage(userMessage, userId = null) {
       console.log('🔇 偵測到 6宮格固定模板訊息，不回覆');
       return null; // 返回 null 表示不需要回覆
     }
+    // ⭐⭐⭐ 過濾代碼結束
     const now = new Date();
     const taipeiTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
     const currentHour = taipeiTime.getHours();
