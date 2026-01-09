@@ -1,10 +1,12 @@
 // ====================================
 // C.H 精緻洗衣 - Claude AI 智能客服模組
 // 完全獨立運作，不影響現有功能
+// 版本：從用戶上傳版本修改 + Google Sheets + 對話記憶 + 混合模型
 // ====================================
 
 const Anthropic = require('@anthropic-ai/sdk');
 const OpenAI = require('openai');
+const { google } = require('googleapis');
 
 const anthropic = new Anthropic({
   apiKey: process.env.CLAUDE_API_KEY
@@ -14,8 +16,25 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
+// Google Sheets 認證
+let auth = null;
+let sheetsEnabled = false;
+
+try {
+  if (process.env.GOOGLE_SHEETS_CREDENTIALS) {
+    auth = new google.auth.GoogleAuth({
+      credentials: JSON.parse(process.env.GOOGLE_SHEETS_CREDENTIALS),
+      scopes: ['https://www.googleapis.com/auth/spreadsheets']
+    });
+    sheetsEnabled = true;
+    console.log('✅ Google Sheets 已啟用');
+  }
+} catch (error) {
+  console.error('❌ Google Sheets 初始化失敗:', error.message);
+}
+
 // ====================================
-// 業務知識庫
+// 業務知識庫（完整保留你上傳的版本）
 // ====================================
 const LAUNDRY_KNOWLEDGE = `
 你是 C.H 精緻洗衣的專業客服助理。
@@ -102,7 +121,7 @@ AI：「好的 💙 我們會去收回的，謝謝您」✅
 - 短褲：90元
 - 長褲：120元
 - 西裝褲：120元
-- 七分褲：110元
+- 七分褲:110元
 - 吊帶褲：140元
 - 短裙：130元
 - 長裙：160元
@@ -497,35 +516,86 @@ function getHistory(userId) {
 }
 
 // ====================================
+// Google Sheets 記錄
+// ====================================
+async function logToGoogleSheets(userId, userMessage, aiReply, questionType = '', customerEmotion = '') {
+  try {
+    if (!sheetsEnabled || !process.env.LEARNING_SHEET_ID) {
+      return;
+    }
+
+    const sheets = google.sheets({ version: 'v4', auth: await auth.getClient() });
+    
+    const now = new Date();
+    const date = now.toLocaleDateString('zh-TW');
+    const time = now.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+    
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: process.env.LEARNING_SHEET_ID,
+      range: '對話記錄!A:H',
+      valueInputOption: 'USER_ENTERED',
+      resource: {
+        values: [[
+          date,
+          time,
+          userId,
+          userMessage,
+          aiReply,
+          questionType,
+          customerEmotion,
+          '⏳ 待確認'
+        ]]
+      }
+    });
+    
+    console.log('✅ 已記錄到 Google Sheets');
+  } catch (error) {
+    console.error('❌ Google Sheets 記錄失敗:', error.message);
+  }
+}
+
+// ====================================
+// 偵測客戶情緒
+// ====================================
+function detectEmotion(message) {
+  if (/生氣|很爛|太差|退費|不滿意|投訴|抱怨/.test(message)) return '😠 生氣';
+  if (/怎麼這麼久|洗這麼久|還沒好|太慢|很久|都幾天了|超過/.test(message)) return '😤 不耐煩';
+  if (/忘記|還沒來|怎麼還沒|是不是忘了|沒來收|沒來拿/.test(message)) return '😤 不耐煩';
+  return '😊 正常';
+}
+
+// ====================================
+// 偵測問題類型
+// ====================================
+function detectQuestionType(message) {
+  if (/多少錢|價格|價錢|費用/.test(message)) return '價格詢問';
+  if (/收|來收|收件/.test(message)) return '收件問題';
+  if (/送到家|送回|約時間/.test(message)) return '送回問題';
+  if (/汙漬|髒|油漬|血/.test(message)) return '汙漬處理';
+  if (/怎麼這麼久|還沒好|太慢|都幾天/.test(message)) return '催件';
+  if (/忘記|還沒來|是不是忘了/.test(message)) return '客訴';
+  if (/地毯|窗簾|包包|鞋/.test(message)) return '特殊項目';
+  if (/精品|名牌|LV|Gucci|Chanel|Canada Goose|Moncler/.test(message)) return '精品項目';
+  return '其他';
+}
+
+// ====================================
 // 處理文字訊息（Claude AI）
 // ====================================
 async function handleTextMessage(userMessage, userId = null) {
   try {
-console.log('📩 收到訊息:', userMessage);
+    console.log('📩 收到訊息:', userMessage);
     console.log('📩 訊息長度:', userMessage.length);
     console.log('📩 訊息前50字:', userMessage.substring(0, 50));
     
-    // ⭐⭐⭐ 新增：過濾 6宮格固定模板訊息
-    
-    // 1. 精確匹配：完全是這些文字就不回覆（6宮格觸發詞）
+    // 過濾 6宮格固定模板訊息
     const exactMatches = [
-      '到府收送',
-      '常見問題',
-      '付款方式',
-      '常見問題&付款方式',
-      '服務價目',
-      '儲值優惠',
-      '服務價目&儲值優惠',
-      '店面地址',
-      '營業時間',
-      '店面地址&營業時間',
-      '智能污漬分析',
-      '智能汙漬分析',
-      '寶寶汽座&手推車',
-      '顧客須知'
+      '到府收送', '常見問題', '付款方式', '常見問題&付款方式',
+      '服務價目', '儲值優惠', '服務價目&儲值優惠',
+      '店面地址', '營業時間', '店面地址&營業時間',
+      '智能污漬分析', '智能汙漬分析', '寶寶汽座&手推車', '顧客須知'
     ];
     
-    // 2. 部分匹配：包含這些關鍵字就不回覆（模板長文字）
     const partialMatches = [
       '預約收送,請提供以下訊息',
       '請提供以下訊息或進入連結預約',
@@ -539,28 +609,19 @@ console.log('📩 收到訊息:', userMessage);
       '付款方式有現金💲轉帳🏧line pay🅿信用卡💰'
     ];
     
-    // 檢查精確匹配
     if (exactMatches.includes(userMessage.trim())) {
-      console.log('🔇 偵測到 6宮格觸發詞（精確匹配），不回覆:', userMessage);
+      console.log('🔇 偵測到 6宮格觸發詞，不回覆');
       return null;
     }
     
-    // 檢查部分匹配
-    const isPartialMatch = partialMatches.some(phrase => {
-      const matched = userMessage.includes(phrase);
-      if (matched) {
-        console.log('🎯 匹配到模板關鍵字:', phrase);
-      }
-      return matched;
-    });
-    
+    const isPartialMatch = partialMatches.some(phrase => userMessage.includes(phrase));
     if (isPartialMatch) {
-      console.log('🔇 偵測到 6宮格模板文字（部分匹配），不回覆');
+      console.log('🔇 偵測到 6宮格模板文字，不回覆');
       return null;
     }
     
     console.log('✅ 非模板訊息，繼續處理');
-    // ⭐⭐⭐ 過濾代碼結束
+    
     const now = new Date();
     const taipeiTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
     const currentHour = taipeiTime.getHours();
@@ -619,12 +680,13 @@ console.log('📩 收到訊息:', userMessage);
       model: modelToUse,
       max_tokens: 800,
       system: LAUNDRY_KNOWLEDGE,
-      messages: messages // 包含歷史對話
+      messages: messages
     });
 
     const claudeReply = message.content[0].text;
 
     if (claudeReply.includes('UNRELATED')) {
+      console.log('🔇 AI 判斷為無關問題');
       return null;
     }
 
@@ -636,6 +698,12 @@ console.log('📩 收到訊息:', userMessage);
       pickupRepliedUsers.set(userId, Date.now());
     }
 
+    // ⭐ 記錄到 Google Sheets
+    const emotion = detectEmotion(userMessage);
+    const questionType = detectQuestionType(userMessage);
+    await logToGoogleSheets(userId, userMessage, claudeReply, questionType, emotion);
+
+    console.log('✅ AI 回覆成功');
     return claudeReply;
 
   } catch (error) {
