@@ -596,8 +596,27 @@ console.log('📩 收到訊息:', userMessage);
     
     console.log(`📜 對話記憶: ${history.length} 則歷史訊息`);
     
+    // 判斷問題複雜度
+    const isComplexQuestion = (
+      // 精品品牌
+      /LV|Gucci|Chanel|Hermès|Hermes|Prada|Dior|Burberry|Coach|MK|Longchamp|Fendi|Celine|Canada Goose|Moncler|Arc|Patagonia|加拿大鵝|Loro Piana|Brunello Cucinelli|Tom Ford|The North Face/.test(userMessage) ||
+      // 複雜情緒（催件、客訴、忘記收件）
+      /怎麼這麼久|洗這麼久|還沒好|太慢|很久|都幾天了|超過|忘記|還沒來|怎麼還沒|是不是忘了|沒來收|沒來拿|不滿意|生氣|太差|很爛|退費|投訴|抱怨/.test(userMessage) ||
+      // 需要理解對話脈絡（送回時間）
+      /送到家|送回|完工後|約送回時間|約時間|方便協調|哪得跟我說個時間/.test(userMessage) ||
+      // 多個問題
+      (userMessage.includes('？') && userMessage.split('？').length > 2)
+    );
+    
+    // 選擇模型
+    const modelToUse = isComplexQuestion 
+      ? "claude-sonnet-4-20250514"  // 複雜問題用 Sonnet 4（準確率高）
+      : "claude-3-5-haiku-20241022"; // 簡單問題用 Haiku 3.5（便宜 95%）
+    
+    console.log(`🤖 使用模型: ${modelToUse} (${isComplexQuestion ? '複雜問題' : '簡單問題'})`);
+    
     const message = await anthropic.messages.create({
-      model: "claude-haiku-4-20250514", // 使用 Haiku 4.5 節省成本
+      model: modelToUse,
       max_tokens: 800,
       system: LAUNDRY_KNOWLEDGE,
       messages: messages // 包含歷史對話
