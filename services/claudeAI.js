@@ -15,10 +15,11 @@ const anthropic = new Anthropic({
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
+
 console.log('🔍 開始初始化 Google Sheets');
 console.log('🔍 GOOGLE_SHEETS_CREDENTIALS 存在:', !!process.env.GOOGLE_SHEETS_CREDENTIALS);
 console.log('🔍 LEARNING_SHEET_ID:', process.env.LEARNING_SHEET_ID);
-// ====================================
+
 // ====================================
 // Google Sheets 認證（同步版本）
 // ====================================
@@ -45,7 +46,6 @@ try {
   console.error('錯誤詳情:', error);
   sheetsEnabled = false;
 }
-
 // ====================================
 // 業務知識庫
 // ====================================
