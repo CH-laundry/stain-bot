@@ -16,20 +16,18 @@ const openai = new OpenAI({
 });
 
 // ====================================
-// Google Sheets 認證（修改版）
+// ====================================
+// Google Sheets 認證（同步版本）
 // ====================================
 let auth = null;
 let sheetsEnabled = false;
 
-async function initGoogleSheets() {
-  try {
-    const credentials = process.env.GOOGLE_SHEETS_CREDENTIALS;
-    
-    if (!credentials) {
-      console.log('⚠️ 未設定 GOOGLE_SHEETS_CREDENTIALS');
-      return;
-    }
-
+try {
+  const credentials = process.env.GOOGLE_SHEETS_CREDENTIALS;
+  
+  if (!credentials) {
+    console.log('⚠️ 未設定 GOOGLE_SHEETS_CREDENTIALS');
+  } else {
     auth = new google.auth.GoogleAuth({
       credentials: JSON.parse(credentials),
       scopes: ['https://www.googleapis.com/auth/spreadsheets']
@@ -38,16 +36,12 @@ async function initGoogleSheets() {
     sheetsEnabled = true;
     console.log('✅ Google Sheets 已啟用');
     console.log(`📊 學習記錄 Sheet ID: ${process.env.LEARNING_SHEET_ID}`);
-    
-  } catch (error) {
-    console.error('❌ Google Sheets 初始化失敗:', error.message);
-    console.error('錯誤詳情:', error);
-    sheetsEnabled = false;
   }
+} catch (error) {
+  console.error('❌ Google Sheets 初始化失敗:', error.message);
+  console.error('錯誤詳情:', error);
+  sheetsEnabled = false;
 }
-
-// 立即初始化
-initGoogleSheets();
 
 // ====================================
 // 業務知識庫
