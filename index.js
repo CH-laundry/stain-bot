@@ -1,6 +1,10 @@
 // ====== Bootstraps / 基礎設定 ======
 require('./bootstrap/storageBridge');
 console.log('RAILWAY_VOLUME_MOUNT_PATH =', process.env.RAILWAY_VOLUME_MOUNT_PATH);
+// 強制載入 AI 模組以初始化 Google Sheets
+console.log('🔧 正在載入 AI 模組...');
+require('./services/claudeAI');
+console.log('✅ AI 模組已載入');
 
 const { createECPayPaymentLink } = require('./services/openai');
 const customerDB = require('./services/customerDatabase');
@@ -12,6 +16,10 @@ const fetch = require('node-fetch');
 const crypto = require('crypto');
 const logger = require('./services/logger');
 const messageHandler = require('./services/message');
+// ====== 載入 AI 模組（初始化 Google Sheets）======
+console.log('🔧 正在載入 AI 客服模組...');
+const claudeAI = require('./services/claudeAI');
+console.log('✅ AI 客服模組已載入');
 const { Client } = require('@line/bot-sdk');
 const googleAuth = require('./services/googleAuth');
 const multer = require('multer');
@@ -331,7 +339,6 @@ app.post('/webhook', async (req, res) => {
           // ⭐ Claude AI 優先處理
           let claudeReplied = false;
           try {
-            const claudeAI = require('./services/claudeAI');
             const aiReply = await claudeAI.handleTextMessage(userMessage, userId);
             if (aiReply) {
               await client.pushMessage(userId, { type: 'text', text: aiReply });
