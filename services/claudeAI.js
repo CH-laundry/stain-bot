@@ -1,3 +1,4 @@
+console.log('🚀 AI 模組開始載入');
 // ====================================
 // C.H 精緻洗衣 - Claude AI 智能客服模組
 // 版本：修正 AI 亂回覆 + 週六公休強化
@@ -14,7 +15,9 @@ const anthropic = new Anthropic({
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
-
+console.log('🔍 開始初始化 Google Sheets');
+console.log('🔍 GOOGLE_SHEETS_CREDENTIALS 存在:', !!process.env.GOOGLE_SHEETS_CREDENTIALS);
+console.log('🔍 LEARNING_SHEET_ID:', process.env.LEARNING_SHEET_ID);
 // ====================================
 // ====================================
 // Google Sheets 認證（同步版本）
