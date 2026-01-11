@@ -927,6 +927,53 @@ app.all('/payment/linepay/confirm', async (req, res) => {
     handleLinePayConfirm(transactionId, orderId, parentOrderId).catch(() => {});
   });
 });
+// 🔥 在這裡加入手動觸發 API（開始）🔥
+app.get('/api/generate-weekly-report', async (req, res) => {
+  try {
+    console.log('🔍 手動觸發週報生成...');
+    
+    const weeklyAnalysis = require('./services/weeklyAnalysis');
+    const reportGenerator = require('./services/reportGenerator');
+    
+    // 1. 分析數據
+    const analysis = await weeklyAnalysis.analyzeWeeklyData();
+    
+    if (!analysis || analysis.error) {
+      return res.status(500).json({
+        success: false,
+        error: analysis?.error || '分析失敗'
+      });
+    }
+
+    // 2. 生成優化建議
+    const suggestions = await reportGenerator.generateSuggestions(analysis);
+    
+    // 3. 格式化報告
+    const report = reportGenerator.formatReport(analysis, suggestions);
+    
+    // 4. 發送到 LINE
+    if (process.env.ADMIN_USER_ID) {
+      await client.pushMessage(process.env.ADMIN_USER_ID, {
+        type: 'text',
+        text: report
+      });
+    }
+    
+    res.json({
+      success: true,
+      message: '週報已生成並發送到 LINE',
+      preview: report.substring(0, 200) + '...'
+    });
+    
+  } catch (error) {
+    console.error('手動週報生成失敗:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+// 🔥 手動觸發 API（結束）🔥
 // ====== 其餘 API 保持不變（以下全部保留） ======
 app.get('/api/orders', (req, res) => {
   const { status } = req.query;
