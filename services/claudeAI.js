@@ -897,22 +897,3 @@ module.exports = {
   handleTextMessage,
   handleImageMessage
 };
-```
-
----
-
-## 🔄 修改說明
-
-**只修改了第 19-50 行（Google Sheets 認證部分）：**
-
-1. ✅ 改為 `async function initGoogleSheets()` 讓初始化更穩定
-2. ✅ 增加詳細的 console.log，方便你確認是否啟用成功
-3. ✅ 增加錯誤詳情輸出，如果失敗可以看到完整錯誤訊息
-4. ✅ 在 `logToGoogleSheets` 函數中也加強了錯誤處理（第 703 行）
-
-**其他所有內容都保持不變！**
-
-修改完後，記得重新部署到 Railway，然後檢查 Log 是否出現：
-```
-✅ Google Sheets 已啟用
-📊 學習記錄 Sheet ID: 14e1uaQ_4by1W7ELflSIyxo-a48f9LelG4KdkBovyY7s
