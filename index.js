@@ -1848,3 +1848,50 @@ app.listen(PORT, async () => {
     }
   }, 2 * 60 * 60 * 1000);
 });
+// ====================================
+// 每週 AI 客服分析報告
+// ====================================
+const cron = require('node-cron');
+const weeklyAnalysis = require('./services/weeklyAnalysis');
+const reportGenerator = require('./services/reportGenerator');
+
+// 每週日晚上 8 點執行（台北時間）
+cron.schedule('0 20 * * 0', async () => {
+  console.log('🔍 開始生成每週 AI 客服分析報告...');
+  
+  try {
+    // 1. 分析數據
+    const analysis = await weeklyAnalysis.analyzeWeeklyData();
+    
+    if (!analysis || analysis.error) {
+      console.log('⚠️ 週報生成失敗:', analysis?.error || '未知錯誤');
+      return;
+    }
+
+    // 2. 生成優化建議
+    console.log('💡 正在生成 AI 優化建議...');
+    const suggestions = await reportGenerator.generateSuggestions(analysis);
+    
+    // 3. 格式化報告
+    const report = reportGenerator.formatReport(analysis, suggestions);
+    
+    // 4. 發送到 LINE
+    if (process.env.ADMIN_USER_ID) {
+      await client.pushMessage(process.env.ADMIN_USER_ID, {
+        type: 'text',
+        text: report
+      });
+      console.log('✅ 週報已發送到 LINE');
+    }
+    
+    logger.logToFile('✅ 週報生成成功');
+    
+  } catch (error) {
+    console.error('❌ 週報生成失敗:', error);
+    logger.logError('週報生成失敗', error);
+  }
+}, {
+  timezone: "Asia/Taipei"
+});
+
+console.log('⏰ 每週報告排程已啟動（每週日 20:00）');
