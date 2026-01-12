@@ -660,9 +660,40 @@ function getHistory(userId) {
 }
 
 // ====================================
+// Token 成本計算
+// ====================================
+const MODEL_COSTS = {
+  'claude-sonnet-4-20250514': {
+    input: 3.00 / 1000000,   // $3.00 per million input tokens
+    output: 15.00 / 1000000  // $15.00 per million output tokens
+  },
+  'claude-3-5-haiku-20241022': {
+    input: 0.80 / 1000000,   // $0.80 per million input tokens
+    output: 4.00 / 1000000   // $4.00 per million output tokens
+  }
+};
+
+function calculateCost(model, inputTokens, outputTokens) {
+  const costs = MODEL_COSTS[model];
+  if (!costs) return { inputCost: 0, outputCost: 0, totalCost: 0, inputTokens: 0, outputTokens: 0 };
+  
+  const inputCost = inputTokens * costs.input;
+  const outputCost = outputTokens * costs.output;
+  const totalCost = inputCost + outputCost;
+  
+  return {
+    inputTokens,
+    outputTokens,
+    inputCost: inputCost.toFixed(6),
+    outputCost: outputCost.toFixed(6),
+    totalCost: totalCost.toFixed(6)
+  };
+}
+
+// ====================================
 // Google Sheets 記錄
 // ====================================
-async function logToGoogleSheets(userId, userMessage, aiReply, questionType = '', customerEmotion = '') {
+async function logToGoogleSheets(userId, userMessage, aiReply, questionType = '', customerEmotion = '', costInfo = null) {
   try {
     if (!sheetsEnabled || !process.env.LEARNING_SHEET_ID) {
       console.log('⚠️ Google Sheets 未啟用或缺少 LEARNING_SHEET_ID');
@@ -689,6 +720,10 @@ async function logToGoogleSheets(userId, userMessage, aiReply, questionType = ''
           questionType,
           customerEmotion,
           '⏳ 待確認'
+          costInfo ? costInfo.model : '',
+          costInfo ? costInfo.inputTokens : '',
+          costInfo ? costInfo.outputTokens : '',
+          costInfo ? `$${costInfo.totalCost}` : ''
         ]]
       }
     });
@@ -833,6 +868,17 @@ async function handleTextMessage(userMessage, userId = null) {
 
     const claudeReply = message.content[0].text;
 
+    // 計算成本
+const inputTokens = message.usage.input_tokens;
+const outputTokens = message.usage.output_tokens;
+const costInfo = calculateCost(modelToUse, inputTokens, outputTokens);
+costInfo.model = modelToUse;
+
+console.log(`💰 成本資訊: ${modelToUse}`);
+console.log(`📥 Input tokens: ${inputTokens}`);
+console.log(`📤 Output tokens: ${outputTokens}`);
+console.log(`💵 總成本: $${costInfo.totalCost}`);
+
     if (claudeReply.includes('UNRELATED')) {
       console.log('🔇 AI 判斷為無關問題');
       return null;
@@ -849,7 +895,7 @@ async function handleTextMessage(userMessage, userId = null) {
     // ⭐ 記錄到 Google Sheets
     const emotion = detectEmotion(userMessage);
     const questionType = detectQuestionType(userMessage);
-    await logToGoogleSheets(userId, userMessage, claudeReply, questionType, emotion);
+    await logToGoogleSheets(userId, userMessage, claudeReply, questionType, emotion, costInfo);
 
     console.log('✅ AI 回覆成功');
     return claudeReply;
