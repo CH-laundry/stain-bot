@@ -341,7 +341,7 @@ app.post('/webhook', async (req, res) => {
           let aiResponse = '';
           try {
             aiResponse = await claudeAI.handleTextMessage(userMessage, userId);
-            if (aiReply) {
+            if (aiResponse) {
               await client.pushMessage(userId, { type: 'text', text: aiReply });
               logger.logToFile(`[Claude AI] 已回覆: ${userId}`);
               claudeReplied = true;
@@ -355,118 +355,7 @@ app.post('/webhook', async (req, res) => {
             await messageHandler.handleTextMessage(userId, userMessage, userMessage);
           }
         } 
-          // 🧺 收件關鍵字自動偵測
-  // ========================================
-  
-  // 收件關鍵字列表
-  const pickupKeywords = [
-    '會去收', '去收回', '來收', '過去收', '收衣服',
-    '明天收', '今天收', '收取', '安排收件', '會過去收',
-    '可以來收', '去拿', '會來收'
-  ];
-
-  // 檢查訊息是否包含收件關鍵字
-  function containsPickupKeyword(message) {
-    return pickupKeywords.some(keyword => message.includes(keyword));
-  }
-
-  // 🔍 情況 1：檢查「客人的訊息」是否包含收件關鍵字
-  if (containsPickupKeyword(userMessage)) {
-    try {
-      const profile = await client.getProfile(userId);
-      const userName = profile.displayName;
-      
-      // 從 savedCustomers 找客戶編號
-      const customerData = Object.entries(savedCustomers || {}).find(
-        item => item[1].userId === userId
-      );
-      const customerNumber = customerData ? customerData[0] : '未登記';
-
-      // 呼叫 API 記錄收件排程
-      await fetch(`${process.env.BASE_URL || 'https://stain-bot-production-2593.up.railway.app'}/api/pickup-schedule/auto-add`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: userId,
-          userName: userName,
-          message: userMessage,
-          source: 'customer',  // 標記是客人說的
-          customerNumber: customerNumber
-        })
-      });
-      
-      logger.logToFile(`[收件偵測] 客人要求收件: ${userName} (#${customerNumber}) - "${userMessage}"`);
-    } catch (err) {
-      logger.logError('[收件偵測] 客人訊息記錄失敗', err);
-    }
-  }
-
-  // 🔍 情況 2：檢查「AI 的回覆」是否包含收件關鍵字
-  if (claudeReplied && aiResponse && containsPickupKeyword(aiResponse)) {
-    try {
-      const profile = await client.getProfile(userId);
-      const userName = profile.displayName;
-      
-      // 從 savedCustomers 找客戶編號
-      const customerData = Object.entries(savedCustomers || {}).find(
-        item => item[1].userId === userId
-      );
-      const customerNumber = customerData ? customerData[0] : '未登記';
-
-      // 呼叫 API 記錄收件排程
-      await fetch(`${process.env.BASE_URL || 'https://stain-bot-production-2593.up.railway.app'}/api/pickup-schedule/auto-add`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: userId,
-          userName: userName,
-          message: aiResponse,
-          source: 'ai',  // 標記是 AI 說的
-          customerNumber: customerNumber
-        })
-      });
-      
-      logger.logToFile(`[收件偵測] AI 承諾收件: ${userName} (#${customerNumber}) - "${aiResponse}"`);
-    } catch (err) {
-      logger.logError('[收件偵測] AI 訊息記錄失敗', err);
-    }
-  }
-        
-        // ========== 處理圖片訊息 ==========
-        else if (event.message.type === 'image') {
-          logger.logUserMessage(userId, '上傳了一張圖片');
-          await messageHandler.handleImageMessage(userId, event.message.id);
-        } 
-        
-        // ========== 處理貼圖訊息 ==========
-        else if (event.message.type === 'sticker') {
-          logger.logUserMessage(userId, `發送了貼圖 (${event.message.stickerId})`);
-        } 
-        
-        // ========== 其他訊息 ==========
-        else {
-          logger.logUserMessage(userId, '發送了其他類型的訊息');
-        }
-        
-      } catch (err) {
-        logger.logError('處理事件時出錯', err, event.source?.userId);
-      }
-    }
-  } catch (err) {
-    logger.logError('全局錯誤', err);
-  }
-});
-
-// ====== Google OAuth ======
-app.get('/auth', (req, res) => {
-  try {
-    const authUrl = googleAuth.getAuthUrl();
-    res.redirect(authUrl);
-  } catch (error) {
-    logger.logError('生成授權 URL 失敗', error);
-    res.status(500).send('授權失敗: ' + error.message);
-  }
-});
+         
 
 app.get('/oauth2callback', async (req, res) => {
   const { code } = req.query;
