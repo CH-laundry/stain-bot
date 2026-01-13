@@ -85,6 +85,8 @@
       <button class="tab" onclick="switchTab(event,'manual')">📝 人工通知</button>
       <button class="tab" onclick="switchTab(event,'records')">👤 客人紀錄</button>
       <button class="tab" onclick="switchTab(event,'urgent')">⚡ 急件追蹤</button>
+      <button class="tab" onclick="switchTab(event,'pickup-schedule')">🏠 收件排程</button>
+      
     </div>
 
     <div id="payment-tab" class="tab-content active">
@@ -437,6 +439,35 @@
   </div>
 </div>
 
+</div>  <!-- urgent-tab 結束 -->
+
+<!-- 🔥🔥🔥 新增：收件排程分頁（開始）🔥🔥🔥 -->
+<!-- 🏠 收件排程分頁 -->
+<div id="pickup-schedule-tab" class="tab-content">
+  <h3 style="color:#667eea; margin-bottom:20px;">🏠 收件排程管理</h3>
+  
+  <!-- 今日提醒 -->
+  <div id="todayAlert" style="display:none; background:#fff3cd; padding:15px; border-radius:10px; margin-bottom:20px; border-left:4px solid #ffc107;">
+    <h4 style="color:#856404; margin-bottom:10px;">🔔 今日收件提醒</h4>
+    <p id="alertMessage" style="color:#856404; margin:0;"></p>
+  </div>
+  
+  <!-- 操作列 -->
+  <div style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
+    <button class="btn btn-small btn-secondary" onclick="loadPickupSchedules()">🔄 重新整理</button>
+    <button class="btn btn-small" style="background:#52c41a;color:#fff;" onclick="showTodayAlert()">🔔 今日提醒</button>
+  </div>
+  
+  <!-- 收件列表 -->
+  <div id="pickupScheduleList">
+    <p style="text-align:center; color:#999;">尚未載入，請點「重新整理」。</p>
+  </div>
+</div>
+<!-- 🔥🔥🔥 新增：收件排程分頁（結束）🔥🔥🔥 -->
+
+<!-- 📝 人工通知分頁 -->
+<div id="manual-tab" class="tab-content">
+  
 <!-- 📝 人工通知分頁 -->
 <div id="manual-tab" class="tab-content">
   <h3 style="color:#667eea; margin-bottom:20px;">📝 人工通知紀錄</h3>
@@ -2973,6 +3004,239 @@ async function saveCustomerNumberDirect(number, name, userId) {
     showResult('error', '❌ 連線失敗: ' + error.message);
   }
 }
+    // 直接儲存客戶編號（不需填表單）
+async function saveCustomerNumberDirect(number, name, userId) {
+  try {
+    var res = await fetch('/api/customer-numbers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        number: number, 
+        name: name, 
+        userId: userId 
+      })
+    });
+    
+    var data = await res.json();
+    
+    if (data.success) {
+      showResult('success', '✅ 客戶編號已儲存：#' + number);
+      await loadCustomerNumbers();
+      loadRecords(); // 重新載入客人紀錄
+    } else {
+      showResult('error', '❌ 儲存失敗: ' + (data.error || '未知錯誤'));
+    }
+  } catch (error) {
+    showResult('error', '❌ 連線失敗: ' + error.message);
+  }
+}
+
+// 🔥🔥🔥 新增：收件排程功能（開始）🔥🔥🔥
+// ========================================
+// 🏠 收件排程功能
+// ========================================
+
+var allPickupSchedules = [];
+
+// 載入收件排程
+async function loadPickupSchedules() {
+  var wrap = document.getElementById('pickupScheduleList');
+  wrap.innerHTML = '<p style="text-align:center; color:#999;">載入中...</p>';
+  
+  try {
+    var res = await fetch('/api/pickup-schedule/orders');
+    var data = await res.json();
+    
+    if (!data.success) throw new Error(data.error || '載入失敗');
+    
+    allPickupSchedules = data.schedules || [];
+    renderPickupSchedules(data.grouped || {});
+    
+    // 自動顯示今日提醒
+    checkTodayPickupAlert();
+    
+  } catch (e) {
+    wrap.innerHTML = '<p style="text-align:center; color:#dc3545;">載入失敗：' + e.message + '</p>';
+  }
+}
+
+// 渲染收件排程列表
+function renderPickupSchedules(grouped) {
+  var wrap = document.getElementById('pickupScheduleList');
+  
+  if (Object.keys(grouped).length === 0) {
+    wrap.innerHTML = '<p style="text-align:center; color:#999;">目前沒有收件排程</p>';
+    return;
+  }
+  
+  var today = new Date().toISOString().split('T')[0];
+  var dates = Object.keys(grouped).sort().reverse();
+  
+  var html = '';
+  
+  dates.forEach(function(date) {
+    var schedules = grouped[date];
+    var isToday = date === today;
+    var tag = isToday ? '（今天）' : '';
+    
+    // 分類：AI 承諾 vs 客人要求
+    var aiSchedules = schedules.filter(s => s.source === 'ai' && s.status === 'pending');
+    var customerSchedules = schedules.filter(s => s.source === 'customer' && s.status === 'pending');
+    
+    html += '<h4 style="margin-top:20px; margin-bottom:10px; color:#667eea;">📅 ' + date + ' ' + tag + '</h4>';
+    
+    // AI 承諾收件
+    if (aiSchedules.length > 0) {
+      html += '<div style="background:#e7f0ff; padding:15px; border-radius:10px; margin-bottom:15px;">';
+      html += '<h5 style="color:#1890ff; margin-bottom:10px;">🤖 AI 承諾收件（' + aiSchedules.length + ' 筆）</h5>';
+      
+      aiSchedules.forEach(function(s) {
+        html += renderScheduleItem(s);
+      });
+      
+      html += '</div>';
+    }
+    
+    // 客人要求收件
+    if (customerSchedules.length > 0) {
+      html += '<div style="background:#f0f4ff; padding:15px; border-radius:10px; margin-bottom:15px;">';
+      html += '<h5 style="color:#667eea; margin-bottom:10px;">👤 客人要求收件（' + customerSchedules.length + ' 筆）</h5>';
+      
+      customerSchedules.forEach(function(s) {
+        html += renderScheduleItem(s);
+      });
+      
+      html += '</div>';
+    }
+  });
+  
+  wrap.innerHTML = html;
+}
+
+// 渲染單個收件項目
+function renderScheduleItem(s) {
+  var time = s.createdAt ? new Date(s.createdAt).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }) : '';
+  var sourceLabel = s.source === 'ai' ? 'AI 回覆' : '客人說';
+  
+  return '<div class="user-item" style="display:block; margin-bottom:10px;">' +
+    '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">' +
+    '<div>' +
+    '<strong style="font-size:15px;">#' + (s.customerNumber || '?') + ' - ' + (s.customerName || '未知') + '</strong>' +
+    '</div>' +
+    '<div style="font-size:12px; color:#999;">⏰ ' + time + '</div>' +
+    '</div>' +
+    '<div style="font-size:13px; color:#666; margin-bottom:8px;">' +
+    '<div>📝 ' + sourceLabel + '：「' + (s.originalMessage || '-') + '」</div>' +
+    (s.note ? '<div>💡 備註：' + s.note + '</div>' : '') +
+    '</div>' +
+    '<div style="display:flex; gap:5px; flex-wrap:wrap;">' +
+    '<button class="btn btn-small btn-secondary" onclick="completePickup(\'' + s.id + '\', true)">✅ 已收件（通知客人）</button>' +
+    '<button class="btn btn-small btn-danger" onclick="deletePickup(\'' + s.id + '\')">🗑️ 刪除（不通知）</button>' +
+    '<button class="btn btn-small" style="background:#ff9800;color:#fff;" onclick="editPickupNote(\'' + s.id + '\')">✏️ 加備註</button>' +
+    '</div>' +
+    '</div>';
+}
+
+// ✅ 標記已收件（並通知客人）
+async function completePickup(id, notifyCustomer) {
+  if (!confirm('確認已收到此客人的衣物？\n' + (notifyCustomer ? '將自動通知客人' : ''))) return;
+  
+  try {
+    var res = await fetch('/api/pickup-schedule/complete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: id, notifyCustomer: notifyCustomer })
+    });
+    
+    var data = await res.json();
+    
+    if (data.success) {
+      showResult('success', data.message || '✅ 已標記完成');
+      loadPickupSchedules();
+    } else {
+      showResult('error', '❌ 操作失敗：' + (data.error || '未知錯誤'));
+    }
+  } catch (e) {
+    showResult('error', '❌ 連線失敗：' + e.message);
+  }
+}
+
+// 🗑️ 刪除收件排程（不通知客人）
+async function deletePickup(id) {
+  if (!confirm('確定要刪除此收件排程？\n（不會通知客人）')) return;
+  
+  try {
+    var res = await fetch('/api/pickup-schedule/order/' + encodeURIComponent(id), {
+      method: 'DELETE'
+    });
+    
+    var data = await res.json();
+    
+    if (data.success) {
+      showResult('success', '✅ 已刪除收件排程');
+      loadPickupSchedules();
+    } else {
+      showResult('error', '❌ 刪除失敗：' + (data.error || '未知錯誤'));
+    }
+  } catch (e) {
+    showResult('error', '❌ 連線失敗：' + e.message);
+  }
+}
+
+// ✏️ 編輯備註
+async function editPickupNote(id) {
+  var schedule = allPickupSchedules.find(s => s.id === id);
+  if (!schedule) return;
+  
+  var note = prompt('輸入備註（例如：客人說有污漬、下午3點後在家等）', schedule.note || '');
+  if (note === null) return;
+  
+  try {
+    var res = await fetch('/api/pickup-schedule/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: id, note: note })
+    });
+    
+    var data = await res.json();
+    
+    if (data.success) {
+      showResult('success', '✅ 已更新備註');
+      loadPickupSchedules();
+    } else {
+      showResult('error', '❌ 更新失敗：' + (data.error || '未知錯誤'));
+    }
+  } catch (e) {
+    showResult('error', '❌ 連線失敗：' + e.message);
+  }
+}
+
+// 🔔 檢查今日收件提醒
+async function checkTodayPickupAlert() {
+  try {
+    var res = await fetch('/api/pickup-schedule/today-alert');
+    var data = await res.json();
+    
+    if (data.success && data.total > 0) {
+      var msg = '您今天有 ' + data.total + ' 筆收件排程：\n';
+      if (data.aiCount > 0) msg += '- ' + data.aiCount + ' 筆是 AI 承諾要去收的\n';
+      if (data.customerCount > 0) msg += '- ' + data.customerCount + ' 筆是客人主動要求的';
+      
+      document.getElementById('alertMessage').textContent = msg;
+      document.getElementById('todayAlert').style.display = 'block';
+    }
+  } catch (e) {
+    console.error('載入今日提醒失敗:', e);
+  }
+}
+
+// 手動顯示今日提醒
+function showTodayAlert() {
+  checkTodayPickupAlert();
+}
+// 🔥🔥🔥 新增：收件排程功能（結束）🔥🔥🔥
+
+  </script>  <!-- ⭐ JavaScript 結束標籤 -->
   </script>
    <script src="/payment.js"></script>
 </body> 
