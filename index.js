@@ -447,10 +447,31 @@ else if (event.message.type === 'sticker') {
 
 // ========== 其他訊息 ==========
 else {
+  else {
   logger.logUserMessage(userId, '發送了其他類型的訊息');
 }
 
-// Google OAuth 繼續...
+      } catch (err) {
+        logger.logError('處理事件時出錯', err, event.source?.userId);
+      }
+    }
+  } catch (err) {
+    logger.logError('全局錯誤', err);
+  }
+});
+
+// ====== Google OAuth ======
+app.get('/auth', (req, res) => {
+  try {
+    const authUrl = googleAuth.getAuthUrl();
+    res.redirect(authUrl);
+  } catch (error) {
+    logger.logError('生成授權 URL 失敗', error);
+    res.status(500).send('授權失敗: ' + error.message);
+  }
+});
+
+app.get('/oauth2callback', async (req, res) => {
 app.get('/oauth2callback', async (req, res) => {
   const { code } = req.query;
   if (!code) return res.status(400).send('缺少擔保碼');
