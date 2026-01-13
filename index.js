@@ -338,8 +338,9 @@ app.post('/webhook', async (req, res) => {
           
           // ⭐ Claude AI 優先處理
           let claudeReplied = false;
+          let aiResponse = '';
           try {
-            const aiReply = await claudeAI.handleTextMessage(userMessage, userId);
+            aiResponse = await claudeAI.handleTextMessage(userMessage, userId);
             if (aiReply) {
               await client.pushMessage(userId, { type: 'text', text: aiReply });
               logger.logToFile(`[Claude AI] 已回覆: ${userId}`);
@@ -354,6 +355,82 @@ app.post('/webhook', async (req, res) => {
             await messageHandler.handleTextMessage(userId, userMessage, userMessage);
           }
         } 
+          // 🧺 收件關鍵字自動偵測
+  // ========================================
+  
+  // 收件關鍵字列表
+  const pickupKeywords = [
+    '會去收', '去收回', '來收', '過去收', '收衣服',
+    '明天收', '今天收', '收取', '安排收件', '會過去收',
+    '可以來收', '去拿', '會來收'
+  ];
+
+  // 檢查訊息是否包含收件關鍵字
+  function containsPickupKeyword(message) {
+    return pickupKeywords.some(keyword => message.includes(keyword));
+  }
+
+  // 🔍 情況 1：檢查「客人的訊息」是否包含收件關鍵字
+  if (containsPickupKeyword(userMessage)) {
+    try {
+      const profile = await client.getProfile(userId);
+      const userName = profile.displayName;
+      
+      // 從 savedCustomers 找客戶編號
+      const customerData = Object.entries(savedCustomers || {}).find(
+        item => item[1].userId === userId
+      );
+      const customerNumber = customerData ? customerData[0] : '未登記';
+
+      // 呼叫 API 記錄收件排程
+      await fetch(`${process.env.BASE_URL || 'https://stain-bot-production-2593.up.railway.app'}/api/pickup-schedule/auto-add`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: userId,
+          userName: userName,
+          message: userMessage,
+          source: 'customer',  // 標記是客人說的
+          customerNumber: customerNumber
+        })
+      });
+      
+      logger.logToFile(`[收件偵測] 客人要求收件: ${userName} (#${customerNumber}) - "${userMessage}"`);
+    } catch (err) {
+      logger.logError('[收件偵測] 客人訊息記錄失敗', err);
+    }
+  }
+
+  // 🔍 情況 2：檢查「AI 的回覆」是否包含收件關鍵字
+  if (claudeReplied && aiResponse && containsPickupKeyword(aiResponse)) {
+    try {
+      const profile = await client.getProfile(userId);
+      const userName = profile.displayName;
+      
+      // 從 savedCustomers 找客戶編號
+      const customerData = Object.entries(savedCustomers || {}).find(
+        item => item[1].userId === userId
+      );
+      const customerNumber = customerData ? customerData[0] : '未登記';
+
+      // 呼叫 API 記錄收件排程
+      await fetch(`${process.env.BASE_URL || 'https://stain-bot-production-2593.up.railway.app'}/api/pickup-schedule/auto-add`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: userId,
+          userName: userName,
+          message: aiResponse,
+          source: 'ai',  // 標記是 AI 說的
+          customerNumber: customerNumber
+        })
+      });
+      
+      logger.logToFile(`[收件偵測] AI 承諾收件: ${userName} (#${customerNumber}) - "${aiResponse}"`);
+    } catch (err) {
+      logger.logError('[收件偵測] AI 訊息記錄失敗', err);
+    }
+  }
         
         // ========== 處理圖片訊息 ==========
         else if (event.message.type === 'image') {
@@ -1821,6 +1898,245 @@ app.post('/api/create-delivery-task', async (req, res) => {
     }
 });
 
+// ========================================
+// 🏠 收件排程 API
+// ========================================
+
+// 📥 自動新增收件排程
+app.post('/api/pickup-schedule/auto-add', async (req, res) => {
+  const { userId, userName, message, source, customerNumber } = req.body;
+  
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const FILE_PATH = path.join(__dirname, 'data', 'pickup-schedule.json');
+    
+    // 確保資料夾存在
+    if (!fs.existsSync(path.join(__dirname, 'data'))) {
+      fs.mkdirSync(path.join(__dirname, 'data'), { recursive: true });
+    }
+    
+    // 載入現有資料
+    let data = { schedules: [] };
+    if (fs.existsSync(FILE_PATH)) {
+      data = JSON.parse(fs.readFileSync(FILE_PATH, 'utf8'));
+    }
+    
+    // 檢查今天是否已經記錄過
+    const today = new Date().toISOString().split('T')[0];
+    const existing = data.schedules.find(s => 
+      s.userId === userId && 
+      s.pickupDate === today && 
+      s.status === 'pending'
+    );
+    
+    if (existing) {
+      return res.json({ 
+        success: true, 
+        message: '今天已記錄此客戶',
+        alreadyExists: true 
+      });
+    }
+    
+    // 建立新記錄
+    const schedule = {
+      id: 'PICKUP' + Date.now() + Math.random().toString(36).substr(2, 5).toUpperCase(),
+      customerNumber: customerNumber || '未登記',
+      customerName: userName,
+      userId: userId,
+      pickupDate: today,
+      source: source, // 'customer' 或 'ai'
+      originalMessage: message,
+      note: '',
+      status: 'pending',
+      createdAt: new Date().toISOString()
+    };
+    
+    data.schedules.push(schedule);
+    fs.writeFileSync(FILE_PATH, JSON.stringify(data, null, 2), 'utf8');
+    
+    res.json({ 
+      success: true, 
+      message: '✅ 已記錄到收件排程',
+      schedule: schedule
+    });
+    
+  } catch (error) {
+    console.error('新增收件排程失敗:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 📋 取得收件排程列表
+app.get('/api/pickup-schedule/orders', async (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const FILE_PATH = path.join(__dirname, 'data', 'pickup-schedule.json');
+    
+    let data = { schedules: [] };
+    if (fs.existsSync(FILE_PATH)) {
+      data = JSON.parse(fs.readFileSync(FILE_PATH, 'utf8'));
+    }
+    
+    // 依日期分組
+    const grouped = {};
+    data.schedules.forEach(schedule => {
+      const date = schedule.pickupDate;
+      if (!grouped[date]) grouped[date] = [];
+      grouped[date].push(schedule);
+    });
+    
+    res.json({ 
+      success: true, 
+      schedules: data.schedules,
+      grouped: grouped
+    });
+    
+  } catch (error) {
+    console.error('載入收件排程失敗:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ✅ 標記已收件（並通知客人）
+app.post('/api/pickup-schedule/complete', async (req, res) => {
+  const { id, notifyCustomer } = req.body;
+  
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const FILE_PATH = path.join(__dirname, 'data', 'pickup-schedule.json');
+    
+    let data = { schedules: [] };
+    if (fs.existsSync(FILE_PATH)) {
+      data = JSON.parse(fs.readFileSync(FILE_PATH, 'utf8'));
+    }
+    
+    const schedule = data.schedules.find(s => s.id === id);
+    if (!schedule) {
+      return res.status(404).json({ success: false, error: '找不到此記錄' });
+    }
+    
+    schedule.status = 'completed';
+    schedule.completedAt = new Date().toISOString();
+    
+    fs.writeFileSync(FILE_PATH, JSON.stringify(data, null, 2), 'utf8');
+    
+    // 如果要通知客人
+    if (notifyCustomer && schedule.userId) {
+      await client.pushMessage(schedule.userId, {
+        type: 'text',
+        text: '✅ 您的衣物已收到！\n我們會盡快為您處理，完成後會再通知您取件 💙'
+      });
+    }
+    
+    res.json({ 
+      success: true, 
+      message: notifyCustomer ? '✅ 已標記完成並通知客人' : '✅ 已標記完成'
+    });
+    
+  } catch (error) {
+    console.error('標記完成失敗:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 🗑️ 刪除收件排程
+app.delete('/api/pickup-schedule/order/:id', async (req, res) => {
+  const { id } = req.params;
+  
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const FILE_PATH = path.join(__dirname, 'data', 'pickup-schedule.json');
+    
+    let data = { schedules: [] };
+    if (fs.existsSync(FILE_PATH)) {
+      data = JSON.parse(fs.readFileSync(FILE_PATH, 'utf8'));
+    }
+    
+    const index = data.schedules.findIndex(s => s.id === id);
+    if (index === -1) {
+      return res.status(404).json({ success: false, error: '找不到此記錄' });
+    }
+    
+    data.schedules.splice(index, 1);
+    fs.writeFileSync(FILE_PATH, JSON.stringify(data, null, 2), 'utf8');
+    
+    res.json({ success: true, message: '✅ 已刪除收件排程' });
+    
+  } catch (error) {
+    console.error('刪除收件排程失敗:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ✏️ 編輯收件排程
+app.post('/api/pickup-schedule/update', async (req, res) => {
+  const { id, note, pickupDate } = req.body;
+  
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const FILE_PATH = path.join(__dirname, 'data', 'pickup-schedule.json');
+    
+    let data = { schedules: [] };
+    if (fs.existsSync(FILE_PATH)) {
+      data = JSON.parse(fs.readFileSync(FILE_PATH, 'utf8'));
+    }
+    
+    const schedule = data.schedules.find(s => s.id === id);
+    if (!schedule) {
+      return res.status(404).json({ success: false, error: '找不到此記錄' });
+    }
+    
+    if (note !== undefined) schedule.note = note;
+    if (pickupDate !== undefined) schedule.pickupDate = pickupDate;
+    
+    fs.writeFileSync(FILE_PATH, JSON.stringify(data, null, 2), 'utf8');
+    
+    res.json({ success: true, message: '✅ 已更新收件排程' });
+    
+  } catch (error) {
+    console.error('更新收件排程失敗:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 📊 取得今日收件提醒
+app.get('/api/pickup-schedule/today-alert', async (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const FILE_PATH = path.join(__dirname, 'data', 'pickup-schedule.json');
+    
+    let data = { schedules: [] };
+    if (fs.existsSync(FILE_PATH)) {
+      data = JSON.parse(fs.readFileSync(FILE_PATH, 'utf8'));
+    }
+    
+    const today = new Date().toISOString().split('T')[0];
+    const todaySchedules = data.schedules.filter(s => 
+      s.pickupDate === today && s.status === 'pending'
+    );
+    
+    const aiCount = todaySchedules.filter(s => s.source === 'ai').length;
+    const customerCount = todaySchedules.filter(s => s.source === 'customer').length;
+    
+    res.json({
+      success: true,
+      total: todaySchedules.length,
+      aiCount: aiCount,
+      customerCount: customerCount,
+      schedules: todaySchedules
+    });
+    
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
   console.log(`伺服器正在運行,端口:${PORT}`);
@@ -1829,7 +2145,8 @@ app.listen(PORT, async () => {
 // 🧺 初始化取件追蹤
   pickupRoutes.setLineClient(client);
   setInterval(() => {
-    pickupRoutes.checkAndSendReminders();
+    pickupRoutes.chec
+    kAndSendReminders();
   }, 60 * 60 * 1000);
   console.log('✅ 取件追蹤系統已啟動');
   try {
