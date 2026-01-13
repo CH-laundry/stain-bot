@@ -447,7 +447,6 @@ else if (event.message.type === 'sticker') {
 
 // ========== 其他訊息 ==========
 else {
-  else {
   logger.logUserMessage(userId, '發送了其他類型的訊息');
 }
 
@@ -471,7 +470,6 @@ app.get('/auth', (req, res) => {
   }
 });
 
-app.get('/oauth2callback', async (req, res) => {
 app.get('/oauth2callback', async (req, res) => {
   const { code } = req.query;
   if (!code) return res.status(400).send('缺少擔保碼');
