@@ -1058,7 +1058,7 @@ async function handleTextMessage(userMessage, userId = null) {
     
     const message = await anthropic.messages.create({
       model: modelToUse,
-      max_tokens: 800,
+      max_tokens: 1500,
       system: LAUNDRY_KNOWLEDGE,
       messages: messages
     });
