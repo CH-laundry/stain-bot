@@ -638,7 +638,39 @@
   </div>
 </div>
 
-  </div>  <!-- container 結束 -->   
+ <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+      <button type="button" class="btn btn-secondary" onclick="addNotifyTemplate()">➕ 新增模板</button>
+      <button type="button" class="btn btn-small" style="background: #ff9800;" onclick="loadNotifyTemplates()">🔄 重新載入</button>
+    </div>
+  </div>
+</div>
+
+<!-- 🏠 收件排程分頁 -->
+<div id="pickup-schedule-tab" class="tab-content">
+  <h3 style="color:#667eea; margin-bottom:20px;">🏠 收件排程管理</h3>
+  
+  <!-- 今日提醒 -->
+  <div id="todayAlert" style="display:none; background:#fff3cd; padding:15px; border-radius:10px; margin-bottom:20px; border-left:4px solid #ffc107;">
+    <h4 style="color:#856404; margin-bottom:10px;">🔔 今日收件提醒</h4>
+    <p id="alertMessage" style="color:#856404; margin:0;"></p>
+  </div>
+  
+  <!-- 操作列 -->
+  <div style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
+    <button class="btn btn-small btn-secondary" onclick="loadPickupSchedules()">🔄 重新整理</button>
+    <button class="btn btn-small" style="background:#52c41a;color:#fff;" onclick="showTodayAlert()">🔔 今日提醒</button>
+  </div>
+  
+  <!-- 收件列表 -->
+  <div id="pickupScheduleList">
+    <p style="text-align:center; color:#999;">尚未載入，請點「重新整理」。</p>
+  </div>
+</div>
+
+  </div>  <!-- container 結束 -->
+
+    
+    <!-- 模板編輯 Modal -->  
 
     
     <!-- 模板編輯 Modal -->
