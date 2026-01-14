@@ -64,6 +64,9 @@ app.use('/api/pickup', pickupRoutes.router);
 app.use('/api/delivery', deliveryRoutes);
 app.use('/api/urgent', urgentRoutes);
 app.use('/api/manual', manualRoutes);
+// ⭐ 新增:載入洗衣軟體同步路由
+const posSyncRouter = require('./pos-sync');
+app.use('/api/pos-sync', posSyncRouter);
 
 // ====== LINE Client ======
 const client = new Client({
