@@ -2184,6 +2184,21 @@ function displayRecords(records) {
     var newBadge = isNew 
       ? '<span style="background:#52c41a;color:#fff;padding:3px 8px;border-radius:5px;font-size:12px;margin-left:5px;">🆕 新客人</span>'
       : '';
+// ⭐⭐⭐ 新增：檢查是否已加入客戶編號 ⭐⭐⭐
+    var customerNumber = null;
+    var customerName = null;
+    
+    // 在 savedCustomers 中尋找此 User ID
+    Object.entries(savedCustomers).forEach(function(entry) {
+      if (entry[1].userId === r.userId) {
+        customerNumber = entry[0];
+        customerName = entry[1].name;
+      }
+    });
+    
+    var existingBadge = customerNumber 
+      ? '<span style="background:#1890ff;color:#fff;padding:3px 8px;border-radius:5px;font-size:12px;margin-left:5px;">✅ 已加入編號：#' + customerNumber + '</span>'
+      : '';
     
     html +=
       '<div class="user-item" style="display:block; margin-bottom:10px;">' +
@@ -2191,6 +2206,7 @@ function displayRecords(records) {
       '<div>' +
       '<strong style="font-size:16px;">' + (r.displayName || '未知') + '</strong> ' +
       newBadge +
+      existingBadge + 
       '</div>' +
       '<div style="font-size:14px; color:#667eea; font-weight:600;">對話 ' + messageCount + ' 次</div>' +
       '</div>' +
@@ -2202,7 +2218,10 @@ function displayRecords(records) {
       '<div style="display:flex; gap:5px; flex-wrap:wrap;">' +
       '<button class="btn btn-small btn-secondary" onclick="copyUserId(\'' + (r.userId || '') + '\')">📋 複製 User ID</button>' +
       '<button class="btn btn-small" style="background:#1890ff;color:#fff;" onclick="viewRecordDetail(\'' + (r.userId || '') + '\')">👁️ 查看詳情</button>' +
-      '<button class="btn btn-small" style="background:#52c41a;color:#fff;" onclick="addCustomerNumber(\'' + (r.userId || '') + '\', \'' + (r.displayName || '') + '\')">➕ 新增編號</button>' +
+      (customerNumber 
+        ? '<button class="btn btn-small" style="background:#999;color:#fff;" disabled>✅ 已有編號 #' + customerNumber + '</button>'
+        : '<button class="btn btn-small" style="background:#52c41a;color:#fff;" onclick="addCustomerNumber(\'' + (r.userId || '') + '\', \'' + (r.displayName || '') + '\')">➕ 新增編號</button>'
+      ) +
       '</div>' +
       '</div>';
   });
