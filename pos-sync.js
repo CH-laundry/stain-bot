@@ -1,174 +1,140 @@
-// ========================================
-// 🚚 洗衣軟體同步 API
-// ========================================
-
 const express = require('express');
 const router = express.Router();
-
-// ⭐ 重要:不使用 googleapis,改用你現有的 googleAuth
-const googleAuth = require('./services/googleAuth');
 const { google } = require('googleapis');
+const googleAuth = require('./services/googleAuth');
+const logger = require('./services/logger');
 
-// Google Sheets 寫入函數 (使用 OAuth)
-async function appendToSheet(range, values) {
+// 🔧 試算表 ID (從環境變數讀取)
+const SPREADSHEET_ID = process.env.SPREADSHEET_ID || '14e1uaQ_4by1W7ELflSIyxo-a48f9LelG4KdkBovyY7s';
+
+// 📊 寫入 Google Sheets
+async function appendToSheet(values) {
   try {
-    console.log('📊 開始寫入 Google Sheets...');
-    console.log('  - Range:', range);
-    console.log('  - Values:', values);
-    
-    // 使用你現有的 OAuth 認證
     const auth = googleAuth.getOAuth2Client();
     const sheets = google.sheets({ version: 'v4', auth });
     
-    const spreadsheetId = process.env.SPREADSHEET_ID;
-    
-    if (!spreadsheetId) {
-      throw new Error('SPREADSHEET_ID 環境變數未設定');
-    }
-    
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: spreadsheetId,
-      range: range,
+    const response = await sheets.spreadsheets.values.append({
+      spreadsheetId: SPREADSHEET_ID,
+      range: '外送排程!A:J',
       valueInputOption: 'USER_ENTERED',
       resource: { values: [values] }
     });
     
-    console.log('✅ 寫入成功!');
-    
+    return { success: true, data: response.data };
   } catch (error) {
     console.error('❌ Google Sheets 寫入失敗:', error.message);
     throw error;
   }
 }
 
-// API 1: 發送通知 → 外送排程
+// 🚀 接收洗衣軟體的外送通知
 router.post('/delivery-notify', async (req, res) => {
+  console.log('========================================');
+  console.log('🚀 收到外送排程請求');
+  console.log('📦 原始請求:', JSON.stringify(req.body, null, 2));
+  
   try {
-    console.log('========================================');
-    console.log('🚀 收到外送排程請求');
-    console.log('📦 原始請求:', JSON.stringify(req.body, null, 2));
-    
-    let posData = req.body;
-    
-    // 🔥 如果是陣列格式,轉換成物件
-    if (Array.isArray(posData)) {
-      const tempData = {};
-      posData.forEach(item => {
+    // 🔄 轉換 Key-Value 格式
+    const data = {};
+    if (Array.isArray(req.body)) {
+      req.body.forEach(item => {
         if (item.Key && item.Value !== undefined) {
-          tempData[item.Key] = item.Value;
+          data[item.Key] = item.Value;
         }
       });
-      posData = tempData;
-      console.log('📦 轉換後資料:', JSON.stringify(posData, null, 2));
+    } else {
+      Object.assign(data, req.body);
     }
     
-    const customerNumber = (posData.ReceivingOrderNumber || '').replace(/^0+/, '') || 'unknown';
-    const customerName = posData.userName || '未知客戶';
+    console.log('📦 轉換後資料:', JSON.stringify(data, null, 2));
+    
+    // 📝 提取資料
+    const customerNumber = data.CustomerNumber || data.customerNumber || 'unknown';
+    const customerName = data.userName || data.CustomerName || '未知客戶';
+    const orderNo = data.ReceivingOrderID || data.orderNo || '';
     
     console.log('📝 處理後的資料:');
     console.log('  - 客戶編號:', customerNumber);
     console.log('  - 客戶姓名:', customerName);
     
-    await appendToSheet('外送排程!A:J', [
-      customerNumber,
-      customerName,
-      0,
-      'sent',
-      '',
-      `洗衣軟體自動同步 - ${new Date().toLocaleString('zh-TW')}`,
-      false,
-      new Date().toISOString(),
-      posData.ReceivingItemId || posData.ReceivingItemID || '',
-      'pos-sync'
-    ]);
+    // 🗓️ 建立時間戳記
+    const now = new Date();
+    const formattedTime = now.toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
     
+    // 📊 準備寫入 Sheets 的資料
+    const rowData = [
+      customerNumber,           // A: 客戶編號
+      customerName,             // B: 客戶姓名
+      0,                        // C: 金額
+      'sent',                   // D: 通知狀態
+      '',                       // E: 指定日期
+      `洗衣軟體自動同步 - ${formattedTime}`, // F: 備註
+      false,                    // G: 已簽收
+      now.toISOString(),        // H: 建立時間
+      orderNo,                  // I: 訂單ID
+      'pos-sync'                // J: 來源
+    ];
+    
+    console.log('📊 開始寫入 Google Sheets...');
+    console.log('  - Range: 外送排程!A:J');
+    console.log('  - Values:', JSON.stringify(rowData, null, 2));
+    
+    // ✅ 寫入 Google Sheets
+    await appendToSheet(rowData);
+    
+    console.log('✅ 寫入成功!');
     console.log('✅ 已寫入外送排程');
-    console.log('========================================');
-    
-    res.json({ success: true, message: '✅ 已寫入外送排程' });
-    
-  } catch (error) {
-    console.error('========================================');
-    console.error('❌ 錯誤發生!');
-    console.error('錯誤訊息:', error.message);
-    console.error('錯誤堆疊:', error.stack);
-    console.error('========================================');
-    
-    res.status(500).json({ 
-      success: false, 
-      error: error.message
-    });
-  }
-});
 
-// API 2: 取消 → 人工通知
-router.post('/manual-notify', async (req, res) => {
-  try {
-    console.log('========================================');
-    console.log('🚀 收到人工通知請求');
-    console.log('📦 原始請求:', JSON.stringify(req.body, null, 2));
-    
-    let posData = req.body;
-    
-    // 🔥 如果是陣列格式,轉換成物件
-    if (Array.isArray(posData)) {
-      const tempData = {};
-      posData.forEach(item => {
-        if (item.Key && item.Value !== undefined) {
-          tempData[item.Key] = item.Value;
-        }
-      });
-      posData = tempData;
-      console.log('📦 轉換後資料:', JSON.stringify(posData, null, 2));
+    // 🔥 同步寫入 delivery.json (讓網頁後台看得到)
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const DELIVERY_FILE = path.join(__dirname, 'data', 'delivery.json');
+      
+      let deliveryData = { orders: [] };
+      if (fs.existsSync(DELIVERY_FILE)) {
+        deliveryData = JSON.parse(fs.readFileSync(DELIVERY_FILE, 'utf8'));
+      }
+      
+      // 檢查是否已存在
+      const exists = deliveryData.orders.some(o => o.orderNo === orderNo);
+      
+      if (!exists) {
+        deliveryData.orders.push({
+          id: `DELIVERY_${Date.now()}`,
+          orderNo: orderNo || 'unknown',
+          customerNumber: customerNumber,
+          customerName: customerName,
+          mobile: '',
+          status: 'Pending',
+          createdAt: new Date().toISOString(),
+          signed: false
+        });
+        
+        fs.writeFileSync(DELIVERY_FILE, JSON.stringify(deliveryData, null, 2), 'utf8');
+        console.log('✅ 已同步到網頁後台 (delivery.json)');
+      } else {
+        console.log('⚠️ 訂單已存在於 delivery.json,跳過');
+      }
+    } catch (err) {
+      console.error('⚠️ 同步到 delivery.json 失敗:', err.message);
     }
-    
-    const customerNumber = (posData.ReceivingOrderNumber || '').replace(/^0+/, '') || 'unknown';
-    const customerName = posData.userName || '未知客戶';
-    
-    console.log('📝 處理後的資料:');
-    console.log('  - 客戶編號:', customerNumber);
-    console.log('  - 客戶姓名:', customerName);
-    
-    await appendToSheet('人工通知!A:J', [
-      customerNumber,
-      customerName,
-      0,
-      'yes',
-      `洗衣軟體取消通知 - ${new Date().toLocaleString('zh-TW')}`,
-      false,
-      false,
-      new Date().toISOString(),
-      posData.ReceivingItemId || posData.ReceivingItemID || '',
-      'pos-sync'
-    ]);
-    
-    console.log('✅ 已寫入人工通知');
+
     console.log('========================================');
-    
-    res.json({ success: true, message: '✅ 已寫入人工通知' });
+    res.json({ success: true, message: '已加入外送排程' });
     
   } catch (error) {
-    console.error('========================================');
-    console.error('❌ 錯誤發生!');
-    console.error('錯誤訊息:', error.message);
-    console.error('錯誤堆疊:', error.stack);
-    console.error('========================================');
+    console.log('========================================');
+    console.log('❌ 錯誤發生!');
+    console.log('錯誤訊息:', error.message);
+    console.log('錯誤堆疊:', error.stack);
+    console.log('========================================');
     
-    res.status(500).json({ 
-      success: false, 
+    res.status(500).json({
+      success: false,
       error: error.message
     });
   }
-});
-
-// 測試 API
-router.get('/status', (req, res) => {
-  res.json({ 
-    status: 'running', 
-    message: '🚚 洗衣軟體同步服務運行中',
-    spreadsheetId: process.env.SPREADSHEET_ID ? '已設定' : '未設定',
-    googleAuth: googleAuth.isAuthorized() ? '已授權' : '未授權'
-  });
 });
 
 module.exports = router;
