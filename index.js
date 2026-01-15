@@ -2287,3 +2287,19 @@ app.get('/test-token-detail', async (req, res) => {
   }
 });
 
+app.get('/test-auth-email', async (req, res) => {
+  try {
+    const googleAuth = require('./services/googleAuth');
+    const { google } = require('googleapis');
+    const auth = googleAuth.getOAuth2Client();
+    const oauth2 = google.oauth2({ version: 'v2', auth });
+    const userInfo = await oauth2.userinfo.get();
+    
+    res.json({
+      email: userInfo.data.email,
+      name: userInfo.data.name
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
