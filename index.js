@@ -2150,8 +2150,7 @@ app.listen(PORT, async () => {
 // 🧺 初始化取件追蹤
   pickupRoutes.setLineClient(client);
   setInterval(() => {
-    pickupRoutes.chec
-    kAndSendReminders();
+  pickupRoutes.checkAndSendReminders();
   }, 60 * 60 * 1000);
   console.log('✅ 取件追蹤系統已啟動');
   try {
