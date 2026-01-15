@@ -41,6 +41,7 @@ function getAuthUrl() {
     
     const authUrl = oauth2Client.generateAuthUrl({
         access_type: 'offline',
+        prompt: 'consent',  // ✅ 強制重新授權,取得完整權限
         scope: [
             'https://www.googleapis.com/auth/spreadsheets',
             'https://www.googleapis.com/auth/drive.file'
