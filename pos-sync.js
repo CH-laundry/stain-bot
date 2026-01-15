@@ -46,9 +46,22 @@ router.post('/delivery-notify', async (req, res) => {
   try {
     console.log('========================================');
     console.log('🚀 收到外送排程請求');
-    console.log('📦 請求內容:', JSON.stringify(req.body, null, 2));
+    console.log('📦 原始請求:', JSON.stringify(req.body, null, 2));
     
-    const posData = req.body;
+    let posData = req.body;
+    
+    // 🔥 如果是陣列格式,轉換成物件
+    if (Array.isArray(posData)) {
+      const tempData = {};
+      posData.forEach(item => {
+        if (item.Key && item.Value !== undefined) {
+          tempData[item.Key] = item.Value;
+        }
+      });
+      posData = tempData;
+      console.log('📦 轉換後資料:', JSON.stringify(posData, null, 2));
+    }
+    
     const customerNumber = (posData.ReceivingOrderNumber || '').replace(/^0+/, '') || 'unknown';
     const customerName = posData.userName || '未知客戶';
     
@@ -65,7 +78,7 @@ router.post('/delivery-notify', async (req, res) => {
       `洗衣軟體自動同步 - ${new Date().toLocaleString('zh-TW')}`,
       false,
       new Date().toISOString(),
-      posData.ReceivingItemId || '',
+      posData.ReceivingItemId || posData.ReceivingItemID || '',
       'pos-sync'
     ]);
     
@@ -93,9 +106,22 @@ router.post('/manual-notify', async (req, res) => {
   try {
     console.log('========================================');
     console.log('🚀 收到人工通知請求');
-    console.log('📦 請求內容:', JSON.stringify(req.body, null, 2));
+    console.log('📦 原始請求:', JSON.stringify(req.body, null, 2));
     
-    const posData = req.body;
+    let posData = req.body;
+    
+    // 🔥 如果是陣列格式,轉換成物件
+    if (Array.isArray(posData)) {
+      const tempData = {};
+      posData.forEach(item => {
+        if (item.Key && item.Value !== undefined) {
+          tempData[item.Key] = item.Value;
+        }
+      });
+      posData = tempData;
+      console.log('📦 轉換後資料:', JSON.stringify(posData, null, 2));
+    }
+    
     const customerNumber = (posData.ReceivingOrderNumber || '').replace(/^0+/, '') || 'unknown';
     const customerName = posData.userName || '未知客戶';
     
@@ -112,7 +138,7 @@ router.post('/manual-notify', async (req, res) => {
       false,
       false,
       new Date().toISOString(),
-      posData.ReceivingItemId || '',
+      posData.ReceivingItemId || posData.ReceivingItemID || '',
       'pos-sync'
     ]);
     
