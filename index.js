@@ -2266,24 +2266,3 @@ cron.schedule('0 20 * * 0', async () => {
 
 console.log('⏰ 每週報告排程已啟動（每週日 20:00）');
 
-// 🔍 測試 token 詳細資訊
-app.get('/test-token-detail', async (req, res) => {
-  try {
-    const googleAuth = require('./services/googleAuth');
-    const oauth2Client = googleAuth.getOAuth2Client();
-    
-    // 檢查 credentials
-    const creds = oauth2Client.credentials;
-    
-    res.json({
-      hasToken: !!creds,
-      hasAccessToken: !!creds?.access_token,
-      hasRefreshToken: !!creds?.refresh_token,
-      scopes: creds?.scope?.split(' ') || [],
-      expiry: creds?.expiry_date ? new Date(creds.expiry_date).toISOString() : null,
-      tokenType: creds?.token_type
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
