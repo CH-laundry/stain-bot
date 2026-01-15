@@ -49,6 +49,8 @@ if (process.env.GOOGLE_PRIVATE_KEY) {
 }
 
 const app = express();
+const cors = require('cors');
+app.use(cors());
 
 // Volume 資料夾
 const FILE_ROOT = '/data/uploads';
