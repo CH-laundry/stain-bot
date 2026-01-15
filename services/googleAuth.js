@@ -2,9 +2,9 @@ const { google } = require('googleapis');
 const fs = require('fs');
 const path = require('path');
 
-// 讀取憑證
+// 🔥 改成存到 /data (Railway Volume)
 const CREDENTIALS_PATH = path.join(__dirname, '../credentials.json');
-const TOKEN_PATH = path.join(__dirname, '../token.json');
+const TOKEN_PATH = '/data/google-token.json';  // ✅ 改這裡!
 
 // OAuth2 客戶端
 let oauth2Client = null;
@@ -26,8 +26,15 @@ function getOAuth2Client() {
     
     // 如果已有 token,載入它
     if (fs.existsSync(TOKEN_PATH)) {
-        const token = JSON.parse(fs.readFileSync(TOKEN_PATH));
-        oauth2Client.setCredentials(token);
+        try {
+            const token = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf8'));
+            oauth2Client.setCredentials(token);
+            console.log('✅ Google OAuth token 已載入');
+        } catch (error) {
+            console.error('❌ 載入 token 失敗:', error.message);
+        }
+    } else {
+        console.log('⚠️ Token 檔案不存在:', TOKEN_PATH);
     }
     
     return oauth2Client;
@@ -41,7 +48,7 @@ function getAuthUrl() {
     
     const authUrl = oauth2Client.generateAuthUrl({
         access_type: 'offline',
-        prompt: 'consent',  // ✅ 強制重新授權,取得完整權限
+        prompt: 'consent',
         scope: [
             'https://www.googleapis.com/auth/spreadsheets',
             'https://www.googleapis.com/auth/drive.file'
@@ -60,8 +67,13 @@ async function getTokenFromCode(code) {
     const { tokens } = await oauth2Client.getToken(code);
     oauth2Client.setCredentials(tokens);
     
-    // 儲存 token
-    fs.writeFileSync(TOKEN_PATH, JSON.stringify(tokens));
+    // 🔥 儲存到 /data 確保持久化
+    try {
+        fs.writeFileSync(TOKEN_PATH, JSON.stringify(tokens, null, 2), 'utf8');
+        console.log('✅ Token 已儲存到:', TOKEN_PATH);
+    } catch (error) {
+        console.error('❌ 儲存 token 失敗:', error.message);
+    }
     
     return tokens;
 }
@@ -70,7 +82,9 @@ async function getTokenFromCode(code) {
  * 檢查是否已授權
  */
 function isAuthorized() {
-    return fs.existsSync(TOKEN_PATH);
+    const exists = fs.existsSync(TOKEN_PATH);
+    console.log('🔍 檢查授權狀態:', exists ? '已授權' : '未授權');
+    return exists;
 }
 
 module.exports = {
