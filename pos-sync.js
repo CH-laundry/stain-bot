@@ -48,9 +48,9 @@ router.post('/delivery-notify', async (req, res) => {
     
     console.log('📦 轉換後資料:', JSON.stringify(data, null, 2));
     
-    // 📝 提取資料
+    // 📝 提取資料 (✅ 修正:優先使用 CustomerName)
     const customerNumber = data.CustomerNumber || data.customerNumber || 'unknown';
-    const customerName = data.userName || data.CustomerName || '未知客戶';
+    const customerName = data.CustomerName || data.userName || '未知客戶';
     const orderNo = data.ReceivingOrderID || data.orderNo || '';
     
     console.log('📝 處理後的資料:');
