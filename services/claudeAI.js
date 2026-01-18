@@ -1170,7 +1170,7 @@ async function handleTextMessage(userMessage, userId = null) {
     });
 
     const claudeReply = message.content[0].text;
-    / 檢查並過濾禁止用語
+   //  檢查並過濾禁止用語
 const forbiddenPhrases = [
   '作為AI', '作為客服', '我是AI', 'AI客服',
   '我無法', '我不能', '我沒有權限',
