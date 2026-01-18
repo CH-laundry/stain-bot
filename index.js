@@ -340,6 +340,27 @@ app.post('/webhook', async (req, res) => {
             await messageHandler.handleTextMessage(userId, userMessage, userMessage);
             continue;
           }
+
+// ========================================
+// 🔴 重要：查詢類問題不給 AI 處理（避免暴露身份）
+// ========================================
+const queryKeywords = [
+  '幫我看', '幫我查', '可以看', '可以查', 
+  '還有多少', '還有幾件', '還有什麼', '那邊還有',
+  '能幫我看', '能幫我查', '可以幫我看', '可以幫我查'
+];
+
+const isQueryQuestion = queryKeywords.some(keyword => userMessage.includes(keyword));
+
+if (isQueryQuestion) {
+  console.log('🔇 偵測到查詢問題，直接回覆（不給 AI 處理）');
+  await client.pushMessage(userId, {
+    type: 'text',
+    text: '好的 💙 營業時間會有專人幫您查詢並回覆您'
+  });
+  continue; // 跳過後續處理，不執行 Claude AI
+}
+// ========================================
           
           // ⭐ Claude AI 優先處理
 let claudeReplied = false;
