@@ -1268,9 +1268,9 @@ console.log(`💵 總成本: $${costInfo.totalCost}`);
 
     // ⭐ 儲存對話記憶
     addToHistory(userId, "user", userMessage);
-    addToHistory(userId, "assistant", claudeReply);
+    addToHistory(userId, "assistant", finalReply);
 
-    if (isPickupQuestion && userId && claudeReply) {
+    if (isPickupQuestion && userId && finalReply) {
       pickupRepliedUsers.set(userId, Date.now());
     }
 
