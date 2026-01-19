@@ -1230,7 +1230,7 @@ async function handleTextMessage(userMessage, userId = null) {
       messages: messages
     });
 
-    const claudeReply = message.content[0].text;
+   const claudeReply = message.content[0].text;
    //  檢查並過濾禁止用語
 const forbiddenPhrases = [
   '作為AI', '作為客服', '我是AI', 'AI客服',
