@@ -326,7 +326,12 @@ app.post('/api/pickup/update-status', async (req, res) => {
   try {
     const fs = require('fs');
     const path = require('path');
-    const PICKUP_FILE = path.join(__dirname, 'data', 'pickup.json');
+    const PICKUP_FILE = '/data/pickup.json';
+
+// 確保目錄存在
+if (!fs.existsSync('/data')) {
+  fs.mkdirSync('/data', { recursive: true });
+}
     
     const dataDir = path.join(__dirname, 'data');
     if (!fs.existsSync(dataDir)) {
