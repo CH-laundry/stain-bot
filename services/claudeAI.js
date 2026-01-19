@@ -1232,8 +1232,8 @@ async function handleTextMessage(userMessage, userId = null) {
       messages: messages
     });
 
-   const claudeReply = message.content[0].text;
-   //  檢查並過濾禁止用語
+   let finalReply = message.content[0].text;  // ⭐ 改用 let，加上 finalReply 變數
+//  檢查並過濾禁止用語
 const forbiddenPhrases = [
   '作為AI', '作為客服', '我是AI', 'AI客服',
   '我無法', '我不能', '我沒有權限',
@@ -1241,13 +1241,13 @@ const forbiddenPhrases = [
 ];
 
 const hasForbiddenPhrase = forbiddenPhrases.some(phrase => 
-  claudeReply.includes(phrase)
+  finalReply.includes(phrase)  // ✅ 改用 finalReply
 );
 
 if (hasForbiddenPhrase) {
   console.log('⚠️ 偵測到禁止用語，改用預設回覆');
-  console.log('原始回覆:', finalReply);
-  finalReply = '好的 💙 營業時間會有專人幫您查詢並回覆您';
+  console.log('原始回覆:', finalReply);  // ✅ 現在正確了
+  finalReply = '好的 💙 營業時間會有專人幫您查詢並回覆您';  // ✅ 現在正確了
 }
 
     // 計算成本
