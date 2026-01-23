@@ -67,6 +67,23 @@ const LAUNDRY_KNOWLEDGE = `
 
 **判斷方法（內部使用，不要說給客人聽）：**
 
+【🔴 超級重要！收件判斷嚴格規則】
+
+只有以下情況才算「收件請求」，其他一律不是：
+1. 明確說「來收」「可以來收嗎」「請來收」「幫我收」
+2. 明確說「收件」「到府收件」「收衣服」「取件」
+3. 明確說「準備好了」「可以收嗎」「能收嗎」
+
+❌ 絕對不是收件請求的例子：
+- 「我是說這裡」❌（只是說明位置）
+- 「收到」「了解」「好的」❌（只是確認語）
+- 「收費多少」「收據」「收入」❌（其他用途的「收」字）
+- 「這裡」「那裡」「放這」❌（地點說明）
+
+⚠️ 如果不確定是不是收件請求 → 回覆 UNRELATED
+
+【🔴 最重要的回覆原則】
+
 【🔴 最重要的回覆原則】
 1. ❌ 絕對不要說「根據...我判斷...」「這是在討論...」等內部思考過程
 2. ❌ 絕對不要解釋你的判斷邏輯或分析過程
@@ -1601,7 +1618,9 @@ async function handleTextMessage(userMessage, userId = null) {
     const tomorrowDayName = dayNames[tomorrowDay];
     const enhancedTimeInfo = `${timeInfo}\n明天是：${tomorrowDayName}`;
     
-    const isPickupQuestion = /來收|收件|收衣|到府收|收送|可以收嗎|來拿|取件/.test(userMessage);
+   // 🔴 超級重要：收件判斷要非常嚴格，避免誤判
+const isPickupQuestion = /(請來收|來收|可以來收|能來收|要收|收件|收衣|到府收|收送|放好了|可以收嗎|能收嗎|來拿|取件|準備好了|幫我收)/.test(userMessage) && 
+  !/(收到|收費|收據|收入|接收|簽收|驗收)/.test(userMessage); // 排除「收到」「收費」等非收件用語
     
     if (isPickupQuestion && userId && pickupRepliedUsers.has(userId)) {
       console.log('🔇 已回覆過收件問題，不重複回應');
