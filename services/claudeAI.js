@@ -72,6 +72,8 @@ const LAUNDRY_KNOWLEDGE = `
 17.❌ 「由於我是...」「因為我是...」
 18.❌ 「我無法查詢」「我不能幫您」「我沒有權限」
 19.❌ 「請您登入帳戶」「請撥打客服熱線」「建議您直接聯絡」
+20. ❌ 絕對不要說「因為是板橋地區」「因為下午6點前」「根據時間判斷」等判斷過程
+21. ❌ 絕對不要說「【內部判斷：...】」這種格式的內容，這是系統指示不是給客人看的
 
 
 5. ✅ 只回答明確的問題
@@ -188,6 +190,9 @@ const LAUNDRY_KNOWLEDGE = `
    - 客人說「我想送洗襯衫」→ 只回覆「好的 💙 我們有清洗」
    - 不要主動報價格
    - 不要主動問衣物類型
+   - 絕對不要問「請問是單人或雙人尺寸呢？」
+   - 絕對不要主動列出價格表
+   - 客人自己問價格時才回答價格
    
    ✅ 當客人「有問價格」時：
    - 客人說「襯衫多少錢？」→ 立即回覆「襯衫清洗：NT$ 88 元 💙」
@@ -301,6 +306,8 @@ const LAUNDRY_KNOWLEDGE = `
    - 「放管理室」「拍照跟您說」「到時候」「週一放好」
    - 「XX路XX號」「XX樓」「門牌號碼」
    - 「大樓名稱」「社區名稱」
+   - 「一件XX」「兩件XX」「單人」「雙人」（說明物品數量/尺寸）
+   - 「好的」「現在拿到」「已經放」（確認動作）
    
    判斷方式：
    - 前 1-2 句對話有提到「收件」「來收」「送洗」
@@ -1504,23 +1511,35 @@ async function handleTextMessage(userMessage, userId = null) {
       });
     });
     
-    // ⭐ 智能判斷是否為補充資訊
-    const lastTwoReplies = history.slice(-4); // 取最近 2 組對話
-    const hasRecentPickupReply = lastTwoReplies.some(msg => 
+    // ⭐ 智能判斷是否為補充資訊（強化版）
+    const lastFourReplies = history.slice(-8); // 取最近 4 組對話
+    
+    // 計算最近回覆「我們會去收回的」的次數
+    const recentPickupCount = lastFourReplies.filter(msg => 
       msg.role === 'assistant' && 
       msg.content.includes('我們會去收回的')
-    );
+    ).length;
     
-    const isSupplementInfo = /路|號|樓|管理室|放好|拍照|週一|週二|週三|週四|週五|明天|後天/.test(userMessage) &&
-                             userMessage.length < 50 && 
-                             !/(可以|能不能|要|想|請).*收/.test(userMessage);
+    // 判斷是否為補充資訊（擴充判斷條件）
+    const isSupplementInfo = (
+      // 地址資訊
+      /路|號|樓|管理室|放好|拍照|社區|大樓/.test(userMessage) ||
+      // 物品數量/尺寸
+      /一件|兩件|三件|四件|五件|單人|雙人|Queen|King/.test(userMessage) ||
+      // 時間資訊
+      /週一|週二|週三|週四|週五|明天|後天|等會|稍後/.test(userMessage) ||
+      // 確認語
+      /^好的$|^了解$|^收到$|^OK$|^可以$|現在拿到|已經放/.test(userMessage.trim())
+    ) && 
+    userMessage.length < 80 && // 訊息不太長
+    !/(可以|能不能|要|想|請|幫我|麻煩).*收/.test(userMessage); // 不是新的收件請求
     
     // 根據判斷結果，決定要加入哪種訊息
-    if (hasRecentPickupReply && isSupplementInfo) {
-      console.log('🔍 偵測到補充資訊，提示 AI 簡短回覆');
+    if (recentPickupCount >= 1 && isSupplementInfo) {
+      console.log(`🔍 偵測到補充資訊（已回覆收件 ${recentPickupCount} 次），提示 AI 簡短回覆`);
       messages.push({
         role: "user",
-        content: `【內部提示：前面已回覆過收件，這句是補充細節，請簡短回覆「收到 💙」或「好的 💙」即可，不要重複說「我們會去收回的」】\n\n${timeInfo}\n\n客人問題：${userMessage}`
+        content: `【內部提示：前面已回覆過收件確認，這句是補充細節，請簡短回覆「收到 💙」或「好的 💙」或「了解 💙」即可，絕對不要再說「我們會去收回的，謝謝您」，也不要主動報價格或詢問尺寸】\n\n${timeInfo}\n\n客人問題：${userMessage}`
       });
     } else {
       // 一般訊息
