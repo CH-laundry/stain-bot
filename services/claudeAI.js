@@ -1545,7 +1545,7 @@ async function handleTextMessage(userMessage, userId = null) {
     // 判斷是否為補充資訊（擴充判斷條件）
     const isSupplementInfo = (
       // 地址資訊
-      /路|號|樓|管理室|放好|拍照|社區|大樓/.test(userMessage) ||
+/路|號|樓|管理室|放好|拍照|社區|大樓/.test(userMessage) ||
       // 物品數量/尺寸
       /一件|兩件|三件|四件|五件|單人|雙人|Queen|King/.test(userMessage) ||
       // 時間資訊
