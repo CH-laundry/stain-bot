@@ -52,6 +52,21 @@ try {
 const LAUNDRY_KNOWLEDGE = `
 你是 C.H 精緻洗衣的專業客服助理。
 
+【🔴 超級重要！智能收件判斷規則】
+
+【⚠️ 週六公休優先判斷 - 絕對不能錯】
+
+**第一步：先判斷明天是不是週六**
+- 如果今天是週五 + 客人問「明天」或沒說具體時間
+  → 回覆：「因為週六固定公休，我們週日會去收回的 💙」
+  
+- 如果今天是週五 + 客人明確說「今天」
+  → 看地區 + 時間關鍵字決定
+
+**絕對不要說「明天收」如果明天是週六！**
+
+**判斷方法（內部使用，不要說給客人聽）：**
+
 【🔴 最重要的回覆原則】
 1. ❌ 絕對不要說「根據...我判斷...」「這是在討論...」等內部思考過程
 2. ❌ 絕對不要解釋你的判斷邏輯或分析過程
@@ -1491,6 +1506,13 @@ async function handleTextMessage(userMessage, userId = null) {
     const dayNames = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
     const currentDayName = dayNames[currentDay];
     const timeInfo = `當前時間：${currentDayName} ${currentHour}:${taipeiTime.getMinutes().toString().padStart(2, '0')}`;
+
+    // ⭐ 加入明天星期判斷
+    const tomorrow = new Date(taipeiTime);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowDay = tomorrow.getDay();
+    const tomorrowDayName = dayNames[tomorrowDay];
+    const enhancedTimeInfo = `${timeInfo}\n明天是：${tomorrowDayName}`;
     
     const isPickupQuestion = /來收|收件|收衣|到府收|收送|可以收嗎|來拿|取件/.test(userMessage);
     
@@ -1545,9 +1567,30 @@ async function handleTextMessage(userMessage, userId = null) {
       // 一般訊息
       messages.push({
         role: "user",
-        content: `${timeInfo}\n\n客人問題：${userMessage}`
-      });
-    }
+       content: `${enhancedTimeInfo}\n\n客人問題：${userMessage}`
+```
+
+---
+
+## ✅ 修復後的正確對話
+```
+客人：「您好我要預約收取待洗物件」（週五 20:00）
+AI：「因為週六固定公休，我們週日會去收回的 💙」
+
+客人：「一件被單一件毛毯」
+AI：「收到 💙」
+
+客人：「華江九路帝景五社區」
+AI：「收到 💙」
+
+客人：「都是單人」
+AI：「好的 💙」
+
+客人：「請問是今天來收或是明天？」
+AI：「因為週六固定公休，我們週日會去收回的 💙」
+
+客人：「好的我現在拿到1樓管理室」
+AI：「收到 💙」
     
     console.log(`📜 對話記憶: ${history.length} 則歷史訊息`);
     
@@ -1586,13 +1629,13 @@ const forbiddenPhrases = [
 ];
 
 const hasForbiddenPhrase = forbiddenPhrases.some(phrase => 
-  finalReply.includes(phrase)  // ✅ 改用 finalReply
+  finalReply.includes(phrase)
 );
 
 if (hasForbiddenPhrase) {
   console.log('⚠️ 偵測到禁止用語，改用預設回覆');
-  console.log('原始回覆:', finalReply);  // ✅ 現在正確了
-  finalReply = '好的 💙 營業時間會有專人幫您查詢並回覆您';  // ✅ 現在正確了
+  console.log('原始回覆:', finalReply);
+  finalReply = '好的 💙 營業時間會有專人幫您查詢並回覆您';
 }
 
     // 計算成本
@@ -1606,7 +1649,19 @@ console.log(`📥 Input tokens: ${inputTokens}`);
 console.log(`📤 Output tokens: ${outputTokens}`);
 console.log(`💵 總成本: $${costInfo.totalCost}`);
 
-    if (finalReply.includes('UNRELATED')) {
+    // ⭐ 最終檢查：移除所有【內部判斷】內容（新增這段）
+    if (finalReply.includes('【內部判斷') || finalReply.includes('【內部提示')) {
+      console.log('🚨 偵測到內部判斷洩漏！強制移除');
+      console.log('原始回覆:', finalReply);
+      
+      // 移除所有【內部判斷：...】區塊
+      finalReply = finalReply.replace(/【內部判斷：[\s\S]*?】/g, '').trim();
+      finalReply = finalReply.replace(/【內部提示：[\s\S]*?】/g, '').trim();
+      
+      console.log('清理後回覆:', finalReply);
+    }
+
+    if (finalReply.includes('UNRELATED')) {  // ← 原本就在這裡
       console.log('🔇 AI 判斷為無關問題');
       return null;
     }
