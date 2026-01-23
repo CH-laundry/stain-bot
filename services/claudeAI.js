@@ -1573,27 +1573,6 @@ async function handleTextMessage(userMessage, userId = null) {
     
     console.log(`📜 對話記憶: ${history.length} 則歷史訊息`);
 
-## ✅ 修復後的正確對話
-```
-客人：「您好我要預約收取待洗物件」（週五 20:00）
-AI：「因為週六固定公休，我們週日會去收回的 💙」
-
-客人：「一件被單一件毛毯」
-AI：「收到 💙」
-
-客人：「華江九路帝景五社區」
-AI：「收到 💙」
-
-客人：「都是單人」
-AI：「好的 💙」
-
-客人：「請問是今天來收或是明天？」
-AI：「因為週六固定公休，我們週日會去收回的 💙」
-
-客人：「好的我現在拿到1樓管理室」
-AI：「收到 💙」
-    
-    console.log(`📜 對話記憶: ${history.length} 則歷史訊息`);
     
     // 判斷問題複雜度
     const isComplexQuestion = (
