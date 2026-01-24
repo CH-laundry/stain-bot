@@ -1706,13 +1706,43 @@ const isPickupQuestion = /(請來收|來收|可以來收|能來收|要收|收件
       messages: messages
     });
 
-   let finalReply = message.content[0].text;  // ⭐ 改用 let，加上 finalReply 變數
-//  檢查並過濾禁止用語
+   let finalReply = message.content[0].text;  
+
+// 🔴 第一步：移除所有內部備註、判斷邏輯、思考過程
+console.log('📝 原始回覆:', finalReply);
+
+// 移除所有【...】內的內容（內部指示、備註、判斷）
+finalReply = finalReply.replace(/【[^】]*】/g, '').trim();
+
+// 移除所有「內部...」「根據...」「判斷...」開頭的句子
+finalReply = finalReply.replace(/內部[^。！？\n]*(。|！|\?|\n)/g, '').trim();
+finalReply = finalReply.replace(/根據[^。！？\n]*(。|！|\?|\n)/g, '').trim();
+finalReply = finalReply.replace(/判斷[^。！？\n]*(。|！|\?|\n)/g, '').trim();
+finalReply = finalReply.replace(/特別備註[^。！？\n]*(。|！|\?|\n)/g, '').trim();
+
+// 移除多餘的換行和空格
+finalReply = finalReply.replace(/\n\n+/g, '\n').trim();
+
+console.log('🧹 清理後回覆:', finalReply);
+
+// 🔴 第二步：檢查並過濾禁止用語
 const forbiddenPhrases = [
   '作為AI', '作為客服', '我是AI', 'AI客服',
   '我無法', '我不能', '我沒有權限',
-  '建議您直接聯絡', '建議您聯繫店舖', '請您自己查詢'
+  '建議您直接聯絡', '建議您聯繫店舖', '請您自己查詢',
+  '內部判斷', '內部提示', '內部備註', '特別備註', // 新增
+  '根據時間', '根據地區', '依照規則' // 新增
 ];
+
+const hasForbiddenPhrase = forbiddenPhrases.some(phrase => 
+  finalReply.includes(phrase)
+);
+
+if (hasForbiddenPhrase) {
+  console.log('⚠️ 偵測到禁止用語，改用預設回覆');
+  console.log('問題回覆:', finalReply);
+  finalReply = '好的 💙 營業時間會有專人幫您查詢並回覆您';
+}
 
 const hasForbiddenPhrase = forbiddenPhrases.some(phrase => 
   finalReply.includes(phrase)
@@ -1735,17 +1765,7 @@ console.log(`📥 Input tokens: ${inputTokens}`);
 console.log(`📤 Output tokens: ${outputTokens}`);
 console.log(`💵 總成本: $${costInfo.totalCost}`);
 
-    // ⭐ 最終檢查：移除所有【內部判斷】內容（新增這段）
-    if (finalReply.includes('【內部判斷') || finalReply.includes('【內部提示')) {
-      console.log('🚨 偵測到內部判斷洩漏！強制移除');
-      console.log('原始回覆:', finalReply);
-      
-      // 移除所有【內部判斷：...】區塊
-      finalReply = finalReply.replace(/【內部判斷：[\s\S]*?】/g, '').trim();
-      finalReply = finalReply.replace(/【內部提示：[\s\S]*?】/g, '').trim();
-      
-      console.log('清理後回覆:', finalReply);
-    }
+    
 
     if (finalReply.includes('UNRELATED')) {  // ← 原本就在這裡
       console.log('🔇 AI 判斷為無關問題');
