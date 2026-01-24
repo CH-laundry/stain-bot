@@ -1725,24 +1725,7 @@ finalReply = finalReply.replace(/\n\n+/g, '\n').trim();
 
 console.log('🧹 清理後回覆:', finalReply);
 
-// 🔴 第二步：檢查並過濾禁止用語
-const forbiddenPhrases = [
-  '作為AI', '作為客服', '我是AI', 'AI客服',
-  '我無法', '我不能', '我沒有權限',
-  '建議您直接聯絡', '建議您聯繫店舖', '請您自己查詢',
-  '內部判斷', '內部提示', '內部備註', '特別備註', // 新增
-  '根據時間', '根據地區', '依照規則' // 新增
-];
 
-const hasForbiddenPhrase = forbiddenPhrases.some(phrase => 
-  finalReply.includes(phrase)
-);
-
-if (hasForbiddenPhrase) {
-  console.log('⚠️ 偵測到禁止用語，改用預設回覆');
-  console.log('問題回覆:', finalReply);
-  finalReply = '好的 💙 營業時間會有專人幫您查詢並回覆您';
-}
 
 const hasForbiddenPhrase = forbiddenPhrases.some(phrase => 
   finalReply.includes(phrase)
