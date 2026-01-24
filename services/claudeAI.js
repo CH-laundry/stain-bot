@@ -1700,32 +1700,50 @@ const isPickupQuestion = /(請來收|來收|可以來收|能來收|要收|收件
     console.log(`🤖 使用模型: ${modelToUse} (${isComplexQuestion ? '複雜問題' : '簡單問題'})`);
     
     const message = await anthropic.messages.create({
-      model: modelToUse,
-      max_tokens: 1500,
-      system: LAUNDRY_KNOWLEDGE,
-      messages: messages
-    });
+  model: modelToUse,
+  max_tokens: 1500,
+  system: LAUNDRY_KNOWLEDGE,
+  messages: messages
+});
 
-   let finalReply = message.content[0].text;  
+let finalReply = message.content[0].text;  
 
-// 🔴 第一步：移除所有內部備註、判斷邏輯、思考過程
-console.log('📝 原始回覆:', finalReply);
+// 🔴 超級重要：三層過濾機制
+console.log('📝 AI 原始回覆:', finalReply);
 
-// 移除所有【...】內的內容（內部指示、備註、判斷）
+// === 第一層：移除所有內部標記 ===
 finalReply = finalReply.replace(/【[^】]*】/g, '').trim();
+finalReply = finalReply.replace(/（內部[^）]*）/g, '').trim();
+finalReply = finalReply.replace(/\[內部[^\]]*\]/g, '').trim();
 
-// 移除所有「內部...」「根據...」「判斷...」開頭的句子
-finalReply = finalReply.replace(/內部[^。！？\n]*(。|！|\?|\n)/g, '').trim();
-finalReply = finalReply.replace(/根據[^。！？\n]*(。|！|\?|\n)/g, '').trim();
-finalReply = finalReply.replace(/判斷[^。！？\n]*(。|！|\?|\n)/g, '').trim();
-finalReply = finalReply.replace(/特別備註[^。！？\n]*(。|！|\?|\n)/g, '').trim();
+// === 第二層：移除思考過程句子 ===
+const thinkingPatterns = [
+  /內部[^。！？\n]*(。|！|\?|\n|$)/g,
+  /根據[^。！？\n]*(。|！|\?|\n|$)/g,
+  /判斷[^。！？\n]*(。|！|\?|\n|$)/g,
+  /特別備註[^。！？\n]*(。|！|\?|\n|$)/g,
+  /依照規則[^。！？\n]*(。|！|\?|\n|$)/g,
+  /因為.*地區[^。！？\n]*(。|！|\?|\n|$)/g
+];
 
-// 移除多餘的換行和空格
+thinkingPatterns.forEach(pattern => {
+  finalReply = finalReply.replace(pattern, '').trim();
+});
+
+// 清理多餘空白
 finalReply = finalReply.replace(/\n\n+/g, '\n').trim();
+finalReply = finalReply.replace(/\s+/g, ' ').trim();
 
 console.log('🧹 清理後回覆:', finalReply);
 
-
+// === 第三層：檢查禁止用語 ===
+const forbiddenPhrases = [
+  '作為AI', '作為客服', '我是AI', 'AI客服',
+  '我無法', '我不能', '我沒有權限',
+  '建議您直接聯絡', '建議您聯繫店舖', '請您自己查詢',
+  '內部判斷', '內部提示', '內部備註', '特別備註',
+  '根據時間', '根據地區', '依照規則', '將依照'
+];
 
 const hasForbiddenPhrase = forbiddenPhrases.some(phrase => 
   finalReply.includes(phrase)
@@ -1733,11 +1751,11 @@ const hasForbiddenPhrase = forbiddenPhrases.some(phrase =>
 
 if (hasForbiddenPhrase) {
   console.log('⚠️ 偵測到禁止用語，改用預設回覆');
-  console.log('原始回覆:', finalReply);
+  console.log('問題回覆:', finalReply);
   finalReply = '好的 💙 營業時間會有專人幫您查詢並回覆您';
 }
 
-    // 計算成本
+// 計算成本
 const inputTokens = message.usage.input_tokens;
 const outputTokens = message.usage.output_tokens;
 const costInfo = calculateCost(modelToUse, inputTokens, outputTokens);
@@ -1748,33 +1766,32 @@ console.log(`📥 Input tokens: ${inputTokens}`);
 console.log(`📤 Output tokens: ${outputTokens}`);
 console.log(`💵 總成本: $${costInfo.totalCost}`);
 
-    
+// 檢查是否為無關問題
+if (finalReply.includes('UNRELATED')) {
+  console.log('🔇 AI 判斷為無關問題');
+  return null;
+}
 
-    if (finalReply.includes('UNRELATED')) {  // ← 原本就在這裡
-      console.log('🔇 AI 判斷為無關問題');
-      return null;
-    }
+// ⭐ 儲存對話記憶
+addToHistory(userId, "user", userMessage);
+addToHistory(userId, "assistant", finalReply);
 
-    // ⭐ 儲存對話記憶
-    addToHistory(userId, "user", userMessage);
-    addToHistory(userId, "assistant", finalReply);
+if (isPickupQuestion && userId && finalReply) {
+  pickupRepliedUsers.set(userId, Date.now());
+}
 
-    if (isPickupQuestion && userId && finalReply) {
-      pickupRepliedUsers.set(userId, Date.now());
-    }
+// ⭐ 記錄到 Google Sheets
+const emotion = detectEmotion(userMessage);
+const questionType = detectQuestionType(userMessage);
+await logToGoogleSheets(userId, userMessage, finalReply, questionType, emotion, costInfo);
 
-    // ⭐ 記錄到 Google Sheets
-    const emotion = detectEmotion(userMessage);
-    const questionType = detectQuestionType(userMessage);
-    await logToGoogleSheets(userId, userMessage, finalReply, questionType, emotion, costInfo);
+console.log('✅ AI 回覆成功');
+return finalReply;
 
-    console.log('✅ AI 回覆成功');
-    return finalReply;
-
-  } catch (error) {
-    console.error('[Claude AI] 錯誤:', error);
-    return null;
-  }
+} catch (error) {
+  console.error('[Claude AI] 錯誤:', error);
+  return null;
+}
 }
 
 // ====================================
