@@ -1728,12 +1728,17 @@ if (isOrderQuery && userId) {
       
       // 查詢衣物明細（用客戶名稱查詢）
       const result = await laundryAPI.getItemsByCustomer({
-        pageIndex: 0,
-        pageSize: 100,
-        CustomerName: customerName
-      });
-      
-      if (result.Data && result.Data.length > 0) {
+  pageIndex: 0,
+  pageSize: 100,
+  CustomerName: customerName
+});
+
+// 🔥 Debug: 印出完整的 API 回應
+console.log('🔍 API 完整回應:', JSON.stringify(result, null, 2));
+console.log('📊 result.Data 類型:', typeof result.Data);
+console.log('📊 result.Data 長度:', result.Data ? result.Data.length : 'null or undefined');
+
+if (result.Data && result.Data.length > 0) {
         // 統計衣物狀態
         let totalItems = 0;
         let completedItems = 0;
