@@ -1466,6 +1466,33 @@ app.post('/api/delivery/mark-signed-simple', async (req, res) => {
 
     await deliveryService.markSignedSimple(id, customerNumber, customerName);
 
+    await deliveryService.markSignedSimple(id, customerNumber, customerName);
+
+    // 🔥🔥🔥 自動刪除取件追蹤記錄（開始）🔥🔥🔥
+    try {
+      const PICKUP_FILE = path.join(__dirname, 'data', 'pickup.json');
+      if (fs.existsSync(PICKUP_FILE)) {
+        const pickupData = JSON.parse(fs.readFileSync(PICKUP_FILE, 'utf8'));
+        const originalLength = pickupData.orders ? pickupData.orders.length : 0;
+        
+        // 刪除符合客戶編號的取件追蹤
+        if (pickupData.orders) {
+          pickupData.orders = pickupData.orders.filter(o => o.customerNumber !== customerNumber);
+          fs.writeFileSync(PICKUP_FILE, JSON.stringify(pickupData, null, 2), 'utf8');
+          
+          const deletedCount = originalLength - pickupData.orders.length;
+          if (deletedCount > 0) {
+            console.log(`✅ 已自動刪除 ${deletedCount} 筆取件追蹤記錄（客戶編號：${customerNumber}）`);
+          }
+        }
+      }
+    } catch (pickupErr) {
+      console.error('⚠️ 刪除取件追蹤失敗（不影響簽收）:', pickupErr.message);
+    }
+    // 🔥🔥🔥 自動刪除取件追蹤記錄（結束）🔥🔥🔥
+
+    res.json({ success: true });
+
     res.json({ success: true });
 
   } catch (error) {
@@ -1510,6 +1537,34 @@ app.post('/api/delivery/mark-signed-with-payment', async (req, res) => {
       customerName,
       amount
     );
+
+    // 🔥🔥🔥 自動刪除取件追蹤記錄（開始）🔥🔥🔥
+    try {
+      const PICKUP_FILE = path.join(__dirname, 'data', 'pickup.json');
+      if (fs.existsSync(PICKUP_FILE)) {
+        const pickupData = JSON.parse(fs.readFileSync(PICKUP_FILE, 'utf8'));
+        const originalLength = pickupData.orders ? pickupData.orders.length : 0;
+        
+        // 刪除符合客戶編號的取件追蹤
+        if (pickupData.orders) {
+          pickupData.orders = pickupData.orders.filter(o => o.customerNumber !== customerNumber);
+          fs.writeFileSync(PICKUP_FILE, JSON.stringify(pickupData, null, 2), 'utf8');
+          
+          const deletedCount = originalLength - pickupData.orders.length;
+          if (deletedCount > 0) {
+            console.log(`✅ 已自動刪除 ${deletedCount} 筆取件追蹤記錄（客戶編號：${customerNumber}）`);
+          }
+        }
+      }
+    } catch (pickupErr) {
+      console.error('⚠️ 刪除取件追蹤失敗（不影響簽收）:', pickupErr.message);
+    }
+    // 🔥🔥🔥 自動刪除取件追蹤記錄（結束）🔥🔥🔥
+
+    res.json({
+      success: true,
+      orderId: result.orderId
+    });
 
     res.json({
       success: true,
