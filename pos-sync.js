@@ -1,16 +1,38 @@
 const express = require('express');
 const router = express.Router();
 const { google } = require('googleapis');
-const googleAuth = require('./services/googleAuth');
 const logger = require('./services/logger');
 
 // 🔧 試算表 ID (從環境變數讀取)
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID || '14e1uaQ_4by1W7ELflSIyxo-a48f9LelG4KdkBovyY7s';
 
+// 🔑 取得 Google Auth (改用 Service Account)
+function getGoogleAuth() {
+  try {
+    // 優先使用 Service Account
+    if (process.env.GOOGLE_SERVICE_ACCOUNT) {
+      console.log('✅ 使用 Service Account 授權');
+      const serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
+      return new google.auth.GoogleAuth({
+        credentials: serviceAccount,
+        scopes: ['https://www.googleapis.com/auth/spreadsheets']
+      });
+    }
+    
+    // 備用:使用 OAuth (舊方法)
+    console.log('⚠️ 未找到 GOOGLE_SERVICE_ACCOUNT,嘗試使用 OAuth');
+    const googleAuth = require('./services/googleAuth');
+    return googleAuth.getOAuth2Client();
+  } catch (error) {
+    console.error('❌ Google 授權失敗:', error.message);
+    throw error;
+  }
+}
+
 // 📊 寫入 Google Sheets
 async function appendToSheet(values) {
   try {
-    const auth = googleAuth.getOAuth2Client();
+    const auth = getGoogleAuth();
     const sheets = google.sheets({ version: 'v4', auth });
     
     const response = await sheets.spreadsheets.values.append({
@@ -48,7 +70,7 @@ router.post('/delivery-notify', async (req, res) => {
     
     console.log('📦 轉換後資料:', JSON.stringify(data, null, 2));
     
-    // 📝 提取資料 (✅ 修正:優先使用 CustomerName)
+    // 📝 提取資料
     const customerNumber = data.CustomerNumber || data.customerNumber || 'unknown';
     const customerName = data.CustomerName || data.userName || '未知客戶';
     const orderNo = data.ReceivingOrderID || data.orderNo || '';
