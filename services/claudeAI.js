@@ -1701,39 +1701,70 @@ function detectQuestionType(message) {
 // ====================================
 async function handleTextMessage(userMessage, userId = null) {
   try {
-    // 🔥🔥🔥 洗衣系統查詢整合（開始）🔥🔥🔥
-    // 1. 引入 API 客戶端
-    const { LaundryAPI } = require('../src/laundry-api');
-    const laundryAPI = new LaundryAPI(
-      process.env.LAUNDRY_API_BASE_URL,
-      process.env.LAUNDRY_AUTH_TOKEN
-    );
+    // 🔥 洗衣系統查詢整合
+const { LaundryAPI } = require('../src/laundry-api');
+const laundryAPI = new LaundryAPI(
+  process.env.LAUNDRY_API_BASE_URL,
+  process.env.LAUNDRY_AUTH_TOKEN
+);
+
+const isOrderQuery = /衣服.*好了|訂單.*狀態|洗好了嗎|可以拿了嗎|完工了嗎|幾件好了/.test(userMessage);
+
+if (isOrderQuery && userId) {
+  try {
+    console.log('🔍 偵測到訂單查詢問題，查詢洗衣系統...');
     
-    // 2. 檢查是否為查詢訂單的問題
-   const isOrderQuery = /衣服.*好了|衣服好了|訂單.*狀態|洗好了|可以拿了|完工了|好了嗎|洗好/.test(userMessage);
+    // 從 Google Sheets 查詢客戶電話
+    const customerData = await customerService.getCustomerByLineId(userId);
     
-    if (isOrderQuery && userId) {
-      try {
-        console.log('🔍 偵測到訂單查詢問題，查詢洗衣系統...');
-        
-        // 查詢訂單列表
-        const orders = await laundryAPI.getOrdersList({ pageIndex: 0, pageSize: 20 });
-        
-        if (orders.Data && orders.Data.length > 0) {
-          // 找到訂單，回覆客戶
-          const pendingOrders = orders.Data.filter(o => o.DeliveryType !== 'Completed');
-          
-          if (pendingOrders.length > 0) {
-            return `您目前有 ${pendingOrders.length} 件訂單處理中 💙\n完工後我們會立即通知您`;
-          } else {
-            return `您的衣物已經完工了！💙\n可以隨時來拿或安排送回`;
-          }
-        }
-      } catch (queryError) {
-        console.error('❌ 查詢訂單失敗:', queryError.message);
-        // 查詢失敗就繼續用 AI 處理
-      }
+    if (!customerData || !customerData.phone) {
+      return '請先綁定您的電話號碼，才能查詢訂單狀態 💙\n請提供您的電話號碼';
     }
+    
+    const customerPhone = customerData.phone;
+    console.log(`📞 客戶電話: ${customerPhone}`);
+    
+    // 查詢衣物明細
+    const result = await laundryAPI.getItemsByCustomer({
+      pageIndex: 0,
+      pageSize: 100,
+      Mobile: customerPhone
+    });
+    
+    if (result.Data && result.Data.length > 0) {
+      // 統計衣物狀態
+      let totalItems = 0;
+      let completedItems = 0;
+      let processingItems = 0;
+      
+      result.Data.forEach(item => {
+        const qty = item.Qty || 1;
+        totalItems += qty;
+        
+        // 判斷是否完工（有掛衣號 = LocationName 不是 null）
+        if (item.LocationName && item.LocationName !== '(null)') {
+          completedItems += qty;
+        } else {
+          processingItems += qty;
+        }
+      });
+      
+      // 生成回覆
+      if (processingItems === 0) {
+        return `您的 ${totalItems} 件衣物都已經完工了！💙\n可以隨時來拿或安排送回`;
+      } else if (completedItems === 0) {
+        return `您的 ${totalItems} 件衣物都還在清潔中 💙\n完工後我們會立即通知您`;
+      } else {
+        return `您好！目前已經完工 ${completedItems} 件，還有 ${processingItems} 件正在清潔中 💙\n完工後我們會立即通知您`;
+      }
+    } else {
+      return `目前沒有查詢到您的訂單 💙\n如有問題請聯繫我們`;
+    }
+  } catch (queryError) {
+    console.error('❌ 查詢訂單失敗:', queryError.message);
+    // 查詢失敗時繼續用 Claude AI 回答
+  }
+}
     // 🔥🔥🔥 洗衣系統查詢整合（結束）🔥🔥🔥
     console.log('📩 收到訊息:', userMessage);
     console.log('📩 訊息長度:', userMessage.length);
