@@ -1727,22 +1727,36 @@ if (isOrderQuery && userId) {
       console.log(`👤 客戶名稱: ${customerName}`);
       
       // 查詢衣物明細（用日期範圍查詢最近 7 天訂單）
-      const today = new Date();
-      const sevenDaysAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+const today = new Date();
+const sevenDaysAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-      const result = await laundryAPI.getItemsByCustomer({
-        pageIndex: 0,
-        pageSize: 200,
-        FromReceivedDate: sevenDaysAgo.toISOString().split('T')[0] + 'T00:00:00',
-        ToReceivedDate: today.toISOString().split('T')[0] + 'T23:59:59'
-      });
-      
-      if (result.Data && result.Data.length > 0) {
-        // 篩選出這個客戶的訂單
-        const customerItems = result.Data.filter(item => 
-          item.CustomerName === customerName ||
-          item.CustomerGroupName === customerName
-        );
+const result = await laundryAPI.getItemsByCustomer({
+  pageIndex: 0,
+  pageSize: 200,
+  FromReceivedDate: sevenDaysAgo.toISOString().split('T')[0] + 'T00:00:00',
+  ToReceivedDate: today.toISOString().split('T')[0] + 'T23:59:59'
+});
+
+if (result.Data && result.Data.length > 0) {
+  // 🔥 Debug: 印出所有訂單資料
+  console.log(`📊 查詢到 ${result.Data.length} 筆訂單`);
+  console.log('📋 前 5 筆訂單的客戶名稱:', JSON.stringify(
+    result.Data.slice(0, 5).map(item => ({
+      CustomerName: item.CustomerName,
+      CustomerGroupName: item.CustomerGroupName,
+      CustomerNumber: item.CustomerNumber,
+      GoodsTypeName: item.GoodsTypeName,
+      LocationName: item.LocationName
+    })), null, 2
+  ));
+  
+  // 篩選出這個客戶的訂單
+  const customerItems = result.Data.filter(item => 
+    item.CustomerName === customerName ||
+    item.CustomerGroupName === customerName
+  );
+  
+  console.log(`🔍 篩選後找到 ${customerItems.length} 筆訂單（客戶名稱：${customerName}）`);
         
         if (customerItems.length === 0) {
           console.log('❌ 查詢不到訂單，可能客戶名稱不符或沒有訂單');
