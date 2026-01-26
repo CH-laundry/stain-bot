@@ -1730,12 +1730,6 @@ if (isOrderQuery && userId) {
 const today = new Date();
 const sevenDaysAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-const result = await laundryAPI.getItemsByCustomer({
-  pageIndex: 0,
-  pageSize: 200,
-  FromReceivedDate: sevenDaysAgo.toISOString().split('T')[0] + 'T00:00:00',
-  ToReceivedDate: today.toISOString().split('T')[0] + 'T23:59:59'
-});
 
 const result = await laundryAPI.getItemsByCustomer({
   pageIndex: 0,
