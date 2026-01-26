@@ -1701,91 +1701,91 @@ function detectQuestionType(message) {
 // ====================================
 async function handleTextMessage(userMessage, userId = null) {
   try {
-    // 🔥 洗衣系統查詢整合
-const { LaundryAPI } = require('../src/laundry-api');
-const laundryAPI = new LaundryAPI(
-  process.env.LAUNDRY_API_BASE_URL,
-  process.env.LAUNDRY_AUTH_TOKEN
-);
+//     // 🔥 洗衣系統查詢整合
+// const { LaundryAPI } = require('../src/laundry-api');
+// const laundryAPI = new LaundryAPI(
+//   process.env.LAUNDRY_API_BASE_URL,
+//   process.env.LAUNDRY_AUTH_TOKEN
+// );
 
-const isOrderQuery = /衣服.*好了|訂單.*狀態|洗好了嗎|可以拿了嗎|完工了嗎|幾件好了/.test(userMessage);
+// const isOrderQuery = /衣服.*好了|訂單.*狀態|洗好了嗎|可以拿了嗎|完工了嗎|幾件好了/.test(userMessage);
 
-if (isOrderQuery && userId) {
-  try {
-    console.log('🔍 偵測到訂單查詢問題，查詢洗衣系統...');
+// if (isOrderQuery && userId) {
+//   try {
+//     console.log('🔍 偵測到訂單查詢問題，查詢洗衣系統...');
     
-    // 從客戶資料庫查詢客戶名稱
-    const customerDatabase = require('./customerDatabase');
-    const customerData = customerDatabase.getCustomer(userId);
+//     // 從客戶資料庫查詢客戶名稱
+//     const customerDatabase = require('./customerDatabase');
+//     const customerData = customerDatabase.getCustomer(userId);
     
-    if (!customerData) {
-      console.log('❌ 找不到客戶資料，跳過洗衣系統查詢');
-      // 繼續用 Claude AI 回答
-    } else {
-      // 使用客戶的真實名稱或顯示名稱
-      const customerName = customerData.realName || customerData.displayName;
-      console.log(`👤 客戶名稱: ${customerName}`);
+//     if (!customerData) {
+//       console.log('❌ 找不到客戶資料，跳過洗衣系統查詢');
+//       // 繼續用 Claude AI 回答
+//     } else {
+//       // 使用客戶的真實名稱或顯示名稱
+//       const customerName = customerData.realName || customerData.displayName;
+//       console.log(`👤 客戶名稱: ${customerName}`);
       
-      // 查詢衣物明細（查詢全部，不帶參數）
-      const result = await laundryAPI.getItemsByCustomer({
-        pageIndex: 0,
-        pageSize: 200
-      });
+//       // 查詢衣物明細（查詢全部，不帶參數）
+//       const result = await laundryAPI.getItemsByCustomer({
+//         pageIndex: 0,
+//         pageSize: 200
+//       });
       
-      console.log('🔍 API 完整回應:', JSON.stringify(result, null, 2));
+//       console.log('🔍 API 完整回應:', JSON.stringify(result, null, 2));
       
-      if (result.Data && result.Data.length > 0) {
-        console.log(`📊 查詢到 ${result.Data.length} 筆訂單`);
+//       if (result.Data && result.Data.length > 0) {
+//         console.log(`📊 查詢到 ${result.Data.length} 筆訂單`);
         
-        // 篩選出這個客戶的訂單
-        const customerItems = result.Data.filter(item => 
-          item.CustomerName === customerName ||
-          item.CustomerGroupName === customerName
-        );
+//         // 篩選出這個客戶的訂單
+//         const customerItems = result.Data.filter(item => 
+//           item.CustomerName === customerName ||
+//           item.CustomerGroupName === customerName
+//         );
         
-        console.log(`🔍 篩選後找到 ${customerItems.length} 筆訂單（客戶名稱：${customerName}）`);
+//         console.log(`🔍 篩選後找到 ${customerItems.length} 筆訂單（客戶名稱：${customerName}）`);
         
-        if (customerItems.length === 0) {
-          console.log('❌ 查詢不到訂單，可能客戶名稱不符或沒有訂單');
-          // 繼續用 Claude AI 回答
-        } else {
-          // 統計衣物狀態
-          let totalItems = 0;
-          let completedItems = 0;
-          let processingItems = 0;
+//         if (customerItems.length === 0) {
+//           console.log('❌ 查詢不到訂單，可能客戶名稱不符或沒有訂單');
+//           // 繼續用 Claude AI 回答
+//         } else {
+//           // 統計衣物狀態
+//           let totalItems = 0;
+//           let completedItems = 0;
+//           let processingItems = 0;
           
-          customerItems.forEach(item => {
-            const qty = item.Qty || 1;
-            totalItems += qty;
+//           customerItems.forEach(item => {
+//             const qty = item.Qty || 1;
+//             totalItems += qty;
             
-            // 判斷是否完工（有掛衣號 = LocationName 不是 null）
-            if (item.LocationName && item.LocationName !== '(null)') {
-              completedItems += qty;
-            } else {
-              processingItems += qty;
-            }
-          });
+//             // 判斷是否完工（有掛衣號 = LocationName 不是 null）
+//             if (item.LocationName && item.LocationName !== '(null)') {
+//               completedItems += qty;
+//             } else {
+//               processingItems += qty;
+//             }
+//           });
           
-          // 生成回覆
-          if (processingItems === 0) {
-            return `您的 ${totalItems} 件衣物都已經完工了！💙\n可以隨時來拿或安排送回`;
-          } else if (completedItems === 0) {
-            return `您的 ${totalItems} 件衣物都還在清潔中 💙\n完工後我們會立即通知您`;
-          } else {
-            return `您好！目前已經完工 ${completedItems} 件，還有 ${processingItems} 件正在清潔中 💙\n完工後我們會立即通知您`;
-          }
-        }
-      } else {
-        console.log('❌ API 查詢失敗或無資料');
-        // 繼續用 Claude AI 回答
-      }
-    }
-  } catch (queryError) {
-    console.error('❌ 查詢訂單失敗:', queryError.message);
-    // 查詢失敗時繼續用 Claude AI 回答
-  }
-}
-    // 🔥🔥🔥 洗衣系統查詢整合（結束）🔥🔥🔥
+//           // 生成回覆
+//           if (processingItems === 0) {
+//             return `您的 ${totalItems} 件衣物都已經完工了！💙\n可以隨時來拿或安排送回`;
+//           } else if (completedItems === 0) {
+//             return `您的 ${totalItems} 件衣物都還在清潔中 💙\n完工後我們會立即通知您`;
+//           } else {
+//             return `您好！目前已經完工 ${completedItems} 件，還有 ${processingItems} 件正在清潔中 💙\n完工後我們會立即通知您`;
+//           }
+//         }
+//       } else {
+//         console.log('❌ API 查詢失敗或無資料');
+//         // 繼續用 Claude AI 回答
+//       }
+//     }
+//   } catch (queryError) {
+//     console.error('❌ 查詢訂單失敗:', queryError.message);
+//     // 查詢失敗時繼續用 Claude AI 回答
+//   }
+// }
+//     // 🔥🔥🔥 洗衣系統查詢整合（結束）🔥🔥🔥
     console.log('📩 收到訊息:', userMessage);
     console.log('📩 訊息長度:', userMessage.length);
     console.log('📩 訊息前50字:', userMessage.substring(0, 50));
