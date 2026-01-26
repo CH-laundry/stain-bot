@@ -1737,6 +1737,20 @@ const result = await laundryAPI.getItemsByCustomer({
   ToReceivedDate: today.toISOString().split('T')[0] + 'T23:59:59'
 });
 
+const result = await laundryAPI.getItemsByCustomer({
+  pageIndex: 0,
+  pageSize: 200,
+  FromReceivedDate: sevenDaysAgo.toISOString().split('T')[0] + 'T00:00:00',
+  ToReceivedDate: today.toISOString().split('T')[0] + 'T23:59:59'
+});
+
+// 🔥 Debug: 印出完整的 API 回應
+console.log('🔍 API 完整回應:', JSON.stringify(result, null, 2));
+console.log('📊 result.Data 類型:', typeof result.Data);
+console.log('📊 result.Data 長度:', result.Data ? result.Data.length : 'null or undefined');
+
+if (result.Data && result.Data.length > 0) {
+      
 if (result.Data && result.Data.length > 0) {
   // 🔥 Debug: 印出所有訂單資料
   console.log(`📊 查詢到 ${result.Data.length} 筆訂單`);
