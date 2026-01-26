@@ -1701,6 +1701,40 @@ function detectQuestionType(message) {
 // ====================================
 async function handleTextMessage(userMessage, userId = null) {
   try {
+    // 🔥🔥🔥 洗衣系統查詢整合（開始）🔥🔥🔥
+    // 1. 引入 API 客戶端
+    const { LaundryAPI } = require('../src/laundry-api');
+    const laundryAPI = new LaundryAPI(
+      process.env.LAUNDRY_API_BASE_URL,
+      process.env.LAUNDRY_AUTH_TOKEN
+    );
+    
+    // 2. 檢查是否為查詢訂單的問題
+    const isOrderQuery = /衣服.*好了|訂單.*狀態|洗好了嗎|可以拿了嗎|完工了嗎/.test(userMessage);
+    
+    if (isOrderQuery && userId) {
+      try {
+        console.log('🔍 偵測到訂單查詢問題，查詢洗衣系統...');
+        
+        // 查詢訂單列表
+        const orders = await laundryAPI.getOrdersList({ pageIndex: 0, pageSize: 20 });
+        
+        if (orders.Data && orders.Data.length > 0) {
+          // 找到訂單，回覆客戶
+          const pendingOrders = orders.Data.filter(o => o.DeliveryType !== 'Completed');
+          
+          if (pendingOrders.length > 0) {
+            return `您目前有 ${pendingOrders.length} 件訂單處理中 💙\n完工後我們會立即通知您`;
+          } else {
+            return `您的衣物已經完工了！💙\n可以隨時來拿或安排送回`;
+          }
+        }
+      } catch (queryError) {
+        console.error('❌ 查詢訂單失敗:', queryError.message);
+        // 查詢失敗就繼續用 AI 處理
+      }
+    }
+    // 🔥🔥🔥 洗衣系統查詢整合（結束）🔥🔥🔥
     console.log('📩 收到訊息:', userMessage);
     console.log('📩 訊息長度:', userMessage.length);
     console.log('📩 訊息前50字:', userMessage.substring(0, 50));
