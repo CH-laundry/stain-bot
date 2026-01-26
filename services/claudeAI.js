@@ -1710,7 +1710,7 @@ async function handleTextMessage(userMessage, userId = null) {
     );
     
     // 2. 檢查是否為查詢訂單的問題
-    const isOrderQuery = /衣服.*好了|訂單.*狀態|洗好了嗎|可以拿了嗎|完工了嗎/.test(userMessage);
+   const isOrderQuery = /衣服.*好了|衣服好了|訂單.*狀態|洗好了|可以拿了|完工了|好了嗎|洗好/.test(userMessage);
     
     if (isOrderQuery && userId) {
       try {
