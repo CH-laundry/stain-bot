@@ -11,7 +11,7 @@
     "pickup:track": "node startPickupTrack.js",
     "pickup:watch": "node pickupWatcher.js",
     "pickup:auto": "node pickupWatcher.js",
-    "mcp:start": "node src/mcp/index.js"
+    "mcp:start": "node src/index.js"
   },
   "engines": {
     "node": "18.x"
