@@ -1726,14 +1726,36 @@ if (isOrderQuery && userId) {
       const customerName = customerData.realName || customerData.displayName;
       console.log(`👤 客戶名稱: ${customerName}`);
       
-      // 查詢衣物明細（用客戶名稱查詢）
-      const result = await laundryAPI.getItemsByCustomer({
-        pageIndex: 0,
-        pageSize: 100,
-        CustomerName: customerName
-      });
+      // 查詢衣物明細（用日期範圍查詢最近訂單）
+const today = new Date();
+const sevenDaysAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+const result = await laundryAPI.getItemsByCustomer({
+  pageIndex: 0,
+  pageSize: 200,
+  FromReceivedDate: sevenDaysAgo.toISOString().split('T')[0] + 'T00:00:00',
+  ToReceivedDate: today.toISOString().split('T')[0] + 'T23:59:59'
+});
       
-      if (result.Data && result.Data.length > 0) {
+     if (result.Data && result.Data.length > 0) {
+  // 🔥 篩選出這個客戶的訂單
+  const customerItems = result.Data.filter(item => 
+    item.CustomerName === customerName ||
+    item.CustomerGroupName === customerName
+  );
+  
+  if (customerItems.length === 0) {
+    console.log('❌ 查詢不到訂單，可能客戶名稱不符或沒有訂單');
+    // 繼續用 Claude AI 回答
+  } else {
+    // 統計衣物狀態
+    let totalItems = 0;
+    let completedItems = 0;
+    let processingItems = 0;
+    
+    customerItems.forEach(item => {
+
+        
         // 統計衣物狀態
         let totalItems = 0;
         let completedItems = 0;
