@@ -100,6 +100,17 @@ class LaundryAPI {
       method: 'GET'
     });
   }
+
+  /**
+   * 🔥 新增：查詢衣物明細（根據客戶電話）
+   * @param {Object} params - 查詢參數
+   */
+  async getItemsByCustomer(params = {}) {
+    return await this.request('/xiyi-yidianyuan1/ReceivingOrder/SearchItemDetailPage', {
+      method: 'POST',
+      body: JSON.stringify(params)
+    });
+  }
 }
 
 module.exports = { LaundryAPI };
