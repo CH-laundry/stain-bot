@@ -1,3 +1,6 @@
 .env
 node_modules/
-*.log
+*.logservice-account.json 
+credentials.json 
+.env 
+token.json 
