@@ -1726,49 +1726,60 @@ if (isOrderQuery && userId) {
       const customerName = customerData.realName || customerData.displayName;
       console.log(`👤 客戶名稱: ${customerName}`);
       
-      // 查詢衣物明細（用客戶名稱查詢）
-      const result = await laundryAPI.getItemsByCustomer({
+     // 查詢衣物明細（查詢全部，不帶參數）
+const result = await laundryAPI.getItemsByCustomer({
   pageIndex: 0,
-  pageSize: 100,
-  CustomerName: customerName
+  pageSize: 200
+  // 不帶任何篩選參數
 });
 
-// 🔥 Debug: 印出完整的 API 回應
 console.log('🔍 API 完整回應:', JSON.stringify(result, null, 2));
-console.log('📊 result.Data 類型:', typeof result.Data);
-console.log('📊 result.Data 長度:', result.Data ? result.Data.length : 'null or undefined');
 
 if (result.Data && result.Data.length > 0) {
-        // 統計衣物狀態
-        let totalItems = 0;
-        let completedItems = 0;
-        let processingItems = 0;
-        
-        result.Data.forEach(item => {
-          const qty = item.Qty || 1;
-          totalItems += qty;
-          
-          // 判斷是否完工（有掛衣號 = LocationName 不是 null）
-          if (item.LocationName && item.LocationName !== '(null)') {
-            completedItems += qty;
-          } else {
-            processingItems += qty;
-          }
-        });
-        
-        // 生成回覆
-        if (processingItems === 0) {
-          return `您的 ${totalItems} 件衣物都已經完工了！💙\n可以隨時來拿或安排送回`;
-        } else if (completedItems === 0) {
-          return `您的 ${totalItems} 件衣物都還在清潔中 💙\n完工後我們會立即通知您`;
-        } else {
-          return `您好！目前已經完工 ${completedItems} 件，還有 ${processingItems} 件正在清潔中 💙\n完工後我們會立即通知您`;
-        }
+  console.log(`📊 查詢到 ${result.Data.length} 筆訂單`);
+  
+  // 篩選出這個客戶的訂單
+  const customerItems = result.Data.filter(item => 
+    item.CustomerName === customerName ||
+    item.CustomerGroupName === customerName
+  );
+  
+  console.log(`🔍 篩選後找到 ${customerItems.length} 筆訂單（客戶名稱：${customerName}）`);
+  
+  if (customerItems.length === 0) {
+    console.log('❌ 查詢不到訂單，可能客戶名稱不符或沒有訂單');
+    // 繼續用 Claude AI 回答
+  } else {
+    // 統計衣物狀態
+    let totalItems = 0;
+    let completedItems = 0;
+    let processingItems = 0;
+    
+    customerItems.forEach(item => {
+      const qty = item.Qty || 1;
+      totalItems += qty;
+      
+      // 判斷是否完工（有掛衣號 = LocationName 不是 null）
+      if (item.LocationName && item.LocationName !== '(null)') {
+        completedItems += qty;
       } else {
-        console.log('❌ 查詢不到訂單，可能客戶名稱不符或沒有訂單');
-        // 繼續用 Claude AI 回答
+        processingItems += qty;
       }
+    });
+    
+    // 生成回覆
+    if (processingItems === 0) {
+      return `您的 ${totalItems} 件衣物都已經完工了！💙\n可以隨時來拿或安排送回`;
+    } else if (completedItems === 0) {
+      return `您的 ${totalItems} 件衣物都還在清潔中 💙\n完工後我們會立即通知您`;
+    } else {
+      return `您好！目前已經完工 ${completedItems} 件，還有 ${processingItems} 件正在清潔中 💙\n完工後我們會立即通知您`;
     }
+  }
+} else {
+  console.log('❌ API 查詢失敗或無資料');
+  // 繼續用 Claude AI 回答
+}
   } catch (queryError) {
     console.error('❌ 查詢訂單失敗:', queryError.message);
     // 查詢失敗時繼續用 Claude AI 回答
