@@ -1,9 +1,11 @@
-import fetch from 'node-fetch';
+const fetch = require('node-fetch');
+const https = require('https');
+const http = require('http');
 
 /**
  * C.H 洗衣系統 API 客戶端
  */
-export class LaundryAPI {
+class LaundryAPI {
   constructor(baseUrl, authToken) {
     this.baseUrl = baseUrl;
     this.authToken = authToken;
@@ -20,11 +22,29 @@ export class LaundryAPI {
       ...options.headers
     };
 
+    // 建立 agent（處理 HTTP/HTTPS 連線）
+    const agent = url.startsWith('https') 
+      ? new https.Agent({ 
+          rejectUnauthorized: false,
+          keepAlive: true,
+          timeout: 30000
+        })
+      : new http.Agent({ 
+          keepAlive: true,
+          timeout: 30000
+        });
+
     try {
+      console.log(`📡 正在請求: ${url}`);
+      
       const response = await fetch(url, {
         ...options,
-        headers
+        headers,
+        agent,
+        timeout: 30000
       });
+
+      console.log(`✅ 回應狀態: ${response.status} ${response.statusText}`);
 
       if (!response.ok) {
         throw new Error(`API Error: ${response.status} ${response.statusText}`);
@@ -32,7 +52,7 @@ export class LaundryAPI {
 
       return await response.json();
     } catch (error) {
-      console.error(`Request failed for ${endpoint}:`, error);
+      console.error(`❌ Request failed for ${endpoint}:`, error.message);
       throw error;
     }
   }
@@ -42,7 +62,7 @@ export class LaundryAPI {
    * @param {Object} params - 查詢參數（可選）
    */
   async getOrdersList(params = {}) {
-    return await this.request('/ayi-yidanyuan1/ReceivingOrder/SearchPage', {
+    return await this.request('/xiyi-yidianyuan1/ReceivingOrder/SearchPage', {
       method: 'POST',
       body: JSON.stringify(params)
     });
@@ -53,7 +73,7 @@ export class LaundryAPI {
    * @param {string} orderId - 訂單 ID
    */
   async getOrderDetail(orderId) {
-    return await this.request(`/ayi-yidanyuan1/ReceivingOrder/GetData/${orderId}`, {
+    return await this.request(`/xiyi-yidianyuan1/ReceivingOrder/GetData/${orderId}`, {
       method: 'GET'
     });
   }
@@ -63,7 +83,7 @@ export class LaundryAPI {
    * @param {string} deliverOrderId - 配送訂單 ID
    */
   async updateDeliveryStatus(deliverOrderId) {
-    return await this.request('/ayi-yidanyuan1/DeliverOrder/UpdateDeliverState', {
+    return await this.request('/xiyi-yidianyuan1/DeliverOrder/UpdateDeliverState', {
       method: 'POST',
       body: JSON.stringify({
         DeliverOrderID: deliverOrderId
@@ -76,8 +96,10 @@ export class LaundryAPI {
    * @param {string} deliverOrderId - 配送訂單 ID
    */
   async getDeliveryInfo(deliverOrderId) {
-    return await this.request(`/ayi-yidanyuan1/DeliverOrder/GetData/${deliverOrderId}`, {
+    return await this.request(`/xiyi-yidianyuan1/DeliverOrder/GetData/${deliverOrderId}`, {
       method: 'GET'
     });
   }
 }
+
+module.exports = { LaundryAPI };
