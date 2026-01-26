@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>C.H 精緻洗衣｜AI 小鎮（聊天版）</title>
+  <link rel="icon" href="./favicon.ico" />
+  <style>
+    :root{--bg:#0b1220;--panel:#0f172a;--muted:#94a3b8;--text:#e2e8f0;--brand:#7c3aed;--brand-2:#22d3ee;--ok:#10b981}
+    *{box-sizing:border-box} html,body{height:100%}
+    body{margin:0;font:16px/1.6 system-ui,"Segoe UI","Noto Sans TC",Arial,sans-serif;color:var(--text);
+      background:linear-gradient(120deg,#0b1220 0%,#0c1324 50%,#0e162b 100%)}
+    .topbar{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid #192033;background:#0b1220c0;backdrop-filter:blur(8px);position:sticky;top:0;z-index:999}
+    .brand{font-weight:700;letter-spacing:.5px}
+    .nav .nav-btn{margin-left:8px;background:#141c2f;color:var(--text);border:1px solid #203051;padding:6px 10px;border-radius:10px;cursor:pointer}
+    .nav .nav-btn:hover{border-color:var(--brand)}
+    .layout{display:grid;grid-template-columns:280px 1fr;gap:16px;padding:16px;max-width:1200px;margin:0 auto}
+    .sidebar{background:var(--panel);border:1px solid #223051;border-radius:18px;padding:14px}
+    .sidebar h2{margin:0 0 8px 0;font-size:14px;color:var(--muted)}
+    .agent-list{display:flex;flex-direction:column;gap:8px;min-height:60vh}
+    .agent{display:flex;gap:10px;padding:10px;border:1px solid #253455;border-radius:12px;cursor:pointer;background:#0f1831;align-items:center}
+    .agent:hover{border-color:var(--brand)}
+    .agent.active{border-color:var(--brand-2);box-shadow:0 0 0 2px #22d3ee33 inset}
+    .avatar{width:38px;height:38px;border-radius:50%;background:#1b2450;display:grid;place-items:center;font-weight:700}
+    .chat{background:var(--panel);border:1px solid #223051;border-radius:18px;display:flex;flex-direction:column;min-height:70vh}
+    .chat-title{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid #223051}
+    .title{font-weight:700}.subtitle{color:var(--muted);font-size:13px}
+    .status-dot{width:10px;height:10px;border-radius:50%;background:var(--ok);box-shadow:0 0 10px #10b98166}
+    .quick-actions{display:flex;gap:8px;padding:10px 16px;border-bottom:1px solid #223051;flex-wrap:wrap}
+    .qa{background:#162144;color:var(--text);border:1px solid #223051;border-radius:10px;padding:6px 10px;cursor:pointer}
+    .qa:hover{border-color:var(--brand)}
+    .chat-log{padding:16px;overflow:auto;flex:1}
+    .msg{display:flex;gap:10px;margin:10px 0}
+    .msg .bubble{max-width:70%;padding:10px 12px;border-radius:14px;border:1px solid #2a3a61;background:#0f1831;white-space:pre-wrap}
+    .msg.me{flex-direction:row-reverse}.msg.me .bubble{background:#132147;border-color:#32446d}
+    .composer{display:flex;gap:8px;border-top:1px solid #223051;padding:12px 16px}
+    .composer input{flex:1;background:#0e1630;border:1px solid #213155;color:var(--text);padding:10px 12px;border-radius:12px;outline:none}
+    .composer button{background:linear-gradient(45deg,var(--brand),var(--brand-2));color:#fff;border:none;padding:10px 16px;border-radius:12px;cursor:pointer;font-weight:700}
+    .footer{padding:12px 16px;color:var(--muted);text-align:center}
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">C.H 精緻洗衣 · AI 小鎮</div>
+    <nav class="nav">
+      <button class="nav-btn" data-action="entry">入口頁</button>
+      <button class="nav-btn" data-action="progress">查詢進度</button>
+      <button class="nav-btn" data-action="pickup">預約收件</button>
+      <button class="nav-btn" data-action="price">價目與優惠</button>
+    </nav>
+  </header>
+
+  <main class="layout">
+    <aside class="sidebar">
+      <h2>角色</h2>
+      <div class="agent-list" id="agentList"></div>
+    </aside>
+
+    <section class="chat">
+      <div class="chat-title">
+        <div>
+          <div id="agentTitle" class="title">請選擇左側角色</div>
+          <div id="agentDesc" class="subtitle">點選任一角色開始互動</div>
+        </div>
+        <div class="status-dot" id="statusDot" title="ready"></div>
+      </div>
+
+      <div class="quick-actions">
+        <button class="qa" data-qa="bag">包包清潔</button>
+        <button class="qa" data-qa="shoe">洗鞋服務</button>
+        <button class="qa" data-qa="curtain">窗簾清洗</button>
+        <button class="qa" data-qa="stain">污漬處理</button>
+        <button class="qa" data-qa="delivery">到府收送</button>
+      </div>
+
+      <div class="chat-log" id="chatLog"></div>
+
+      <form id="composer" class="composer">
+        <input id="userInput" type="text" placeholder="輸入想問的內容… 例如：帆布包發霉怎麼處理？" />
+        <button type="submit">送出</button>
+      </form>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <small>© C.H 精緻洗衣 · 板橋｜免費收送：板橋 / 中和 / 永和 / 新莊 / 土城 / 萬華 / 雙和</small>
+  </footer>
+
+  <script>
+    if (window.__AITOWN_BOOTED__) {
+      console.warn('[AI-TOWN] already booted, skip re-init');
+    } else {
+      window.__AITOWN_BOOTED__ = true;
+
+      const AITOWN = {};
+      AITOWN.AGENTS = [
+        { id:'cs', name:'小C.H客服', emoji:'💬', desc:'一般諮詢、價目與優惠、到府收送', rules:[
+          { test:/(價目|價格|多少|費用|報價|儲值|優惠)/, reply:'我們有完整價目與儲值優惠，可先告訴我要處理的品項（衣物／鞋／包／窗簾／地毯），我幫您評估最省方案 😊' },
+          { test:/(到府|收件|取件|收衣|免費收送|預約)/, reply:'免費收送區域：板橋 / 中和 / 永和 / 新莊 / 土城 / 萬華 / 雙和。請留言完整地址與可收件時間，我安排司機與您連絡。' },
+          { test:/(進度|洗好|好了嗎|完成|查詢)/, reply:'您可點右上角「查詢進度」，或留言姓名 + 電話末三碼，我幫您內部查詢。' },
+        ]},
+        { id:'cleaner', name:'清潔師傅', emoji:'🧼', desc:'衣物/鞋/包 汙漬處理評估', rules:[
+          { test:/(發霉|霉|黴|黴斑)/, reply:'發霉會先乾刷＋局部測試，布面與皮革處理不同。請盡量拍照光線足、近景遠景各一張，上傳我評估風險與成功率。' },
+          { test:/(污|汙|污漬|汙漬|黃斑|泛黃|染色|退色|變色)/, reply:'先告知材質（棉/麻/絲/羊毛/皮革/帆布/麂皮…）與色塊大小，若曾自行處理（檸檬酸/小蘇打/去漬油）也請說明，避免二次反應。' },
+          { test:/(鞋|球鞋|運動鞋|皮鞋|靴|涼鞋)/, reply:'鞋類會依材質（布面/皮革/麂皮）調整流程：局部測試→深層清潔→定型/上油保養（皮革）。黃斑/發霉多可改善。' },
+          { test:/(包|名牌|皮革|帆布|麂皮)/, reply:'包包會重視版型與塗層保護；皮革以保養為主、布面會加強清潔與定型。嚴重掉色會先告知風險。' },
+        ]},
+        { id:'iron', name:'熨燙師傅', emoji:'👔', desc:'定型、整燙與尺寸穩定', rules:[
+          { test:/(熨燙|整燙|定型|皺|皺褶)/, reply:'我們會依布性設定溫度與蒸氣，避免亮印；完成後版型更俐落，襯衫領袖也會整齊服貼。' },
+        ]},
+        { id:'runner', name:'收送人員', emoji:'🚚', desc:'到府收送路線與時段', rules:[
+          { test:/(幾點|何時|時段|今天|明天)/, reply:'收送大致分 10:00–13:00 / 14:00–18:30 兩段，確切會依路線排程。留地址 + 可收件時間，我回覆可行時段。' },
+        ]},
+        { id:'manager', name:'店長', emoji:'🏪', desc:'例外狀況、客訴處理、特殊材質', rules:[
+          { test:/(急件|加急|趕)/, reply:'可以協助急件，但需視材質與件數評估可行性。請告訴我件數與期望時間，我幫您安排。' },
+          { test:/(特殊|婚紗|西裝|大衣|羽絨|絲|羊毛)/, reply:'這些材質會特別評估縮水與掉色風險；我們會先做不顯眼處測試，確認後才進行。' },
+        ]},
+      ];
+      AITOWN.QUICK = {
+        bag:'我想詢問包包清潔，帆布發霉能處理嗎？',
+        shoe:'運動鞋泛黃可以改善嗎？大概需要多久？',
+        curtain:'窗簾可否清洗？會不會縮水？',
+        stain:'衣服有咖啡漬和汗漬，如何處理比較安全？',
+        delivery:'板橋區可以到府收件嗎？今天或明天有時段嗎？'
+      };
+
+      (function(){
+        const $=s=>document.querySelector(s), $$=s=>Array.from(document.querySelectorAll(s));
+        const chatLog=$('#chatLog'), agentList=$('#agentList'),
+              agentTitle=$('#agentTitle'), agentDesc=$('#agentDesc'),
+              statusDot=$('#statusDot'), composer=$('#composer'), userInput=$('#userInput');
+
+        let currentAgent=null;
+        const greeted = new Set();
+        const historyByAgent = new Map(); // id -> [{who:'me'|'bot', text:string}]
+
+        function saveHistory(id){
+          try{ sessionStorage.setItem('aitown.hist.'+id, JSON.stringify(historyByAgent.get(id)||[])); }catch{}
+        }
+        function loadHistory(id){
+          try{ const raw=sessionStorage.getItem('aitown.hist.'+id); if(raw){ historyByAgent.set(id, JSON.parse(raw)||[] ); } }catch{}
+        }
+
+        function renderAgents(){
+          agentList.innerHTML='';
+          AITOWN.AGENTS.forEach(a=>{
+            const item=document.createElement('div');
+            item.className='agent'; item.dataset.agent=a.id;
+            item.innerHTML=`<div class="avatar">${a.emoji}</div>
+              <div><div class="title">${a.name}</div><div class="subtitle">${a.desc}</div></div>`;
+            item.addEventListener('click',()=>selectAgent(a.id));
+            agentList.appendChild(item);
+          });
+        }
+
+        function renderChat(id){
+          chatLog.innerHTML='';
+          const hist = historyByAgent.get(id)||[];
+          hist.forEach(m=>append(m.who, m.text, false));
+          chatLog.scrollTop=chatLog.scrollHeight;
+        }
+
+        function selectAgent(id){
+          // 保存舊聊歷
+          if(currentAgent){ saveHistory(currentAgent.id); }
+
+          currentAgent=AITOWN.AGENTS.find(x=>x.id===id);
+          $$('.agent').forEach(el=>el.classList.toggle('active',el.dataset.agent===id));
+          agentTitle.textContent=currentAgent.name;
+          agentDesc.textContent=currentAgent.desc;
+
+          // 載入並渲染該角色歷史
+          loadHistory(id);
+          renderChat(id);
+
+          if (!greeted.has(id)) {
+            pushBot(`您好，我是「${currentAgent.name}」。請描述您的需求或上傳照片，我先幫您評估～`);
+            greeted.add(id);
+          }
+        }
+
+        function pushUser(t){append('me',t)}
+        function pushBot(t){append('bot',t)}
+        function append(who,t,persist=true){
+          const w=document.createElement('div');
+          w.className='msg'+(who==='me'?' me':'');
+          w.innerHTML=`<div class="bubble">${escape(t)}</div>`;
+          chatLog.appendChild(w); chatLog.scrollTop=chatLog.scrollHeight;
+          if(persist && currentAgent){
+            const arr = historyByAgent.get(currentAgent.id)||[];
+            arr.push({who,text:String(t)}); historyByAgent.set(currentAgent.id,arr);
+            saveHistory(currentAgent.id);
+          }
+        }
+        function escape(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+
+        function replyByRules(text){
+          if(!currentAgent) return '請先在左側選擇一位角色（例如：小C.H客服、清潔師傅）。';
+          for(const r of (currentAgent.rules||[])) if(r.test.test(text)) return r.reply;
+          const maybe=/(洗|清洗|清潔|去污|污|汙|發霉|泛黃|掉色|衣|鞋|包|窗簾|地毯|到府|收件|取件)/;
+          if(!maybe.test(text)) return '我目前只回覆與洗衣、洗鞋、洗包、到府收送相關的問題喔 🙏';
+          return '請提供「品項 + 材質 + 問題描述（例如：帆布包發霉、皮鞋有黃斑）」與是否急件，我會依情況給建議。';
+        }
+
+        async function replyViaAPI(text){
+          // 若未接後端，先使用本地規則
+          return replyByRules(text);
+        }
+
+        composer.addEventListener('submit',async e=>{
+          e.preventDefault();
+          const text=userInput.value.trim(); if(!text) return;
+          pushUser(text); userInput.value=''; setStatus('thinking');
+          try{ const r=await replyViaAPI(text); pushBot(r);}catch{ pushBot('服務暫時忙線中，請稍後再試 🙏');}
+          setStatus('ready');
+        });
+
+        $$('.qa').forEach(btn=>{
+          btn.addEventListener('click',()=>{
+            const t=(AITOWN.QUICK||{})[btn.dataset.qa]||'';
+            if(t){ userInput.value=t; composer.requestSubmit(); }
+          });
+        });
+
+        $$('.nav-btn').forEach(btn=>{
+          btn.addEventListener('click',()=>{
+            const act=btn.dataset.action;
+            if(act==='entry'){ location.href='index.html'; }
+            else if(act==='progress'){ window.open('https://liff.line.me/2004612704-JnzA1qN6','_blank'); }
+            else if(act==='pickup'){ pushBot('請輸入完整地址與可收件時間（例如：新北市板橋區華江八路6號，明天 14:00–16:00）。'); }
+            else if(act==='price'){ pushBot('價目與儲值優惠：衣物 / 鞋 / 包 / 窗簾 / 地毯… 請告訴我品項，我幫您用最省方案。'); }
+          });
+        });
+
+        function setStatus(s){ statusDot.style.background=(s==='thinking')?'#f59e0b':'#10b981'; statusDot.title=s; }
+
+        renderAgents();
+        // 預設選中客服，避免「不知從何開始」的怪感
+        selectAgent('cs');
+        console.log('[AI-TOWN] ready');
+      })();
+    }
+  </script>
+</body>
+</html>
+
+

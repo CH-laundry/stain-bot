@@ -1,0 +1,74 @@
+[2025/10/7 下午1:25:33] 伺服器正在運行，端口：3000
+[2025/10/7 下午1:26:07] ❌ 錯誤 - 生成授權 URL 失敗: ENOENT: no such file or directory, open 'C:\Users\lin\stain-bot\credentials.json'
+[2025/10/7 下午1:26:07] 堆疊: Error: ENOENT: no such file or directory, open 'C:\Users\lin\stain-bot\credentials.json'
+    at Object.openSync (node:fs:561:18)
+    at Object.readFileSync (node:fs:445:35)
+    at getOAuth2Client (C:\Users\lin\stain-bot\services\googleAuth.js:18:39)
+    at Object.getAuthUrl (C:\Users\lin\stain-bot\services\googleAuth.js:40:26)
+    at C:\Users\lin\stain-bot\index.js:70:36
+    at Layer.handle [as handle_request] (C:\Users\lin\stain-bot\node_modules\express\lib\router\layer.js:95:5)
+    at next (C:\Users\lin\stain-bot\node_modules\express\lib\router\route.js:149:13)
+    at Route.dispatch (C:\Users\lin\stain-bot\node_modules\express\lib\router\route.js:119:3)
+    at Layer.handle [as handle_request] (C:\Users\lin\stain-bot\node_modules\express\lib\router\layer.js:95:5)
+    at C:\Users\lin\stain-bot\node_modules\express\lib\router\index.js:284:15
+[2025/10/7 下午1:32:35] 伺服器正在運行，端口：3000
+[2025/10/7 下午3:10:26] ❌ 錯誤 - 處理授權碼失敗: invalid_client
+[2025/10/7 下午3:10:26] 堆疊: Error: invalid_client
+    at Gaxios._request (C:\Users\lin\stain-bot\node_modules\gaxios\build\src\gaxios.js:142:23)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async OAuth2Client.getTokenAsync (C:\Users\lin\stain-bot\node_modules\google-auth-library\build\src\auth\oauth2client.js:158:21)
+    at async Object.getTokenFromCode (C:\Users\lin\stain-bot\services\googleAuth.js:59:24)
+    at async C:\Users\lin\stain-bot\index.js:88:9
+[2025/10/7 下午3:10:45] ❌ 錯誤 - 處理授權碼失敗: invalid_client
+[2025/10/7 下午3:10:45] 堆疊: Error: invalid_client
+    at Gaxios._request (C:\Users\lin\stain-bot\node_modules\gaxios\build\src\gaxios.js:142:23)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async OAuth2Client.getTokenAsync (C:\Users\lin\stain-bot\node_modules\google-auth-library\build\src\auth\oauth2client.js:158:21)
+    at async Object.getTokenFromCode (C:\Users\lin\stain-bot\services\googleAuth.js:59:24)
+    at async C:\Users\lin\stain-bot\index.js:88:9
+[2025/10/7 下午3:10:52] ❌ 錯誤 - 處理授權碼失敗: invalid_client
+[2025/10/7 下午3:10:52] 堆疊: Error: invalid_client
+    at Gaxios._request (C:\Users\lin\stain-bot\node_modules\gaxios\build\src\gaxios.js:142:23)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async OAuth2Client.getTokenAsync (C:\Users\lin\stain-bot\node_modules\google-auth-library\build\src\auth\oauth2client.js:158:21)
+    at async Object.getTokenFromCode (C:\Users\lin\stain-bot\services\googleAuth.js:59:24)
+    at async C:\Users\lin\stain-bot\index.js:88:9
+[2025/10/7 下午3:11:26] ❌ 錯誤 - 處理授權碼失敗: invalid_client
+[2025/10/7 下午3:11:26] 堆疊: Error: invalid_client
+    at Gaxios._request (C:\Users\lin\stain-bot\node_modules\gaxios\build\src\gaxios.js:142:23)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async OAuth2Client.getTokenAsync (C:\Users\lin\stain-bot\node_modules\google-auth-library\build\src\auth\oauth2client.js:158:21)
+    at async Object.getTokenFromCode (C:\Users\lin\stain-bot\services\googleAuth.js:59:24)
+    at async C:\Users\lin\stain-bot\index.js:88:9
+[2025/10/7 下午3:33:24] 伺服器正在運行，端口：3000
+[2025/10/7 下午3:40:16] 伺服器正在運行，端口：3000
+[2025/10/7 下午3:41:00] ❌ 錯誤 - 處理授權碼失敗: invalid_client
+[2025/10/7 下午3:41:00] 堆疊: Error: invalid_client
+    at Gaxios._request (C:\Users\lin\stain-bot\node_modules\gaxios\build\src\gaxios.js:142:23)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async OAuth2Client.getTokenAsync (C:\Users\lin\stain-bot\node_modules\google-auth-library\build\src\auth\oauth2client.js:158:21)
+    at async Object.getTokenFromCode (C:\Users\lin\stain-bot\services\googleAuth.js:59:24)
+    at async C:\Users\lin\stain-bot\index.js:88:9
+[2025/10/7 下午3:42:02] ❌ 錯誤 - 處理授權碼失敗: invalid_client
+[2025/10/7 下午3:42:02] 堆疊: Error: invalid_client
+    at Gaxios._request (C:\Users\lin\stain-bot\node_modules\gaxios\build\src\gaxios.js:142:23)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async OAuth2Client.getTokenAsync (C:\Users\lin\stain-bot\node_modules\google-auth-library\build\src\auth\oauth2client.js:158:21)
+    at async Object.getTokenFromCode (C:\Users\lin\stain-bot\services\googleAuth.js:59:24)
+    at async C:\Users\lin\stain-bot\index.js:88:9
+[2025/10/7 下午4:14:51] 伺服器正在運行，端口：3000
+[2025/10/7 下午4:17:43] ✅ Google OAuth 授權成功
+[2025/10/7 下午4:26:17] 伺服器正在運行，端口：3000
+[2025/10/7 下午4:27:36] 伺服器正在運行，端口：3000
+[2025/10/7 下午4:31:12] 伺服器正在運行，端口：3000
+[2025/10/7 下午4:31:29] ❌ 錯誤 - Google Sheets 測試失敗: Unable to parse range: Sheet1!A1
+[2025/10/7 下午4:31:29] 堆疊: Error: Unable to parse range: Sheet1!A1
+    at Gaxios._request (C:\Users\lin\stain-bot\node_modules\gaxios\build\src\gaxios.js:142:23)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async OAuth2Client.requestAsync (C:\Users\lin\stain-bot\node_modules\google-auth-library\build\src\auth\oauth2client.js:429:18)
+    at async C:\Users\lin\stain-bot\index.js:160:9
+[2025/10/7 下午4:31:32] ✅ Google OAuth 授權成功
+[2025/10/7 下午4:31:45] ✅ Google OAuth 授權成功
+[2025/10/7 下午4:33:10] ✅ Google OAuth 授權成功
+[2025/10/7 下午4:58:09] 伺服器正在運行，端口：3000
+[2025/10/7 下午4:58:20] ✅ Google Sheets OAuth 測試成功
