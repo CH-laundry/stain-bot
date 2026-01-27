@@ -159,4 +159,123 @@ router.post('/delivery-notify', async (req, res) => {
   }
 });
 
+// 🔥🔥🔥 新增：接收洗衣軟體的「已簽收」通知
+router.post('/signed-notify', async (req, res) => {
+  console.log('========================================');
+  console.log('✅ 收到已簽收通知');
+  console.log('📦 原始請求:', JSON.stringify(req.body, null, 2));
+  
+  try {
+    // 🔄 轉換 Key-Value 格式
+    const data = {};
+    if (Array.isArray(req.body)) {
+      req.body.forEach(item => {
+        if (item.Key && item.Value !== undefined) {
+          data[item.Key] = item.Value;
+        }
+      });
+    } else {
+      Object.assign(data, req.body);
+    }
+    
+    console.log('📦 轉換後資料:', JSON.stringify(data, null, 2));
+    
+    // 📝 提取資料
+    const customerNumber = data.CustomerNumber || data.customerNumber;
+    const orderNo = data.ReceivingOrderID || data.orderNo;
+    
+    console.log('📝 處理後的資料:');
+    console.log('  - 客戶編號:', customerNumber);
+    console.log('  - 訂單編號:', orderNo);
+    
+    if (!customerNumber && !orderNo) {
+      throw new Error('缺少客戶編號或訂單編號');
+    }
+    
+    // 🔥 更新 delivery.json 為已簽收
+    const fs = require('fs');
+    const path = require('path');
+    const DELIVERY_FILE = path.join(__dirname, 'data', 'delivery.json');
+    
+    let deliveryData = { orders: [] };
+    if (fs.existsSync(DELIVERY_FILE)) {
+      deliveryData = JSON.parse(fs.readFileSync(DELIVERY_FILE, 'utf8'));
+    }
+    
+    // 尋找訂單
+    let order = null;
+    if (orderNo) {
+      order = deliveryData.orders.find(o => o.orderNo === orderNo);
+    }
+    if (!order && customerNumber) {
+      // 找最新的未簽收訂單
+      order = deliveryData.orders
+        .filter(o => o.customerNumber === customerNumber && !o.signed)
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
+    }
+    
+    if (!order) {
+      console.log('⚠️ 找不到訂單，可能尚未建立外送紀錄');
+      return res.json({ 
+        success: false, 
+        error: '找不到訂單（請確認已先建立外送紀錄）' 
+      });
+    }
+    
+    // ✅ 更新為已簽收
+    order.signed = true;
+    order.signedAt = new Date().toISOString();
+    order.signedBy = 'pos-sync-auto';
+    order.status = 'Completed';
+    
+    // 💾 儲存
+    fs.writeFileSync(DELIVERY_FILE, JSON.stringify(deliveryData, null, 2), 'utf8');
+    
+    console.log('✅ 已更新為已簽收:', order.customerNumber, order.customerName);
+    
+    // 🔥 自動刪除取件追蹤記錄
+    try {
+      const PICKUP_FILE = path.join(__dirname, 'data', 'pickup.json');
+      if (fs.existsSync(PICKUP_FILE)) {
+        const pickupData = JSON.parse(fs.readFileSync(PICKUP_FILE, 'utf8'));
+        if (pickupData.orders) {
+          const originalLength = pickupData.orders.length;
+          pickupData.orders = pickupData.orders.filter(o => o.customerNumber !== order.customerNumber);
+          fs.writeFileSync(PICKUP_FILE, JSON.stringify(pickupData, null, 2), 'utf8');
+          
+          const deletedCount = originalLength - pickupData.orders.length;
+          if (deletedCount > 0) {
+            console.log(`✅ 已自動刪除 ${deletedCount} 筆取件追蹤記錄`);
+          }
+        }
+      }
+    } catch (pickupErr) {
+      console.error('⚠️ 刪除取件追蹤失敗（不影響簽收）:', pickupErr.message);
+    }
+    
+    console.log('========================================');
+    res.json({ 
+      success: true, 
+      message: '已更新為已簽收',
+      order: {
+        orderNo: order.orderNo,
+        customerNumber: order.customerNumber,
+        customerName: order.customerName
+      }
+    });
+    
+  } catch (error) {
+    console.log('========================================');
+    console.log('❌ 錯誤發生!');
+    console.log('錯誤訊息:', error.message);
+    console.log('錯誤堆疊:', error.stack);
+    console.log('========================================');
+    
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;
