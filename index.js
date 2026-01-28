@@ -67,9 +67,11 @@ app.use('/api/delivery', deliveryRoutes);
 app.use('/api/urgent', urgentRoutes);
 app.use('/api/manual', manualRoutes);
 
-// 🚀 接收 POS 簽收訊號，自動取消 7 天通知
+// 🚀 強化版：接收 POS 簽收訊號，自動取消 7 天通知 (增加日誌除錯)
 app.post('/api/pos-sync/pickup-complete', async (req, res) => {
     const { customerNo } = req.body; 
+    console.log(`[Sync] 收到 POS 訊號，原始內容: "${customerNo}"`);
+
     if (!customerNo) return res.status(400).json({ success: false, error: "缺少客戶編號" });
 
     try {
@@ -79,18 +81,33 @@ app.post('/api/pos-sync/pickup-complete', async (req, res) => {
 
         if (fs.existsSync(PICKUP_FILE)) {
             let pickupData = JSON.parse(fs.readFileSync(PICKUP_FILE, 'utf8'));
-            const cleanNo = customerNo.replace(/\D/g, ''); // K0000625 -> 625
             
+            // 強制轉換：K0000625 -> 625 (字串型態)
+            const cleanNo = customerNo.replace(/\D/g, '').trim(); 
+            console.log(`[Sync] 轉換後的編號: "${cleanNo}"`);
+
+            // 列出目前資料庫有的編號，方便在 Logs 查看
+            const currentNos = pickupData.orders.map(o => String(o.customerNumber).trim());
+            console.log(`[Sync] 目前追蹤名單中的編號: [${currentNos.join(', ')}]`);
+
             const originalCount = pickupData.orders.length;
-            pickupData.orders = pickupData.orders.filter(o => o.customerNumber != cleanNo);
+            
+            // 比對時，兩邊都轉成字串並去掉空格
+            pickupData.orders = pickupData.orders.filter(o => {
+                return String(o.customerNumber).trim() !== cleanNo;
+            });
             
             if (pickupData.orders.length < originalCount) {
                 fs.writeFileSync(PICKUP_FILE, JSON.stringify(pickupData, null, 2), 'utf8');
-                return res.json({ success: true, message: "已自動取消通知" });
+                console.log(`✅ 同步成功：已移除客戶 #${cleanNo}`);
+                return res.json({ success: true, message: `通知已取消，成功移除編號 ${cleanNo}` });
+            } else {
+                console.log(`⚠️ 比對失敗：名單中找不到與 "${cleanNo}" 匹配的編號`);
             }
         }
-        res.json({ success: false, message: "無此追蹤紀錄" });
+        res.json({ success: false, message: `目前名單中沒有編號 ${customerNo.replace(/\D/g, '')}` });
     } catch (err) {
+        console.error(`❌ 同步錯誤: ${err.message}`);
         res.status(500).json({ success: false, error: err.message });
     }
 });
