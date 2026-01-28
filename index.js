@@ -67,7 +67,7 @@ app.use('/api/delivery', deliveryRoutes);
 app.use('/api/urgent', urgentRoutes);
 app.use('/api/manual', manualRoutes);
 
-// 🚀 終極對齊版：不論數字或字串，通通轉成數字進行精準比對
+// 🚀 診斷與同步版：自動取消 7 天取件通知
 app.post('/api/pos-sync/pickup-complete', async (req, res) => {
     const { customerNo } = req.body; 
     console.log(`[Sync] 收到 POS 訊號: "${customerNo}"`);
@@ -80,38 +80,46 @@ app.post('/api/pos-sync/pickup-complete', async (req, res) => {
         const PICKUP_FILE = path.join(__dirname, 'data', 'pickup.json');
 
         if (fs.existsSync(PICKUP_FILE)) {
-            let pickupData = JSON.parse(fs.readFileSync(PICKUP_FILE, 'utf8'));
+            let content = fs.readFileSync(PICKUP_FILE, 'utf8');
+            let pickupData = JSON.parse(content);
             
-            // 處理傳進來的編號：K0000625 -> 625 (數字型態)
+            // 轉換格式：K0000625 -> 625 (數字型態)
             const inputNo = parseInt(customerNo.replace(/\D/g, ''), 10); 
             console.log(`[Sync] 處理後的輸入編號: ${inputNo}`);
 
-            const originalCount = pickupData.orders.length;
+            // 取得追蹤名單陣列 (相容不同資料結構)
+            const orders = Array.isArray(pickupData.orders) ? pickupData.orders : (Array.isArray(pickupData) ? pickupData : []);
+            const originalCount = orders.length;
             
-            // 執行過濾：將資料庫裡的編號也轉成數字進行對比
-            pickupData.orders = pickupData.orders.filter(o => {
-                const dbNo = parseInt(String(o.customerNumber).replace(/\D/g, ''), 10);
+            // 執行比對刪除
+            const filteredOrders = orders.filter(o => {
+                // 同時比對 customerNumber 與 number 欄位，確保萬無一失
+                const dbNo = parseInt(String(o.customerNumber || o.number || o.id || "").replace(/\D/g, ''), 10);
                 return dbNo !== inputNo;
             });
             
-            if (pickupData.orders.length < originalCount) {
+            if (filteredOrders.length < originalCount) {
+                // 寫回更新後的資料
+                if (Array.isArray(pickupData.orders)) {
+                    pickupData.orders = filteredOrders;
+                } else {
+                    pickupData = filteredOrders;
+                }
                 fs.writeFileSync(PICKUP_FILE, JSON.stringify(pickupData, null, 2), 'utf8');
-                console.log(`✅ 同步成功：已移除客戶 #${inputNo}`);
+                console.log(`✅ 同步成功：已移除客戶 #${inputNo} 的追蹤紀錄`);
                 return res.json({ success: true, message: `通知已取消，成功移除編號 ${inputNo}` });
             } else {
-                // 這裡會印出目前資料庫到底有哪些編號，幫你抓出問題
-                const allNos = pickupData.orders.map(o => o.customerNumber);
-                console.log(`[Sync] 比對失敗。資料庫現有編號: ${JSON.stringify(allNos)}`);
+                // 除錯資訊：如果沒刪掉，列出目前檔案裡的編號
+                const availableNos = orders.map(o => o.customerNumber || o.number);
+                console.log(`[Sync] 比對失敗。檔案內現有編號: ${JSON.stringify(availableNos)}`);
             }
         }
-        const failNo = parseInt(customerNo.replace(/\D/g, ''), 10);
-        res.json({ success: false, message: `比對失敗，請確認網頁追蹤清單中是否有編號 ${failNo}` });
+        res.json({ success: false, message: `比對失敗，請確認網頁追蹤清單中是否有編號 ${parseInt(customerNo.replace(/\D/g, ''), 10)}` });
     } catch (err) {
         console.error(`❌ 同步錯誤: ${err.message}`);
         res.status(500).json({ success: false, error: err.message });
     }
 });
-
 // ⭐ 新增:載入洗衣軟體同步路由
 const posSyncRouter = require('./pos-sync');
 app.use('/api/pos-sync', posSyncRouter);
