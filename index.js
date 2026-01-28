@@ -67,6 +67,7 @@ app.use('/api/delivery', deliveryRoutes);
 app.use('/api/urgent', urgentRoutes);
 app.use('/api/manual', manualRoutes);
 
+// 🚀 最終精確對接版：使用伺服器上實際存在的 pickup-tracking.json
 app.post('/api/pos-sync/pickup-complete', async (req, res) => {
     const { customerNo } = req.body; 
     try {
@@ -74,29 +75,24 @@ app.post('/api/pos-sync/pickup-complete', async (req, res) => {
         const path = require('path');
         const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
         
-        // 🔍 自動搜尋：列出目錄下所有檔案，幫我們確認檔名
-        const files = fs.existsSync(baseDir) ? fs.readdirSync(baseDir) : [];
-        console.log(`[Sync] 目錄 ${baseDir} 內的檔案:`, files);
+        // 🎯 精確指向你在 Logs 看到的正確檔名
+        const PICKUP_FILE = path.join(baseDir, 'pickup-tracking.json');
 
-        // 嘗試幾個可能的路徑
-        const possiblePaths = [
-            path.join(baseDir, 'pickup.json'),
-            path.join(baseDir, 'data', 'pickup.json'),
-            path.join(__dirname, 'data', 'pickup.json')
-        ];
+        console.log(`[Sync] 正在對接檔案: ${PICKUP_FILE}`);
 
-        let PICKUP_FILE = possiblePaths.find(p => fs.existsSync(p));
-
-        if (!PICKUP_FILE) {
+        if (!fs.existsSync(PICKUP_FILE)) {
             return res.json({ 
                 success: false, 
-                message: `檔案不存在。目錄下的檔案有: [${files.join(', ')}]，請確認網頁是否有按下「開始追蹤」。` 
+                message: `對接失敗。雖然目錄有找到，但讀取 ${PICKUP_FILE} 失敗。` 
             });
         }
 
         let pickupData = JSON.parse(fs.readFileSync(PICKUP_FILE, 'utf8'));
+        
+        // 確保編號格式統一：K0000625 -> 625
         const inputNo = parseInt(customerNo.replace(/\D/g, ''), 10); 
         
+        // 執行刪除邏輯
         const originalCount = pickupData.orders.length;
         pickupData.orders = pickupData.orders.filter(o => {
             const dbNo = parseInt(String(o.customerNumber).replace(/\D/g, ''), 10);
@@ -105,12 +101,13 @@ app.post('/api/pos-sync/pickup-complete', async (req, res) => {
         
         if (pickupData.orders.length < originalCount) {
             fs.writeFileSync(PICKUP_FILE, JSON.stringify(pickupData, null, 2), 'utf8');
-            return res.json({ success: true, message: `✅ 成功移除編號 ${inputNo}` });
+            console.log(`✅ 同步成功：已從取件追蹤移除客戶 #${inputNo}`);
+            return res.json({ success: true, message: `✅ 成功！通知已取消，已移除編號 ${inputNo}` });
         } else {
             const allNos = pickupData.orders.map(o => o.customerNumber);
             return res.json({ 
                 success: false, 
-                message: `名單中沒找到 ${inputNo}。現有名單: [${allNos.join(', ')}]` 
+                message: `找到檔案了！但名單中沒看到 ${inputNo}。名單現有：[${allNos.join(', ')}]` 
             });
         }
     } catch (err) {
