@@ -67,11 +67,9 @@ app.use('/api/delivery', deliveryRoutes);
 app.use('/api/urgent', urgentRoutes);
 app.use('/api/manual', manualRoutes);
 
-// 🚀 新增：接收洗衣軟體「簽收同步」訊號，自動取消 7 天取件通知
+// 🚀 接收 POS 簽收訊號，自動取消 7 天通知
 app.post('/api/pos-sync/pickup-complete', async (req, res) => {
     const { customerNo } = req.body; 
-    console.log(`[Sync] 收到 POS 簽收訊號，客戶編號: ${customerNo}`);
-
     if (!customerNo) return res.status(400).json({ success: false, error: "缺少客戶編號" });
 
     try {
@@ -81,18 +79,14 @@ app.post('/api/pos-sync/pickup-complete', async (req, res) => {
 
         if (fs.existsSync(PICKUP_FILE)) {
             let pickupData = JSON.parse(fs.readFileSync(PICKUP_FILE, 'utf8'));
+            const cleanNo = customerNo.replace(/\D/g, ''); // K0000625 -> 625
             
-            // 處理編號：把 K0000625 變成 625
-            const cleanNo = customerNo.replace(/\D/g, ''); 
             const originalCount = pickupData.orders.length;
-            
-            // 從「取件追蹤」中移除該客人
             pickupData.orders = pickupData.orders.filter(o => o.customerNumber != cleanNo);
             
             if (pickupData.orders.length < originalCount) {
                 fs.writeFileSync(PICKUP_FILE, JSON.stringify(pickupData, null, 2), 'utf8');
-                console.log(`✅ 同步成功：客戶 #${cleanNo} 已取件，7 天通知已刪除。`);
-                return res.json({ success: true, message: "通知已取消" });
+                return res.json({ success: true, message: "已自動取消通知" });
             }
         }
         res.json({ success: false, message: "無此追蹤紀錄" });
