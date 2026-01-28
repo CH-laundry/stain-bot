@@ -1787,26 +1787,47 @@ function detectQuestionType(message) {
 // ====================================
 // 處理文字訊息（Claude AI）
 // ====================================
-// 專門用來查詢洗衣進度的函數
+// 專門用來查詢洗衣進度的函數 (管理員混合版)
 async function checkLaundryProgress(userId) {
     try {
-       
-        // 以下是正常邏輯
         if (!customerDatabase) return null;
 
+        // 1. 先嘗試正規查詢 (查資料庫)
         const customer = customerDatabase.getCustomer(userId);
-        if (!customer) {
-            console.log(`[Progress] 找不到此 LINE ID 的資料: ${userId}`);
+        
+        let customerNo = null;
+        let displayName = '貴賓';
+
+        if (customer) {
+            const rawId = customer.realName || customer.displayName;
+            customerNo = String(rawId).replace(/\D/g, ''); 
+            displayName = customer.displayName;
+        }
+
+        // 2. 如果資料庫查不到，但發現是【你的 ID】，就啟動「管理員測試模式」
+        if (!customerNo && userId === 'U5099169723d6e83588c5f23dfaf6f9cf') {
+            console.log('🧪 [測試] 管理者查無資料，啟動強制測試數據');
+            return {
+                customerName: '小林王子大大',
+                total: 3,
+                finished: 2,
+                details: [
+                    '襯衫 (掛衣號:1037)', 
+                    'T-SHIRT (掛衣號:1039)', 
+                    'POLO衫 (清潔中)'
+                ]
+            };
+        }
+
+        // 3. 如果真的沒編號，就結束
+        if (!customerNo) {
+            console.log(`[Progress] 找不到此 LINE ID 的綁定資料: ${userId}`);
             return null;
         }
 
-        const rawId = customer.realName || customer.displayName;
-        const customerNo = String(rawId).replace(/\D/g, ''); 
-        
-        if (!customerNo) return null;
-
         console.log(`[Progress] 準備查詢客戶編號: ${customerNo}`);
 
+        // 4. 呼叫本地 API
         const port = process.env.PORT || 3000;
         const apiUrl = `http://localhost:${port}/api/pos-sync/query-progress/${customerNo}`;
         
@@ -1816,7 +1837,7 @@ async function checkLaundryProgress(userId) {
         if (json.success && json.data) {
             return {
                 ...json.data,
-                customerName: customer.displayName || '貴賓'
+                customerName: displayName
             };
         }
         return null;
@@ -1979,15 +2000,19 @@ async function handleTextMessage(userMessage, userId = null) {
                 return d.includes('掛衣號') ? `✅ ${d}` : `⏳ ${d}`;
             }).join('\n');
 
+           // 👇👇👇 修改後的漂亮回覆格式 (直接顯示件數) 👇👇👇
             let reply = `${progressData.customerName}您好 💙 幫您查到了！\n`;
-            reply += `您這次送洗共有 ${total} 件。\n\n`;
+            
+            // 直接清楚說明狀況
+            reply += `您這次送洗共有 **${total}** 件，其中 **${finished}** 件已經清洗完成 ✨\n\n`;
             
             if (notFinished === 0) {
                 reply += `🎉 全數完工！\n${detailsStr}\n\n您可以隨時來店取件或安排送回，謝謝您 💙`;
             } else {
                 reply += `目前進度如下：\n${detailsStr}\n\n`;
-                reply += `還有 ${notFinished} 件正在努力清潔中，好了會立即通知您喔 💙`;
+                reply += `還有 **${notFinished}** 件正在努力清潔中，好了會立即通知您喔 💙`;
             }
+            // 👆👆👆 修改結束 👆👆👆
 
             // 附上原本的查詢連結
             reply += `\n\n您也可以點此查看詳情 🔍\nhttps://liff.line.me/2004612704-JnzA1qN6#/home`;
