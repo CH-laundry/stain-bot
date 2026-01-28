@@ -1784,6 +1784,18 @@ function detectQuestionType(message) {
 // 專門用來查詢洗衣進度的函數
 async function checkLaundryProgress(userId) {
     try {
+      // 👇👇👇 請在這裡插入這段 (強制指定你的 ID) 👇👇👇
+        if (userId === 'U5099169723d6e83588c5f23dfaf6f9cf') {
+            // 強制讓這個 ID 變成 625 號客人
+            const port = process.env.PORT || 3000;
+            const apiUrl = `http://localhost:${port}/api/pos-sync/query-progress/625`; // 直接查 625
+            const response = await fetch(apiUrl);
+            const json = await response.json();
+            if (json.success && json.data) {
+                return { ...json.data, customerName: '小林王子大大' };
+            }
+        }
+        // 👆👆👆 插入結束 👆👆👆
         // 1. 檢查資料庫是否載入
         if (!customerDatabase) return null;
 
