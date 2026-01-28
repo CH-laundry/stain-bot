@@ -67,7 +67,7 @@ app.use('/api/delivery', deliveryRoutes);
 app.use('/api/urgent', urgentRoutes);
 app.use('/api/manual', manualRoutes);
 
-// 🚀 模糊比對強化版：解決編號與姓名連在一起的問題
+// 🚀 修正版：解決 inputNo 未定義錯誤，並確保數字比對精準
 app.post('/api/pos-sync/pickup-complete', async (req, res) => {
     const { customerNo } = req.body; 
     console.log(`[Sync] 收到 POS 訊號: "${customerNo}"`);
@@ -82,30 +82,31 @@ app.post('/api/pos-sync/pickup-complete', async (req, res) => {
         if (fs.existsSync(PICKUP_FILE)) {
             let pickupData = JSON.parse(fs.readFileSync(PICKUP_FILE, 'utf8'));
             
-            // 轉換 POS 編號：K0000625 -> 625 (字串)
-            const inputNo = String(parseInt(customerNo.replace(/\D/g, ''), 10)); 
-            console.log(`[Sync] 準備比對的編號: "${inputNo}"`);
+            // 1. 處理輸入編號：K0000625 -> 625 (數字)
+            const inputNo = parseInt(customerNo.replace(/\D/g, ''), 10); 
+            console.log(`[Sync] 處理後的輸入編號: ${inputNo}`);
 
             const originalCount = pickupData.orders.length;
             
-            // 執行比對刪除：只要資料庫的編號欄位「包含」或「等於」625 就刪除
+            // 2. 執行過濾：將資料庫裡的編號也轉成數字進行對比
             pickupData.orders = pickupData.orders.filter(o => {
-                const dbNo = String(o.customerNumber || o.number || "").trim();
-                // 檢查是否完全相同，或者是包含在內
-                return dbNo !== inputNo && !dbNo.includes(inputNo);
+                // 如果資料庫存的是 625，這裡 parseInt 後也會是 625
+                const dbNo = parseInt(String(o.customerNumber).replace(/\D/g, ''), 10);
+                return dbNo !== inputNo;
             });
             
             if (pickupData.orders.length < originalCount) {
                 fs.writeFileSync(PICKUP_FILE, JSON.stringify(pickupData, null, 2), 'utf8');
-                console.log(`✅ 同步成功：已成功移除編號 ${inputNo} 的追蹤紀錄`);
+                console.log(`✅ 同步成功：已移除客戶 #${inputNo}`);
                 return res.json({ success: true, message: `通知已取消，成功移除編號 ${inputNo}` });
             } else {
-                // 如果失敗，列出目前名單所有編號到 Log，方便除錯
-                const currentList = pickupData.orders.map(o => o.customerNumber);
-                console.log(`[Sync] 比對失敗。目前名單內有: ${JSON.stringify(currentList)}`);
+                const allNos = pickupData.orders.map(o => o.customerNumber);
+                console.log(`[Sync] 比對失敗。名單中編號有: ${JSON.stringify(allNos)}`);
             }
         }
-        res.json({ success: false, message: `名單中找不到編號 ${inputNo}` });
+        // 這裡也要補上 inputNo 的宣告，避免報錯
+        const finalInputNo = parseInt(customerNo.replace(/\D/g, ''), 10);
+        res.json({ success: false, message: `比對失敗，請確認網頁追蹤清單中是否有編號 ${finalInputNo}` });
     } catch (err) {
         console.error(`❌ 同步錯誤: ${err.message}`);
         res.status(500).json({ success: false, error: err.message });
