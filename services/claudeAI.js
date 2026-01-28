@@ -8,6 +8,18 @@ const Anthropic = require('@anthropic-ai/sdk');
 const OpenAI = require('openai');
 const { google } = require('googleapis');
 
+
+// 👇👇👇 請插入這段 (開始) 👇👇👇
+let customerDatabase;
+try {
+  // 因為在同一個 services 資料夾，所以用 ./customerDatabase
+  customerDatabase = require('./customerDatabase');
+  console.log('✅ 客戶資料庫模組載入成功');
+} catch (e) {
+  console.log('⚠️ 找不到 customerDatabase 模組，將無法進行身分對應', e);
+}
+// 👆👆👆 請插入這段 (結束) 👆👆👆
+
 const anthropic = new Anthropic({
   apiKey: process.env.CLAUDE_API_KEY
 });
@@ -1768,6 +1780,52 @@ function detectQuestionType(message) {
   return '其他';
 }
 
+// 👇👇👇 請插入這段 (開始) 👇👇👇
+// 專門用來查詢洗衣進度的函數
+async function checkLaundryProgress(userId) {
+    try {
+        // 1. 檢查資料庫是否載入
+        if (!customerDatabase) return null;
+
+        // 2. 透過 LINE ID 找客戶資料
+        const customer = customerDatabase.getCustomer(userId);
+        if (!customer) {
+            console.log(`[Progress] 找不到此 LINE ID 的資料: ${userId}`);
+            return null;
+        }
+
+        // 3. 取得客戶編號 (優先使用 realName 作為編號，或是 displayName)
+        // 這裡會把 "K0000625" 或 "625" 裡的非數字去掉，變成 "625"
+        const rawId = customer.realName || customer.displayName;
+        const customerNo = String(rawId).replace(/\D/g, ''); 
+        
+        if (!customerNo) return null;
+
+        console.log(`[Progress] 準備查詢客戶編號: ${customerNo}`);
+
+        // 4. 呼叫本地 API (連接 index.js 的資料庫)
+        const port = process.env.PORT || 3000;
+        const apiUrl = `http://localhost:${port}/api/pos-sync/query-progress/${customerNo}`;
+        
+        const response = await fetch(apiUrl);
+        const json = await response.json();
+
+        if (json.success && json.data) {
+            // 把客戶名稱也放進去，方便回覆
+            return {
+                ...json.data,
+                customerName: customer.displayName || '貴賓'
+            };
+        }
+        return null;
+
+    } catch (error) {
+        console.error('[Progress] 查詢失敗:', error);
+        return null;
+    }
+}
+// 👆👆👆 請插入這段 (結束) 👆👆👆
+
 // ====================================
 // 處理文字訊息（Claude AI）
 // ====================================
@@ -1895,6 +1953,59 @@ async function handleTextMessage(userMessage, userId = null) {
     }
     
     console.log('✅ 非模板訊息，繼續處理');
+
+    console.log('✅ 非模板訊息，繼續處理');
+
+    // 👇👇👇 請插入這段 (開始) 👇👇👇
+    
+    // 1. 定義觸發關鍵字 (問進度、洗好了沒)
+    const isProgressQuery = /(好了嗎|好了沒|洗好了|進度|可以拿了嗎|完工|幾件好|好了)/.test(userMessage);
+
+    // 2. 如果是問進度，且有 User ID
+    if (isProgressQuery && userId) {
+        console.log('🔍 偵測到進度詢問，正在查詢即時資料庫...');
+        const progressData = await checkLaundryProgress(userId);
+
+        // 3. 如果成功查到資料 (代表店裡電腦有同步上來)
+        if (progressData) {
+            console.log('✅ 查到進度資料，生成回覆...');
+            const { total, finished, details } = progressData;
+            const notFinished = total - finished;
+            
+            // 處理清單顯示：完成打勾，未完成打漏斗
+            // details 裡的格式是 "襯衫 (掛衣號:1037)" 或 "POLO衫 (清潔中)"
+            const detailsStr = details.map(d => {
+                return d.includes('掛衣號') ? `✅ ${d}` : `⏳ ${d}`;
+            }).join('\n');
+
+            let reply = `${progressData.customerName}您好 💙 幫您查到了！\n`;
+            reply += `您這次送洗共有 **${total}** 件。\n\n`;
+            
+            if (notFinished === 0) {
+                reply += `🎉 全數完工！\n${detailsStr}\n\n您可以隨時來店取件或安排送回，謝謝您 💙`;
+            } else {
+                reply += `目前進度如下：\n${detailsStr}\n\n`;
+                reply += `還有 **${notFinished}** 件正在努力清潔中，好了會立即通知您喔 💙`;
+            }
+
+            // 附上原本的查詢連結
+            reply += `\n\n您也可以點此查看詳情 🔍\nhttps://liff.line.me/2004612704-JnzA1qN6#/home`;
+
+            // 寫入對話記憶 (讓 AI 知道剛才發生什麼事)
+            addToHistory(userId, "user", userMessage);
+            addToHistory(userId, "assistant", reply);
+            
+            // 寫入 Google Sheets (紀錄這次成功的查詢)
+            logToGoogleSheets(userId, userMessage, reply, '進度查詢(自動)', '正常');
+
+            // 直接回傳結果，結束這個回合
+            return reply;
+        }
+        // 如果沒查到資料，程式會自動往下跑，讓 Claude AI 用原本的方式回答
+    }
+    // 👆👆👆 請插入這段 (結束) 👆👆👆
+
+    const now = new Date(); // <-- 這是你原本的代碼
     
     const now = new Date();
     const taipeiTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
