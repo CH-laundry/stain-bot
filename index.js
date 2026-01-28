@@ -67,48 +67,41 @@ app.use('/api/delivery', deliveryRoutes);
 app.use('/api/urgent', urgentRoutes);
 app.use('/api/manual', manualRoutes);
 
-// 🚀 修正版：解決 inputNo 未定義錯誤，並確保數字比對精準
 app.post('/api/pos-sync/pickup-complete', async (req, res) => {
     const { customerNo } = req.body; 
-    console.log(`[Sync] 收到 POS 訊號: "${customerNo}"`);
-
-    if (!customerNo) return res.status(400).json({ success: false, error: "缺少客戶編號" });
-
     try {
         const fs = require('fs');
         const path = require('path');
-        const PICKUP_FILE = path.join(__dirname, 'data', 'pickup.json');
+        // 這裡確保路徑正確，指向你儲存取件追蹤的資料夾
+        const PICKUP_FILE = path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH || '.', 'data', 'pickup.json');
 
-        if (fs.existsSync(PICKUP_FILE)) {
-            let pickupData = JSON.parse(fs.readFileSync(PICKUP_FILE, 'utf8'));
-            
-            // 1. 處理輸入編號：K0000625 -> 625 (數字)
-            const inputNo = parseInt(customerNo.replace(/\D/g, ''), 10); 
-            console.log(`[Sync] 處理後的輸入編號: ${inputNo}`);
-
-            const originalCount = pickupData.orders.length;
-            
-            // 2. 執行過濾：將資料庫裡的編號也轉成數字進行對比
-            pickupData.orders = pickupData.orders.filter(o => {
-                // 如果資料庫存的是 625，這裡 parseInt 後也會是 625
-                const dbNo = parseInt(String(o.customerNumber).replace(/\D/g, ''), 10);
-                return dbNo !== inputNo;
-            });
-            
-            if (pickupData.orders.length < originalCount) {
-                fs.writeFileSync(PICKUP_FILE, JSON.stringify(pickupData, null, 2), 'utf8');
-                console.log(`✅ 同步成功：已移除客戶 #${inputNo}`);
-                return res.json({ success: true, message: `通知已取消，成功移除編號 ${inputNo}` });
-            } else {
-                const allNos = pickupData.orders.map(o => o.customerNumber);
-                console.log(`[Sync] 比對失敗。名單中編號有: ${JSON.stringify(allNos)}`);
-            }
+        if (!fs.existsSync(PICKUP_FILE)) {
+            return res.json({ success: false, message: `找不到資料檔案：${PICKUP_FILE}` });
         }
-        // 這裡也要補上 inputNo 的宣告，避免報錯
-        const finalInputNo = parseInt(customerNo.replace(/\D/g, ''), 10);
-        res.json({ success: false, message: `比對失敗，請確認網頁追蹤清單中是否有編號 ${finalInputNo}` });
+
+        let pickupData = JSON.parse(fs.readFileSync(PICKUP_FILE, 'utf8'));
+        const inputNo = parseInt(customerNo.replace(/\D/g, ''), 10); 
+        
+        const originalCount = pickupData.orders.length;
+        // 列出所有編號供比對
+        const allExistingNos = pickupData.orders.map(o => o.customerNumber);
+
+        pickupData.orders = pickupData.orders.filter(o => {
+            const dbNo = parseInt(String(o.customerNumber).replace(/\D/g, ''), 10);
+            return dbNo !== inputNo;
+        });
+        
+        if (pickupData.orders.length < originalCount) {
+            fs.writeFileSync(PICKUP_FILE, JSON.stringify(pickupData, null, 2), 'utf8');
+            return res.json({ success: true, message: `✅ 成功移除編號 ${inputNo}` });
+        } else {
+            // ❌ 如果找不到，直接把現在名單有的編號傳回 CMD 給你看
+            return res.json({ 
+                success: false, 
+                message: `名單中沒找到 ${inputNo}。目前名單有的編號是: [${allExistingNos.join(', ')}]` 
+            });
+        }
     } catch (err) {
-        console.error(`❌ 同步錯誤: ${err.message}`);
         res.status(500).json({ success: false, error: err.message });
     }
 });
