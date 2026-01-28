@@ -1952,7 +1952,6 @@ async function handleTextMessage(userMessage, userId = null) {
       return null;
     }
     
-    console.log('✅ 非模板訊息，繼續處理');
 
     console.log('✅ 非模板訊息，繼續處理');
 
