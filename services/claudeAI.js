@@ -1994,13 +1994,13 @@ async function handleTextMessage(userMessage, userId = null) {
             }).join('\n');
 
             let reply = `${progressData.customerName}您好 💙 幫您查到了！\n`;
-            reply += `您這次送洗共有 **${total}** 件。\n\n`;
+            reply += `您這次送洗共有 ${total} 件。\n\n`;
             
             if (notFinished === 0) {
                 reply += `🎉 全數完工！\n${detailsStr}\n\n您可以隨時來店取件或安排送回，謝謝您 💙`;
             } else {
                 reply += `目前進度如下：\n${detailsStr}\n\n`;
-                reply += `還有 **${notFinished}** 件正在努力清潔中，好了會立即通知您喔 💙`;
+                reply += `還有 ${notFinished} 件正在努力清潔中，好了會立即通知您喔 💙`;
             }
 
             // 附上原本的查詢連結
