@@ -1782,60 +1782,7 @@ function detectQuestionType(message) {
 
 // 👇👇👇 請插入這段 (開始) 👇👇👇
 // 專門用來查詢洗衣進度的函數
-async function checkLaundryProgress(userId) {
-    try {
-      // 👇👇👇 請在這裡插入這段 (強制指定你的 ID) 👇👇👇
-        if (userId === 'U5099169723d6e83588c5f23dfaf6f9cf') {
-            // 強制讓這個 ID 變成 625 號客人
-            const port = process.env.PORT || 3000;
-            const apiUrl = `http://localhost:${port}/api/pos-sync/query-progress/625`; // 直接查 625
-            const response = await fetch(apiUrl);
-            const json = await response.json();
-            if (json.success && json.data) {
-                return { ...json.data, customerName: '小林王子大大' };
-            }
-        }
-        // 👆👆👆 插入結束 👆👆👆
-        // 1. 檢查資料庫是否載入
-        if (!customerDatabase) return null;
-
-        // 2. 透過 LINE ID 找客戶資料
-        const customer = customerDatabase.getCustomer(userId);
-        if (!customer) {
-            console.log(`[Progress] 找不到此 LINE ID 的資料: ${userId}`);
-            return null;
-        }
-
-        // 3. 取得客戶編號 (優先使用 realName 作為編號，或是 displayName)
-        // 這裡會把 "K0000625" 或 "625" 裡的非數字去掉，變成 "625"
-        const rawId = customer.realName || customer.displayName;
-        const customerNo = String(rawId).replace(/\D/g, ''); 
-        
-        if (!customerNo) return null;
-
-        console.log(`[Progress] 準備查詢客戶編號: ${customerNo}`);
-
-        // 4. 呼叫本地 API (連接 index.js 的資料庫)
-        const port = process.env.PORT || 3000;
-        const apiUrl = `http://localhost:${port}/api/pos-sync/query-progress/${customerNo}`;
-        
-        const response = await fetch(apiUrl);
-        const json = await response.json();
-
-        if (json.success && json.data) {
-            // 把客戶名稱也放進去，方便回覆
-            return {
-                ...json.data,
-                customerName: customer.displayName || '貴賓'
-            };
-        }
-        return null;
-
-    } catch (error) {
-        console.error('[Progress] 查詢失敗:', error);
-        return null;
-    }
-}
+Ｖ
 // 👆👆👆 請插入這段 (結束) 👆👆👆
 
 // ====================================
