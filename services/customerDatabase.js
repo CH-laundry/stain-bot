@@ -127,6 +127,16 @@ class CustomerDatabase {
     }
 
     getCustomer(userId) {
+        // 👇👇👇 插入開始：測試用強制通道 👇👇👇
+        if (userId === 'U5099169723d6e83588c5f23dfaf6f9cf') {
+            return {
+                userId: userId,
+                displayName: '小林王子大大',
+                realName: '625',  // 強制讓系統以為你是 625 號客人
+                lastContact: new Date().toISOString()
+            };
+        }
+        // 👆👆👆 插入結束 👆👆👆
         return this.cache.get(userId);
     }
 
