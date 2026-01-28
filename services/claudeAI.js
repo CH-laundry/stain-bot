@@ -2005,7 +2005,6 @@ async function handleTextMessage(userMessage, userId = null) {
     }
     // 👆👆👆 請插入這段 (結束) 👆👆👆
 
-    const now = new Date(); // <-- 這是你原本的代碼
     
     const now = new Date();
     const taipeiTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
