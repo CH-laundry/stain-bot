@@ -1790,21 +1790,7 @@ function detectQuestionType(message) {
 // 專門用來查詢洗衣進度的函數
 async function checkLaundryProgress(userId) {
     try {
-        // 🔥 強制測試模式：只要是你的 ID，直接回傳測試數據
-        if (userId === 'U5099169723d6e83588c5f23dfaf6f9cf') {
-            console.log('🧪 [測試] 偵測到管理者，強制回傳測試數據');
-            return {
-                customerName: '小林王子大大',
-                total: 3,
-                finished: 2,
-                details: [
-                    '襯衫 (掛衣號:1037)', 
-                    'T-SHIRT (掛衣號:1039)', 
-                    'POLO衫 (清潔中)'
-                ]
-            };
-        }
-
+       
         // 以下是正常邏輯
         if (!customerDatabase) return null;
 
