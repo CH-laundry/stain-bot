@@ -1787,51 +1787,79 @@ function detectQuestionType(message) {
 // ====================================
 // 👇👇👇 請貼上這段 (正式上線版函數) 👇👇👇
 
-// 專門用來查詢洗衣進度的函數 (正式上線版)
+// 專門用來查詢洗衣進度的函數 (智能姓名對應版)
 async function checkLaundryProgress(userId) {
     try {
-        // 1. 檢查資料庫模組是否存在
-        if (!customerDatabase) return null;
-
-        // 2. 透過 LINE ID 去找這一位客人
-        const customer = customerDatabase.getCustomer(userId);
-        
-        // 如果資料庫裡沒這個人 -> 回傳 null (讓 AI 去回舊的罐頭訊息)
-        if (!customer) {
-            console.log(`[Progress] 資料庫查無此 ID: ${userId}，轉交 AI 處理`);
-            return null;
+        // 1. 取得客人的 LINE 資料 (主要是為了拿名字)
+        let lineName = '貴賓';
+        if (customerDatabase) {
+            const customer = customerDatabase.getCustomer(userId);
+            if (customer && customer.displayName) {
+                lineName = customer.displayName; // 抓到 LINE 名字，例如 "俊"
+            }
         }
 
-        // 3. 取得客戶編號 (從 realName 或 displayName 抓數字)
-        const rawId = customer.realName || customer.displayName;
-        const customerNo = String(rawId).replace(/\D/g, ''); 
-        
-        // 如果抓不到編號 -> 回傳 null
-        if (!customerNo) return null;
+        console.log(`🔍 [Progress] 正在為 LINE 用戶 "${lineName}" (${userId}) 查詢...`);
 
-        console.log(`[Progress] 準備查詢客戶編號: ${customerNo}`);
+        // 2. 第一步：先查有沒有「已綁定」的編號 (最準)
+        // (雖然你說不要綁定，但如果剛好有，還是先用這個，比較準)
+        let customerNo = null;
+        if (customerDatabase) {
+            const customer = customerDatabase.getCustomer(userId);
+            if (customer && customer.realName && /^\d+$/.test(customer.realName)) {
+                customerNo = customer.realName;
+            }
+        }
 
-        // 4. 去問雲端伺服器 (真實數據)
+        // 3. 第二步：如果沒綁定，啟動【智能姓名搜尋】 (這就是你要的功能！)
         const port = process.env.PORT || 3000;
-        const apiUrl = `http://localhost:${port}/api/pos-sync/query-progress/${customerNo}`;
-        
-        const response = await fetch(apiUrl); // 👈 這裡就是報錯的地方，加上 async 就會好了
-        const json = await response.json();
+        let apiUrl = '';
 
-        // 5. 如果伺服器有回傳成功的數據 -> 顯示漂亮格式！
-        if (json.success && json.data) {
-            return {
-                ...json.data,
-                customerName: customer.displayName || '貴賓'
-            };
+        if (customerNo) {
+            // 有編號，直接查
+            apiUrl = `http://localhost:${port}/api/pos-sync/query-progress/${customerNo}`;
+        } else {
+            // 🔥 重點：沒編號，用「名字」去搜！
+            // 注意：這裡假設你的 Python 支援用名字搜尋 (例如 /query-by-name/俊)
+            // 如果你的 LINE 名字包含特殊符號，可能會搜不到，這是正常的
+            const cleanName = lineName.trim(); 
+            console.log(`🧪 嘗試使用 LINE 名字 "${cleanName}" 進行模糊搜尋...`);
+            
+            // 這裡我們呼叫一個新的 API (假設你的後端有支援搜尋名字)
+            // 如果沒有這個 API，我們需要之後在 Python 補上
+            apiUrl = `http://localhost:${port}/api/pos-sync/query-progress-by-name/${encodeURIComponent(cleanName)}`;
+        }
+        
+        // 4. 發送查詢
+        try {
+            const response = await fetch(apiUrl);
+            
+            // 如果 API 網址不存在 (404)，代表 Python 還沒寫好名字搜尋功能
+            if (!response.ok) {
+                console.log('⚠️ 無法使用名字搜尋 (API 可能未支援)');
+                return null;
+            }
+
+            const json = await response.json();
+
+            // 5. 成功查到資料！
+            if (json.success && json.data) {
+                console.log('✅ 姓名對應成功！');
+                return {
+                    ...json.data,
+                    customerName: lineName // 顯示他的 LINE 名字
+                };
+            }
+        } catch (e) {
+            console.error('API 連線錯誤:', e.message);
         }
 
-        // 6. 如果伺服器說沒資料 -> 回傳 null
+        console.log('❌ 查無資料 (名字不符或無訂單)');
         return null;
 
     } catch (error) {
-        console.error('[Progress] 查詢失敗:', error);
-        return null; // 出錯了也轉交 AI
+        console.error('[Progress] 查詢系統錯誤:', error);
+        return null;
     }
 }
 // 👆👆👆 貼上結束 👆👆👆
