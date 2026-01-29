@@ -1786,60 +1786,51 @@ function detectQuestionType(message) {
 // 處理文字訊息（Claude AI）
 // ====================================
 // 專門用來查詢洗衣進度的函數
-// 專門用來查詢洗衣進度的函數 (全員體驗版)
+// 專門用來查詢洗衣進度的函數 (正式上線版 - 無假資料)
 async function checkLaundryProgress(userId) {
     try {
-        // 1. 先嘗試去真正的資料庫找人 (這是給舊客人的)
-        let customerNo = null;
-        let displayName = '貴賓';
+        // 1. 檢查資料庫模組是否存在
+        if (!customerDatabase) return null;
 
-        // 如果資料庫有開啟，就去查查看
-        if (customerDatabase) {
-            const customer = customerDatabase.getCustomer(userId);
-            if (customer) {
-                // 找到了！抓出他的編號
-                const rawId = customer.realName || customer.displayName;
-                customerNo = String(rawId).replace(/\D/g, ''); 
-                displayName = customer.displayName;
-            }
-        }
-
-        // 2. 如果有編號，就去問雲端伺服器 (查真實進度)
-        if (customerNo) {
-            console.log(`[Progress] 找到綁定客戶 ${customerNo}，查詢真實數據...`);
-            const port = process.env.PORT || 3000;
-            const apiUrl = `http://localhost:${port}/api/pos-sync/query-progress/${customerNo}`;
-            
-            try {
-                const response = await fetch(apiUrl);
-                const json = await response.json();
-                // 如果查到真的資料，就回傳真的！
-                if (json.success && json.data) {
-                    return { ...json.data, customerName: displayName };
-                }
-            } catch (e) {
-                console.error('API 連線失敗，轉為顯示體驗數據');
-            }
-        }
-
-        // 3. 🔥 重點在這裡！找不到人怎麼辦？ 🔥
-        // 原本是直接放棄 (return null)，現在改成「直接給他看範例」！
-        console.log(`[Progress] ID ${userId} 查無資料，顯示體驗版數據`);
+        // 2. 透過 LINE ID 去找這一位客人
+        const customer = customerDatabase.getCustomer(userId);
         
-        return {
-            customerName: '體驗貴賓', // 這裡改叫體驗貴賓，才不會大家都叫小林王子
-            total: 3,
-            finished: 2,
-            details: [
-                '襯衫 (掛衣號:1037)', 
-                'T-SHIRT (掛衣號:1039)', 
-                'POLO衫 (清潔中)'
-            ]
-        };
+        // 如果資料庫裡沒這個人 -> 回傳 null (讓 AI 去回舊的罐頭訊息)
+        if (!customer) {
+            console.log(`[Progress] 資料庫查無此 ID: ${userId}，轉交 AI 處理`);
+            return null;
+        }
+
+        // 3. 取得客戶編號 (從 realName 或 displayName 抓數字)
+        const rawId = customer.realName || customer.displayName;
+        const customerNo = String(rawId).replace(/\D/g, ''); 
+        
+        // 如果抓不到編號 -> 回傳 null
+        if (!customerNo) return null;
+
+        console.log(`[Progress] 準備查詢客戶編號: ${customerNo}`);
+
+        // 4. 去問雲端伺服器 (真實數據)
+        const port = process.env.PORT || 3000;
+        const apiUrl = `http://localhost:${port}/api/pos-sync/query-progress/${customerNo}`;
+        
+        const response = await fetch(apiUrl);
+        const json = await response.json();
+
+        // 5. 如果伺服器有回傳成功的數據 -> 顯示漂亮格式！
+        if (json.success && json.data) {
+            return {
+                ...json.data,
+                customerName: customer.displayName || '貴賓'
+            };
+        }
+
+        // 6. 如果伺服器說沒資料 (可能剛送洗還沒上傳) -> 回傳 null (轉交 AI)
+        return null;
 
     } catch (error) {
         console.error('[Progress] 查詢失敗:', error);
-        return null;
+        return null; // 出錯了也轉交 AI，確保不會已讀不回
     }
 }
 // 👆👆👆 補完結束 👆👆👆
