@@ -143,7 +143,7 @@ app.post('/api/pos-sync/update-progress', async (req, res) => {
         // 1. 接收資料
         const { customerNo, customerName, totalItems, finishedItems, details, lastUpdate } = req.body;
         
-        console.log(`[Progress] 收到更新請求: ${customerName} (#${customerNo})`);
+        console.log(`[Progress] 收到更新: ${customerName} (#${customerNo})`);
 
         const fs = require('fs');
         const path = require('path');
@@ -166,11 +166,11 @@ app.post('/api/pos-sync/update-progress', async (req, res) => {
             }
         }
 
-        // 3. 寫入資料 (🔥 這裡是關鍵：一定要存 customerName)
+        // 3. 寫入資料 (🔥 強制寫入名字)
         const cleanNo = String(customerNo).replace(/\D/g, ''); 
         
         progressData[cleanNo] = {
-            customerName: customerName, // <--- 這行就是你之前缺少的！
+            customerName: customerName, // 👈 這裡一定要有
             customerNo: customerNo,
             total: totalItems,
             finished: finishedItems,
@@ -182,16 +182,31 @@ app.post('/api/pos-sync/update-progress', async (req, res) => {
         fs.writeFileSync(PROGRESS_FILE, JSON.stringify(progressData, null, 2), 'utf8');
 
         console.log(`✅ 存檔成功！已將 "${customerName}" 寫入硬碟`);
-        
-        // 🔥 加一個除錯回應，讓你的 Python 知道伺服器真的存了
-        return res.json({ 
-            success: true, 
-            message: `伺服器確認：已儲存客戶 [${customerName}] 的資料` 
-        });
+        return res.json({ success: true, message: `已儲存: ${customerName}` });
 
     } catch (err) {
         console.error(`❌ 存檔失敗: ${err.message}`);
         res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// 🔥🔥🔥 新增：照妖鏡功能 (讓你可以看到檔案裡到底有什麼) 🔥🔥🔥
+app.get('/api/debug-data', (req, res) => {
+    try {
+        const fs = require('fs');
+        const path = require('path');
+        const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
+        const PROGRESS_FILE = path.join(baseDir, 'laundry_progress.json');
+
+        if (fs.existsSync(PROGRESS_FILE)) {
+            const data = fs.readFileSync(PROGRESS_FILE, 'utf8');
+            // 直接把檔案內容印在網頁上
+            res.send(`<h1>伺服器目前的資料：</h1><pre>${data}</pre>`); 
+        } else {
+            res.send('<h1>⚠️ 檔案不存在 (代表還沒收到任何 POS 資料)</h1>');
+        }
+    } catch (e) {
+        res.send(`讀取錯誤: ${e.message}`);
     }
 });
 
