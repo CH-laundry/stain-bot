@@ -429,7 +429,7 @@ async function createLinePayPayment(userId, userName, amount, orderIdOverride) {
   }
 }
 
-// ====== Webhook (Push Message 穩定版) ======
+// ====== Webhook (最終修復版：含進度查詢格式) ======
 app.post('/webhook', async (req, res) => {
   res.status(200).end(); // 先回覆 LINE Server 200 OK
 
@@ -445,10 +445,10 @@ app.post('/webhook', async (req, res) => {
         const userId = event.source.userId;
 
         // 1. 取得真實名字
-        let realName = "未知用戶";
+        let realName = "貴賓";
         try {
             const profile = await client.getProfile(userId);
-            realName = profile.displayName ? profile.displayName.trim() : "未知用戶";
+            realName = profile.displayName ? profile.displayName.trim() : "貴賓";
         } catch (e) {
             console.error('取得個資失敗:', e.message);
         }
@@ -464,8 +464,11 @@ app.post('/webhook', async (req, res) => {
           const userMessage = event.message.text.trim();
           logger.logUserMessage(userId, userMessage);
           
-          // 檢查是否為查詢意圖
-          const isQueryIntent = userMessage.match(/(進度|好了嗎|查詢|洗好|狀況)/);
+          // -------------------------------------------------
+          // 🔎 1. 進度查詢功能 (優先處理)
+          // -------------------------------------------------
+          const queryKeywords = ['進度', '好了嗎', '查詢', '洗好', '狀況', '幫我看', '幫我查'];
+          const isQueryIntent = queryKeywords.some(k => userMessage.includes(k));
 
           if (isQueryIntent) {
               console.log(`🔍 [查詢] ${realName} 正在查詢...`);
@@ -479,83 +482,74 @@ app.post('/webhook', async (req, res) => {
               let allNamesInDB = [];
 
               if (fs.existsSync(PROGRESS_FILE)) {
-                  let progressData = {};
                   try {
-                      progressData = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8'));
-                  } catch (e) {}
+                      const progressData = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8'));
+                      
+                      // 開始比對名字
+                      const cleanRealName = realName.replace(/\s/g, ''); 
 
-                  for (const key in progressData) {
-                      const data = progressData[key];
-                      const dbName = data.customerName ? data.customerName.trim() : "";
-                      if (dbName) allNamesInDB.push(dbName);
+                      for (const key in progressData) {
+                          const data = progressData[key];
+                          const dbName = data.customerName || "";
+                          if (dbName) allNamesInDB.push(dbName);
 
-                      // 比對名字 (移除空白)
-                      const n1 = dbName.replace(/\s/g, '');
-                      const n2 = realName.replace(/\s/g, '');
-
-                      // 只要名字互相包含就算對
-                      if (n1 && n2 && (n1 === n2 || n1.includes(n2) || n2.includes(n1))) {
-                          console.log(`✅ 匹配成功: ${dbName}`);
-                          if (Array.isArray(data.details)) {
-                              foundItems = data.details.map(d => {
-                                  const isFin = d.includes('掛衣號');
-                                  return { txt: d, isFin };
-                              });
+                          const cleanDbName = dbName.replace(/\s/g, '');
+                          
+                          // 名字比對邏輯
+                          if (cleanDbName && cleanRealName && (cleanDbName.includes(cleanRealName) || cleanRealName.includes(cleanDbName))) {
+                              console.log(`✅ 匹配成功: ${dbName}`);
+                              if (Array.isArray(data.details)) {
+                                  foundItems = data.details.map(d => {
+                                      const isFin = d.includes('掛衣號');
+                                      return { txt: d, isFin };
+                                  });
+                              }
+                              break;
                           }
-                          break;
                       }
-                  }
+                  } catch (e) { console.error('讀取進度檔失敗', e); }
               }
 
               if (foundItems.length > 0) {
-                  // --- 查到了 (已更新為您的專屬格式) ---
+                  // --- 查到了 (格式已更新為您指定樣式) ---
                   const finished = foundItems.filter(i => i.isFin).length;
                   const processing = foundItems.length - finished;
                   
-                  // 1. 開頭問候
+                  // 組裝訊息
                   let reply = `${realName} 您好 💙 幫您查到了！\n`;
-                  
-                  // 2. 總數統計
                   reply += `您這次送洗共有 ${foundItems.length} 件，其中 ${finished} 件已經清洗完成 ✨\n\n`;
                   
-                  // 3. 詳細清單
                   reply += `目前進度如下：\n`;
                   foundItems.forEach(item => { 
-                      // 這裡會自動產生 "✅ 西裝外套 (掛衣號:888)" 或 "⏳ 領帶 (清潔中)"
+                      // 顯示：✅ 西裝外套 (掛衣號:888) 或 ⏳ 背心 (清潔中)
                       reply += item.isFin ? `✅ ${item.txt}\n` : `⏳ ${item.txt}\n`; 
                   });
                   
-                  // 4. 結尾提醒
                   if (processing > 0) {
                       reply += `\n還有 ${processing} 件正在努力清潔中，好了會立即通知您喔 💙`;
                   } else {
                       reply += `\n全部都洗好囉！歡迎來店取件 💙`;
                   }
                   
-                  // 5. LIFF 連結
                   reply += `\n\n您也可以點此查看詳情 🔍\nhttps://liff.line.me/2008313382-3Xna6abB#/home`;
                   
-                  // 發送訊息
                   await client.pushMessage(userId, { type: 'text', text: reply });
-              }
+
               } else {
-                  // --- 查不到 ---
-                  let debugMsg = `😭 ${realName} 您好，系統找不到您的資料。\n`;
-                  if (allNamesInDB.length > 0) {
-                      debugMsg += `\n🤔 系統目前的資料庫名單有：\n「${allNamesInDB.slice(0, 20).join("、")}」`;
-                      debugMsg += `\n(請確認名字是否一致)`;
-                  } else {
-                      debugMsg += `\n⚠️ 系統資料庫是空的！`;
-                  }
-                  // 🔥 改用 pushMessage
-                  await client.pushMessage(userId, { type: 'text', text: debugMsg });
+                  // --- 沒查到 (官方制式回覆) ---
+                  const defaultReply = `您可以線上查詢 C.H精緻洗衣 🔍\nhttps://liff.line.me/2004612704-JnzA1qN6#/home\n或是營業時間會有專人回覆您，謝謝 🙏`;
+                  
+                  await client.pushMessage(userId, { type: 'text', text: defaultReply });
               }
-              continue; // 結束查詢流程
+              continue; // 結束查詢，不讓 AI 插嘴
           }
 
-          // 非查詢訊息 -> 給 AI 處理
+          // -------------------------------------------------
+          // 🤖 2. Claude AI 回覆 (非查詢訊息)
+          // -------------------------------------------------
           let claudeReplied = false;
           try {
+            // 這裡可以加上 try-catch 避免 AI 錯誤導致當機
             const aiResponse = await claudeAI.handleTextMessage(userMessage, userId);
             if (aiResponse) {
               await client.pushMessage(userId, { type: 'text', text: aiResponse });
@@ -567,15 +561,43 @@ app.post('/webhook', async (req, res) => {
             await messageHandler.handleTextMessage(userId, userMessage, userMessage);
           }
           
+          // -------------------------------------------------
+          // 📦 3. 收件偵測 (保留原本功能)
+          // -------------------------------------------------
+          const pickupKeywords = ['會去收', '去收回', '來收', '過去收', '收衣服', '明天收', '今天收', '收取', '安排收件', '會過去收', '可以來收', '去拿', '會來收'];
+          const containsPickup = (msg) => pickupKeywords.some(k => msg.includes(k));
+
+          // 檢查客人訊息
+          if (containsPickup(userMessage)) {
+             // ... (省略詳細邏輯，保持原樣)
+             try {
+                const allCustomers = orderManager.getAllCustomerNumbers();
+                const cData = allCustomers.find(c => c.userId === userId);
+                const cNum = cData ? cData.number : '未登記';
+                
+                // 呼叫 API 記錄
+                await fetch(`${process.env.BASE_URL || 'https://stain-bot-production-2593.up.railway.app'}/api/pickup-schedule/auto-add`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId, userName: realName, message: userMessage, source: 'customer', customerNumber: cNum })
+                });
+             } catch(e) {}
+          }
+          
         } else if (event.message.type === 'image') {
+           // ========== 處理圖片訊息 ==========
            await messageHandler.handleImageMessage(userId, event.message.id);
+        
+        } else if (event.message.type === 'sticker') {
+           logger.logUserMessage(userId, `發送了貼圖 (${event.message.stickerId})`);
         }
+
       } catch (err) {
-        console.error('處理事件錯誤:', err.message);
+        console.error('處理單一事件錯誤:', err.message);
       }
     }
   } catch (err) {
-    logger.logError('全域錯誤', err);
+    logger.logError('Webhook 全域錯誤', err);
   }
 });
 
