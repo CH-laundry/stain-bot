@@ -429,7 +429,7 @@ async function createLinePayPayment(userId, userName, amount, orderIdOverride) {
   }
 }
 
-// ====== Webhook (最終穩定版) ======
+// ====== Webhook (絕對回覆版) ======
 app.post('/webhook', async (req, res) => {
   res.status(200).end(); 
 
@@ -440,7 +440,12 @@ app.post('/webhook', async (req, res) => {
         if (event.type !== 'message' || !event.source.userId) continue;
         
         const userId = event.source.userId;
-        const replyToken = event.replyToken;
+        
+        // 🔥 關鍵修正：檢查並直接使用 event.replyToken，不透過變數傳遞
+        if (!event.replyToken) {
+            console.log('⚠️ 警告：此事件沒有 replyToken，無法回覆');
+            continue;
+        }
 
         // 1. 取得真實名字
         let realName = "未知用戶";
@@ -487,7 +492,6 @@ app.post('/webhook', async (req, res) => {
                       
                       if (dbName) allNamesInDB.push(dbName);
 
-                      // 比對名字 (移除空白)
                       const n1 = dbName.replace(/\s/g, '');
                       const n2 = realName.replace(/\s/g, '');
 
@@ -505,7 +509,7 @@ app.post('/webhook', async (req, res) => {
               }
 
               if (foundItems.length > 0) {
-                  // --- 查到了 (直接寫死 LIFF ID 避免出錯) ---
+                  // --- 查到了 ---
                   const finished = foundItems.filter(i => i.isFin).length;
                   const processing = foundItems.length - finished;
                   
@@ -515,10 +519,10 @@ app.post('/webhook', async (req, res) => {
                   if (processing > 0) reply += `\n還有 ${processing} 件清洗中 💙`;
                   else reply += `\n全部洗好囉！歡迎取件 💙`;
                   
-                  // 🔥 直接寫死連結，保證不會錯
                   reply += `\n\n查看詳情 🔍\nhttps://liff.line.me/2008313382-3Xna6abB#/home`;
                   
-                  await client.replyMessage(replyToken, { type: 'text', text: reply });
+                  // 🔥 直接用 event.replyToken，不做變數轉換
+                  await client.replyMessage(event.replyToken, { type: 'text', text: reply });
               } else {
                   // --- 查不到 ---
                   let debugMsg = `😭 ${realName} 您好，系統找不到您的資料。\n`;
@@ -528,9 +532,9 @@ app.post('/webhook', async (req, res) => {
                   } else {
                       debugMsg += `\n⚠️ 系統資料庫是空的！`;
                   }
-                  await client.replyMessage(replyToken, { type: 'text', text: debugMsg });
+                  await client.replyMessage(event.replyToken, { type: 'text', text: debugMsg });
               }
-              continue; // 成功處理，結束
+              continue; 
           }
 
           // 非查詢訊息 -> 給 AI 處理
@@ -547,13 +551,10 @@ app.post('/webhook', async (req, res) => {
             await messageHandler.handleTextMessage(userId, userMessage, userMessage);
           }
           
-          // (這裡省略收件偵測代碼以節省篇幅，保留原本功能)
-          // 圖片處理
         } else if (event.message.type === 'image') {
            await messageHandler.handleImageMessage(userId, event.message.id);
         }
       } catch (err) {
-        // 這裡會抓到 400 錯誤，但這次應該不會有了
         console.error('處理事件錯誤:', err.originalError?.response?.data || err.message);
       }
     }
