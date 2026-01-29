@@ -2388,37 +2388,108 @@ app.get('/api/pickup-schedule/today-alert', async (req, res) => {
   }
 });
 
-// 👇👇👇 請把這段加在 index.js 裡面 (測試用) 👇👇👇
+// 處理訊息事件的主函數
+async function handleMessage(event) {
+  // 只處理文字訊息
+  if (event.type !== 'message' || event.message.type !== 'text') {
+    return Promise.resolve(null);
+  }
 
-app.get('/api/debug/force-create-data', (req, res) => {
-    try {
-        const fs = require('fs');
-        const path = require('path');
-        const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
+  const userId = event.source.userId;
+  const userMessage = event.message.text.trim();
+  const replyToken = event.replyToken;
+
+  try {
+    // 1. 取得 LINE 用戶真實資料 (不再使用測試名字)
+    const profile = await client.getProfile(userId);
+    const realName = profile.displayName; // 這是 LINE 上顯示的真實暱稱
+    
+    console.log(`[${new Date().toLocaleString()}] 📩 收到訊息: "${userMessage}" 來自: ${realName} (${userId})`);
+
+    // 2. 更新或建立客戶資料 (自動綁定)
+    // 這裡會把 LINE 名字存入資料庫，如果你的資料庫有這個名字的訂單，之後就能查到
+    await customerDB.upsertCustomer(userId, realName);
+
+    // 3. 判斷是否為「查詢進度」的意圖
+    // 簡單關鍵字判斷，你可以根據需要擴充 (例如加: 好了沒, 進度, 查詢)
+    const isQueryIntent = userMessage.match(/(進度|好了嗎|查詢|洗好|狀況)/);
+
+    if (isQueryIntent) {
+      console.log(`🔍 偵測到查詢意圖，正在使用名稱 "${realName}" 查詢洗衣進度...`);
+
+      // 4. 直接使用 realName 去查詢 API/資料庫
+      // 注意：這裡假設你的後端 API 是用名字來過濾的
+      const progressData = await laundryService.getProgressByName(realName);
+
+      if (progressData && progressData.length > 0) {
+        // 5. 格式化回覆訊息 (動態生成)
+        const replyText = formatProgressReply(realName, progressData);
         
-        // 1. 強制建立資料夾
-        if (!fs.existsSync(baseDir)) {
-            fs.mkdirSync(baseDir, { recursive: true });
-        }
+        // 記錄這次查詢
+        await googleSheetLogger.logInteraction(userId, realName, userMessage, "查詢成功");
+        
+        return client.replyMessage(replyToken, {
+          type: 'text',
+          text: replyText
+        });
+      } else {
+        // 查無資料的情況
+        console.log(`❌ 查無 "${realName}" 的送洗紀錄`);
+        return client.replyMessage(replyToken, {
+          type: 'text',
+          text: `${realName} 您好，目前系統中查不到您的送洗中紀錄喔！\n\n如果您是用其他名字送洗，或剛送件資料尚未同步，請稍後再試，或聯繫客服。`
+        });
+      }
+    }
 
-        const PROGRESS_FILE = path.join(baseDir, 'laundry_progress.json');
+    // 6. 如果不是查詢進度，則轉交給 AI 處理一般對話
+    console.log(`🤖 轉交 AI 處理一般對話...`);
+    const aiReply = await aiService.getReply(userId, userMessage);
+    
+    return client.replyMessage(replyToken, {
+      type: 'text',
+      text: aiReply
+    });
 
-        // 2. 這是我們要寫入的假資料 (名字跟你的一模一樣)
-        const dummyData = {
-            "625": {
-                "customerName": "小林王子大大", // 👈 關鍵！全自動對應就是靠這個
-                "total": 5,
-                "finished": 3,
-                "details": [
-                    "西裝外套 (掛衣號:888)",
-                    "襯衫 (掛衣號:889)",
-                    "西裝褲 (掛衣號:890)",
-                    "領帶 (清潔中)",
-                    "背心 (清潔中)"
-                ],
-                "updateTime": new Date().toISOString()
-            }
-        };
+  } catch (error) {
+    console.error('處理訊息發生錯誤:', error);
+    return client.replyMessage(replyToken, {
+      type: 'text',
+      text: '系統暫時忙碌中，請稍後再試。'
+    });
+  }
+}
+
+// 輔助函式：格式化進度回覆 (與你原本的邏輯保持一致)
+function formatProgressReply(name, items) {
+  const finishedItems = items.filter(i => i.status === '完成'); // 假設狀態是 '完成'
+  const processingItems = items.filter(i => i.status !== '完成');
+  
+  let reply = `${name} 您好 💙 幫您查到了！\n`;
+  reply += `您這次送洗共有 ${items.length} 件，其中 ${finishedItems.length} 件已經清洗完成 ✨\n\n`;
+  reply += `目前進度如下：\n`;
+
+  // 列出已完成
+  finishedItems.forEach(item => {
+    reply += `✅ ${item.itemName} (掛衣號:${item.tagNumber})\n`;
+  });
+
+  // 列出未完成
+  processingItems.forEach(item => {
+    reply += `⏳ ${item.itemName} (清潔中)\n`;
+  });
+
+  if (processingItems.length > 0) {
+    reply += `\n還有 ${processingItems.length} 件正在努力清潔中，好了會立即通知您喔 💙`;
+  } else {
+    reply += `\n全部都洗好囉！歡迎來店取件 💙`;
+  }
+  
+  // 加上 LIFF 連結
+  reply += `\n\n您也可以點此查看詳情 🔍\nhttps://liff.line.me/2004612704-JnzA1qN6#/home`;
+
+  return reply;
+}
 
         // 3. 寫入檔案
         fs.writeFileSync(PROGRESS_FILE, JSON.stringify(dummyData, null, 2), 'utf8');
