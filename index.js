@@ -2461,9 +2461,8 @@ app.get('/api/pickup-schedule/today-alert', async (req, res) => {
 // 核心訊息處理與啟動 (正式上線版)
 // ==========================================
 
-// 處理訊息事件的主函數
+// 處理訊息事件的主函數 (強力偵錯版)
 async function handleMessage(event) {
-  // 只處理文字訊息
   if (event.type !== 'message' || event.message.type !== 'text') {
     return Promise.resolve(null);
   }
@@ -2473,50 +2472,48 @@ async function handleMessage(event) {
   const replyToken = event.replyToken;
 
   try {
-    // 1. 取得 LINE 用戶真實資料
     const profile = await client.getProfile(userId);
-    const realName = profile.displayName; // 這是 LINE 上顯示的真實暱稱
+    const realName = profile.displayName.trim(); // 你的 LINE 名字
     
-    console.log(`[${new Date().toLocaleString()}] 📩 收到訊息: "${userMessage}" 來自: ${realName} (${userId})`);
+    console.log(`📩 [${realName}] 說: ${userMessage}`);
 
-    // 2. 更新或建立客戶資料 (自動綁定)
+    // 自動綁定客戶資料
     await customerDB.upsertCustomer(userId, realName);
 
-    // 3. 判斷是否為「查詢進度」的意圖
-    // 關鍵字：進度, 好了嗎, 查詢, 洗好, 狀況
+    // 關鍵字判斷
     const isQueryIntent = userMessage.match(/(進度|好了嗎|查詢|洗好|狀況)/);
 
     if (isQueryIntent) {
-      console.log(`🔍 偵測到查詢意圖，正在為 "${realName}" 查詢洗衣進度...`);
+      console.log(`🔍 開始為 "${realName}" 查詢...`);
 
-      // 4. 讀取進度檔案 (只讀取，絕不寫入測試資料)
       const fs = require('fs');
       const path = require('path');
       const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
       const PROGRESS_FILE = path.join(baseDir, 'laundry_progress.json');
       
       let foundItems = [];
+      let allNamesInDB = []; // 用來存所有看到的客人名字
 
-      // 如果檔案存在，讀取並比對名字
       if (fs.existsSync(PROGRESS_FILE)) {
           let progressData = {};
           try {
             progressData = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8'));
-          } catch (e) {
-            console.error('讀取進度檔失敗', e);
-          }
+          } catch (e) { console.error('讀檔失敗', e); }
           
-          // 遍歷所有訂單尋找名字匹配的
+          // 逐筆比對
           for (const key in progressData) {
               const data = progressData[key];
-              // 比對名字 (去除前後空白)
-              if (data.customerName && data.customerName.trim() === realName.trim()) {
-                  // 找到了！
-                  console.log(`✅ 在資料庫中找到對應名字: ${data.customerName}`);
+              const dbName = data.customerName ? data.customerName.trim() : "未知";
+              
+              // 收集名字 (為了除錯)
+              if(dbName !== "未知") allNamesInDB.push(dbName);
+
+              // 比對 (使用寬鬆比對：只要包含就算)
+              if (dbName === realName || dbName.includes(realName) || realName.includes(dbName)) {
+                  console.log(`✅ 找到匹配: ${dbName} vs ${realName}`);
                   
                   if (Array.isArray(data.details)) {
                       foundItems = data.details.map(detailStr => {
-                          // 解析字串 "襯衫 (掛衣號:889)" 或 "背心 (清潔中)"
                           const isFinished = detailStr.includes('掛衣號');
                           return {
                               itemName: detailStr, 
@@ -2525,90 +2522,57 @@ async function handleMessage(event) {
                           };
                       });
                   }
-                  break; // 找到後就跳出
+                  break; 
               }
           }
-      } else {
-        console.log('⚠️ 尚未有任何進度檔案 (laundry_progress.json)');
       }
 
       if (foundItems.length > 0) {
-        // 5. 格式化回覆訊息
+        // === 成功找到 ===
         const replyText = formatProgressReply(realName, foundItems);
-        
-        // 記錄查詢
-        if (typeof googleSheetLogger !== 'undefined') {
-            await googleSheetLogger.logInteraction(userId, realName, userMessage, "查詢成功");
-        }
-        
-        return client.replyMessage(replyToken, {
-          type: 'text',
-          text: replyText
-        });
+        return client.replyMessage(replyToken, { type: 'text', text: replyText });
       } else {
-        // 查無資料的情況
-        console.log(`❌ 查無 "${realName}" 的送洗紀錄`);
-        return client.replyMessage(replyToken, {
-          type: 'text',
-          text: `${realName} 您好，目前系統中查不到您的送洗中紀錄喔！\n\n(系統說明：請確認您在店內留的名字與 LINE 暱稱一致，或等待店內電腦同步資料)`
-        });
+        // === 失敗：回報原因 ===
+        // 讓機器人告訴你它看到了哪些人，這樣我們就知道問題在哪
+        let debugMsg = `${realName} 您好，系統查無您的進度。`;
+        
+        if (allNamesInDB.length > 0) {
+            // 只列出前 10 個名字避免洗版
+            const showNames = allNamesInDB.slice(0, 10).join("、");
+            debugMsg += `\n\n🤔 系統目前有名單：\n${showNames}\n...等 ${allNamesInDB.length} 人。`;
+            debugMsg += `\n\n(請確認您的 LINE 名字與店內登記完全一致)`;
+        } else {
+            debugMsg += `\n\n⚠️ 系統目前是空的 (尚未收到 POS 資料)。`;
+        }
+
+        return client.replyMessage(replyToken, { type: 'text', text: debugMsg });
       }
     }
 
-    // 6. 如果不是查詢進度，則轉交給 AI 處理
-    console.log(`🤖 轉交 AI 處理一般對話...`);
-    let aiReply = '';
-    try {
-        aiReply = await claudeAI.handleTextMessage(userMessage, userId);
-    } catch (aiErr) {
-        console.error('AI 回覆生成失敗:', aiErr);
-        aiReply = '抱歉，我現在有點忙不過來，請稍後再跟我說話！';
-    }
-    
+    // AI 回覆
+    const aiReply = await claudeAI.handleTextMessage(userMessage, userId);
     if (aiReply) {
-        return client.replyMessage(replyToken, {
-          type: 'text',
-          text: aiReply
-        });
+        return client.replyMessage(replyToken, { type: 'text', text: aiReply });
     }
 
   } catch (error) {
-    console.error('處理訊息發生錯誤:', error);
-    return client.replyMessage(replyToken, {
-      type: 'text',
-      text: '系統暫時忙碌中，請稍後再試。'
-    });
+    console.error('錯誤:', error);
+    return client.replyMessage(replyToken, { type: 'text', text: '系統暫時忙碌中' });
   }
 }
 
-// 輔助函式：格式化進度回覆
+// 輔助函式 (保持不變)
 function formatProgressReply(name, items) {
   const finishedItems = items.filter(i => i.status === '完成'); 
   const processingItems = items.filter(i => i.status !== '完成');
-  
   let reply = `${name} 您好 💙 幫您查到了！\n`;
   reply += `您這次送洗共有 ${items.length} 件，其中 ${finishedItems.length} 件已經清洗完成 ✨\n\n`;
   reply += `目前進度如下：\n`;
-
-  // 列出已完成
-  finishedItems.forEach(item => {
-    reply += `✅ ${item.itemName}\n`;
-  });
-
-  // 列出未完成
-  processingItems.forEach(item => {
-    reply += `⏳ ${item.itemName}\n`;
-  });
-
-  if (processingItems.length > 0) {
-    reply += `\n還有 ${processingItems.length} 件正在努力清潔中，好了會立即通知您喔 💙`;
-  } else {
-    reply += `\n全部都洗好囉！歡迎來店取件 💙`;
-  }
-  
-  // 加上 LIFF 連結
-  reply += `\n\n您也可以點此查看詳情 🔍\nhttps://liff.line.me/${YOUR_LIFF_ID || '2004612704-JnzA1qN6'}#/home`;
-
+  finishedItems.forEach(item => { reply += `✅ ${item.itemName}\n`; });
+  processingItems.forEach(item => { reply += `⏳ ${item.itemName}\n`; });
+  if (processingItems.length > 0) reply += `\n還有 ${processingItems.length} 件正在努力清潔中，好了會立即通知您喔 💙`;
+  else reply += `\n全部都洗好囉！歡迎來店取件 💙`;
+  reply += `\n\n您也可以點此查看詳情 🔍\nhttps://liff.line.me/${process.env.LIFF_ID || '2004612704-JnzA1qN6'}#/home`;
   return reply;
 }
 
