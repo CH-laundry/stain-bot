@@ -2389,6 +2389,10 @@ app.get('/api/pickup-schedule/today-alert', async (req, res) => {
 });
 
 // 處理訊息事件的主函數
+// ==========================================
+// 核心訊息處理與啟動 (正式上線版)
+// ==========================================
+
 // 處理訊息事件的主函數
 async function handleMessage(event) {
   // 只處理文字訊息
@@ -2411,12 +2415,13 @@ async function handleMessage(event) {
     await customerDB.upsertCustomer(userId, realName);
 
     // 3. 判斷是否為「查詢進度」的意圖
+    // 關鍵字：進度, 好了嗎, 查詢, 洗好, 狀況
     const isQueryIntent = userMessage.match(/(進度|好了嗎|查詢|洗好|狀況)/);
 
     if (isQueryIntent) {
-      console.log(`🔍 偵測到查詢意圖，正在使用名稱 "${realName}" 查詢洗衣進度...`);
+      console.log(`🔍 偵測到查詢意圖，正在為 "${realName}" 查詢洗衣進度...`);
 
-      // 4. 讀取進度檔案並尋找該名字
+      // 4. 讀取進度檔案 (只讀取，絕不寫入測試資料)
       const fs = require('fs');
       const path = require('path');
       const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
@@ -2426,14 +2431,21 @@ async function handleMessage(event) {
 
       // 如果檔案存在，讀取並比對名字
       if (fs.existsSync(PROGRESS_FILE)) {
-          const progressData = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8'));
+          let progressData = {};
+          try {
+            progressData = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8'));
+          } catch (e) {
+            console.error('讀取進度檔失敗', e);
+          }
           
           // 遍歷所有訂單尋找名字匹配的
           for (const key in progressData) {
               const data = progressData[key];
               // 比對名字 (去除前後空白)
               if (data.customerName && data.customerName.trim() === realName.trim()) {
-                  // 找到了！檢查 details 格式
+                  // 找到了！
+                  console.log(`✅ 在資料庫中找到對應名字: ${data.customerName}`);
+                  
                   if (Array.isArray(data.details)) {
                       foundItems = data.details.map(detailStr => {
                           // 解析字串 "襯衫 (掛衣號:889)" 或 "背心 (清潔中)"
@@ -2448,6 +2460,8 @@ async function handleMessage(event) {
                   break; // 找到後就跳出
               }
           }
+      } else {
+        console.log('⚠️ 尚未有任何進度檔案 (laundry_progress.json)');
       }
 
       if (foundItems.length > 0) {
@@ -2468,7 +2482,7 @@ async function handleMessage(event) {
         console.log(`❌ 查無 "${realName}" 的送洗紀錄`);
         return client.replyMessage(replyToken, {
           type: 'text',
-          text: `${realName} 您好，目前系統中查不到您的送洗中紀錄喔！\n\n如果您是用其他名字送洗，或剛送件資料尚未同步，請稍後再試，或聯繫客服。`
+          text: `${realName} 您好，目前系統中查不到您的送洗中紀錄喔！\n\n(系統說明：請確認您在店內留的名字與 LINE 暱稱一致，或等待店內電腦同步資料)`
         });
       }
     }
@@ -2529,6 +2543,10 @@ function formatProgressReply(name, items) {
 
   return reply;
 }
+
+// ==========================================
+// 啟動伺服器
+// ==========================================
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
@@ -2602,7 +2620,6 @@ app.listen(PORT, async () => {
 // ====================================
 // 每週 AI 客服分析報告 (修正 cron 錯誤)
 // ====================================
-// 🔥 這裡補上了缺失的宣告
 const cron = require('node-cron'); 
 const weeklyAnalysis = require('./services/weeklyAnalysis');
 const reportGenerator = require('./services/reportGenerator');
