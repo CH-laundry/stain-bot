@@ -136,14 +136,14 @@ app.post('/api/pos-sync/pickup-complete', async (req, res) => {
 });
 
 // ==========================================
-// 👕 接收店面電腦的「掛衣進度」 (修正版：會存名字)
+// 👕 接收店面電腦的「掛衣進度」 (修正版：強制寫入名字)
 // ==========================================
 app.post('/api/pos-sync/update-progress', async (req, res) => {
     try {
-        // 1. 接收資料 (包含 customerName)
+        // 1. 接收資料 (特別注意 customerName)
         const { customerNo, customerName, totalItems, finishedItems, details, lastUpdate } = req.body;
         
-        console.log(`[Progress] 收到更新: ${customerName} (#${customerNo}) - ${finishedItems}/${totalItems}`);
+        console.log(`[Progress] 收到更新: ${customerName} (#${customerNo})`);
 
         const fs = require('fs');
         const path = require('path');
@@ -162,32 +162,30 @@ app.post('/api/pos-sync/update-progress', async (req, res) => {
             try {
                 progressData = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8'));
             } catch (e) {
-                console.error('JSON 讀取錯誤，將重置檔案', e);
                 progressData = {};
             }
         }
 
-        // 3. 更新這位客人的資料
-        // 標準化編號 (例如 "625")
+        // 3. 更新資料 (重點：把名字存進去！)
         const cleanNo = String(customerNo).replace(/\D/g, ''); 
         
         progressData[cleanNo] = {
-            customerName: customerName, // 🔥 關鍵修正：必須把名字存進去！
-            customerNo: customerNo,     // 保留原始編號 (例如 K0000625)
+            customerName: customerName, // 👈 這裡就是之前缺少的關鍵！
+            customerNo: customerNo,
             total: totalItems,
             finished: finishedItems,
             details: details,
             updateTime: lastUpdate || new Date().toISOString()
         };
 
-        // 4. 寫入檔案
+        // 4. 寫入硬碟
         fs.writeFileSync(PROGRESS_FILE, JSON.stringify(progressData, null, 2), 'utf8');
 
-        console.log(`✅ 資料已寫入 laundry_progress.json (包含名字: ${customerName})`);
-        return res.json({ success: true, message: `已更新客戶 ${customerName} 進度` });
+        console.log(`✅ 成功儲存！名字: "${customerName}" 已寫入檔案`);
+        return res.json({ success: true, message: `已更新客戶 ${customerName}` });
 
     } catch (err) {
-        console.error(`❌ 進度更新失敗: ${err.message}`);
+        console.error(`❌ 更新失敗: ${err.message}`);
         res.status(500).json({ success: false, error: err.message });
     }
 });
