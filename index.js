@@ -52,26 +52,6 @@ const app = express();
 const cors = require('cors');
 app.use(cors());
 
-// 🔥 強制刪除舊的進度檔案 (工具用)
-app.get('/api/force-clear', (req, res) => {
-    try {
-        const fs = require('fs');
-        const path = require('path');
-        const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
-        const PROGRESS_FILE = path.join(baseDir, 'laundry_progress.json');
-
-        if (fs.existsSync(PROGRESS_FILE)) {
-            fs.unlinkSync(PROGRESS_FILE); // 刪除檔案
-            console.log('🗑️ 已刪除舊的 laundry_progress.json');
-            res.send('<h1>✅ 舊資料已刪除！</h1><p>請重新從店面電腦發送一次新的進度資料。</p>');
-        } else {
-            res.send('<h1>⚠️ 檔案不存在</h1><p>目前沒有舊資料，可以直接測試。</p>');
-        }
-    } catch (e) {
-        res.send(`刪除失敗: ${e.message}`);
-    }
-});
-
 // Volume 資料夾
 const FILE_ROOT = '/data/uploads';
 fs.mkdirSync(FILE_ROOT, { recursive: true });
@@ -136,92 +116,44 @@ app.post('/api/pos-sync/pickup-complete', async (req, res) => {
 });
 
 // ==========================================
-// 👕 接收店面電腦的「掛衣進度」 (終極修正版)
+// 👕 新增功能：接收店面電腦的「掛衣進度」
 // ==========================================
 app.post('/api/pos-sync/update-progress', async (req, res) => {
     try {
-        // 1. 接收資料
-        const { customerNo, customerName, totalItems, finishedItems, details, lastUpdate } = req.body;
+        const { customerNo, totalItems, finishedItems, details, lastUpdate } = req.body;
         
-        console.log(`[Progress] 收到更新: ${customerName} (#${customerNo})`);
+        console.log(`[Progress] 收到進度更新: 客戶 ${customerNo} (${finishedItems}/${totalItems})`);
 
         const fs = require('fs');
         const path = require('path');
         const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
-        
-        // 確保目錄存在
-        if (!fs.existsSync(baseDir)) {
-            fs.mkdirSync(baseDir, { recursive: true });
-        }
-
         const PROGRESS_FILE = path.join(baseDir, 'laundry_progress.json');
 
-        // 2. 讀取現有檔案
+        // 讀取現有進度表 (如果沒有就創一個空的)
         let progressData = {};
         if (fs.existsSync(PROGRESS_FILE)) {
-            try {
-                progressData = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8'));
-            } catch (e) {
-                progressData = {};
-            }
+            progressData = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8'));
         }
 
-        // 3. 寫入資料 (🔥 強制寫入名字)
+        // 更新這位客人的資料
+        // 我們把編號標準化 (去掉 K, 去掉 0) 變成 "625" 這種格式
         const cleanNo = String(customerNo).replace(/\D/g, ''); 
         
         progressData[cleanNo] = {
-            customerName: customerName, // 👈 這裡一定要有
-            customerNo: customerNo,
             total: totalItems,
             finished: finishedItems,
-            details: details,
+            details: details, // 這裡會存 ["襯衫(已完成)", "POLO衫(清潔中)"]
             updateTime: lastUpdate || new Date().toISOString()
         };
 
-        // 4. 存檔
+        // 寫入檔案
         fs.writeFileSync(PROGRESS_FILE, JSON.stringify(progressData, null, 2), 'utf8');
 
-        console.log(`✅ 存檔成功！已將 "${customerName}" 寫入硬碟`);
-        return res.json({ success: true, message: `已儲存: ${customerName}` });
+        return res.json({ success: true, message: `已更新客戶 ${cleanNo} 進度` });
 
     } catch (err) {
-        console.error(`❌ 存檔失敗: ${err.message}`);
+        console.error(`❌ 進度更新失敗: ${err.message}`);
         res.status(500).json({ success: false, error: err.message });
-    }
-});
-
-// 🔥🔥🔥 新增：照妖鏡功能 (讓你可以看到檔案裡到底有什麼) 🔥🔥🔥
-app.get('/api/debug-data', (req, res) => {
-    try {
-        const fs = require('fs');
-        const path = require('path');
-        const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
-        const PROGRESS_FILE = path.join(baseDir, 'laundry_progress.json');
-
-        if (fs.existsSync(PROGRESS_FILE)) {
-            const data = fs.readFileSync(PROGRESS_FILE, 'utf8');
-            // 直接把檔案內容印在網頁上
-            res.send(`<h1>伺服器目前的資料：</h1><pre>${data}</pre>`); 
-        } else {
-            res.send('<h1>⚠️ 檔案不存在 (代表還沒收到任何 POS 資料)</h1>');
-        }
-    } catch (e) {
-        res.send(`讀取錯誤: ${e.message}`);
-    }
-});
-
-// 🔥 新增：偷看檔案內容的工具 (讓你可以確認檔案裡到底有什麼)
-app.get('/api/debug-file', (req, res) => {
-    const fs = require('fs');
-    const path = require('path');
-    const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
-    const PROGRESS_FILE = path.join(baseDir, 'laundry_progress.json');
-    
-    if (fs.existsSync(PROGRESS_FILE)) {
-        const data = fs.readFileSync(PROGRESS_FILE, 'utf8');
-        res.send(`<pre>${data}</pre>`); // 直接顯示檔案內容
-    } else {
-        res.send('檔案還不存在');
     }
 });
 
@@ -249,58 +181,6 @@ app.get('/api/pos-sync/query-progress/:customerNo', (req, res) => {
         res.status(500).json({ success: false, error: err.message });
     }
 });
-
-// 👇👇👇 請把這段 插入 到上面那個 app.get 結束後，下面那個 const posSyncRouter 之前 👇👇👇
-
-// 🔎 新增功能：讓 AI 用「名字」查詢進度 (全自動對應用)
-app.get('/api/pos-sync/query-progress-by-name/:name', (req, res) => {
-    try {
-        const fs = require('fs');
-        const path = require('path');
-        // 確保路徑跟上面一樣
-        const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
-        const PROGRESS_FILE = path.join(baseDir, 'laundry_progress.json');
-
-        // 1. 如果檔案不存在，就回傳沒資料
-        if (!fs.existsSync(PROGRESS_FILE)) {
-            return res.status(404).json({ success: false, message: '尚無進度資料' });
-        }
-
-        // 2. 讀取並解析 JSON
-        const progressData = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8'));
-        
-        // 3. 解碼傳進來的名字 (例如把亂碼轉回中文 "小林")
-        const targetName = decodeURIComponent(req.params.name).trim();
-        console.log(`🔍 [API] 正在用名字搜尋: "${targetName}"`);
-
-        let foundData = null;
-
-        // 4. 在所有資料中，一筆一筆找名字一樣的
-        // progressData 的結構是 { "編號": { customerName: "名字", ... } }
-        for (const key in progressData) {
-            const data = progressData[key];
-            if (data.customerName && data.customerName.trim() === targetName) {
-                foundData = data;
-                break; // 找到了！跳出迴圈
-            }
-        }
-
-        // 5. 回傳結果
-        if (foundData) {
-            console.log(`✅ [API] 找到名字匹配: ${targetName}`);
-            return res.json({ success: true, data: foundData });
-        } else {
-            console.log(`❌ [API] 找不到名字: ${targetName}`);
-            return res.status(404).json({ success: false, message: 'Name not found' });
-        }
-
-    } catch (err) {
-        console.error('API 錯誤:', err);
-        res.status(500).json({ success: false, error: err.message });
-    }
-});
-
-// 👆👆👆 插入結束 👆👆👆
 
 // ⭐ 新增:載入洗衣軟體同步路由
 const posSyncRouter = require('./pos-sync');
@@ -2456,142 +2336,17 @@ app.get('/api/pickup-schedule/today-alert', async (req, res) => {
   }
 });
 
-// 處理訊息事件的主函數
-// ==========================================
-// 核心訊息處理與啟動 (正式上線版)
-// ==========================================
-
-// 處理訊息事件的主函數 (強力偵錯版)
-async function handleMessage(event) {
-  if (event.type !== 'message' || event.message.type !== 'text') {
-    return Promise.resolve(null);
-  }
-
-  const userId = event.source.userId;
-  const userMessage = event.message.text.trim();
-  const replyToken = event.replyToken;
-
-  try {
-    const profile = await client.getProfile(userId);
-    const realName = profile.displayName.trim(); // 你的 LINE 名字
-    
-    console.log(`📩 [${realName}] 說: ${userMessage}`);
-
-    // 自動綁定客戶資料
-    await customerDB.upsertCustomer(userId, realName);
-
-    // 關鍵字判斷
-    const isQueryIntent = userMessage.match(/(進度|好了嗎|查詢|洗好|狀況)/);
-
-    if (isQueryIntent) {
-      console.log(`🔍 開始為 "${realName}" 查詢...`);
-
-      const fs = require('fs');
-      const path = require('path');
-      const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
-      const PROGRESS_FILE = path.join(baseDir, 'laundry_progress.json');
-      
-      let foundItems = [];
-      let allNamesInDB = []; // 用來存所有看到的客人名字
-
-      if (fs.existsSync(PROGRESS_FILE)) {
-          let progressData = {};
-          try {
-            progressData = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8'));
-          } catch (e) { console.error('讀檔失敗', e); }
-          
-          // 逐筆比對
-          for (const key in progressData) {
-              const data = progressData[key];
-              const dbName = data.customerName ? data.customerName.trim() : "未知";
-              
-              // 收集名字 (為了除錯)
-              if(dbName !== "未知") allNamesInDB.push(dbName);
-
-              // 比對 (使用寬鬆比對：只要包含就算)
-              if (dbName === realName || dbName.includes(realName) || realName.includes(dbName)) {
-                  console.log(`✅ 找到匹配: ${dbName} vs ${realName}`);
-                  
-                  if (Array.isArray(data.details)) {
-                      foundItems = data.details.map(detailStr => {
-                          const isFinished = detailStr.includes('掛衣號');
-                          return {
-                              itemName: detailStr, 
-                              status: isFinished ? '完成' : '清潔中',
-                              tagNumber: isFinished ? detailStr.match(/掛衣號:(\d+)/)?.[1] || '' : ''
-                          };
-                      });
-                  }
-                  break; 
-              }
-          }
-      }
-
-      if (foundItems.length > 0) {
-        // === 成功找到 ===
-        const replyText = formatProgressReply(realName, foundItems);
-        return client.replyMessage(replyToken, { type: 'text', text: replyText });
-      } else {
-        // === 失敗：回報原因 ===
-        // 讓機器人告訴你它看到了哪些人，這樣我們就知道問題在哪
-        let debugMsg = `${realName} 您好，系統查無您的進度。`;
-        
-        if (allNamesInDB.length > 0) {
-            // 只列出前 10 個名字避免洗版
-            const showNames = allNamesInDB.slice(0, 10).join("、");
-            debugMsg += `\n\n🤔 系統目前有名單：\n${showNames}\n...等 ${allNamesInDB.length} 人。`;
-            debugMsg += `\n\n(請確認您的 LINE 名字與店內登記完全一致)`;
-        } else {
-            debugMsg += `\n\n⚠️ 系統目前是空的 (尚未收到 POS 資料)。`;
-        }
-
-        return client.replyMessage(replyToken, { type: 'text', text: debugMsg });
-      }
-    }
-
-    // AI 回覆
-    const aiReply = await claudeAI.handleTextMessage(userMessage, userId);
-    if (aiReply) {
-        return client.replyMessage(replyToken, { type: 'text', text: aiReply });
-    }
-
-  } catch (error) {
-    console.error('錯誤:', error);
-    return client.replyMessage(replyToken, { type: 'text', text: '系統暫時忙碌中' });
-  }
-}
-
-// 輔助函式 (保持不變)
-function formatProgressReply(name, items) {
-  const finishedItems = items.filter(i => i.status === '完成'); 
-  const processingItems = items.filter(i => i.status !== '完成');
-  let reply = `${name} 您好 💙 幫您查到了！\n`;
-  reply += `您這次送洗共有 ${items.length} 件，其中 ${finishedItems.length} 件已經清洗完成 ✨\n\n`;
-  reply += `目前進度如下：\n`;
-  finishedItems.forEach(item => { reply += `✅ ${item.itemName}\n`; });
-  processingItems.forEach(item => { reply += `⏳ ${item.itemName}\n`; });
-  if (processingItems.length > 0) reply += `\n還有 ${processingItems.length} 件正在努力清潔中，好了會立即通知您喔 💙`;
-  else reply += `\n全部都洗好囉！歡迎來店取件 💙`;
-  reply += `\n\n您也可以點此查看詳情 🔍\nhttps://liff.line.me/${process.env.LIFF_ID || '2004612704-JnzA1qN6'}#/home`;
-  return reply;
-}
-
-// ==========================================
-// 啟動伺服器
-// ==========================================
-
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
   console.log(`伺服器正在運行,端口:${PORT}`);
   logger.logToFile(`伺服器正在運行,端口:${PORT}`);
 
-  // 🧺 初始化取件追蹤
+// 🧺 初始化取件追蹤
   pickupRoutes.setLineClient(client);
   setInterval(() => {
-    pickupRoutes.checkAndSendReminders();
+  pickupRoutes.checkAndSendReminders();
   }, 60 * 60 * 1000);
   console.log('✅ 取件追蹤系統已啟動');
-  
   try {
     await customerDB.loadAllCustomers();
     console.log('客戶資料載入完成');
@@ -2608,6 +2363,7 @@ app.listen(PORT, async () => {
     if (ordersNeedingReminder.length === 0) return;
 
     logger.logToFile(`檢測到 ${ordersNeedingReminder.length} 筆訂單需要提醒`);
+
     const rawBase = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.BASE_URL || process.env.PUBLIC_BASE_URL || '';
     const baseURL = ensureHttpsBase(rawBase) || 'https://stain-bot-production-2593.up.railway.app';
 
@@ -2615,7 +2371,7 @@ app.listen(PORT, async () => {
       try {
         const linepayPersistentUrl = `${baseURL}/payment/linepay/pay/${order.orderId}`;
         const ecpayPersistentUrl = `${baseURL}/payment/ecpay/pay/${order.orderId}`;
-        
+
         let linepayShort = linepayPersistentUrl;
         let ecpayShort = ecpayPersistentUrl;
 
@@ -2623,13 +2379,17 @@ app.listen(PORT, async () => {
           const r1 = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(linepayPersistentUrl)}`);
           const t1 = await r1.text();
           if (t1 && t1.startsWith('http')) linepayShort = t1;
-        } catch { }
+        } catch {
+          logger.logToFile(`LINE Pay 短網址生成失敗,使用原網址`);
+        }
 
         try {
           const r2 = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(ecpayPersistentUrl)}`);
           const t2 = await r2.text();
           if (t2 && t2.startsWith('http')) ecpayShort = t2;
-        } catch { }
+        } catch {
+          logger.logToFile(`綠界短網址失敗，使用原網址`);
+        }
 
         const reminderText =
           `溫馨付款提醒\n\n` +
@@ -2641,6 +2401,8 @@ app.listen(PORT, async () => {
           `若已完成付款，請忽略此訊息。感謝您的支持 💙`;
 
         await client.pushMessage(order.userId, { type: 'text', text: reminderText });
+
+        logger.logToFile(`自動發送付款提醒：${order.orderId} (第 ${order.reminderCount + 1} 次)`);
         orderManager.markReminderSent(order.orderId);
       } catch (error) {
         logger.logError(`自動提醒失敗: ${order.orderId}`, error);
@@ -2648,17 +2410,17 @@ app.listen(PORT, async () => {
     }
   }, 2 * 60 * 60 * 1000);
 });
-
 // ====================================
-// 每週 AI 客服分析報告 (修正 cron 錯誤)
+// 每週 AI 客服分析報告
 // ====================================
-const cron = require('node-cron'); 
+const cron = require('node-cron');
 const weeklyAnalysis = require('./services/weeklyAnalysis');
 const reportGenerator = require('./services/reportGenerator');
 
 // 每週日晚上 8 點執行（台北時間）
 cron.schedule('0 20 * * 0', async () => {
   console.log('🔍 開始生成每週 AI 客服分析報告...');
+  
   try {
     // 1. 分析數據
     const analysis = await weeklyAnalysis.analyzeWeeklyData();
@@ -2696,30 +2458,40 @@ cron.schedule('0 20 * * 0', async () => {
 
 console.log('⏰ 每週報告排程已啟動（每週日 20:00）');
 
-// 測試路由
+// 🔍 測試 token 詳細資訊
 app.get('/test-token-detail', async (req, res) => {
-    try {
-        const googleAuth = require('./services/googleAuth');
-        const oauth2Client = googleAuth.getOAuth2Client();
-        const creds = oauth2Client.credentials;
-        res.json({
-            hasToken: !!creds,
-            expiry: creds?.expiry_date ? new Date(creds.expiry_date).toISOString() : null
-        });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
+  try {
+    const googleAuth = require('./services/googleAuth');
+    const oauth2Client = googleAuth.getOAuth2Client();
+    
+    const creds = oauth2Client.credentials;
+    
+    res.json({
+      hasToken: !!creds,
+      hasAccessToken: !!creds?.access_token,
+      hasRefreshToken: !!creds?.refresh_token,
+      scopes: creds?.scope?.split(' ') || [],
+      expiry: creds?.expiry_date ? new Date(creds.expiry_date).toISOString() : null,
+      tokenType: creds?.token_type
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 app.get('/test-auth-email', async (req, res) => {
-    try {
-        const googleAuth = require('./services/googleAuth');
-        const { google } = require('googleapis');
-        const auth = googleAuth.getOAuth2Client();
-        const oauth2 = google.oauth2({ version: 'v2', auth });
-        const userInfo = await oauth2.userinfo.get();
-        res.json({ email: userInfo.data.email });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
+  try {
+    const googleAuth = require('./services/googleAuth');
+    const { google } = require('googleapis');
+    const auth = googleAuth.getOAuth2Client();
+    const oauth2 = google.oauth2({ version: 'v2', auth });
+    const userInfo = await oauth2.userinfo.get();
+    
+    res.json({
+      email: userInfo.data.email,
+      name: userInfo.data.name
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
