@@ -182,6 +182,58 @@ app.get('/api/pos-sync/query-progress/:customerNo', (req, res) => {
     }
 });
 
+// 👇👇👇 請把這段 插入 到上面那個 app.get 結束後，下面那個 const posSyncRouter 之前 👇👇👇
+
+// 🔎 新增功能：讓 AI 用「名字」查詢進度 (全自動對應用)
+app.get('/api/pos-sync/query-progress-by-name/:name', (req, res) => {
+    try {
+        const fs = require('fs');
+        const path = require('path');
+        // 確保路徑跟上面一樣
+        const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
+        const PROGRESS_FILE = path.join(baseDir, 'laundry_progress.json');
+
+        // 1. 如果檔案不存在，就回傳沒資料
+        if (!fs.existsSync(PROGRESS_FILE)) {
+            return res.status(404).json({ success: false, message: '尚無進度資料' });
+        }
+
+        // 2. 讀取並解析 JSON
+        const progressData = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8'));
+        
+        // 3. 解碼傳進來的名字 (例如把亂碼轉回中文 "小林")
+        const targetName = decodeURIComponent(req.params.name).trim();
+        console.log(`🔍 [API] 正在用名字搜尋: "${targetName}"`);
+
+        let foundData = null;
+
+        // 4. 在所有資料中，一筆一筆找名字一樣的
+        // progressData 的結構是 { "編號": { customerName: "名字", ... } }
+        for (const key in progressData) {
+            const data = progressData[key];
+            if (data.customerName && data.customerName.trim() === targetName) {
+                foundData = data;
+                break; // 找到了！跳出迴圈
+            }
+        }
+
+        // 5. 回傳結果
+        if (foundData) {
+            console.log(`✅ [API] 找到名字匹配: ${targetName}`);
+            return res.json({ success: true, data: foundData });
+        } else {
+            console.log(`❌ [API] 找不到名字: ${targetName}`);
+            return res.status(404).json({ success: false, message: 'Name not found' });
+        }
+
+    } catch (err) {
+        console.error('API 錯誤:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// 👆👆👆 插入結束 👆👆👆
+
 // ⭐ 新增:載入洗衣軟體同步路由
 const posSyncRouter = require('./pos-sync');
 app.use('/api/pos-sync', posSyncRouter);
