@@ -2388,6 +2388,49 @@ app.get('/api/pickup-schedule/today-alert', async (req, res) => {
   }
 });
 
+// 👇👇👇 請把這段加在 index.js 裡面 (測試用) 👇👇👇
+
+app.get('/api/debug/force-create-data', (req, res) => {
+    try {
+        const fs = require('fs');
+        const path = require('path');
+        const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
+        
+        // 1. 強制建立資料夾
+        if (!fs.existsSync(baseDir)) {
+            fs.mkdirSync(baseDir, { recursive: true });
+        }
+
+        const PROGRESS_FILE = path.join(baseDir, 'laundry_progress.json');
+
+        // 2. 這是我們要寫入的假資料 (名字跟你的一模一樣)
+        const dummyData = {
+            "625": {
+                "customerName": "小林王子大大", // 👈 關鍵！全自動對應就是靠這個
+                "total": 5,
+                "finished": 3,
+                "details": [
+                    "西裝外套 (掛衣號:888)",
+                    "襯衫 (掛衣號:889)",
+                    "西裝褲 (掛衣號:890)",
+                    "領帶 (清潔中)",
+                    "背心 (清潔中)"
+                ],
+                "updateTime": new Date().toISOString()
+            }
+        };
+
+        // 3. 寫入檔案
+        fs.writeFileSync(PROGRESS_FILE, JSON.stringify(dummyData, null, 2), 'utf8');
+
+        res.send('<h1>✅ 成功！已強制建立 laundry_progress.json</h1><p>現在請去 LINE 問「洗好了嗎」，絕對會抓到！</p>');
+
+    } catch (error) {
+        res.send(`<h1>❌ 失敗</h1><p>${error.message}</p>`);
+    }
+});
+// 👆👆👆 加完存檔 👆👆👆
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
   console.log(`伺服器正在運行,端口:${PORT}`);
