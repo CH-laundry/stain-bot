@@ -429,34 +429,32 @@ async function createLinePayPayment(userId, userName, amount, orderIdOverride) {
   }
 }
 
-// ====== Webhook (絕對回覆版) ======
+// ====== Webhook (Push Message 穩定版) ======
 app.post('/webhook', async (req, res) => {
-  res.status(200).end(); 
+  res.status(200).end(); // 先回覆 LINE Server 200 OK
 
   try {
     const events = req.body.events;
     for (const event of events) {
       try {
-        if (event.type !== 'message' || !event.source.userId) continue;
-        
-        const userId = event.source.userId;
-        
-        // 🔥 關鍵修正：檢查並直接使用 event.replyToken，不透過變數傳遞
-        if (!event.replyToken) {
-            console.log('⚠️ 警告：此事件沒有 replyToken，無法回覆');
+        // 只處理有 userId 的訊息事件
+        if (event.type !== 'message' || !event.source || !event.source.userId) {
             continue;
         }
+        
+        const userId = event.source.userId;
 
         // 1. 取得真實名字
         let realName = "未知用戶";
         try {
             const profile = await client.getProfile(userId);
             realName = profile.displayName ? profile.displayName.trim() : "未知用戶";
-        } catch (e) {}
+        } catch (e) {
+            console.error('取得個資失敗:', e.message);
+        }
 
+        // 保存用戶資料 & 更新活動紀錄
         await saveUserProfile(userId);
-        
-        // 更新對話紀錄
         try {
           await customerDB.updateCustomerActivity(userId, event.message);
         } catch (err) {}
@@ -489,12 +487,13 @@ app.post('/webhook', async (req, res) => {
                   for (const key in progressData) {
                       const data = progressData[key];
                       const dbName = data.customerName ? data.customerName.trim() : "";
-                      
                       if (dbName) allNamesInDB.push(dbName);
 
+                      // 比對名字 (移除空白)
                       const n1 = dbName.replace(/\s/g, '');
                       const n2 = realName.replace(/\s/g, '');
 
+                      // 只要名字互相包含就算對
                       if (n1 && n2 && (n1 === n2 || n1.includes(n2) || n2.includes(n1))) {
                           console.log(`✅ 匹配成功: ${dbName}`);
                           if (Array.isArray(data.details)) {
@@ -521,8 +520,8 @@ app.post('/webhook', async (req, res) => {
                   
                   reply += `\n\n查看詳情 🔍\nhttps://liff.line.me/2008313382-3Xna6abB#/home`;
                   
-                  // 🔥 直接用 event.replyToken，不做變數轉換
-                  await client.replyMessage(event.replyToken, { type: 'text', text: reply });
+                  // 🔥 改用 pushMessage，完全避開 replyToken 問題
+                  await client.pushMessage(userId, { type: 'text', text: reply });
               } else {
                   // --- 查不到 ---
                   let debugMsg = `😭 ${realName} 您好，系統找不到您的資料。\n`;
@@ -532,9 +531,10 @@ app.post('/webhook', async (req, res) => {
                   } else {
                       debugMsg += `\n⚠️ 系統資料庫是空的！`;
                   }
-                  await client.replyMessage(event.replyToken, { type: 'text', text: debugMsg });
+                  // 🔥 改用 pushMessage
+                  await client.pushMessage(userId, { type: 'text', text: debugMsg });
               }
-              continue; 
+              continue; // 結束查詢流程
           }
 
           // 非查詢訊息 -> 給 AI 處理
@@ -555,7 +555,7 @@ app.post('/webhook', async (req, res) => {
            await messageHandler.handleImageMessage(userId, event.message.id);
         }
       } catch (err) {
-        console.error('處理事件錯誤:', err.originalError?.response?.data || err.message);
+        console.error('處理事件錯誤:', err.message);
       }
     }
   } catch (err) {
