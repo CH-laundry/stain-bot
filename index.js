@@ -2431,6 +2431,50 @@ app.get('/api/debug/force-create-data', (req, res) => {
 });
 // 👆👆👆 加完存檔 👆👆👆
 
+// 👇👇👇 請把這段插入在 app.listen 的 上面 👇👇👇
+
+// 🔥【強制測試數據】伺服器啟動時，自動建立假資料檔
+// 這樣你就不用跑 Python 也能測試「姓名查詢」功能了！
+try {
+    const fs = require('fs');
+    const path = require('path');
+    const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
+    
+    // 確保資料夾存在
+    if (!fs.existsSync(baseDir)) {
+        fs.mkdirSync(baseDir, { recursive: true });
+    }
+
+    const PROGRESS_FILE = path.join(baseDir, 'laundry_progress.json');
+
+    // 寫入包含你名字的測試資料
+    const dummyData = {
+        "625": {
+            "customerName": "小林王子大大", // 👈 這裡必須跟你的 LINE 名字一模一樣
+            "total": 5,
+            "finished": 3,
+            "details": [
+                "西裝外套 (掛衣號:888)",
+                "襯衫 (掛衣號:889)",
+                "西裝褲 (掛衣號:890)",
+                "領帶 (清潔中)",
+                "背心 (清潔中)"
+            ],
+            "updateTime": new Date().toISOString()
+        }
+    };
+
+    // 強制寫入檔案 (覆蓋舊的)
+    fs.writeFileSync(PROGRESS_FILE, JSON.stringify(dummyData, null, 2), 'utf8');
+    console.log('✅ [系統啟動] 已自動建立 laundry_progress.json 測試資料');
+    console.log('✅ 資料內容包含用戶: 小林王子大大');
+
+} catch (e) {
+    console.error('❌ 建立測試資料失敗:', e);
+}
+
+// 👆👆👆 插入結束 👆👆👆
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
   console.log(`伺服器正在運行,端口:${PORT}`);
