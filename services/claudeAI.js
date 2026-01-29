@@ -1785,8 +1785,9 @@ function detectQuestionType(message) {
 // ====================================
 // 處理文字訊息（Claude AI）
 // ====================================
-// 專門用來查詢洗衣進度的函數
-// 專門用來查詢洗衣進度的函數 (正式上線版 - 無假資料)
+// 👇👇👇 請貼上這段 (正式上線版函數) 👇👇👇
+
+// 專門用來查詢洗衣進度的函數 (正式上線版)
 async function checkLaundryProgress(userId) {
     try {
         // 1. 檢查資料庫模組是否存在
@@ -1814,7 +1815,7 @@ async function checkLaundryProgress(userId) {
         const port = process.env.PORT || 3000;
         const apiUrl = `http://localhost:${port}/api/pos-sync/query-progress/${customerNo}`;
         
-        const response = await fetch(apiUrl);
+        const response = await fetch(apiUrl); // 👈 這裡就是報錯的地方，加上 async 就會好了
         const json = await response.json();
 
         // 5. 如果伺服器有回傳成功的數據 -> 顯示漂亮格式！
@@ -1825,15 +1826,15 @@ async function checkLaundryProgress(userId) {
             };
         }
 
-        // 6. 如果伺服器說沒資料 (可能剛送洗還沒上傳) -> 回傳 null (轉交 AI)
+        // 6. 如果伺服器說沒資料 -> 回傳 null
         return null;
 
     } catch (error) {
         console.error('[Progress] 查詢失敗:', error);
-        return null; // 出錯了也轉交 AI，確保不會已讀不回
+        return null; // 出錯了也轉交 AI
     }
 }
-// 👆👆👆 補完結束 👆👆👆
+// 👆👆👆 貼上結束 👆👆👆
 
 // ====================================
 // 處理文字訊息（Claude AI）
