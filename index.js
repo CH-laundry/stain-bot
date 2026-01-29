@@ -2400,33 +2400,63 @@ async function handleMessage(event) {
   const replyToken = event.replyToken;
 
   try {
-    // 1. 取得 LINE 用戶真實資料 (不再使用測試名字)
+    // 1. 取得 LINE 用戶真實資料
     const profile = await client.getProfile(userId);
     const realName = profile.displayName; // 這是 LINE 上顯示的真實暱稱
     
     console.log(`[${new Date().toLocaleString()}] 📩 收到訊息: "${userMessage}" 來自: ${realName} (${userId})`);
 
     // 2. 更新或建立客戶資料 (自動綁定)
-    // 這裡會把 LINE 名字存入資料庫，如果你的資料庫有這個名字的訂單，之後就能查到
     await customerDB.upsertCustomer(userId, realName);
 
     // 3. 判斷是否為「查詢進度」的意圖
-    // 簡單關鍵字判斷，你可以根據需要擴充 (例如加: 好了沒, 進度, 查詢)
     const isQueryIntent = userMessage.match(/(進度|好了嗎|查詢|洗好|狀況)/);
 
     if (isQueryIntent) {
       console.log(`🔍 偵測到查詢意圖，正在使用名稱 "${realName}" 查詢洗衣進度...`);
 
-      // 4. 直接使用 realName 去查詢 API/資料庫
-      // 注意：這裡假設你的後端 API 是用名字來過濾的
-      const progressData = await laundryService.getProgressByName(realName);
+      // 4. 讀取進度檔案並尋找該名字
+      const fs = require('fs');
+      const path = require('path');
+      const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
+      const PROGRESS_FILE = path.join(baseDir, 'laundry_progress.json');
+      
+      let foundItems = [];
 
-      if (progressData && progressData.length > 0) {
-        // 5. 格式化回覆訊息 (動態生成)
-        const replyText = formatProgressReply(realName, progressData);
+      // 如果檔案存在，讀取並比對名字
+      if (fs.existsSync(PROGRESS_FILE)) {
+          const progressData = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8'));
+          
+          // 遍歷所有訂單尋找名字匹配的
+          for (const key in progressData) {
+              const data = progressData[key];
+              // 比對名字 (去除前後空白)
+              if (data.customerName && data.customerName.trim() === realName.trim()) {
+                  // 找到了！檢查 details 格式
+                  if (Array.isArray(data.details)) {
+                      foundItems = data.details.map(detailStr => {
+                          // 解析字串 "襯衫 (掛衣號:889)" 或 "背心 (清潔中)"
+                          const isFinished = detailStr.includes('掛衣號');
+                          return {
+                              itemName: detailStr, 
+                              status: isFinished ? '完成' : '清潔中',
+                              tagNumber: isFinished ? detailStr.match(/掛衣號:(\d+)/)?.[1] || '' : ''
+                          };
+                      });
+                  }
+                  break; // 找到後就跳出
+              }
+          }
+      }
+
+      if (foundItems.length > 0) {
+        // 5. 格式化回覆訊息
+        const replyText = formatProgressReply(realName, foundItems);
         
-        // 記錄這次查詢
-        await googleSheetLogger.logInteraction(userId, realName, userMessage, "查詢成功");
+        // 記錄查詢
+        if (typeof googleSheetLogger !== 'undefined') {
+            await googleSheetLogger.logInteraction(userId, realName, userMessage, "查詢成功");
+        }
         
         return client.replyMessage(replyToken, {
           type: 'text',
@@ -2442,14 +2472,22 @@ async function handleMessage(event) {
       }
     }
 
-    // 6. 如果不是查詢進度，則轉交給 AI 處理一般對話
+    // 6. 如果不是查詢進度，則轉交給 AI 處理
     console.log(`🤖 轉交 AI 處理一般對話...`);
-    const aiReply = await aiService.getReply(userId, userMessage);
+    let aiReply = '';
+    try {
+        aiReply = await claudeAI.handleTextMessage(userMessage, userId);
+    } catch (aiErr) {
+        console.error('AI 回覆生成失敗:', aiErr);
+        aiReply = '抱歉，我現在有點忙不過來，請稍後再跟我說話！';
+    }
     
-    return client.replyMessage(replyToken, {
-      type: 'text',
-      text: aiReply
-    });
+    if (aiReply) {
+        return client.replyMessage(replyToken, {
+          type: 'text',
+          text: aiReply
+        });
+    }
 
   } catch (error) {
     console.error('處理訊息發生錯誤:', error);
@@ -2460,9 +2498,9 @@ async function handleMessage(event) {
   }
 }
 
-// 輔助函式：格式化進度回覆 (與你原本的邏輯保持一致)
+// 輔助函式：格式化進度回覆
 function formatProgressReply(name, items) {
-  const finishedItems = items.filter(i => i.status === '完成'); // 假設狀態是 '完成'
+  const finishedItems = items.filter(i => i.status === '完成'); 
   const processingItems = items.filter(i => i.status !== '完成');
   
   let reply = `${name} 您好 💙 幫您查到了！\n`;
@@ -2471,12 +2509,12 @@ function formatProgressReply(name, items) {
 
   // 列出已完成
   finishedItems.forEach(item => {
-    reply += `✅ ${item.itemName} (掛衣號:${item.tagNumber})\n`;
+    reply += `✅ ${item.itemName}\n`;
   });
 
   // 列出未完成
   processingItems.forEach(item => {
-    reply += `⏳ ${item.itemName} (清潔中)\n`;
+    reply += `⏳ ${item.itemName}\n`;
   });
 
   if (processingItems.length > 0) {
@@ -2486,77 +2524,23 @@ function formatProgressReply(name, items) {
   }
   
   // 加上 LIFF 連結
-  reply += `\n\n您也可以點此查看詳情 🔍\nhttps://liff.line.me/2004612704-JnzA1qN6#/home`;
+  reply += `\n\n您也可以點此查看詳情 🔍\nhttps://liff.line.me/${YOUR_LIFF_ID || '2004612704-JnzA1qN6'}#/home`;
 
   return reply;
 }
-
-        // 3. 寫入檔案
-        fs.writeFileSync(PROGRESS_FILE, JSON.stringify(dummyData, null, 2), 'utf8');
-
-        res.send('<h1>✅ 成功！已強制建立 laundry_progress.json</h1><p>現在請去 LINE 問「洗好了嗎」，絕對會抓到！</p>');
-
-    } catch (error) {
-        res.send(`<h1>❌ 失敗</h1><p>${error.message}</p>`);
-    }
-});
-// 👆👆👆 加完存檔 👆👆👆
-
-// 👇👇👇 請把這段插入在 app.listen 的 上面 👇👇👇
-
-// 🔥【強制測試數據】伺服器啟動時，自動建立假資料檔
-// 這樣你就不用跑 Python 也能測試「姓名查詢」功能了！
-try {
-    const fs = require('fs');
-    const path = require('path');
-    const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
-    
-    // 確保資料夾存在
-    if (!fs.existsSync(baseDir)) {
-        fs.mkdirSync(baseDir, { recursive: true });
-    }
-
-    const PROGRESS_FILE = path.join(baseDir, 'laundry_progress.json');
-
-    // 寫入包含你名字的測試資料
-    const dummyData = {
-        "625": {
-            "customerName": "小林王子大大", // 👈 這裡必須跟你的 LINE 名字一模一樣
-            "total": 5,
-            "finished": 3,
-            "details": [
-                "西裝外套 (掛衣號:888)",
-                "襯衫 (掛衣號:889)",
-                "西裝褲 (掛衣號:890)",
-                "領帶 (清潔中)",
-                "背心 (清潔中)"
-            ],
-            "updateTime": new Date().toISOString()
-        }
-    };
-
-    // 強制寫入檔案 (覆蓋舊的)
-    fs.writeFileSync(PROGRESS_FILE, JSON.stringify(dummyData, null, 2), 'utf8');
-    console.log('✅ [系統啟動] 已自動建立 laundry_progress.json 測試資料');
-    console.log('✅ 資料內容包含用戶: 小林王子大大');
-
-} catch (e) {
-    console.error('❌ 建立測試資料失敗:', e);
-}
-
-// 👆👆👆 插入結束 👆👆👆
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
   console.log(`伺服器正在運行,端口:${PORT}`);
   logger.logToFile(`伺服器正在運行,端口:${PORT}`);
 
-// 🧺 初始化取件追蹤
+  // 🧺 初始化取件追蹤
   pickupRoutes.setLineClient(client);
   setInterval(() => {
-  pickupRoutes.checkAndSendReminders();
+    pickupRoutes.checkAndSendReminders();
   }, 60 * 60 * 1000);
   console.log('✅ 取件追蹤系統已啟動');
+  
   try {
     await customerDB.loadAllCustomers();
     console.log('客戶資料載入完成');
@@ -2573,7 +2557,6 @@ app.listen(PORT, async () => {
     if (ordersNeedingReminder.length === 0) return;
 
     logger.logToFile(`檢測到 ${ordersNeedingReminder.length} 筆訂單需要提醒`);
-
     const rawBase = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.BASE_URL || process.env.PUBLIC_BASE_URL || '';
     const baseURL = ensureHttpsBase(rawBase) || 'https://stain-bot-production-2593.up.railway.app';
 
@@ -2581,7 +2564,7 @@ app.listen(PORT, async () => {
       try {
         const linepayPersistentUrl = `${baseURL}/payment/linepay/pay/${order.orderId}`;
         const ecpayPersistentUrl = `${baseURL}/payment/ecpay/pay/${order.orderId}`;
-
+        
         let linepayShort = linepayPersistentUrl;
         let ecpayShort = ecpayPersistentUrl;
 
@@ -2589,17 +2572,13 @@ app.listen(PORT, async () => {
           const r1 = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(linepayPersistentUrl)}`);
           const t1 = await r1.text();
           if (t1 && t1.startsWith('http')) linepayShort = t1;
-        } catch {
-          logger.logToFile(`LINE Pay 短網址生成失敗,使用原網址`);
-        }
+        } catch { }
 
         try {
           const r2 = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(ecpayPersistentUrl)}`);
           const t2 = await r2.text();
           if (t2 && t2.startsWith('http')) ecpayShort = t2;
-        } catch {
-          logger.logToFile(`綠界短網址失敗，使用原網址`);
-        }
+        } catch { }
 
         const reminderText =
           `溫馨付款提醒\n\n` +
@@ -2611,8 +2590,6 @@ app.listen(PORT, async () => {
           `若已完成付款，請忽略此訊息。感謝您的支持 💙`;
 
         await client.pushMessage(order.userId, { type: 'text', text: reminderText });
-
-        logger.logToFile(`自動發送付款提醒：${order.orderId} (第 ${order.reminderCount + 1} 次)`);
         orderManager.markReminderSent(order.orderId);
       } catch (error) {
         logger.logError(`自動提醒失敗: ${order.orderId}`, error);
@@ -2620,88 +2597,49 @@ app.listen(PORT, async () => {
     }
   }, 2 * 60 * 60 * 1000);
 });
-// ====================================
-// 每週 AI 客服分析報告
-// ====================================
-const cron = require('node-cron');
-const weeklyAnalysis = require('./services/weeklyAnalysis');
-const reportGenerator = require('./services/reportGenerator');
 
-// 每週日晚上 8 點執行（台北時間）
+// 每週 AI 客服分析報告
 cron.schedule('0 20 * * 0', async () => {
   console.log('🔍 開始生成每週 AI 客服分析報告...');
-  
   try {
-    // 1. 分析數據
     const analysis = await weeklyAnalysis.analyzeWeeklyData();
-    
-    if (!analysis || analysis.error) {
-      console.log('⚠️ 週報生成失敗:', analysis?.error || '未知錯誤');
-      return;
-    }
-
-    // 2. 生成優化建議
-    console.log('💡 正在生成 AI 優化建議...');
+    if (!analysis || analysis.error) return;
     const suggestions = await reportGenerator.generateSuggestions(analysis);
-    
-    // 3. 格式化報告
     const report = reportGenerator.formatReport(analysis, suggestions);
-    
-    // 4. 發送到 LINE
     if (process.env.ADMIN_USER_ID) {
-      await client.pushMessage(process.env.ADMIN_USER_ID, {
-        type: 'text',
-        text: report
-      });
-      console.log('✅ 週報已發送到 LINE');
+      await client.pushMessage(process.env.ADMIN_USER_ID, { type: 'text', text: report });
     }
-    
-    logger.logToFile('✅ 週報生成成功');
-    
   } catch (error) {
     console.error('❌ 週報生成失敗:', error);
-    logger.logError('週報生成失敗', error);
   }
-}, {
-  timezone: "Asia/Taipei"
-});
+}, { timezone: "Asia/Taipei" });
 
 console.log('⏰ 每週報告排程已啟動（每週日 20:00）');
 
-// 🔍 測試 token 詳細資訊
+// 測試路由
 app.get('/test-token-detail', async (req, res) => {
-  try {
-    const googleAuth = require('./services/googleAuth');
-    const oauth2Client = googleAuth.getOAuth2Client();
-    
-    const creds = oauth2Client.credentials;
-    
-    res.json({
-      hasToken: !!creds,
-      hasAccessToken: !!creds?.access_token,
-      hasRefreshToken: !!creds?.refresh_token,
-      scopes: creds?.scope?.split(' ') || [],
-      expiry: creds?.expiry_date ? new Date(creds.expiry_date).toISOString() : null,
-      tokenType: creds?.token_type
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+    try {
+        const googleAuth = require('./services/googleAuth');
+        const oauth2Client = googleAuth.getOAuth2Client();
+        const creds = oauth2Client.credentials;
+        res.json({
+            hasToken: !!creds,
+            expiry: creds?.expiry_date ? new Date(creds.expiry_date).toISOString() : null
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
 app.get('/test-auth-email', async (req, res) => {
-  try {
-    const googleAuth = require('./services/googleAuth');
-    const { google } = require('googleapis');
-    const auth = googleAuth.getOAuth2Client();
-    const oauth2 = google.oauth2({ version: 'v2', auth });
-    const userInfo = await oauth2.userinfo.get();
-    
-    res.json({
-      email: userInfo.data.email,
-      name: userInfo.data.name
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+    try {
+        const googleAuth = require('./services/googleAuth');
+        const { google } = require('googleapis');
+        const auth = googleAuth.getOAuth2Client();
+        const oauth2 = google.oauth2({ version: 'v2', auth });
+        const userInfo = await oauth2.userinfo.get();
+        res.json({ email: userInfo.data.email });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
