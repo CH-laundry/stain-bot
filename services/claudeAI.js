@@ -1786,57 +1786,56 @@ function detectQuestionType(message) {
 // 處理文字訊息（Claude AI）
 // ====================================
 // 專門用來查詢洗衣進度的函數
+// 專門用來查詢洗衣進度的函數 (全員體驗版)
 async function checkLaundryProgress(userId) {
     try {
-        // 🔥🔥🔥 第一順位：管理員強制展示模式 🔥🔥🔥
-        // 只要是你的 ID，直接回傳設定好的數據，不查資料庫！
-        if (userId === 'U5099169723d6e83588c5f23dfaf6f9cf') {
-            console.log('🧪 [測試] 偵測到管理者，強制回傳展示數據');
-            return {
-                customerName: '小林王子大大',
-                total: 3,
-                finished: 2,
-                details: [
-                    '襯衫 (掛衣號:1037)', 
-                    'T-SHIRT (掛衣號:1039)', 
-                    'POLO衫 (清潔中)'
-                ]
-            };
-        }
-        // 🔥🔥🔥 展示模式結束 🔥🔥🔥
+        // 1. 先嘗試去真正的資料庫找人 (這是給舊客人的)
+        let customerNo = null;
+        let displayName = '貴賓';
 
-        // --- 以下是給真實客人的邏輯 ---
-        
-        if (!customerDatabase) return null;
-
-        const customer = customerDatabase.getCustomer(userId);
-        if (!customer) {
-            console.log(`[Progress] 找不到此 LINE ID 的資料: ${userId}`);
-            return null;
+        // 如果資料庫有開啟，就去查查看
+        if (customerDatabase) {
+            const customer = customerDatabase.getCustomer(userId);
+            if (customer) {
+                // 找到了！抓出他的編號
+                const rawId = customer.realName || customer.displayName;
+                customerNo = String(rawId).replace(/\D/g, ''); 
+                displayName = customer.displayName;
+            }
         }
 
-        // 取得客戶編號
-        const rawId = customer.realName || customer.displayName;
-        const customerNo = String(rawId).replace(/\D/g, ''); 
-        
-        if (!customerNo) return null;
-
-        console.log(`[Progress] 準備查詢客戶編號: ${customerNo}`);
-
-        // 呼叫 API
-        const port = process.env.PORT || 3000;
-        const apiUrl = `http://localhost:${port}/api/pos-sync/query-progress/${customerNo}`;
-        
-        const response = await fetch(apiUrl);
-        const json = await response.json();
-
-        if (json.success && json.data) {
-            return {
-                ...json.data,
-                customerName: customer.displayName || '貴賓'
-            };
+        // 2. 如果有編號，就去問雲端伺服器 (查真實進度)
+        if (customerNo) {
+            console.log(`[Progress] 找到綁定客戶 ${customerNo}，查詢真實數據...`);
+            const port = process.env.PORT || 3000;
+            const apiUrl = `http://localhost:${port}/api/pos-sync/query-progress/${customerNo}`;
+            
+            try {
+                const response = await fetch(apiUrl);
+                const json = await response.json();
+                // 如果查到真的資料，就回傳真的！
+                if (json.success && json.data) {
+                    return { ...json.data, customerName: displayName };
+                }
+            } catch (e) {
+                console.error('API 連線失敗，轉為顯示體驗數據');
+            }
         }
-        return null;
+
+        // 3. 🔥 重點在這裡！找不到人怎麼辦？ 🔥
+        // 原本是直接放棄 (return null)，現在改成「直接給他看範例」！
+        console.log(`[Progress] ID ${userId} 查無資料，顯示體驗版數據`);
+        
+        return {
+            customerName: '體驗貴賓', // 這裡改叫體驗貴賓，才不會大家都叫小林王子
+            total: 3,
+            finished: 2,
+            details: [
+                '襯衫 (掛衣號:1037)', 
+                'T-SHIRT (掛衣號:1039)', 
+                'POLO衫 (清潔中)'
+            ]
+        };
 
     } catch (error) {
         console.error('[Progress] 查詢失敗:', error);
