@@ -508,20 +508,36 @@ app.post('/webhook', async (req, res) => {
               }
 
               if (foundItems.length > 0) {
-                  // --- 查到了 ---
+                  // --- 查到了 (已更新為您的專屬格式) ---
                   const finished = foundItems.filter(i => i.isFin).length;
                   const processing = foundItems.length - finished;
                   
-                  let reply = `${realName} 您好 💙 幫您查到了！\n共 ${foundItems.length} 件，已完成 ${finished} 件 ✨\n\n`;
-                  foundItems.forEach(item => { reply += item.isFin ? `✅ ${item.txt}\n` : `⏳ ${item.txt}\n`; });
+                  // 1. 開頭問候
+                  let reply = `${realName} 您好 💙 幫您查到了！\n`;
                   
-                  if (processing > 0) reply += `\n還有 ${processing} 件清洗中 💙`;
-                  else reply += `\n全部洗好囉！歡迎取件 💙`;
+                  // 2. 總數統計
+                  reply += `您這次送洗共有 ${foundItems.length} 件，其中 ${finished} 件已經清洗完成 ✨\n\n`;
                   
-                  reply += `\n\n查看詳情 🔍\nhttps://liff.line.me/2008313382-3Xna6abB#/home`;
+                  // 3. 詳細清單
+                  reply += `目前進度如下：\n`;
+                  foundItems.forEach(item => { 
+                      // 這裡會自動產生 "✅ 西裝外套 (掛衣號:888)" 或 "⏳ 領帶 (清潔中)"
+                      reply += item.isFin ? `✅ ${item.txt}\n` : `⏳ ${item.txt}\n`; 
+                  });
                   
-                  // 🔥 改用 pushMessage，完全避開 replyToken 問題
+                  // 4. 結尾提醒
+                  if (processing > 0) {
+                      reply += `\n還有 ${processing} 件正在努力清潔中，好了會立即通知您喔 💙`;
+                  } else {
+                      reply += `\n全部都洗好囉！歡迎來店取件 💙`;
+                  }
+                  
+                  // 5. LIFF 連結
+                  reply += `\n\n您也可以點此查看詳情 🔍\nhttps://liff.line.me/2008313382-3Xna6abB#/home`;
+                  
+                  // 發送訊息
                   await client.pushMessage(userId, { type: 'text', text: reply });
+              }
               } else {
                   // --- 查不到 ---
                   let debugMsg = `😭 ${realName} 您好，系統找不到您的資料。\n`;
