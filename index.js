@@ -52,6 +52,26 @@ const app = express();
 const cors = require('cors');
 app.use(cors());
 
+// 🔥 強制刪除舊的進度檔案 (工具用)
+app.get('/api/force-clear', (req, res) => {
+    try {
+        const fs = require('fs');
+        const path = require('path');
+        const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
+        const PROGRESS_FILE = path.join(baseDir, 'laundry_progress.json');
+
+        if (fs.existsSync(PROGRESS_FILE)) {
+            fs.unlinkSync(PROGRESS_FILE); // 刪除檔案
+            console.log('🗑️ 已刪除舊的 laundry_progress.json');
+            res.send('<h1>✅ 舊資料已刪除！</h1><p>請重新從店面電腦發送一次新的進度資料。</p>');
+        } else {
+            res.send('<h1>⚠️ 檔案不存在</h1><p>目前沒有舊資料，可以直接測試。</p>');
+        }
+    } catch (e) {
+        res.send(`刪除失敗: ${e.message}`);
+    }
+});
+
 // Volume 資料夾
 const FILE_ROOT = '/data/uploads';
 fs.mkdirSync(FILE_ROOT, { recursive: true });
