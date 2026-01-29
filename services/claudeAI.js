@@ -1786,60 +1786,24 @@ function detectQuestionType(message) {
 // 處理文字訊息（Claude AI）
 // ====================================
 // 專門用來查詢洗衣進度的函數
-// 專門用來查詢洗衣進度的函數 (全員體驗版)
 async function checkLaundryProgress(userId) {
     try {
-        // 1. 先嘗試去真正的資料庫找人
-        let customerNo = null;
-        let displayName = '貴賓';
-
-        if (customerDatabase) {
-            const customer = customerDatabase.getCustomer(userId);
-            if (customer) {
-                const rawId = customer.realName || customer.displayName;
-                customerNo = String(rawId).replace(/\D/g, ''); 
-                displayName = customer.displayName;
-            }
+        // 🔥🔥🔥 第一順位：管理員強制展示模式 🔥🔥🔥
+        // 只要是你的 ID，直接回傳設定好的數據，不查資料庫！
+        if (userId === 'U5099169723d6e83588c5f23dfaf6f9cf') {
+            console.log('🧪 [測試] 偵測到管理者，強制回傳展示數據');
+            return {
+                customerName: '小林王子大大',
+                total: 3,
+                finished: 2,
+                details: [
+                    '襯衫 (掛衣號:1037)', 
+                    'T-SHIRT (掛衣號:1039)', 
+                    'POLO衫 (清潔中)'
+                ]
+            };
         }
-
-        // 2. 如果資料庫有這個人，就去查真實數據
-        if (customerNo) {
-            console.log(`[Progress] 找到綁定客戶 ${customerNo}，查詢真實數據...`);
-            const port = process.env.PORT || 3000;
-            const apiUrl = `http://localhost:${port}/api/pos-sync/query-progress/${customerNo}`;
-            
-            try {
-                const response = await fetch(apiUrl);
-                const json = await response.json();
-                if (json.success && json.data) {
-                    return { ...json.data, customerName: displayName };
-                }
-            } catch (e) {
-                console.error('API 連線失敗，轉為測試數據');
-            }
-        }
-
-        // 3. 🔥🔥🔥 關鍵修改：如果是陌生人，一律回傳「測試數據」 🔥🔥🔥
-        // 這樣所有客人問「洗好了嗎」，都會看到這個範例畫面！
-        console.log(`[Progress] ID ${userId} 未綁定或查無資料，顯示體驗版數據`);
-        
-        return {
-            customerName: '體驗貴賓', // 這裡會顯示給未綁定的客人看
-            total: 3,
-            finished: 2,
-            details: [
-                '襯衫 (掛衣號:1037)', 
-                'T-SHIRT (掛衣號:1039)', 
-                'POLO衫 (清潔中)'
-            ]
-        };
-        // 🔥🔥🔥 修改結束 🔥🔥🔥
-
-    } catch (error) {
-        console.error('[Progress] 查詢失敗:', error);
-        return null;
-    }
-}
+        // 🔥🔥🔥 展示模式結束 🔥🔥🔥
 
         // --- 以下是給真實客人的邏輯 ---
         
