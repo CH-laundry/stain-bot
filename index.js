@@ -599,6 +599,184 @@ app.post('/webhook', async (req, res) => {
   } catch (err) {
     logger.logError('Webhook 全域錯誤', err);
   }
+});// ====== Webhook (全功能整合版：含超強關鍵字查詢) ======
+app.post('/webhook', async (req, res) => {
+  res.status(200).end(); // 先回覆 LINE Server 200 OK
+
+  try {
+    const events = req.body.events;
+    for (const event of events) {
+      try {
+        if (event.type !== 'message' || !event.source.userId) continue;
+        const userId = event.source.userId;
+        
+        // 1. 取得真實名字 & 更新資料
+        let realName = "貴賓";
+        try {
+            const profile = await client.getProfile(userId);
+            realName = profile.displayName ? profile.displayName.trim() : "貴賓";
+        } catch (e) {}
+
+        await saveUserProfile(userId);
+        try {
+          await customerDB.updateCustomerActivity(userId, event.message);
+        } catch (err) {}
+        
+        // ========== 處理文字訊息 ==========
+        if (event.message.type === 'text') {
+          const userMessage = event.message.text.trim();
+          logger.logUserMessage(userId, userMessage);
+          
+          // (A) 特殊指令：按 1 直接給 messageHandler
+          if (userMessage === '1' || userMessage === '１') {
+            await messageHandler.handleTextMessage(userId, userMessage, userMessage);
+            continue;
+          }
+
+          // (B) 🔎 進度查詢功能 (超完整關鍵字版)
+          // 只要客人說出這些詞，機器人就會去查進度，不會讓 AI 亂回覆
+          const queryKeywords = [
+              // 核心動作
+              '進度', '查詢', '查單', '狀況', '好了沒', '好了嗎', '好沒', '好嗎',
+              '洗好', '洗完', '完成', 'ok了', 'OK了', 'ok沒', 'OK沒',
+              
+              // 請求協助
+              '幫我看', '幫我查', '幫查', '請查', '可以看', '可以查', '能看', '能查', 
+              '幫確認', '確認一下',
+              
+              // 時間詢問
+              '還要多久', '要多久', '什麼時候', '何時', '幾點', '哪時候', '多久',
+              
+              // 抱怨或催促
+              '還沒好', '還沒洗', '太久', '怎麼這麼久', '等好久', '還在洗',
+              
+              // 其他口語
+              '我的衣服', '衣服呢', '好了没'
+          ];
+          
+          const isQueryIntent = queryKeywords.some(k => userMessage.toLowerCase().includes(k.toLowerCase()));
+
+          if (isQueryIntent) {
+              console.log(`🔍 [查詢] ${realName} 正在查詢...`);
+              const fs = require('fs');
+              const path = require('path');
+              const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
+              const PROGRESS_FILE = path.join(baseDir, 'laundry_progress.json');
+
+              let foundItems = [];
+              if (fs.existsSync(PROGRESS_FILE)) {
+                  try {
+                      const progressData = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8'));
+                      // 移除空白後比對名字
+                      const cleanRealName = realName.replace(/\s/g, ''); 
+                      for (const key in progressData) {
+                          const data = progressData[key];
+                          const dbName = data.customerName || "";
+                          const cleanDbName = dbName.replace(/\s/g, ''); 
+                          // 名字比對邏輯
+                          if (cleanDbName && cleanRealName && (cleanDbName.includes(cleanRealName) || cleanRealName.includes(cleanDbName))) {
+                              console.log(`✅ 匹配成功: ${dbName}`);
+                              if (Array.isArray(data.details)) {
+                                  foundItems = data.details.map(d => {
+                                      const isFin = d.includes('掛衣號');
+                                      return { txt: d, isFin };
+                                  });
+                              }
+                              break;
+                          }
+                      }
+                  } catch (e) { console.error('讀檔失敗', e); }
+              }
+
+              if (foundItems.length > 0) {
+                  // --- 查到了 (顯示進度) ---
+                  const finished = foundItems.filter(i => i.isFin).length;
+                  const processing = foundItems.length - finished;
+                  
+                  let reply = `${realName} 您好 💙 幫您查到了！\n`;
+                  reply += `您這次送洗共有 ${foundItems.length} 件，其中 ${finished} 件已經清洗完成 ✨\n\n`;
+                  
+                  reply += `目前進度如下：\n`;
+                  foundItems.forEach(item => { 
+                      reply += item.isFin ? `✅ ${item.txt}\n` : `⏳ ${item.txt}\n`; 
+                  });
+                  
+                  if (processing > 0) {
+                      reply += `\n還有 ${processing} 件正在努力清潔中，好了會立即通知您喔 💙`;
+                  } else {
+                      reply += `\n全部都洗好囉！歡迎來店取件 💙`;
+                  }
+                  
+                  reply += `\n\n您也可以點此查看詳情 🔍\nhttps://liff.line.me/${YOUR_LIFF_ID || '2008313382-3Xna6abB'}#/home`;
+                  
+                  await client.pushMessage(userId, { type: 'text', text: reply });
+              } else {
+                  // --- 沒查到 (顯示官方制式訊息) ---
+                  const defaultReply = `您可以線上查詢 C.H精緻洗衣 🔍\nhttps://liff.line.me/2004612704-JnzA1qN6#/home\n或是營業時間會有專人回覆您，謝謝 🙏`;
+                  await client.pushMessage(userId, { type: 'text', text: defaultReply });
+              }
+              continue; // 成功攔截查詢，跳過後面的 AI，不讓 AI 插嘴
+          }
+
+          // (C) 🤖 Claude AI 優先處理 (非查詢類問題)
+          let claudeReplied = false;
+          let aiResponse = '';
+          try {
+            aiResponse = await claudeAI.handleTextMessage(userMessage, userId);
+            if (aiResponse) {
+              await client.pushMessage(userId, { type: 'text', text: aiResponse });
+              logger.logToFile(`[Claude AI] 已回覆: ${userId}`);
+              claudeReplied = true;
+            }
+          } catch (err) { logger.logError('[Claude AI] 失敗', err); }
+
+          if (!claudeReplied) {
+            await messageHandler.handleTextMessage(userId, userMessage, userMessage);
+          }
+
+          // (D) 🧺 收件偵測 (保留您原本的功能)
+          const pickupKeywords = ['會去收', '去收回', '來收', '過去收', '收衣服', '明天收', '今天收', '收取', '安排收件', '會過去收', '可以來收', '去拿', '會來收'];
+          const containsPickup = (msg) => pickupKeywords.some(k => msg.includes(k));
+
+          // 檢查客人訊息
+          if (containsPickup(userMessage)) {
+              try {
+                const allCustomers = orderManager.getAllCustomerNumbers();
+                const cData = allCustomers.find(c => c.userId === userId);
+                const cNum = cData ? cData.number : '未登記';
+                await fetch(`${process.env.BASE_URL || 'https://stain-bot-production-2593.up.railway.app'}/api/pickup-schedule/auto-add`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId, userName: realName, message: userMessage, source: 'customer', customerNumber: cNum })
+                });
+              } catch(e) {}
+          }
+          // 檢查 AI 回覆
+          if (claudeReplied && aiResponse && containsPickup(aiResponse)) {
+             try {
+                const allCustomers = orderManager.getAllCustomerNumbers();
+                const cData = allCustomers.find(c => c.userId === userId);
+                const cNum = cData ? cData.number : '未登記';
+                await fetch(`${process.env.BASE_URL || 'https://stain-bot-production-2593.up.railway.app'}/api/pickup-schedule/auto-add`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId, userName: realName, message: aiResponse, source: 'ai', customerNumber: cNum })
+                });
+             } catch(e) {}
+          }
+
+        } else if (event.message.type === 'image') {
+          await messageHandler.handleImageMessage(userId, event.message.id);
+        } else if (event.message.type === 'sticker') {
+          logger.logUserMessage(userId, `發送了貼圖 (${event.message.stickerId})`);
+        }
+      } catch (err) {
+        logger.logError('處理事件出錯', err);
+      }
+    }
+  } catch (err) {
+    logger.logError('全局錯誤', err);
+  }
 });
 
 // ====== Google OAuth ======
