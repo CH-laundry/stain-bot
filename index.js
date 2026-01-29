@@ -136,40 +136,55 @@ app.post('/api/pos-sync/pickup-complete', async (req, res) => {
 });
 
 // ==========================================
-// 👕 新增功能：接收店面電腦的「掛衣進度」
+// 👕 接收店面電腦的「掛衣進度」 (修正版：會存名字)
 // ==========================================
 app.post('/api/pos-sync/update-progress', async (req, res) => {
     try {
-        const { customerNo, totalItems, finishedItems, details, lastUpdate } = req.body;
+        // 1. 接收資料 (包含 customerName)
+        const { customerNo, customerName, totalItems, finishedItems, details, lastUpdate } = req.body;
         
-        console.log(`[Progress] 收到進度更新: 客戶 ${customerNo} (${finishedItems}/${totalItems})`);
+        console.log(`[Progress] 收到更新: ${customerName} (#${customerNo}) - ${finishedItems}/${totalItems}`);
 
         const fs = require('fs');
         const path = require('path');
         const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
-        const PROGRESS_FILE = path.join(baseDir, 'laundry_progress.json');
-
-        // 讀取現有進度表 (如果沒有就創一個空的)
-        let progressData = {};
-        if (fs.existsSync(PROGRESS_FILE)) {
-            progressData = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8'));
+        
+        // 確保目錄存在
+        if (!fs.existsSync(baseDir)) {
+            fs.mkdirSync(baseDir, { recursive: true });
         }
 
-        // 更新這位客人的資料
-        // 我們把編號標準化 (去掉 K, 去掉 0) 變成 "625" 這種格式
+        const PROGRESS_FILE = path.join(baseDir, 'laundry_progress.json');
+
+        // 2. 讀取現有進度表
+        let progressData = {};
+        if (fs.existsSync(PROGRESS_FILE)) {
+            try {
+                progressData = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8'));
+            } catch (e) {
+                console.error('JSON 讀取錯誤，將重置檔案', e);
+                progressData = {};
+            }
+        }
+
+        // 3. 更新這位客人的資料
+        // 標準化編號 (例如 "625")
         const cleanNo = String(customerNo).replace(/\D/g, ''); 
         
         progressData[cleanNo] = {
+            customerName: customerName, // 🔥 關鍵修正：必須把名字存進去！
+            customerNo: customerNo,     // 保留原始編號 (例如 K0000625)
             total: totalItems,
             finished: finishedItems,
-            details: details, // 這裡會存 ["襯衫(已完成)", "POLO衫(清潔中)"]
+            details: details,
             updateTime: lastUpdate || new Date().toISOString()
         };
 
-        // 寫入檔案
+        // 4. 寫入檔案
         fs.writeFileSync(PROGRESS_FILE, JSON.stringify(progressData, null, 2), 'utf8');
 
-        return res.json({ success: true, message: `已更新客戶 ${cleanNo} 進度` });
+        console.log(`✅ 資料已寫入 laundry_progress.json (包含名字: ${customerName})`);
+        return res.json({ success: true, message: `已更新客戶 ${customerName} 進度` });
 
     } catch (err) {
         console.error(`❌ 進度更新失敗: ${err.message}`);
