@@ -136,14 +136,14 @@ app.post('/api/pos-sync/pickup-complete', async (req, res) => {
 });
 
 // ==========================================
-// 👕 接收店面電腦的「掛衣進度」 (修正版：強制寫入名字)
+// 👕 接收店面電腦的「掛衣進度」 (終極修正版)
 // ==========================================
 app.post('/api/pos-sync/update-progress', async (req, res) => {
     try {
-        // 1. 接收資料 (特別注意 customerName)
+        // 1. 接收資料
         const { customerNo, customerName, totalItems, finishedItems, details, lastUpdate } = req.body;
         
-        console.log(`[Progress] 收到更新: ${customerName} (#${customerNo})`);
+        console.log(`[Progress] 收到更新請求: ${customerName} (#${customerNo})`);
 
         const fs = require('fs');
         const path = require('path');
@@ -156,7 +156,7 @@ app.post('/api/pos-sync/update-progress', async (req, res) => {
 
         const PROGRESS_FILE = path.join(baseDir, 'laundry_progress.json');
 
-        // 2. 讀取現有進度表
+        // 2. 讀取現有檔案
         let progressData = {};
         if (fs.existsSync(PROGRESS_FILE)) {
             try {
@@ -166,11 +166,11 @@ app.post('/api/pos-sync/update-progress', async (req, res) => {
             }
         }
 
-        // 3. 更新資料 (重點：把名字存進去！)
+        // 3. 寫入資料 (🔥 這裡是關鍵：一定要存 customerName)
         const cleanNo = String(customerNo).replace(/\D/g, ''); 
         
         progressData[cleanNo] = {
-            customerName: customerName, // 👈 這裡就是之前缺少的關鍵！
+            customerName: customerName, // <--- 這行就是你之前缺少的！
             customerNo: customerNo,
             total: totalItems,
             finished: finishedItems,
@@ -178,15 +178,35 @@ app.post('/api/pos-sync/update-progress', async (req, res) => {
             updateTime: lastUpdate || new Date().toISOString()
         };
 
-        // 4. 寫入硬碟
+        // 4. 存檔
         fs.writeFileSync(PROGRESS_FILE, JSON.stringify(progressData, null, 2), 'utf8');
 
-        console.log(`✅ 成功儲存！名字: "${customerName}" 已寫入檔案`);
-        return res.json({ success: true, message: `已更新客戶 ${customerName}` });
+        console.log(`✅ 存檔成功！已將 "${customerName}" 寫入硬碟`);
+        
+        // 🔥 加一個除錯回應，讓你的 Python 知道伺服器真的存了
+        return res.json({ 
+            success: true, 
+            message: `伺服器確認：已儲存客戶 [${customerName}] 的資料` 
+        });
 
     } catch (err) {
-        console.error(`❌ 更新失敗: ${err.message}`);
+        console.error(`❌ 存檔失敗: ${err.message}`);
         res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// 🔥 新增：偷看檔案內容的工具 (讓你可以確認檔案裡到底有什麼)
+app.get('/api/debug-file', (req, res) => {
+    const fs = require('fs');
+    const path = require('path');
+    const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
+    const PROGRESS_FILE = path.join(baseDir, 'laundry_progress.json');
+    
+    if (fs.existsSync(PROGRESS_FILE)) {
+        const data = fs.readFileSync(PROGRESS_FILE, 'utf8');
+        res.send(`<pre>${data}</pre>`); // 直接顯示檔案內容
+    } else {
+        res.send('檔案還不存在');
     }
 });
 
