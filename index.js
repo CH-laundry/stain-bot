@@ -531,7 +531,7 @@ app.post('/webhook', async (req, res) => {
                       reply += `\n全部都洗好囉！歡迎來店取件 💙`;
                   }
                   
-                  reply += `\n\n您也可以點此查看詳情 🔍\nhttps://liff.line.me/2008313382-3Xna6abB#/home`;
+                  reply += `\n\n您也可以點此查看詳情 🔍\nhttps://liff.line.me/2004612704-JnzA1qN6#/home`;
                   
                   await client.pushMessage(userId, { type: 'text', text: reply });
 
