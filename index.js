@@ -468,14 +468,96 @@ const queryKeywords = [
 
 const isQueryQuestion = queryKeywords.some(keyword => userMessage.includes(keyword));
 
-if (isQueryQuestion) {
-  console.log('🔇 偵測到查詢問題，直接回覆（不給 AI 處理）');
-  await client.pushMessage(userId, {
-    type: 'text',
-    text: '好的 💙 營業時間會有專人幫您查詢並回覆您'
-  });
-  continue; // 跳過後續處理，不執行 Claude AI
-}
+// ====== 👇👇👇 請從這裡開始複製 (替換掉原本的 isQueryQuestion 區塊) 👇👇👇 ======
+    if (isQueryQuestion) {
+      console.log('🔍 偵測到查詢意圖，開始查詢 JSON 檔案...');
+      
+      try {
+        // 1. 取得用戶 LINE 真實名稱
+        const profile = await client.getProfile(userId);
+        const realName = profile.displayName ? profile.displayName.trim() : "未知用戶";
+
+        // 2. 準備讀取檔案
+        const fs = require('fs');
+        const path = require('path');
+        const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
+        const PROGRESS_FILE = path.join(baseDir, 'laundry_progress.json');
+
+        let foundItems = [];
+        let allNames = []; // 用來除錯，讓你知道它看到了誰
+
+        if (fs.existsSync(PROGRESS_FILE)) {
+          // 讀取檔案
+          const fileContent = fs.readFileSync(PROGRESS_FILE, 'utf8');
+          const progressData = JSON.parse(fileContent);
+
+          // 3. 開始比對名字
+          for (const key in progressData) {
+            const data = progressData[key];
+            const dbName = data.customerName ? data.customerName.trim() : "";
+            
+            if (dbName) allNames.push(dbName); // 記錄所有名單
+
+            // 🔥 超級寬鬆比對 (移除所有空白)
+            const n1 = dbName.replace(/\s/g, '');
+            const n2 = realName.replace(/\s/g, '');
+
+            // 只要名字互相包含就算找到
+            if (n1 === n2 || n1.includes(n2) || n2.includes(n1)) {
+              if (Array.isArray(data.details)) {
+                foundItems = data.details.map(d => {
+                  const isFin = d.includes('掛衣號');
+                  return { txt: d, isFin };
+                });
+              }
+              break; // 找到了就跳出
+            }
+          }
+        }
+
+        // 4. 回覆結果
+        if (foundItems.length > 0) {
+          // --- 找到了 ---
+          const finished = foundItems.filter(i => i.isFin).length;
+          const processing = foundItems.length - finished;
+
+          let reply = `${realName} 您好 💙 幫您查到了！\n`;
+          reply += `共 ${foundItems.length} 件，已完成 ${finished} 件 ✨\n\n`;
+          
+          foundItems.forEach(item => {
+             reply += item.isFin ? `✅ ${item.txt}\n` : `⏳ ${item.txt}\n`;
+          });
+          
+          if (processing > 0) reply += `\n還有 ${processing} 件努力清潔中 💙`;
+          else reply += `\n全部都洗好囉！歡迎取件 💙`;
+
+          // 附上 LIFF 連結
+          reply += `\n\n查看詳情 🔍\nhttps://liff.line.me/${YOUR_LIFF_ID}#/home`;
+
+          await client.pushMessage(userId, { type: 'text', text: reply });
+          
+        } else {
+          // --- 沒找到 (顯示除錯資訊) ---
+          let msg = `${realName} 您好，目前系統查無您的進度。\n`;
+          
+          if (allNames.length > 0) {
+             msg += `\n🤔 系統目前有名單：\n${allNames.slice(0, 15).join('、')}`;
+             msg += `\n(請確認您的 LINE 名字是否與店內留的完全一致)`;
+          } else {
+             msg += `\n⚠️ 系統目前是空的 (尚未收到店內電腦資料)`;
+          }
+          
+          await client.pushMessage(userId, { type: 'text', text: msg });
+        }
+
+      } catch (err) {
+        console.error('查詢過程發生錯誤:', err);
+        await client.pushMessage(userId, { type: 'text', text: '系統暫時忙碌中，請稍後再試' });
+      }
+
+      continue; // 阻擋，不讓後面的 AI 再回覆一次
+    }
+// ====== 👆👆👆 複製到這裡結束 👆👆👆 ======
 // ========================================
           
           // ⭐ Claude AI 優先處理
