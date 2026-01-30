@@ -116,13 +116,13 @@ app.post('/api/pos-sync/pickup-complete', async (req, res) => {
 });
 
 // ==========================================
-// 👕 新增功能：接收店面電腦的「掛衣進度」 (BarCode 智慧合併版)
+// 👕 掛衣進度同步接口 (最終穩定版)
 // ==========================================
 app.post('/api/pos-sync/update-progress', async (req, res) => {
     try {
         const { customerNo, customerName, rawItems, lastUpdate } = req.body;
-        
-        console.log(`[Sync] 收到 ${customerName || '未知'} (#${customerNo}) 的 ${rawItems ? rawItems.length : 0} 筆變動`);
+        // 簡化 Log
+        console.log(`[Sync] ${customerName || '未知'} (#${customerNo}) 更新 ${rawItems ? rawItems.length : 0} 筆`);
 
         const fs = require('fs');
         const path = require('path');
@@ -136,66 +136,57 @@ app.post('/api/pos-sync/update-progress', async (req, res) => {
 
         const cleanNo = String(customerNo).replace(/\D/g, ''); 
         
-        // 1. 取出這位客人現有的資料 (如果沒有就創新的)
         let currentData = progressData[cleanNo] || { 
             customerName: customerName || "貴賓", 
-            itemsMap: {} // 這是存衣服的小倉庫
+            itemsMap: {} 
         };
 
-        // 更新名字
         if (customerName) currentData.customerName = customerName;
         if (!currentData.itemsMap) currentData.itemsMap = {};
 
-        // 2. 【核心邏輯】依據 BarCode 進行更新 (只改變動的那一件)
         if (Array.isArray(rawItems)) {
             rawItems.forEach(item => {
-                // 用 BarCode 當身分證 (如果真的沒有，才勉強用名稱)
+                // 用 BarCode 或 Name 當 Key
                 const key = item.barcode || item.name; 
                 
                 if (key) {
+                    // 只要傳來的 location 是有值的，就標記 done，否則 processing
                     const hasLocation = item.location && item.location.trim() !== "" && item.location !== "null";
                     
-                    // 更新或新增這件衣服
+                    // 這裡的邏輯：如果有名字傳來就更新名字，沒有就維持原樣
+                    const currentItem = currentData.itemsMap[key] || {};
+                    
                     currentData.itemsMap[key] = {
-                        name: item.name,
-                        location: hasLocation ? item.location : "", // 如果是取消，這裡會變空
-                        status: hasLocation ? "done" : "processing", // 狀態跟著變
+                        name: item.name || currentItem.name || "衣物", // 優先用新名字，沒有就用舊的
+                        location: hasLocation ? item.location : "",
+                        status: hasLocation ? "done" : "processing",
                         barcode: key
                     };
                 }
             });
         }
 
-        // 3. 重新整理清單 (給 LINE 顯示用的)
+        // 重新統計
         const allItems = Object.values(currentData.itemsMap);
         const totalItems = allItems.length;
-        // 計算有掛衣號的數量
         const finishedItems = allItems.filter(i => i.status === "done").length;
         
         const details = allItems.map(i => {
-            if (i.status === "done") {
-                return `${i.name} (掛衣號:${i.location})`;
-            } else {
-                return `${i.name} (清潔中)`;
-            }
+            return i.status === "done" ? `${i.name} (掛衣號:${i.location})` : `${i.name} (清潔中)`;
         });
 
-        // 4. 存檔
         progressData[cleanNo] = {
             customerName: currentData.customerName,
             total: totalItems,
             finished: finishedItems,
             details: details,
-            itemsMap: currentData.itemsMap, // 把小倉庫存回去，下次才能繼續拼湊
+            itemsMap: currentData.itemsMap,
             updateTime: lastUpdate || new Date().toISOString()
         };
 
         fs.writeFileSync(PROGRESS_FILE, JSON.stringify(progressData, null, 2), 'utf8');
 
-        return res.json({ 
-            success: true, 
-            message: `已更新 ${currentData.customerName}: ${finishedItems}/${totalItems} 完成` 
-        });
+        return res.json({ success: true, message: `狀態更新: ${finishedItems}/${totalItems} 完成` });
 
     } catch (err) {
         console.error(`❌ 更新失敗: ${err.message}`);
