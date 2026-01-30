@@ -116,13 +116,14 @@ app.post('/api/pos-sync/pickup-complete', async (req, res) => {
 });
 
 // ==========================================
-// 👕 掛衣進度同步接口 (防亂碼 + 自動清洗版)
+// 👕 掛衣進度同步接口 (自動除靈 + ID 優先版)
 // ==========================================
 app.post('/api/pos-sync/update-progress', async (req, res) => {
     try {
         const { customerNo, customerName, rawItems, lastUpdate } = req.body;
         
-        // 1. 讀取現有資料
+        console.log(`[Sync] ${customerName || '未知'} (#${customerNo}) 更新 ${rawItems ? rawItems.length : 0} 筆`);
+
         const fs = require('fs');
         const path = require('path');
         const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
@@ -142,70 +143,65 @@ app.post('/api/pos-sync/update-progress', async (req, res) => {
         if (customerName) currentData.customerName = customerName;
         if (!currentData.itemsMap) currentData.itemsMap = {};
 
-        // 2. 【核心邏輯】過濾亂碼 + 更新狀態
+        // 1. 更新資料
         if (Array.isArray(rawItems)) {
             rawItems.forEach(item => {
-                // 用 ID 當唯一 Key (這樣才不會重複)
+                // 這裡的 barcode 其實是 Python 傳來的 ID
                 const key = item.barcode || item.name; 
                 
                 if (key) {
                     let loc = item.location;
-                    
-                    // 🔥 強力過濾：如果掛衣號太長(超過8字)，代表那是系統亂碼，視為空值(取消)
-                    if (loc && loc.length > 8) {
-                        loc = ""; 
-                    }
-                    
+                    // 過濾亂碼
+                    if (loc && loc.length > 8) loc = ""; 
                     const hasLocation = loc && loc.trim() !== "" && loc !== "null";
                     
-                    // 取得舊資料
-                    const oldItem = currentData.itemsMap[key] || {};
-                    
-                    // 更新 (如果新名字是"衣物"但舊的有名字，就保留舊的)
-                    const realName = (item.name === '衣物' && oldItem.name && oldItem.name !== '衣物') 
-                                     ? oldItem.name 
-                                     : item.name;
-
                     currentData.itemsMap[key] = {
-                        name: realName,
+                        name: item.name,
                         location: hasLocation ? loc : "",
-                        status: hasLocation ? "done" : "processing", // 有正常號碼才算完成
-                        barcode: key
+                        status: hasLocation ? "done" : "processing",
+                        barcode: key,
+                        lastUpdate: Date.now() // 標記更新時間
                     };
                 }
             });
         }
 
-        // 3. 【自我修復】檢查所有現存資料，把那些「亂碼號碼」的髒資料清掉
+        // 2. 🔥🔥🔥【關鍵修正：自動清除重複項目】🔥🔥🔥
+        // 如果發現有兩件衣服名字一樣 (例如 "護士服")，只保留最新的那個 ID
         const allItems = Object.values(currentData.itemsMap);
-        
-        // 重新過濾：只保留合法的
-        const cleanItems = [];
-        const cleanMap = {};
-        
+        const nameGroups = {};
+
+        // 分組
         allItems.forEach(item => {
-            // 如果掛衣號是亂碼，強制清空
-            if (item.location && item.location.length > 8) {
-                item.location = "";
-                item.status = "processing";
+            if (!nameGroups[item.name]) nameGroups[item.name] = [];
+            nameGroups[item.name].push(item);
+        });
+
+        const cleanMap = {};
+        Object.keys(nameGroups).forEach(name => {
+            const group = nameGroups[name];
+            if (group.length > 1) {
+                // 發現重複！找出最新的那個 (Last Update 最大)
+                group.sort((a, b) => (b.lastUpdate || 0) - (a.lastUpdate || 0));
+                const keeper = group[0];
+                cleanMap[keeper.barcode] = keeper;
+                console.log(`🧹 自動清除重複: ${name} (刪除 ${group.length - 1} 筆舊資料)`);
+            } else {
+                cleanMap[group[0].barcode] = group[0];
             }
-            // 排除重複的 "衣物" (如果它是亂碼產生的 ghost item)
-            // 這裡簡單做：只要 Key 正常就留著
-            cleanMap[item.barcode] = item;
-            cleanItems.push(item);
         });
 
         currentData.itemsMap = cleanMap; // 寫回乾淨的 Map
 
-        // 4. 計算統計
-        const totalItems = cleanItems.length;
-        const finishedItems = cleanItems.filter(i => i.status === "done").length;
+        // 3. 統計與存檔
+        const finalItems = Object.values(currentData.itemsMap);
+        const totalItems = finalItems.length;
+        const finishedItems = finalItems.filter(i => i.status === "done").length;
         
-        const details = cleanItems.map(i => {
+        const details = finalItems.map(i => {
             return i.status === "done" ? `${i.name} (掛衣號:${i.location})` : `${i.name} (清潔中)`;
         });
 
-        // 5. 存檔
         progressData[cleanNo] = {
             customerName: currentData.customerName,
             total: totalItems,
@@ -216,10 +212,8 @@ app.post('/api/pos-sync/update-progress', async (req, res) => {
         };
 
         fs.writeFileSync(PROGRESS_FILE, JSON.stringify(progressData, null, 2), 'utf8');
-        
-        console.log(`[Sync] 已修復 ${currentData.customerName}: ${finishedItems}/${totalItems}`);
 
-        return res.json({ success: true, message: `狀態更新: ${finishedItems}/${totalItems} 完成` });
+        return res.json({ success: true, message: `已修正並更新: ${finishedItems}/${totalItems} 完成` });
 
     } catch (err) {
         console.error(`❌ 更新失敗: ${err.message}`);
