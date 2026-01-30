@@ -116,13 +116,19 @@ app.post('/api/pos-sync/pickup-complete', async (req, res) => {
 });
 
 // ==========================================
-// 👕 新增功能：接收店面電腦的「掛衣進度」
+// 👕 修改這個 API：接收店面電腦的「掛衣進度」
 // ==========================================
+// 
+// 找到你 index.js 裡面的這個 API：
+//   app.post('/api/pos-sync/update-progress', ...)
+// 
+// 把它整個替換成下面這段：
+
 app.post('/api/pos-sync/update-progress', async (req, res) => {
     try {
-        const { customerNo, totalItems, finishedItems, details, lastUpdate } = req.body;
+        const { customerNo, customerName, totalItems, finishedItems, details, lastUpdate } = req.body;
         
-        console.log(`[Progress] 收到進度更新: 客戶 ${customerNo} (${finishedItems}/${totalItems})`);
+        console.log(`[Progress] 收到進度更新: ${customerName} - 客戶編號 ${customerNo} (${finishedItems}/${totalItems})`);
 
         const fs = require('fs');
         const path = require('path');
@@ -136,26 +142,30 @@ app.post('/api/pos-sync/update-progress', async (req, res) => {
         }
 
         // 更新這位客人的資料
-        // 我們把編號標準化 (去掉 K, 去掉 0) 變成 "625" 這種格式
-        const cleanNo = String(customerNo).replace(/\D/g, ''); 
+        // 用客戶編號當 key（去掉 K, 去掉前導 0）
+        const cleanNo = String(customerNo).replace(/\D/g, '').replace(/^0+/, '') || customerNo;
         
         progressData[cleanNo] = {
             total: totalItems,
             finished: finishedItems,
-            details: details, // 這裡會存 ["襯衫(已完成)", "POLO衫(清潔中)"]
+            details: details,  // ["襯衫 (掛衣號:1029)", "POLO衫 (清潔中)"]
+            customerName: customerName,  // ⭐ 新增：儲存客戶名稱，用於 LINE 名稱比對
             updateTime: lastUpdate || new Date().toISOString()
         };
 
         // 寫入檔案
         fs.writeFileSync(PROGRESS_FILE, JSON.stringify(progressData, null, 2), 'utf8');
+        
+        console.log(`✅ 已更新 ${customerName} (編號:${cleanNo}) 進度: ${finishedItems}/${totalItems}`);
 
-        return res.json({ success: true, message: `已更新客戶 ${cleanNo} 進度` });
+        return res.json({ success: true, message: `已更新客戶 ${customerName} 進度` });
 
     } catch (err) {
         console.error(`❌ 進度更新失敗: ${err.message}`);
         res.status(500).json({ success: false, error: err.message });
     }
 });
+
 
 // 🔎 新增功能：讓 AI 查詢進度用的接口
 app.get('/api/pos-sync/query-progress/:customerNo', (req, res) => {
