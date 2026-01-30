@@ -116,52 +116,87 @@ app.post('/api/pos-sync/pickup-complete', async (req, res) => {
 });
 
 // ==========================================
-// 👕 新增功能：接收店面電腦的「掛衣進度」 (修正版：接收並儲存名字)
+// 👕 新增功能：接收店面電腦的「掛衣進度」 (最終版：智慧合併模式)
 // ==========================================
 app.post('/api/pos-sync/update-progress', async (req, res) => {
     try {
-        // 🔥 1. 這裡新增接收 customerName
-        const { customerNo, customerName, totalItems, finishedItems, details, lastUpdate } = req.body;
+        // 接收來自 Python 的原始資料陣列 (rawItems)
+        const { customerNo, customerName, rawItems, lastUpdate } = req.body;
         
-        // Log 方便除錯
-        const nameLog = customerName ? customerName : "未知";
-        console.log(`[Progress] 收到更新: ${nameLog} (#${customerNo}) - ${finishedItems}/${totalItems}`);
+        // 為了避免 Log 洗版，只顯示簡短資訊
+        console.log(`[Sync] 收到 ${customerName || '未知'} (#${customerNo}) 的 ${rawItems ? rawItems.length : 0} 筆資料更新`);
 
         const fs = require('fs');
         const path = require('path');
         const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
         const PROGRESS_FILE = path.join(baseDir, 'laundry_progress.json');
 
-        // 2. 讀取或初始化資料
         let progressData = {};
         if (fs.existsSync(PROGRESS_FILE)) {
-            try {
-                progressData = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8'));
-            } catch(e) {}
+            try { progressData = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8')); } catch(e) {}
         }
 
         const cleanNo = String(customerNo).replace(/\D/g, ''); 
         
-        // 3. 名字處理邏輯：優先用傳來的，沒有就用舊的，再沒有就叫"貴賓"
-        const existingName = progressData[cleanNo]?.customerName;
-        const finalName = customerName || existingName || "貴賓";
+        // 1. 取出這位客人現有的資料 (如果有的話)
+        let currentData = progressData[cleanNo] || { 
+            customerName: customerName || "貴賓", 
+            itemsMap: {} // 這是我們用來儲存「所有衣服」的小倉庫
+        };
 
-        // 4. 更新資料
+        // 確保名字有更新
+        if (customerName) currentData.customerName = customerName;
+        if (!currentData.itemsMap) currentData.itemsMap = {};
+
+        // 2. 【核心邏輯】將新資料「合併」進去
+        if (Array.isArray(rawItems)) {
+            rawItems.forEach(item => {
+                // 使用 BarCode 當作身分證 (如果沒有就用 Name)
+                const key = item.barcode || item.name; 
+                if (key) {
+                    // 更新這件衣服的狀態
+                    currentData.itemsMap[key] = {
+                        name: item.name,
+                        location: item.location, // 掛衣號
+                        status: item.location ? "done" : "processing"
+                    };
+                }
+            });
+        }
+
+        // 3. 重新計算總數與產生 LINE 回覆用的清單
+        const allItems = Object.values(currentData.itemsMap);
+        const totalItems = allItems.length;
+        const finishedItems = allItems.filter(i => i.location && i.location !== "" && i.location !== "null").length;
+        
+        // 產生給 LINE 看的文字清單
+        const details = allItems.map(i => {
+            if (i.location && i.location !== "" && i.location !== "null") {
+                return `${i.name} (掛衣號:${i.location})`;
+            } else {
+                return `${i.name} (清潔中)`;
+            }
+        });
+
+        // 4. 存回總表
         progressData[cleanNo] = {
-            customerName: finalName, // ✅ 確保名字被存進去
+            customerName: currentData.customerName,
             total: totalItems,
             finished: finishedItems,
             details: details,
+            itemsMap: currentData.itemsMap, // 重要：把小倉庫存起來，下次才能繼續合併
             updateTime: lastUpdate || new Date().toISOString()
         };
 
-        // 5. 寫入檔案
         fs.writeFileSync(PROGRESS_FILE, JSON.stringify(progressData, null, 2), 'utf8');
 
-        return res.json({ success: true, message: `已更新客戶 ${cleanNo} (${finalName})` });
+        return res.json({ 
+            success: true, 
+            message: `已合併更新: ${currentData.customerName} 目前共 ${totalItems} 件` 
+        });
 
     } catch (err) {
-        console.error(`❌ 進度更新失敗: ${err.message}`);
+        console.error(`❌ 更新失敗: ${err.message}`);
         res.status(500).json({ success: false, error: err.message });
     }
 });
