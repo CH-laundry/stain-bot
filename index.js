@@ -116,31 +116,37 @@ app.post('/api/pos-sync/pickup-complete', async (req, res) => {
 });
 
 // ==========================================
-// 👕 新增功能：接收店面電腦的「掛衣進度」 (修正版：接收名字)
+// 👕 新增功能：接收店面電腦的「掛衣進度」 (修正版：接收並儲存名字)
 // ==========================================
 app.post('/api/pos-sync/update-progress', async (req, res) => {
     try {
-        // 🔥 重點修正：這裡新增接收 customerName
+        // 🔥 1. 這裡新增接收 customerName
         const { customerNo, customerName, totalItems, finishedItems, details, lastUpdate } = req.body;
         
-        console.log(`[Progress] 收到進度更新: 客戶 ${customerName || '未知'} (#${customerNo}) - ${finishedItems}/${totalItems}`);
+        // Log 方便除錯
+        const nameLog = customerName ? customerName : "未知";
+        console.log(`[Progress] 收到更新: ${nameLog} (#${customerNo}) - ${finishedItems}/${totalItems}`);
 
         const fs = require('fs');
         const path = require('path');
         const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
         const PROGRESS_FILE = path.join(baseDir, 'laundry_progress.json');
 
+        // 2. 讀取或初始化資料
         let progressData = {};
         if (fs.existsSync(PROGRESS_FILE)) {
-            progressData = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8'));
+            try {
+                progressData = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8'));
+            } catch(e) {}
         }
 
         const cleanNo = String(customerNo).replace(/\D/g, ''); 
         
-        // 保留舊名字邏輯：如果這次傳來的沒名字，就試著用舊的，再沒有就叫"貴賓"
+        // 3. 名字處理邏輯：優先用傳來的，沒有就用舊的，再沒有就叫"貴賓"
         const existingName = progressData[cleanNo]?.customerName;
         const finalName = customerName || existingName || "貴賓";
 
+        // 4. 更新資料
         progressData[cleanNo] = {
             customerName: finalName, // ✅ 確保名字被存進去
             total: totalItems,
@@ -149,9 +155,10 @@ app.post('/api/pos-sync/update-progress', async (req, res) => {
             updateTime: lastUpdate || new Date().toISOString()
         };
 
+        // 5. 寫入檔案
         fs.writeFileSync(PROGRESS_FILE, JSON.stringify(progressData, null, 2), 'utf8');
 
-        return res.json({ success: true, message: `已更新客戶 ${cleanNo} 進度` });
+        return res.json({ success: true, message: `已更新客戶 ${cleanNo} (${finalName})` });
 
     } catch (err) {
         console.error(`❌ 進度更新失敗: ${err.message}`);
