@@ -115,10 +115,6 @@ app.post('/api/pos-sync/pickup-complete', async (req, res) => {
     }
 });
 
-const express = require('express');
-const app = express();
-app.use(express.json());
-
 // ==========================================
 // 👕 洗衣店掛衣同步系統 (防重複版)
 // ==========================================
