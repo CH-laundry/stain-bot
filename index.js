@@ -116,103 +116,45 @@ app.post('/api/pos-sync/pickup-complete', async (req, res) => {
 });
 
 // ==========================================
-// 👕 洗衣店掛衣同步接口 (修正版：支援 mode='replace' 清空舊資料)
+// 👕 新增功能：接收店面電腦的「掛衣進度」
 // ==========================================
 app.post('/api/pos-sync/update-progress', async (req, res) => {
     try {
-        const { customerNo, customerName, rawItems, lastUpdate, mode } = req.body;
+        const { customerNo, totalItems, finishedItems, details, lastUpdate } = req.body;
         
+        console.log(`[Progress] 收到進度更新: 客戶 ${customerNo} (${finishedItems}/${totalItems})`);
+
         const fs = require('fs');
         const path = require('path');
         const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
         const PROGRESS_FILE = path.join(baseDir, 'laundry_progress.json');
 
+        // 讀取現有進度表 (如果沒有就創一個空的)
         let progressData = {};
         if (fs.existsSync(PROGRESS_FILE)) {
-            try { progressData = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8')); } catch(e) {}
+            progressData = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8'));
         }
 
-        let targetCustomerNo = String(customerNo).replace(/\D/g, '');
+        // 更新這位客人的資料
+        // 我們把編號標準化 (去掉 K, 去掉 0) 變成 "625" 這種格式
+        const cleanNo = String(customerNo).replace(/\D/g, ''); 
         
-        // 初始化客戶資料
-        if (!progressData[targetCustomerNo]) {
-            progressData[targetCustomerNo] = { 
-                customerName: customerName || "貴賓", 
-                itemsMap: {} 
-            };
-        }
-        
-        const cData = progressData[targetCustomerNo];
-        if (customerName && customerName !== "貴賓" && customerName !== "自動偵測") {
-            cData.customerName = customerName;
-        }
+        progressData[cleanNo] = {
+            total: totalItems,
+            finished: finishedItems,
+            details: details, // 這裡會存 ["襯衫(已完成)", "POLO衫(清潔中)"]
+            updateTime: lastUpdate || new Date().toISOString()
+        };
 
-        // 🔥 關鍵：如果是「查詢模式 (replace)」，先清空舊資料！
-        if (mode === 'replace') {
-            console.log(`[Reset] 清空 ${cData.customerName} 的舊資料`);
-            cData.itemsMap = {}; 
-        }
-
-        if (Array.isArray(rawItems)) {
-            rawItems.forEach(item => {
-                const id = item.barcode;
-                if (!id) return;
-
-                let loc = item.location;
-                if (loc && loc.length > 8) loc = ""; 
-                const hasLocation = loc && loc.trim() !== "";
-                
-                // 嘗試保留舊名字
-                let finalName = item.name;
-                if (mode !== 'replace' && cData.itemsMap[id] && (item.name === '衣物' || !item.name)) {
-                    finalName = cData.itemsMap[id].name;
-                }
-
-                cData.itemsMap[id] = {
-                    name: finalName || "衣物",
-                    location: hasLocation ? loc : "",
-                    status: hasLocation ? "done" : "processing",
-                    barcode: id,
-                    lastUpdate: Date.now()
-                };
-            });
-        }
-
-        // 重新統計
-        const all = Object.values(cData.itemsMap);
-        cData.total = all.length;
-        cData.finished = all.filter(i => i.status === "done").length;
-        cData.details = all.map(i => i.status === "done" ? `${i.name} (掛衣號:${i.location})` : `${i.name} (清潔中)`);
-        cData.updateTime = lastUpdate || new Date().toISOString();
-
+        // 寫入檔案
         fs.writeFileSync(PROGRESS_FILE, JSON.stringify(progressData, null, 2), 'utf8');
-        return res.json({ success: true });
+
+        return res.json({ success: true, message: `已更新客戶 ${cleanNo} 進度` });
 
     } catch (err) {
-        console.error(`❌ 更新失敗: ${err.message}`);
+        console.error(`❌ 進度更新失敗: ${err.message}`);
         res.status(500).json({ success: false, error: err.message });
     }
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-
-// 重置 API
-app.get('/api/reset-customer/:no', (req, res) => {
-    try {
-        const fs = require('fs');
-        const path = require('path');
-        const PROGRESS_FILE = path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data', 'laundry_progress.json');
-        if (fs.existsSync(PROGRESS_FILE)) {
-            let data = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8'));
-            if (data[req.params.no]) {
-                delete data[req.params.no];
-                fs.writeFileSync(PROGRESS_FILE, JSON.stringify(data, null, 2), 'utf8');
-                return res.send('<h1>✅ 已清除！請重新操作 POS 機同步。</h1>');
-            }
-        }
-        res.send('無資料');
-    } catch(e) { res.send(e.message); }
 });
 
 // 🔎 新增功能：讓 AI 查詢進度用的接口
