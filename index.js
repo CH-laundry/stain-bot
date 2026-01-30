@@ -116,14 +116,12 @@ app.post('/api/pos-sync/pickup-complete', async (req, res) => {
 });
 
 // ==========================================
-// 👕 新增功能：接收店面電腦的「掛衣進度」 (最終版：智慧合併模式)
+// 👕 新增功能：接收店面電腦的「掛衣進度」 (最終修復版：支援取消上掛)
 // ==========================================
 app.post('/api/pos-sync/update-progress', async (req, res) => {
     try {
-        // 接收來自 Python 的原始資料陣列 (rawItems)
         const { customerNo, customerName, rawItems, lastUpdate } = req.body;
         
-        // 為了避免 Log 洗版，只顯示簡短資訊
         console.log(`[Sync] 收到 ${customerName || '未知'} (#${customerNo}) 的 ${rawItems ? rawItems.length : 0} 筆資料更新`);
 
         const fs = require('fs');
@@ -138,53 +136,55 @@ app.post('/api/pos-sync/update-progress', async (req, res) => {
 
         const cleanNo = String(customerNo).replace(/\D/g, ''); 
         
-        // 1. 取出這位客人現有的資料 (如果有的話)
+        // 1. 取出這位客人現有的資料
         let currentData = progressData[cleanNo] || { 
             customerName: customerName || "貴賓", 
-            itemsMap: {} // 這是我們用來儲存「所有衣服」的小倉庫
+            itemsMap: {} 
         };
 
-        // 確保名字有更新
         if (customerName) currentData.customerName = customerName;
         if (!currentData.itemsMap) currentData.itemsMap = {};
 
-        // 2. 【核心邏輯】將新資料「合併」進去
+        // 2. 【核心邏輯】雙向更新 (支援覆蓋與取消)
         if (Array.isArray(rawItems)) {
             rawItems.forEach(item => {
-                // 使用 BarCode 當作身分證 (如果沒有就用 Name)
+                // 使用 BarCode 當作唯一識別碼
                 const key = item.barcode || item.name; 
+                
                 if (key) {
-                    // 更新這件衣服的狀態
+                    const hasLocation = item.location && item.location !== "" && item.location !== "null";
+                    
+                    // 無論有沒有掛衣號，都直接更新狀態
+                    // 如果 hasLocation 是 false，代表這件衣服被「取消上掛」了，狀態變回 processing
                     currentData.itemsMap[key] = {
                         name: item.name,
-                        location: item.location, // 掛衣號
-                        status: item.location ? "done" : "processing"
+                        location: hasLocation ? item.location : "", // 如果取消，這裡會變空字串
+                        status: hasLocation ? "done" : "processing" // 狀態同步更新
                     };
                 }
             });
         }
 
-        // 3. 重新計算總數與產生 LINE 回覆用的清單
+        // 3. 重新計算清單
         const allItems = Object.values(currentData.itemsMap);
         const totalItems = allItems.length;
-        const finishedItems = allItems.filter(i => i.location && i.location !== "" && i.location !== "null").length;
+        const finishedItems = allItems.filter(i => i.status === "done").length; // 只算 done 的
         
-        // 產生給 LINE 看的文字清單
         const details = allItems.map(i => {
-            if (i.location && i.location !== "" && i.location !== "null") {
+            if (i.status === "done") {
                 return `${i.name} (掛衣號:${i.location})`;
             } else {
                 return `${i.name} (清潔中)`;
             }
         });
 
-        // 4. 存回總表
+        // 4. 存檔
         progressData[cleanNo] = {
             customerName: currentData.customerName,
             total: totalItems,
             finished: finishedItems,
             details: details,
-            itemsMap: currentData.itemsMap, // 重要：把小倉庫存起來，下次才能繼續合併
+            itemsMap: currentData.itemsMap,
             updateTime: lastUpdate || new Date().toISOString()
         };
 
@@ -192,7 +192,7 @@ app.post('/api/pos-sync/update-progress', async (req, res) => {
 
         return res.json({ 
             success: true, 
-            message: `已合併更新: ${currentData.customerName} 目前共 ${totalItems} 件` 
+            message: `已更新: ${currentData.customerName} (完成 ${finishedItems}/${totalItems})` 
         });
 
     } catch (err) {
