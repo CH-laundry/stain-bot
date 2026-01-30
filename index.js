@@ -2578,6 +2578,30 @@ app.get('/api/pickup-schedule/today-alert', async (req, res) => {
   }
 });
 
+// 🔥 強制清除特定客戶的髒資料
+app.get('/api/reset-customer/:no', (req, res) => {
+    try {
+        const fs = require('fs');
+        const path = require('path');
+        const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
+        const PROGRESS_FILE = path.join(baseDir, 'laundry_progress.json');
+
+        if (fs.existsSync(PROGRESS_FILE)) {
+            let data = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8'));
+            const cleanNo = req.params.no;
+            
+            if (data[cleanNo]) {
+                delete data[cleanNo]; // 刪除這位客人的所有資料
+                fs.writeFileSync(PROGRESS_FILE, JSON.stringify(data, null, 2), 'utf8');
+                return res.send(`<h1>✅ 已清除客戶 ${cleanNo} 的資料</h1><p>請重新操作 POS 機以同步最新數據。</p>`);
+            }
+        }
+        res.send('找不到此客戶或檔案不存在');
+    } catch (e) {
+        res.send('錯誤: ' + e.message);
+    }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
   console.log(`伺服器正在運行,端口:${PORT}`);
