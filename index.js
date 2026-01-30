@@ -116,7 +116,7 @@ app.post('/api/pos-sync/pickup-complete', async (req, res) => {
 });
 
 // ==========================================
-// 👕 洗衣店掛衣同步系統 (防重複版)
+// 👕 洗衣店掛衣同步接口 (修正版：支援 mode='replace' 清空舊資料)
 // ==========================================
 app.post('/api/pos-sync/update-progress', async (req, res) => {
     try {
@@ -134,7 +134,7 @@ app.post('/api/pos-sync/update-progress', async (req, res) => {
 
         let targetCustomerNo = String(customerNo).replace(/\D/g, '');
         
-        // 如果還沒有這個客人的資料，初始化它
+        // 初始化客戶資料
         if (!progressData[targetCustomerNo]) {
             progressData[targetCustomerNo] = { 
                 customerName: customerName || "貴賓", 
@@ -147,11 +147,10 @@ app.post('/api/pos-sync/update-progress', async (req, res) => {
             cData.customerName = customerName;
         }
 
-        // 🔥 關鍵修正：如果是「查詢模式 (replace)」，先清空舊資料！
-        // 這樣就能解決 "3件變5件" 的問題
+        // 🔥 關鍵：如果是「查詢模式 (replace)」，先清空舊資料！
         if (mode === 'replace') {
-            console.log(`[Reset] 清空 ${cData.customerName} 的舊資料，重新寫入 ${rawItems.length} 件`);
-            cData.itemsMap = {}; // <--- 這一行救了你的 AI
+            console.log(`[Reset] 清空 ${cData.customerName} 的舊資料`);
+            cData.itemsMap = {}; 
         }
 
         if (Array.isArray(rawItems)) {
@@ -159,12 +158,11 @@ app.post('/api/pos-sync/update-progress', async (req, res) => {
                 const id = item.barcode;
                 if (!id) return;
 
-                // 處理位置與狀態
                 let loc = item.location;
                 if (loc && loc.length > 8) loc = ""; 
                 const hasLocation = loc && loc.trim() !== "";
                 
-                // 如果是「動作模式 (merge)」，我們要保留舊名字
+                // 嘗試保留舊名字
                 let finalName = item.name;
                 if (mode !== 'replace' && cData.itemsMap[id] && (item.name === '衣物' || !item.name)) {
                     finalName = cData.itemsMap[id].name;
@@ -180,7 +178,7 @@ app.post('/api/pos-sync/update-progress', async (req, res) => {
             });
         }
 
-        // 統計
+        // 重新統計
         const all = Object.values(cData.itemsMap);
         cData.total = all.length;
         cData.finished = all.filter(i => i.status === "done").length;
