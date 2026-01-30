@@ -235,6 +235,227 @@ app.post('/api/pos-sync/update-progress', async (req, res) => {
     }
 });
 
+// ==========================================
+// 🗑️ 清空進度資料（除錯用 - 無需驗證）
+// ==========================================
+app.get('/api/debug/clear-progress', (req, res) => {
+    try {
+        const fs = require('fs');
+        const path = require('path');
+        const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
+        const PROGRESS_FILE = path.join(baseDir, 'laundry_progress.json');
+        
+        // 備份舊資料
+        let oldData = '無舊資料';
+        if (fs.existsSync(PROGRESS_FILE)) {
+            oldData = fs.readFileSync(PROGRESS_FILE, 'utf8');
+        }
+        
+        // 清空資料
+        fs.writeFileSync(PROGRESS_FILE, '{}', 'utf8');
+        
+        console.log('🗑️ 進度資料已清空');
+        
+        res.json({
+            success: true,
+            message: '進度資料已清空',
+            oldData: oldData,
+            timestamp: new Date().toISOString()
+        });
+        
+    } catch (error) {
+        console.error('❌ 清空失敗:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
+    }
+});
+
+// 🔍 查看目前的進度資料（除錯用 - 無需驗證）
+app.get('/api/debug/view-progress', (req, res) => {
+    try {
+        const fs = require('fs');
+        const path = require('path');
+        const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
+        const PROGRESS_FILE = path.join(baseDir, 'laundry_progress.json');
+        
+        let data = null;
+        let fileExists = false;
+        
+        if (fs.existsSync(PROGRESS_FILE)) {
+            const rawData = fs.readFileSync(PROGRESS_FILE, 'utf8');
+            try {
+                data = JSON.parse(rawData);
+                fileExists = true;
+            } catch (e) {
+                data = { error: 'JSON 解析失敗', raw: rawData };
+            }
+        }
+        
+        res.json({
+            success: true,
+            fileExists: fileExists,
+            data: data,
+            timestamp: new Date().toISOString()
+        });
+        
+    } catch (error) {
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
+    }
+});
+
+// 🧪 完整測試用 HTML 頁面
+app.get('/api/debug/dashboard', (req, res) => {
+    res.send(`
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>進度資料除錯面板</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            padding: 20px;
+            background: #0d1117;
+            color: #c9d1d9;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 { color: #58a6ff; margin-bottom: 30px; }
+        .section {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .btn {
+            display: inline-block;
+            padding: 10px 20px;
+            margin: 5px;
+            background: #238636;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        .btn:hover { background: #2ea043; }
+        .btn-danger {
+            background: #da3633;
+        }
+        .btn-danger:hover { background: #f85149; }
+        pre {
+            background: #0d1117;
+            padding: 16px;
+            border-radius: 6px;
+            overflow: auto;
+            border: 1px solid #30363d;
+            font-size: 13px;
+        }
+        #result {
+            margin-top: 15px;
+            padding: 12px;
+            border-radius: 6px;
+            display: none;
+        }
+        .success {
+            background: #1a7f37;
+            border: 1px solid #2ea043;
+        }
+        .error {
+            background: #8b1e1e;
+            border: 1px solid #f85149;
+        }
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #30363d;
+            border-top-color: #58a6ff;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 進度資料除錯面板</h1>
+    
+    <div class="section">
+        <h2>📊 查看目前資料</h2>
+        <button class="btn" onclick="viewData()">🔍 查看資料</button>
+        <div id="viewResult"></div>
+    </div>
+    
+    <div class="section">
+        <h2>🗑️ 清空資料</h2>
+        <p style="color: #f85149;">⚠️ 警告：此操作會清空所有進度資料！</p>
+        <button class="btn btn-danger" onclick="clearData()">🗑️ 清空資料</button>
+        <div id="clearResult"></div>
+    </div>
+    
+    <div class="section">
+        <h2>📝 使用說明</h2>
+        <ul>
+            <li>點擊「查看資料」可以看到目前儲存的所有進度</li>
+            <li>點擊「清空資料」會重置所有進度（用於除錯）</li>
+            <li>清空後重新執行 Python 腳本即可重新開始記錄</li>
+        </ul>
+    </div>
+
+    <script>
+        async function viewData() {
+            const resultDiv = document.getElementById('viewResult');
+            resultDiv.innerHTML = '<div class="loading"></div> 載入中...';
+            resultDiv.style.display = 'block';
+            
+            try {
+                const res = await fetch('/api/debug/view-progress');
+                const data = await res.json();
+                
+                resultDiv.className = 'success';
+                resultDiv.innerHTML = '<h3>✅ 查詢成功</h3><pre>' + 
+                    JSON.stringify(data, null, 2) + '</pre>';
+            } catch (error) {
+                resultDiv.className = 'error';
+                resultDiv.innerHTML = '<h3>❌ 查詢失敗</h3><p>' + error.message + '</p>';
+            }
+        }
+        
+        async function clearData() {
+            if (!confirm('確定要清空所有進度資料嗎？')) return;
+            
+            const resultDiv = document.getElementById('clearResult');
+            resultDiv.innerHTML = '<div class="loading"></div> 處理中...';
+            resultDiv.style.display = 'block';
+            
+            try {
+                const res = await fetch('/api/debug/clear-progress');
+                const data = await res.json();
+                
+                resultDiv.className = 'success';
+                resultDiv.innerHTML = '<h3>✅ 清空成功</h3><p>' + 
+                    data.message + '</p><p>時間：' + data.timestamp + '</p>';
+            } catch (error) {
+                resultDiv.className = 'error';
+                resultDiv.innerHTML = '<h3>❌ 清空失敗</h3><p>' + error.message + '</p>';
+            }
+        }
+    </script>
+</body>
+</html>
+    `);
+});
+
 // 🔎 新增功能：讓 AI 查詢進度用的接口
 app.get('/api/pos-sync/query-progress/:customerNo', (req, res) => {
     try {
