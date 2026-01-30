@@ -115,6 +115,9 @@ app.post('/api/pos-sync/pickup-complete', async (req, res) => {
     }
 });
 
+// ==========================================
+// 👕 掛衣進度同步接口 (最終修正版)
+// ==========================================
 app.post('/api/pos-sync/update-progress', async (req, res) => {
     try {
         const { customerNo, customerName, rawItems, lastUpdate } = req.body;
@@ -124,9 +127,15 @@ app.post('/api/pos-sync/update-progress', async (req, res) => {
         const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
         const PROGRESS_FILE = path.join(baseDir, 'laundry_progress.json');
 
+        // 1. 讀取現有資料
         let progressData = {};
         if (fs.existsSync(PROGRESS_FILE)) {
-            try { progressData = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8')); } catch(e) {}
+            try { 
+                progressData = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8')); 
+            } catch(e) {
+                console.error('⚠️ JSON 解析失敗，重建檔案');
+                progressData = {};
+            }
         }
 
         const cleanNo = String(customerNo).replace(/\D/g, ''); 
@@ -138,53 +147,60 @@ app.post('/api/pos-sync/update-progress', async (req, res) => {
         if (customerName) currentData.customerName = customerName;
         if (!currentData.itemsMap) currentData.itemsMap = {};
 
-        // 🔥 核心修正：強制使用 barcode 作為唯一 Key
+        console.log(`[Sync] 收到資料: ${customerName} (#${cleanNo}) - ${rawItems.length} 筆`);
+
+        // 2. 🔥 核心邏輯：處理每件衣物
         if (Array.isArray(rawItems)) {
             rawItems.forEach(item => {
-                const barcode = item.barcode;  // ← 強制只用 barcode
+                const barcode = item.barcode;
                 
-                // 如果沒有 barcode，跳過這筆（避免產生幽靈衣服）
+                // 沒有 barcode 就跳過
                 if (!barcode) {
-                    console.log(`⚠️ 跳過無 barcode 的項目: ${JSON.stringify(item)}`);
+                    console.log(`⚠️ 跳過無 barcode: ${JSON.stringify(item)}`);
                     return;
                 }
                 
                 let loc = item.location;
                 
-                // 過濾亂碼
+                // 過濾亂碼掛衣號（長度超過 8）
                 if (loc && loc.length > 8) {
+                    console.log(`🚫 過濾亂碼: ${loc}`);
                     loc = ""; 
                 }
                 
                 const hasLocation = loc && loc.trim() !== "" && loc !== "null";
                 
-                // 取得舊資料（用來保留名稱）
+                // 取得舊資料
                 const oldItem = currentData.itemsMap[barcode] || {};
                 
-                // 名稱處理邏輯
+                // 名稱處理
                 const newName = item.name || "衣物";
                 const realName = (newName === '衣物' && oldItem.name && oldItem.name !== '衣物') 
                                  ? oldItem.name 
                                  : newName;
 
-                // 🔥 關鍵邏輯：如果沒有掛衣號，就刪除這筆記錄
+                // 🔥🔥🔥 關鍵邏輯：沒有掛衣號就刪除
                 if (!hasLocation) {
-                    console.log(`🗑️ 刪除項目: ${realName} (barcode: ${barcode})`);
-                    delete currentData.itemsMap[barcode];
+                    if (currentData.itemsMap[barcode]) {
+                        console.log(`🗑️ 刪除: ${realName} (barcode: ${barcode})`);
+                        delete currentData.itemsMap[barcode];
+                    } else {
+                        console.log(`⚠️ 無法刪除（不存在）: ${barcode}`);
+                    }
                 } else {
-                    // 有掛衣號，更新或新增
+                    // 有掛衣號就更新
+                    console.log(`✅ 更新: ${realName} → 掛衣號 ${loc}`);
                     currentData.itemsMap[barcode] = {
                         name: realName,
                         location: loc,
                         status: "done",
                         barcode: barcode
                     };
-                    console.log(`✅ 更新項目: ${realName} → 掛衣號 ${loc}`);
                 }
             });
         }
 
-        // 計算統計（只計算還存在的項目）
+        // 3. 🔥 重新計算統計（只計算 itemsMap 裡的東西）
         const allItems = Object.values(currentData.itemsMap);
         const totalItems = allItems.length;
         const finishedItems = allItems.filter(i => i.status === "done").length;
@@ -193,7 +209,7 @@ app.post('/api/pos-sync/update-progress', async (req, res) => {
             return i.status === "done" ? `${i.name} (掛衣號:${i.location})` : `${i.name} (清潔中)`;
         });
 
-        // 存檔
+        // 4. 存檔（強制覆蓋）
         progressData[cleanNo] = {
             customerName: currentData.customerName,
             total: totalItems,
@@ -205,8 +221,8 @@ app.post('/api/pos-sync/update-progress', async (req, res) => {
 
         fs.writeFileSync(PROGRESS_FILE, JSON.stringify(progressData, null, 2), 'utf8');
         
-        console.log(`[Sync] ${currentData.customerName} (#${customerNo}) 更新 ${rawItems.length} 筆`);
-        console.log(`📊 總計: ${totalItems} 件 | 完成: ${finishedItems} 件`);
+        console.log(`[Sync] ${currentData.customerName} (#${customerNo}) 更新完成`);
+        console.log(`📊 最終結果: ${totalItems} 件 | 完成: ${finishedItems} 件`);
 
         return res.json({ 
             success: true, 
