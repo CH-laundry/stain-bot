@@ -116,13 +116,12 @@ app.post('/api/pos-sync/pickup-complete', async (req, res) => {
 });
 
 // ==========================================
-// 👕 掛衣進度同步接口 (最終邏輯：強制 ID 合併)
+// 👕 掛衣進度同步接口 (ID 反向搜索修正版)
 // ==========================================
 app.post('/api/pos-sync/update-progress', async (req, res) => {
     try {
         const { customerNo, customerName, rawItems, lastUpdate } = req.body;
         
-        // 1. 讀取資料
         const fs = require('fs');
         const path = require('path');
         const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
@@ -133,65 +132,87 @@ app.post('/api/pos-sync/update-progress', async (req, res) => {
             try { progressData = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8')); } catch(e) {}
         }
 
-        const cleanNo = String(customerNo).replace(/\D/g, ''); 
-        
-        let currentData = progressData[cleanNo] || { 
-            customerName: customerName || "貴賓", 
-            itemsMap: {} 
-        };
+        // 1. 準備要更新的資料
+        // 如果傳來的是 "UNKNOWN"，我們先不要用它來建立新客戶
+        let targetCustomerNo = String(customerNo).replace(/\D/g, '');
+        const isUnknownInput = (!customerNo || customerNo === 'UNKNOWN');
 
-        if (customerName) currentData.customerName = customerName;
-        if (!currentData.itemsMap) currentData.itemsMap = {};
-
-        // 2. 【核心邏輯】使用 ID 進行更新與合併
         if (Array.isArray(rawItems)) {
             rawItems.forEach(item => {
-                // 強制使用 ID (Python 端會傳來 barcode 欄位，裡面放的就是 ID)
-                const key = item.barcode || item.name; 
-                
-                if (key) {
-                    let loc = item.location;
-                    // 過濾亂碼 (掛衣號太長視為無效)
-                    if (loc && loc.length > 8) loc = ""; 
-                    const hasLocation = loc && loc.trim() !== "";
-                    
-                    // 嘗試保留舊名字 (如果新資料沒名字)
-                    const oldName = currentData.itemsMap[key]?.name;
-                    const newName = (item.name === '衣物' || item.name === '未知') ? (oldName || item.name) : item.name;
+                const id = item.barcode; // 這是衣服的唯一 ID
+                if (!id) return;
 
-                    currentData.itemsMap[key] = {
-                        name: newName,
+                let foundOwner = false;
+
+                // 2. 【核心邏輯】全域搜索：這件衣服 ID 屬於誰？
+                // 就算 Python 傳來 Unknown，我們也能在這裡找到真正的主人
+                for (const [cNo, cData] of Object.entries(progressData)) {
+                    if (cData.itemsMap && cData.itemsMap[id]) {
+                        // 找到了！這件衣服屬於這位客人 (cNo)
+                        targetCustomerNo = cNo;
+                        foundOwner = true;
+                        
+                        // 更新位置
+                        let loc = item.location;
+                        if (loc && loc.length > 8) loc = ""; 
+                        const hasLocation = loc && loc.trim() !== "";
+
+                        // 更新狀態
+                        cData.itemsMap[id].location = hasLocation ? loc : "";
+                        cData.itemsMap[id].status = hasLocation ? "done" : "processing";
+                        cData.itemsMap[id].lastUpdate = Date.now();
+                        
+                        // 注意：不要把名字覆蓋成 "衣物"
+                        if (item.name && item.name !== '衣物' && item.name !== '未知') {
+                            cData.itemsMap[id].name = item.name;
+                        }
+
+                        // 重新統計該客人的進度
+                        const all = Object.values(cData.itemsMap);
+                        cData.total = all.length;
+                        cData.finished = all.filter(i => i.status === "done").length;
+                        cData.details = all.map(i => i.status === "done" ? `${i.name} (掛衣號:${i.location})` : `${i.name} (清潔中)`);
+                        cData.updateTime = new Date().toISOString();
+                        
+                        console.log(`[SmartUpdate] 找到主人 ${cData.customerName}，更新衣服 ${cData.itemsMap[id].name} -> ${loc || '取消'}`);
+                        break; // 找到就停止搜尋
+                    }
+                }
+
+                // 3. 如果真的找不到主人 (代表是新查詢)，才建立新資料
+                if (!foundOwner && !isUnknownInput) {
+                    if (!progressData[targetCustomerNo]) {
+                        progressData[targetCustomerNo] = { 
+                            customerName: customerName || "貴賓", 
+                            itemsMap: {} 
+                        };
+                    }
+                    const cData = progressData[targetCustomerNo];
+                    
+                    let loc = item.location;
+                    if (loc && loc.length > 8) loc = "";
+                    const hasLocation = loc && loc.trim() !== "";
+
+                    cData.itemsMap[id] = {
+                        name: item.name,
                         location: hasLocation ? loc : "",
                         status: hasLocation ? "done" : "processing",
-                        barcode: key,
+                        barcode: id,
                         lastUpdate: Date.now()
                     };
+                    
+                    // 統計
+                    const all = Object.values(cData.itemsMap);
+                    cData.total = all.length;
+                    cData.finished = all.filter(i => i.status === "done").length;
+                    cData.details = all.map(i => i.status === "done" ? `${i.name} (掛衣號:${i.location})` : `${i.name} (清潔中)`);
+                    cData.updateTime = lastUpdate || new Date().toISOString();
                 }
             });
         }
 
-        // 3. 統計與存檔
-        const allItems = Object.values(currentData.itemsMap);
-        const totalItems = allItems.length;
-        const finishedItems = allItems.filter(i => i.status === "done").length;
-        
-        const details = allItems.map(i => {
-            return i.status === "done" ? `${i.name} (掛衣號:${i.location})` : `${i.name} (清潔中)`;
-        });
-
-        progressData[cleanNo] = {
-            customerName: currentData.customerName,
-            total: totalItems,
-            finished: finishedItems,
-            details: details,
-            itemsMap: currentData.itemsMap,
-            updateTime: lastUpdate || new Date().toISOString()
-        };
-
         fs.writeFileSync(PROGRESS_FILE, JSON.stringify(progressData, null, 2), 'utf8');
-        
-        console.log(`[Sync] ${currentData.customerName}: ${finishedItems}/${totalItems} 更新成功`);
-        return res.json({ success: true, message: `Server 已更新: ${finishedItems}/${totalItems}` });
+        return res.json({ success: true });
 
     } catch (err) {
         console.error(`❌ 更新失敗: ${err.message}`);
