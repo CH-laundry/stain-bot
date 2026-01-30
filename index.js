@@ -116,7 +116,7 @@ app.post('/api/pos-sync/pickup-complete', async (req, res) => {
 });
 
 // ==========================================
-// 👕 掛衣進度同步接口 (最終穩定版：合併+除錯)
+// 👕 掛衣進度同步接口 (最終邏輯：強制 ID 合併)
 // ==========================================
 app.post('/api/pos-sync/update-progress', async (req, res) => {
     try {
@@ -135,7 +135,6 @@ app.post('/api/pos-sync/update-progress', async (req, res) => {
 
         const cleanNo = String(customerNo).replace(/\D/g, ''); 
         
-        // 初始化該客戶資料
         let currentData = progressData[cleanNo] || { 
             customerName: customerName || "貴賓", 
             itemsMap: {} 
@@ -144,18 +143,24 @@ app.post('/api/pos-sync/update-progress', async (req, res) => {
         if (customerName) currentData.customerName = customerName;
         if (!currentData.itemsMap) currentData.itemsMap = {};
 
-        // 2. 【核心邏輯】更新資料
+        // 2. 【核心邏輯】使用 ID 進行更新與合併
         if (Array.isArray(rawItems)) {
             rawItems.forEach(item => {
-                const key = item.barcode || item.name; // 使用 ID 當作唯一識別
+                // 強制使用 ID (Python 端會傳來 barcode 欄位，裡面放的就是 ID)
+                const key = item.barcode || item.name; 
                 
                 if (key) {
-                    const loc = item.location; // Python 已經過濾過亂碼了，這裡是乾淨的
+                    let loc = item.location;
+                    // 過濾亂碼 (掛衣號太長視為無效)
+                    if (loc && loc.length > 8) loc = ""; 
                     const hasLocation = loc && loc.trim() !== "";
                     
-                    // 更新這件衣服的狀態 (合併模式)
+                    // 嘗試保留舊名字 (如果新資料沒名字)
+                    const oldName = currentData.itemsMap[key]?.name;
+                    const newName = (item.name === '衣物' || item.name === '未知') ? (oldName || item.name) : item.name;
+
                     currentData.itemsMap[key] = {
-                        name: item.name,
+                        name: newName,
                         location: hasLocation ? loc : "",
                         status: hasLocation ? "done" : "processing",
                         barcode: key,
@@ -165,32 +170,12 @@ app.post('/api/pos-sync/update-progress', async (req, res) => {
             });
         }
 
-        // 3. 【自我修復】清除重複項目
+        // 3. 統計與存檔
         const allItems = Object.values(currentData.itemsMap);
-        const nameGroups = {};
-        allItems.forEach(item => {
-            if (!nameGroups[item.name]) nameGroups[item.name] = [];
-            nameGroups[item.name].push(item);
-        });
-
-        const cleanMap = {};
-        Object.keys(nameGroups).forEach(name => {
-            const group = nameGroups[name];
-            // 如果同名衣服有多筆，只留最新那一筆
-            if (group.length > 1) {
-                group.sort((a, b) => (b.lastUpdate || 0) - (a.lastUpdate || 0));
-            }
-            const keeper = group[0];
-            cleanMap[keeper.barcode] = keeper;
-        });
-        currentData.itemsMap = cleanMap;
-
-        // 4. 存檔
-        const finalItems = Object.values(currentData.itemsMap);
-        const totalItems = finalItems.length;
-        const finishedItems = finalItems.filter(i => i.status === "done").length;
+        const totalItems = allItems.length;
+        const finishedItems = allItems.filter(i => i.status === "done").length;
         
-        const details = finalItems.map(i => {
+        const details = allItems.map(i => {
             return i.status === "done" ? `${i.name} (掛衣號:${i.location})` : `${i.name} (清潔中)`;
         });
 
@@ -204,9 +189,9 @@ app.post('/api/pos-sync/update-progress', async (req, res) => {
         };
 
         fs.writeFileSync(PROGRESS_FILE, JSON.stringify(progressData, null, 2), 'utf8');
-        console.log(`[Sync] ${currentData.customerName}: ${finishedItems}/${totalItems} 更新完成`);
-
-        return res.json({ success: true });
+        
+        console.log(`[Sync] ${currentData.customerName}: ${finishedItems}/${totalItems} 更新成功`);
+        return res.json({ success: true, message: `Server 已更新: ${finishedItems}/${totalItems}` });
 
     } catch (err) {
         console.error(`❌ 更新失敗: ${err.message}`);
