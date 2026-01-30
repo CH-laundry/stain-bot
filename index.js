@@ -116,37 +116,39 @@ app.post('/api/pos-sync/pickup-complete', async (req, res) => {
 });
 
 // ==========================================
-// 👕 新增功能：接收店面電腦的「掛衣進度」
+// 👕 新增功能：接收店面電腦的「掛衣進度」 (修正版：接收名字)
 // ==========================================
 app.post('/api/pos-sync/update-progress', async (req, res) => {
     try {
-        const { customerNo, totalItems, finishedItems, details, lastUpdate } = req.body;
+        // 🔥 重點修正：這裡新增接收 customerName
+        const { customerNo, customerName, totalItems, finishedItems, details, lastUpdate } = req.body;
         
-        console.log(`[Progress] 收到進度更新: 客戶 ${customerNo} (${finishedItems}/${totalItems})`);
+        console.log(`[Progress] 收到進度更新: 客戶 ${customerName || '未知'} (#${customerNo}) - ${finishedItems}/${totalItems}`);
 
         const fs = require('fs');
         const path = require('path');
         const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
         const PROGRESS_FILE = path.join(baseDir, 'laundry_progress.json');
 
-        // 讀取現有進度表 (如果沒有就創一個空的)
         let progressData = {};
         if (fs.existsSync(PROGRESS_FILE)) {
             progressData = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8'));
         }
 
-        // 更新這位客人的資料
-        // 我們把編號標準化 (去掉 K, 去掉 0) 變成 "625" 這種格式
         const cleanNo = String(customerNo).replace(/\D/g, ''); 
         
+        // 保留舊名字邏輯：如果這次傳來的沒名字，就試著用舊的，再沒有就叫"貴賓"
+        const existingName = progressData[cleanNo]?.customerName;
+        const finalName = customerName || existingName || "貴賓";
+
         progressData[cleanNo] = {
+            customerName: finalName, // ✅ 確保名字被存進去
             total: totalItems,
             finished: finishedItems,
-            details: details, // 這裡會存 ["襯衫(已完成)", "POLO衫(清潔中)"]
+            details: details,
             updateTime: lastUpdate || new Date().toISOString()
         };
 
-        // 寫入檔案
         fs.writeFileSync(PROGRESS_FILE, JSON.stringify(progressData, null, 2), 'utf8');
 
         return res.json({ success: true, message: `已更新客戶 ${cleanNo} 進度` });
