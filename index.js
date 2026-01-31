@@ -192,6 +192,49 @@ app.get('/api/pos-sync/query-progress/:customerNo', (req, res) => {
     }
 });
 
+// ========== 🆕 Fiddler 自動簽收 → 刪除取件追蹤 ==========
+app.post('/api/pickup/auto-complete', async (req, res) => {
+  const { customerNumber, customerName } = req.body;
+  
+  console.log(`🧺 收到自動簽收通知: #${customerNumber} - ${customerName}`);
+  
+  if (!customerNumber) {
+    return res.json({ success: false, error: '缺少客戶編號' });
+  }
+  
+  try {
+    const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
+    const PICKUP_FILE = path.join(baseDir, 'pickup-tracking.json');
+    
+    let data = { orders: [] };
+    if (fs.existsSync(PICKUP_FILE)) {
+      data = JSON.parse(fs.readFileSync(PICKUP_FILE, 'utf8'));
+    }
+    
+    const originalLength = data.orders.length;
+    
+    // 過濾掉匹配的訂單
+    data.orders = data.orders.filter(order => {
+      const orderNum = String(order.customerNumber).replace(/^0+/, '') || '0';
+      const inputNum = String(customerNumber).replace(/^0+/, '') || '0';
+      return orderNum !== inputNum;
+    });
+    
+    const deletedCount = originalLength - data.orders.length;
+    
+    if (deletedCount > 0) {
+      fs.writeFileSync(PICKUP_FILE, JSON.stringify(data, null, 2), 'utf8');
+      console.log(`✅ 已刪除 ${deletedCount} 筆取件追蹤: #${customerNumber}`);
+    }
+    
+    res.json({ success: true, deleted: deletedCount });
+  } catch (error) {
+    console.error('❌ 自動簽收處理失敗:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+// ========== 🆕 結束 ==========
+
 // ⭐ 新增:載入洗衣軟體同步路由
 const posSyncRouter = require('./pos-sync');
 app.use('/api/pos-sync', posSyncRouter);
