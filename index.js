@@ -2286,6 +2286,79 @@ app.post('/api/create-delivery-task', async (req, res) => {
 });
 
 // ========================================
+// 🔧 外送排程緊急修復 API
+// ========================================
+
+// 重建外送資料檔案
+app.get('/api/delivery/reset', (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const FILE_PATH = path.join(__dirname, 'data', 'delivery.json');
+    
+    // 備份舊檔案
+    if (fs.existsSync(FILE_PATH)) {
+      const backupPath = FILE_PATH.replace('.json', '_backup_' + Date.now() + '.json');
+      fs.copyFileSync(FILE_PATH, backupPath);
+      console.log('✅ 已備份舊檔案:', backupPath);
+    }
+    
+    // 建立全新檔案
+    const newData = { orders: [] };
+    fs.writeFileSync(FILE_PATH, JSON.stringify(newData, null, 2), 'utf8');
+    
+    res.json({
+      success: true,
+      message: '✅ 外送資料檔案已重建（舊資料已備份）'
+    });
+    
+  } catch (error) {
+    console.error('重建失敗:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// 檢查外送資料檔案狀態
+app.get('/api/delivery/check', (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const FILE_PATH = path.join(__dirname, 'data', 'delivery.json');
+    
+    if (!fs.existsSync(FILE_PATH)) {
+      return res.json({
+        success: false,
+        exists: false,
+        message: '檔案不存在'
+      });
+    }
+    
+    const data = JSON.parse(fs.readFileSync(FILE_PATH, 'utf8'));
+    const validCount = (data.orders || []).filter(o => o && o.id).length;
+    const totalCount = (data.orders || []).length;
+    
+    res.json({
+      success: true,
+      exists: true,
+      totalOrders: totalCount,
+      validOrders: validCount,
+      invalidOrders: totalCount - validCount,
+      data: data
+    });
+    
+  } catch (error) {
+    res.json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+
+// ========================================
 // 🏠 收件排程 API
 // ========================================
 
