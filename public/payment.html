@@ -1576,39 +1576,70 @@ async function addDelivery() {
   }
 }
 
-// 載入外送紀錄
+// 🚚 載入外送紀錄（加強版：自動重試 + 錯誤處理）
 async function loadDeliveries(showAlert) {
   var wrap = document.getElementById('deliveryList');
   if (!wrap) return;
 
   wrap.innerHTML = '<p style="text-align:center; color:#999;">載入中...</p>';
 
-  try {
-    var res = await fetch('/api/delivery/orders');
+  // ⭐ 自動重試最多 3 次
+  for (let retry = 0; retry < 3; retry++) {
+    try {
+      var res = await fetch('/api/delivery/orders');
+      
+      // 檢查 HTTP 狀態
+      if (!res.ok) {
+        throw new Error('HTTP ' + res.status + ': ' + res.statusText);
+      }
+      
+      // 檢查回應格式
+      var contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('伺服器回應格式錯誤');
+      }
+      
+      var data = await res.json();
+      
+      if (!data.success) {
+        throw new Error(data.error || '載入失敗');
+      }
 
-// ⭐ 新增：檢查 HTTP 狀態
-    if (!res.ok) {
-      throw new Error('HTTP ' + res.status + ': ' + res.statusText);
+      // ⭐ 資料清理：過濾掉不完整的訂單
+      allDeliveries = (data.orders || []).filter(function(o) {
+        return o && o.id && o.customerNumber && o.customerName;
+      });
+      
+      console.log('✅ 成功載入', allDeliveries.length, '筆外送紀錄');
+      
+      // 渲染列表
+      renderDeliveryList();
+      
+      // 顯示今日提醒
+      if (showAlert) {
+        checkTodayDeliveryAlerts();
+      }
+      
+      return; // ✅ 成功就跳出重試循環
+      
+    } catch (e) {
+      console.error(`載入失敗（第 ${retry + 1} 次）:`, e.message);
+      
+      // 如果是最後一次重試還是失敗
+      if (retry === 2) {
+        allDeliveries = [];
+        wrap.innerHTML = 
+          '<div style="text-align:center; padding:30px;">' +
+          '<p style="color:#dc3545; font-size:16px; margin-bottom:15px;">❌ 載入失敗</p>' +
+          '<p style="color:#666; font-size:14px; margin-bottom:20px;">' + e.message + '</p>' +
+          '<button class="btn btn-small btn-secondary" onclick="loadDeliveries(false)">🔄 重試</button>' +
+          '</div>';
+        return;
+      }
+      
+      // 等待 1 秒後重試
+      await new Promise(r => setTimeout(r, 1000));
     }
-    
-    // ⭐ 新增：檢查回應格式
-    var contentType = res.headers.get('content-type');
-    if (!contentType || !contentType.includes('application/json')) {
-      throw new Error('伺服器回應格式錯誤（非 JSON）');
-    }
-    
-    var data = await res.json();
-    if (!data.success) throw new Error(data.error || '載入失敗');
-
-    allDeliveries = Array.isArray(data.orders) ? data.orders : [];
-    renderDeliveryList();
-
-    if (showAlert) {
-      checkTodayDeliveryAlerts();
-    }
-  } catch (e) {
-    allDeliveries = [];
-    wrap.innerHTML = '<p style="text-align:center; color:#dc3545;">載入失敗：' + e.message + '</p>';
   }
 }
 
