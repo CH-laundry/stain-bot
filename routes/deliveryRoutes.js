@@ -24,7 +24,6 @@ function ensureFile() {
   }
 }
 
-
 function loadData() {
   ensureFile();
   const raw = fs.readFileSync(FILE_PATH, 'utf8') || '{"orders":[]}';
@@ -59,7 +58,8 @@ function generateId() {
 router.get('/orders', (req, res) => {
   try {
     const data = loadData();
-// ⭐ 新增：過濾掉壞掉的資料
+    
+    // ⭐ 過濾掉壞掉的資料
     const validOrders = (data.orders || []).filter(order => {
       return order && 
              typeof order === 'object' && 
@@ -70,10 +70,12 @@ router.get('/orders', (req, res) => {
     
     console.log(`✅ 載入外送紀錄成功: ${validOrders.length} 筆`);
     
-    res.json({ success: true, orders: data.orders });
+    // 🔥 修正：回傳 validOrders 而不是 data.orders
+    res.json({ success: true, orders: validOrders });
+    
   } catch (e) {
-    console.error('載入外送紀錄失敗', e);
-    res.json({ success: false, error: e.message || '載入失敗' });
+    console.error('❌ 載入外送紀錄失敗:', e);
+    res.status(500).json({ success: false, error: e.message || '載入失敗' });
   }
 });
 
