@@ -59,6 +59,17 @@ function generateId() {
 router.get('/orders', (req, res) => {
   try {
     const data = loadData();
+// ⭐ 新增：過濾掉壞掉的資料
+    const validOrders = (data.orders || []).filter(order => {
+      return order && 
+             typeof order === 'object' && 
+             order.id &&
+             order.customerNumber && 
+             order.customerName;
+    });
+    
+    console.log(`✅ 載入外送紀錄成功: ${validOrders.length} 筆`);
+    
     res.json({ success: true, orders: data.orders });
   } catch (e) {
     console.error('載入外送紀錄失敗', e);
