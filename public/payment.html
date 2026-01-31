@@ -1585,6 +1585,18 @@ async function loadDeliveries(showAlert) {
 
   try {
     var res = await fetch('/api/delivery/orders');
+
+// ⭐ 新增：檢查 HTTP 狀態
+    if (!res.ok) {
+      throw new Error('HTTP ' + res.status + ': ' + res.statusText);
+    }
+    
+    // ⭐ 新增：檢查回應格式
+    var contentType = res.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      throw new Error('伺服器回應格式錯誤（非 JSON）');
+    }
+    
     var data = await res.json();
     if (!data.success) throw new Error(data.error || '載入失敗');
 
@@ -1600,19 +1612,26 @@ async function loadDeliveries(showAlert) {
   }
 }
 
+    
+
 // 依日期分組顯示外送紀錄
 function renderDeliveryList() {
   var wrap = document.getElementById('deliveryList');
   if (!wrap) return;
 
-  if (!allDeliveries || allDeliveries.length === 0) {
+  // ⭐ 新增：過濾掉資料不完整的訂單
+  var validDeliveries = (allDeliveries || []).filter(function(o) {
+    return o && o.customerNumber && o.customerName;
+  });
+
+  if (!validDeliveries || validDeliveries.length === 0) {
     wrap.innerHTML = '<p style="text-align:center; color:#999;">目前沒有外送紀錄</p>';
     return;
   }
 
   // 依日期分組（只取日期，不含時間）
   var groups = {};
-  allDeliveries.forEach(function(o) {
+  validDeliveries.forEach(function(o) {
     var rawDate =
       (o.createdDate || o.createdAt || '').toString().substring(0, 10) ||
       '未指定日期';
