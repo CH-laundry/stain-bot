@@ -661,6 +661,37 @@ app.post('/webhook', async (req, res) => {
   }
 });
 
+// 🗑️ 刪除過期的 Google token
+app.get('/auth/reset', (req, res) => {
+  try {
+    const fs = require('fs');
+    const tokenPath = '/data/google-token.json';
+    
+    if (fs.existsSync(tokenPath)) {
+      fs.unlinkSync(tokenPath);
+      console.log('✅ 已刪除舊的 token 檔案');
+      res.send(`
+        <h2>✅ Token 已清除</h2>
+        <p>請點擊下方連結重新授權：</p>
+        <a href="/auth" style="font-size:20px; padding:10px 20px; background:#4285f4; color:white; text-decoration:none; border-radius:5px;">
+          🔐 重新授權 Google Sheets
+        </a>
+      `);
+    } else {
+      res.send(`
+        <h2>ℹ️ 沒有找到 token 檔案</h2>
+        <p>請直接進行授權：</p>
+        <a href="/auth" style="font-size:20px; padding:10px 20px; background:#4285f4; color:white; text-decoration:none; border-radius:5px;">
+          🔐 授權 Google Sheets
+        </a>
+      `);
+    }
+  } catch (error) {
+    console.error('刪除 token 錯誤:', error);
+    res.status(500).send(`錯誤: ${error.message}`);
+  }
+});
+
 // ====== Google OAuth ======
 app.get('/auth', (req, res) => {
   try {
