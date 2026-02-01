@@ -1466,7 +1466,7 @@ app.get('/api/templates', (req, res) => {
   }
 });
 
-// 📊 營業報表 API
+// 📊 營業報表 API（從 Google Sheets 讀取）
 app.get('/api/revenue/report', async (req, res) => {
   try {
     const month = req.query.month; // 格式: '2025-02'
@@ -1474,34 +1474,72 @@ app.get('/api/revenue/report', async (req, res) => {
       return res.json({ success: false, error: '請提供月份' });
     }
 
-    const [year, monthNum] = month.split('-');
-    const startDate = new Date(year, monthNum - 1, 1);
-    const endDate = new Date(year, monthNum, 0, 23, 59, 59);
-
-    // 從訂單管理器讀取所有訂單
-    const allOrders = orderManager.getAllOrders();
+    const { google } = require('googleapis');
+    const googleAuth = require('./services/googleAuth');
     
+    if (!googleAuth.isAuthorized()) {
+      return res.json({ success: false, error: '尚未授權 Google Sheets' });
+    }
+
+    const auth = googleAuth.getOAuth2Client();
+    const sheets = google.sheets({ version: 'v4', auth });
+    const spreadsheetId = process.env.GOOGLE_SHEETS_ID_CUSTOMER;
+
+    if (!spreadsheetId) {
+      return res.json({ success: false, error: '未設定 GOOGLE_SHEETS_ID_CUSTOMER' });
+    }
+
+    // 讀取所有資料
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: 'A:E', // 假設資料在 A 到 E 欄
+    });
+
+    const rows = response.data.values || [];
+    if (rows.length === 0) {
+      return res.json({ 
+        success: true, 
+        monthlyTotal: 0, 
+        dailyAverage: 0, 
+        totalOrders: 0, 
+        dailyRevenue: [] 
+      });
+    }
+
+    // 過濾出指定月份的資料
+    const [targetYear, targetMonth] = month.split('-');
     const dailyRevenue = {};
     let monthlyTotal = 0;
     let totalOrders = 0;
 
-    // 統計每日營業額
-    allOrders.forEach(order => {
-      if (order.status !== 'paid') return; // 只統計已付款訂單
+    rows.slice(1).forEach(row => { // 跳過標題列
+      const dateStr = row[0]; // 假設日期在第 0 欄
+      const amountStr = row[1]; // 假設金額在第 1 欄
       
-      const orderDate = new Date(order.createdAt);
-      if (orderDate >= startDate && orderDate <= endDate) {
-        const dayKey = orderDate.toISOString().split('T')[0];
-        
-        if (!dailyRevenue[dayKey]) {
-          dailyRevenue[dayKey] = { date: dayKey, amount: 0, orders: 0 };
-        }
-        
-        dailyRevenue[dayKey].amount += parseInt(order.amount || 0);
-        dailyRevenue[dayKey].orders += 1;
-        monthlyTotal += parseInt(order.amount || 0);
-        totalOrders += 1;
+      if (!dateStr || !amountStr) return;
+
+      // 解析日期（假設格式是 2025/2/1 或 2025-02-01）
+      const dateParts = dateStr.replace(/\//g, '-').split('-');
+      if (dateParts.length < 3) return;
+
+      const year = dateParts[0];
+      const month = dateParts[1].padStart(2, '0');
+      const day = dateParts[2].padStart(2, '0');
+
+      // 只統計指定月份
+      if (year !== targetYear || month !== targetMonth) return;
+
+      const dayKey = `${year}-${month}-${day}`;
+      const amount = parseInt(amountStr.replace(/[^0-9]/g, ''), 10) || 0;
+
+      if (!dailyRevenue[dayKey]) {
+        dailyRevenue[dayKey] = { date: dayKey, amount: 0, orders: 0 };
       }
+
+      dailyRevenue[dayKey].amount += amount;
+      dailyRevenue[dayKey].orders += 1;
+      monthlyTotal += amount;
+      totalOrders += 1;
     });
 
     const dailyArray = Object.values(dailyRevenue).sort((a, b) => a.date.localeCompare(b.date));
