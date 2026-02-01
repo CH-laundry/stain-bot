@@ -1543,52 +1543,39 @@ app.get('/api/revenue/report', async (req, res) => {
     let monthlyTotal = 0;
     let totalOrders = 0;
 
-   rows.slice(1).forEach(row => { // 跳過標題列
-  const dateStr = row[0]; // A 欄：日期
-  const amountStr = row[8]; // I 欄：小計
-  
-  if (!dateStr || !amountStr) return;
+    rows.slice(1).forEach(row => { // 跳過標題列
+      const dateStr = row[0]; // A 欄：日期
+      const amountStr = row[8]; // I 欄：小計
+      
+      if (!dateStr || !amountStr) return;
 
-  // 🔍 除錯：印出原始資料
-  console.log(`📊 原始資料: 日期=${dateStr}, 小計=${amountStr}`);
+      // 🔍 除錯：印出原始資料
+      console.log(`📊 原始資料: 日期=${dateStr}, 小計=${amountStr}`);
 
-  // 解析日期（格式：2026/01/31 或 2026/1/31）
-  const dateParts = dateStr.toString().replace(/\//g, '-').split('-');
-  if (dateParts.length < 3) return;
+      // 解析日期（格式：2026/01/31 或 2026/1/31）
+      const dateParts = dateStr.toString().replace(/\//g, '-').split('-');
+      if (dateParts.length < 3) return;
 
-  const year = dateParts[0];
-  const month = dateParts[1].padStart(2, '0');
-  const day = dateParts[2].padStart(2, '0');
+      const year = dateParts[0];
+      const month = dateParts[1].padStart(2, '0');
+      const day = dateParts[2].padStart(2, '0');
 
-  // 只統計指定月份
-  if (year !== targetYear || month !== targetMonth) return;
+      // 只統計指定月份
+      if (year !== targetYear || month !== targetMonth) return;
 
-  const dayKey = `${year}-${month}-${day}`;
-  
-  // 🔧 修正：確保轉換成數字（去除所有非數字字元）
-  let amount = 0;
-  if (typeof amountStr === 'number') {
-    amount = amountStr;
-  } else {
-    const cleaned = String(amountStr).replace(/[^0-9]/g, '');
-    amount = parseInt(cleaned, 10) || 0;
-  }
-  
-  // 🔍 除錯：印出轉換後的金額
-  console.log(`💰 轉換後金額: ${amount}`);
-
-  if (!dailyRevenue[dayKey]) {
-    dailyRevenue[dayKey] = { date: dayKey, amount: 0, orders: 0 };
-  }
-
-  dailyRevenue[dayKey].amount += amount;
-  dailyRevenue[dayKey].orders += 1;
-  monthlyTotal += amount;
-  totalOrders += 1;
-  
-  // 🔍 除錯：印出累計總額
-  console.log(`📈 累計總額: ${monthlyTotal}`);
-});
+      const dayKey = `${year}-${month}-${day}`;
+      
+      // 🔧 修正：確保轉換成數字
+      let amount = 0;
+      if (typeof amountStr === 'number') {
+        amount = amountStr;
+      } else {
+        const cleaned = String(amountStr).replace(/[^0-9]/g, '');
+        amount = parseInt(cleaned, 10) || 0;
+      }
+      
+      // 🔍 除錯：印出轉換後的金額
+      console.log(`💰 轉換後金額: ${amount}`);
 
       if (!dailyRevenue[dayKey]) {
         dailyRevenue[dayKey] = { date: dayKey, amount: 0, orders: 0 };
@@ -1598,6 +1585,9 @@ app.get('/api/revenue/report', async (req, res) => {
       dailyRevenue[dayKey].orders += 1;
       monthlyTotal += amount;
       totalOrders += 1;
+      
+      // 🔍 除錯：印出累計總額
+      console.log(`📈 累計總額: ${monthlyTotal}`);
     });
 
     const dailyArray = Object.values(dailyRevenue).sort((a, b) => a.date.localeCompare(b.date));
@@ -1616,7 +1606,6 @@ app.get('/api/revenue/report', async (req, res) => {
     res.json({ success: false, error: error.message });
   }
 });
-
 
 app.post('/api/templates', (req, res) => {
   try {
