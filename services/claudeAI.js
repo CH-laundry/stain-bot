@@ -1996,6 +1996,17 @@ async function handleTextMessage(userMessage, userId = null) {
 
     console.log('✅ 非模板訊息，繼續處理');
 
+    // 🔴 過濾純電話號碼（不回覆）
+const phonePattern = /^(09\d{8}|0\d{1,2}-?\d{6,8}|\+886-?9\d{8})$/;
+const isPhoneOnly = phonePattern.test(userMessage.trim().replace(/\s+/g, ''));
+
+if (isPhoneOnly) {
+  console.log('🔇 偵測到純電話號碼，不回覆');
+  return null;
+}
+
+console.log('✅ 非電話號碼，繼續處理');
+
     // 👇👇👇 請插入這段 (開始) 👇👇👇
     
     // 1. 定義觸發關鍵字 (問進度、洗好了沒)
