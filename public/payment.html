@@ -86,6 +86,7 @@
       <button class="tab" onclick="switchTab(event,'records')">👤 客人紀錄</button>
       <button class="tab" onclick="switchTab(event,'urgent')">⚡ 急件追蹤</button>
       <button class="tab" onclick="switchTab(event,'pickup-schedule')">🏠 收件排程</button>
+      <button class="tab" onclick="switchTab(event,'revenue')">📊 營業報表</button>
       
     </div>
 
@@ -664,6 +665,41 @@
   <!-- 收件列表 -->
   <div id="pickupScheduleList">
     <p style="text-align:center; color:#999;">尚未載入，請點「重新整理」。</p>
+  </div>
+</div>
+
+  <!-- 📊 營業報表分頁 -->
+<div id="revenue-tab" class="tab-content">
+  <h3 style="color:#667eea; margin-bottom:20px;">📊 營業報表</h3>
+  
+  <!-- 月份選擇器 -->
+  <div style="display:flex; gap:10px; margin-bottom:20px; align-items:center;">
+    <label style="font-size:14px; color:#666;">選擇月份：</label>
+    <input type="month" id="revenueMonth" style="padding:8px; border-radius:8px; border:2px solid #e0e0e0;">
+    <button class="btn btn-small btn-secondary" onclick="loadRevenueReport()">🔍 查詢</button>
+    <button class="btn btn-small" style="background:#52c41a;color:#fff;" onclick="exportRevenue()">📊 匯出 Excel</button>
+  </div>
+
+  <!-- 統計卡片 -->
+  <div id="revenueStats" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:15px; margin-bottom:30px;">
+    <div style="background:#f0f4ff; padding:20px; border-radius:10px; text-align:center;">
+      <div style="font-size:32px; font-weight:bold; color:#667eea;" id="monthlyTotal">-</div>
+      <div style="font-size:14px; color:#666; margin-top:5px;">本月總營業額</div>
+    </div>
+    <div style="background:#e7f0ff; padding:20px; border-radius:10px; text-align:center;">
+      <div style="font-size:32px; font-weight:bold; color:#1890ff;" id="dailyAverage">-</div>
+      <div style="font-size:14px; color:#666; margin-top:5px;">日均營業額</div>
+    </div>
+    <div style="background:#d4edda; padding:20px; border-radius:10px; text-align:center;">
+      <div style="font-size:32px; font-weight:bold; color:#28a745;" id="totalOrders">-</div>
+      <div style="font-size:14px; color:#666; margin-top:5px;">總訂單數</div>
+    </div>
+  </div>
+
+  <!-- 每日營業額列表 -->
+  <h4 style="color:#667eea; margin-bottom:15px;">📅 每日營業額明細</h4>
+  <div id="dailyRevenueList">
+    <p style="text-align:center; color:#999;">請選擇月份後點擊「查詢」</p>
   </div>
 </div>
 
@@ -3333,6 +3369,118 @@ function showTodayAlert() {
   checkTodayPickupAlert();
 }
 // 🔥🔥🔥 新增：收件排程功能（結束）🔥🔥🔥
+
+    / ========================================
+// 📊 營業報表功能
+// ========================================
+
+var currentRevenueData = null;
+
+// 載入營業報表
+async function loadRevenueReport() {
+  var monthInput = document.getElementById('revenueMonth').value;
+  if (!monthInput) {
+    alert('請選擇月份');
+    return;
+  }
+  
+  var wrap = document.getElementById('dailyRevenueList');
+  wrap.innerHTML = '<p style="text-align:center; color:#999;">載入中...</p>';
+  
+  try {
+    var res = await fetch('/api/revenue/report?month=' + encodeURIComponent(monthInput));
+    var data = await res.json();
+    
+    if (!data.success) {
+      throw new Error(data.error || '載入失敗');
+    }
+    
+    currentRevenueData = data;
+    displayRevenueReport(data);
+    
+  } catch (e) {
+    wrap.innerHTML = '<p style="text-align:center; color:#dc3545;">載入失敗：' + e.message + '</p>';
+  }
+}
+
+// 顯示營業報表
+function displayRevenueReport(data) {
+  // 更新統計卡片
+  document.getElementById('monthlyTotal').textContent = 'NT$ ' + (data.monthlyTotal || 0).toLocaleString();
+  document.getElementById('dailyAverage').textContent = 'NT$ ' + (data.dailyAverage || 0).toLocaleString();
+  document.getElementById('totalOrders').textContent = (data.totalOrders || 0) + ' 筆';
+  
+  // 顯示每日營業額
+  var wrap = document.getElementById('dailyRevenueList');
+  var dailyData = data.dailyRevenue || [];
+  
+  if (dailyData.length === 0) {
+    wrap.innerHTML = '<p style="text-align:center; color:#999;">本月尚無營業資料</p>';
+    return;
+  }
+  
+  var html = '<div style="overflow-x:auto;">';
+  html += '<table style="width:100%; border-collapse:collapse; background:#fff; border-radius:10px; overflow:hidden;">';
+  html += '<thead><tr style="background:#667eea; color:#fff;">';
+  html += '<th style="padding:12px; text-align:left;">日期</th>';
+  html += '<th style="padding:12px; text-align:right;">營業額</th>';
+  html += '<th style="padding:12px; text-align:right;">訂單數</th>';
+  html += '<th style="padding:12px; text-align:right;">日均單價</th>';
+  html += '</tr></thead><tbody>';
+  
+  dailyData.forEach(function(day, index) {
+    var bgColor = index % 2 === 0 ? '#f8f9fa' : '#fff';
+    var dateStr = day.date || '-';
+    var amount = day.amount || 0;
+    var orders = day.orders || 0;
+    var avgPrice = orders > 0 ? Math.round(amount / orders) : 0;
+    
+    html += '<tr style="background:' + bgColor + '; border-bottom:1px solid #e0e0e0;">';
+    html += '<td style="padding:12px;">' + dateStr + '</td>';
+    html += '<td style="padding:12px; text-align:right; font-weight:600; color:#667eea;">NT$ ' + amount.toLocaleString() + '</td>';
+    html += '<td style="padding:12px; text-align:right;">' + orders + ' 筆</td>';
+    html += '<td style="padding:12px; text-align:right; color:#999;">NT$ ' + avgPrice.toLocaleString() + '</td>';
+    html += '</tr>';
+  });
+  
+  html += '</tbody></table></div>';
+  wrap.innerHTML = html;
+}
+
+// 匯出 Excel
+function exportRevenue() {
+  if (!currentRevenueData || !currentRevenueData.dailyRevenue) {
+    alert('請先查詢營業報表');
+    return;
+  }
+  
+  var csv = '日期,營業額,訂單數,日均單價\n';
+  
+  currentRevenueData.dailyRevenue.forEach(function(day) {
+    var amount = day.amount || 0;
+    var orders = day.orders || 0;
+    var avgPrice = orders > 0 ? Math.round(amount / orders) : 0;
+    
+    csv += day.date + ',' + amount + ',' + orders + ',' + avgPrice + '\n';
+  });
+  
+  csv += '\n總計,' + currentRevenueData.monthlyTotal + ',' + currentRevenueData.totalOrders + '\n';
+  
+  var blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  var link = document.createElement('a');
+  var url = URL.createObjectURL(blob);
+  var monthStr = document.getElementById('revenueMonth').value || 'revenue';
+  
+  link.setAttribute('href', url);
+  link.setAttribute('download', 'revenue_' + monthStr + '.csv');
+  link.style.visibility = 'hidden';
+  
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  
+  showResult('success', '✅ 營業報表已匯出');
+}
 
  </script>
 </body>
