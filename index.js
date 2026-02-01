@@ -1523,7 +1523,7 @@ app.get('/api/revenue/report', async (req, res) => {
     // 讀取資料（A 到 I 欄）- 指定「營業報表」工作表
 const response = await sheets.spreadsheets.values.get({
   spreadsheetId,
-  range: '營業報表!A:I',  // ← 指定工作表名稱
+  range: '營業記錄!A:I',  // ← 指定工作表名稱
 });
 
     const rows = response.data.values || [];
