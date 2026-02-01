@@ -1500,7 +1500,7 @@ app.get('/api/templates', (req, res) => {
 // 📊 營業報表 API（從 Google Sheets 讀取）
 app.get('/api/revenue/report', async (req, res) => {
   try {
-    const month = req.query.month; // 格式: '2026-02'
+    const month = req.query.month;
     if (!month) {
       return res.json({ success: false, error: '請提供月份' });
     }
@@ -1520,11 +1520,30 @@ app.get('/api/revenue/report', async (req, res) => {
       return res.json({ success: false, error: '未設定 GOOGLE_SHEETS_ID_CUSTOMER' });
     }
 
-    // 讀取資料（A 到 I 欄）- 指定「營業報表」工作表
-const response = await sheets.spreadsheets.values.get({
-  spreadsheetId,
-  range: '營業記錄!A:I',  // ← 指定工作表名稱
-});
+    // 🔥 改用 Sheet1 或直接用 gid 對應的工作表標題
+    // 先嘗試讀取試算表的所有工作表名稱
+    const sheetInfo = await sheets.spreadsheets.get({
+      spreadsheetId,
+      fields: 'sheets.properties'
+    });
+
+    // 找到 gid=756780563 的工作表
+    const targetSheet = sheetInfo.data.sheets.find(
+      sheet => sheet.properties.sheetId === 756780563
+    );
+
+    if (!targetSheet) {
+      return res.json({ success: false, error: '找不到營業記錄工作表' });
+    }
+
+    const sheetName = targetSheet.properties.title;
+    console.log(`✅ 找到工作表: ${sheetName}`);
+
+    // 讀取資料（使用正確的工作表名稱）
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `'${sheetName}'!A:I`,  // 用單引號包住工作表名稱
+    });
 
     const rows = response.data.values || [];
     if (rows.length === 0) {
@@ -1543,16 +1562,12 @@ const response = await sheets.spreadsheets.values.get({
     let monthlyTotal = 0;
     let totalOrders = 0;
 
-    rows.slice(1).forEach(row => { // 跳過標題列
-      const dateStr = row[0]; // A 欄：日期
-      const amountStr = row[8]; // I 欄：小計
+    rows.slice(1).forEach(row => {
+      const dateStr = row[0];
+      const amountStr = row[8];
       
       if (!dateStr || !amountStr) return;
 
-      // 🔍 除錯：印出原始資料
-      console.log(`📊 原始資料: 日期=${dateStr}, 小計=${amountStr}`);
-
-      // 解析日期（格式：2026/01/31 或 2026/1/31）
       const dateParts = dateStr.toString().replace(/\//g, '-').split('-');
       if (dateParts.length < 3) return;
 
@@ -1560,12 +1575,10 @@ const response = await sheets.spreadsheets.values.get({
       const month = dateParts[1].padStart(2, '0');
       const day = dateParts[2].padStart(2, '0');
 
-      // 只統計指定月份
       if (year !== targetYear || month !== targetMonth) return;
 
       const dayKey = `${year}-${month}-${day}`;
       
-      // 🔧 修正：確保轉換成數字
       let amount = 0;
       if (typeof amountStr === 'number') {
         amount = amountStr;
@@ -1573,9 +1586,6 @@ const response = await sheets.spreadsheets.values.get({
         const cleaned = String(amountStr).replace(/[^0-9]/g, '');
         amount = parseInt(cleaned, 10) || 0;
       }
-      
-      // 🔍 除錯：印出轉換後的金額
-      console.log(`💰 轉換後金額: ${amount}`);
 
       if (!dailyRevenue[dayKey]) {
         dailyRevenue[dayKey] = { date: dayKey, amount: 0, orders: 0 };
@@ -1585,9 +1595,6 @@ const response = await sheets.spreadsheets.values.get({
       dailyRevenue[dayKey].orders += 1;
       monthlyTotal += amount;
       totalOrders += 1;
-      
-      // 🔍 除錯：印出累計總額
-      console.log(`📈 累計總額: ${monthlyTotal}`);
     });
 
     const dailyArray = Object.values(dailyRevenue).sort((a, b) => a.date.localeCompare(b.date));
