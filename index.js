@@ -1469,7 +1469,7 @@ app.get('/api/templates', (req, res) => {
 // 📊 營業報表 API（從 Google Sheets 讀取）
 app.get('/api/revenue/report', async (req, res) => {
   try {
-    const month = req.query.month; // 格式: '2025-02'
+    const month = req.query.month; // 格式: '2026-02'
     if (!month) {
       return res.json({ success: false, error: '請提供月份' });
     }
@@ -1489,10 +1489,10 @@ app.get('/api/revenue/report', async (req, res) => {
       return res.json({ success: false, error: '未設定 GOOGLE_SHEETS_ID_CUSTOMER' });
     }
 
-    // 讀取所有資料
+    // 讀取資料（A 到 I 欄）
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: 'A:E', // 假設資料在 A 到 E 欄
+      range: 'A:I',
     });
 
     const rows = response.data.values || [];
@@ -1513,12 +1513,12 @@ app.get('/api/revenue/report', async (req, res) => {
     let totalOrders = 0;
 
     rows.slice(1).forEach(row => { // 跳過標題列
-      const dateStr = row[0]; // 假設日期在第 0 欄
-      const amountStr = row[1]; // 假設金額在第 1 欄
+      const dateStr = row[0]; // A 欄：日期
+      const amountStr = row[8]; // I 欄：小計
       
       if (!dateStr || !amountStr) return;
 
-      // 解析日期（假設格式是 2025/2/1 或 2025-02-01）
+      // 解析日期（格式：2026/01/31 或 2026/1/31）
       const dateParts = dateStr.replace(/\//g, '-').split('-');
       if (dateParts.length < 3) return;
 
@@ -1530,7 +1530,7 @@ app.get('/api/revenue/report', async (req, res) => {
       if (year !== targetYear || month !== targetMonth) return;
 
       const dayKey = `${year}-${month}-${day}`;
-      const amount = parseInt(amountStr.replace(/[^0-9]/g, ''), 10) || 0;
+      const amount = parseInt(amountStr.toString().replace(/[^0-9]/g, ''), 10) || 0;
 
       if (!dailyRevenue[dayKey]) {
         dailyRevenue[dayKey] = { date: dayKey, amount: 0, orders: 0 };
