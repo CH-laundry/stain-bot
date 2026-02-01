@@ -1466,6 +1466,62 @@ app.get('/api/templates', (req, res) => {
   }
 });
 
+// 📊 營業報表 API
+app.get('/api/revenue/report', async (req, res) => {
+  try {
+    const month = req.query.month; // 格式: '2025-02'
+    if (!month) {
+      return res.json({ success: false, error: '請提供月份' });
+    }
+
+    const [year, monthNum] = month.split('-');
+    const startDate = new Date(year, monthNum - 1, 1);
+    const endDate = new Date(year, monthNum, 0, 23, 59, 59);
+
+    // 從訂單管理器讀取所有訂單
+    const allOrders = orderManager.getAllOrders();
+    
+    const dailyRevenue = {};
+    let monthlyTotal = 0;
+    let totalOrders = 0;
+
+    // 統計每日營業額
+    allOrders.forEach(order => {
+      if (order.status !== 'paid') return; // 只統計已付款訂單
+      
+      const orderDate = new Date(order.createdAt);
+      if (orderDate >= startDate && orderDate <= endDate) {
+        const dayKey = orderDate.toISOString().split('T')[0];
+        
+        if (!dailyRevenue[dayKey]) {
+          dailyRevenue[dayKey] = { date: dayKey, amount: 0, orders: 0 };
+        }
+        
+        dailyRevenue[dayKey].amount += parseInt(order.amount || 0);
+        dailyRevenue[dayKey].orders += 1;
+        monthlyTotal += parseInt(order.amount || 0);
+        totalOrders += 1;
+      }
+    });
+
+    const dailyArray = Object.values(dailyRevenue).sort((a, b) => a.date.localeCompare(b.date));
+    const dailyAverage = dailyArray.length > 0 ? Math.round(monthlyTotal / dailyArray.length) : 0;
+
+    res.json({
+      success: true,
+      monthlyTotal,
+      dailyAverage,
+      totalOrders,
+      dailyRevenue: dailyArray
+    });
+
+  } catch (error) {
+    console.error('營業報表錯誤:', error);
+    res.json({ success: false, error: error.message });
+  }
+});
+
+
 app.post('/api/templates', (req, res) => {
   try {
     const { content } = req.body;
