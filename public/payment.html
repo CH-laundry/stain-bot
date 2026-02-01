@@ -760,6 +760,12 @@
       if (tabName === 'urgent') loadUrgents(true);
       if (tabName === 'manual') loadManuals();
       if (tabName === 'records') loadRecords();
+      if (tabName === 'revenue') {
+        var now = new Date();
+        var monthStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+        var monthInput = document.getElementById('revenueMonth');
+        if (monthInput) monthInput.value = monthStr;
+      }
     }
 
     async function loadCustomerNumbers() {
