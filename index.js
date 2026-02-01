@@ -1520,11 +1520,11 @@ app.get('/api/revenue/report', async (req, res) => {
       return res.json({ success: false, error: '未設定 GOOGLE_SHEETS_ID_CUSTOMER' });
     }
 
-    // 讀取資料（A 到 I 欄）
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: 'A:I',
-    });
+    // 讀取資料（A 到 I 欄）- 指定「營業報表」工作表
+const response = await sheets.spreadsheets.values.get({
+  spreadsheetId,
+  range: '營業報表!A:I',  // ← 指定工作表名稱
+});
 
     const rows = response.data.values || [];
     if (rows.length === 0) {
