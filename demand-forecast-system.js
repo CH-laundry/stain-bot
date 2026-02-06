@@ -21,11 +21,14 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // ==================== Google Sheets 連接 ====================
 async function getGoogleSheetsClient() {
-  const auth = new google.auth.GoogleAuth({
-    credentials: JSON.parse(process.env.GOOGLE_CREDENTIALS),
-    scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly']
-  });
+  // 🔥 修正:使用現有的 googleAuth 模組
+  const googleAuth = require('./services/googleAuth');
   
+  if (!googleAuth.isAuthorized()) {
+    throw new Error('Google Sheets 尚未授權,請先完成 OAuth 授權');
+  }
+  
+  const auth = googleAuth.getOAuth2Client();
   return google.sheets({ version: 'v4', auth });
 }
 
