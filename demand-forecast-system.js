@@ -36,10 +36,34 @@ async function getGoogleSheetsClient() {
 async function fetchOrderData() {
   try {
     const sheets = await getGoogleSheetsClient();
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: CONFIG.SPREADSHEET_ID,
-      range: `${CONFIG.SHEET_NAME}!A:L`,
-    });
+    
+    // 🔥 方法1: 先嘗試用指定的工作表名稱
+    let response;
+    try {
+      response = await sheets.spreadsheets.values.get({
+        spreadsheetId: CONFIG.SPREADSHEET_ID,
+        range: `${CONFIG.SHEET_NAME}!A:L`,
+      });
+    } catch (error) {
+      // 🔥 方法2: 如果失敗,自動讀取第一個工作表
+      console.log('⚠️ 指定的工作表名稱無效,嘗試讀取第一個工作表...');
+      
+      // 取得所有工作表資訊
+      const spreadsheet = await sheets.spreadsheets.get({
+        spreadsheetId: CONFIG.SPREADSHEET_ID
+      });
+      
+      const firstSheet = spreadsheet.data.sheets[0];
+      const sheetTitle = firstSheet.properties.title;
+      
+      console.log(`✅ 找到工作表: ${sheetTitle}`);
+      
+      // 用第一個工作表的名稱重新讀取
+      response = await sheets.spreadsheets.values.get({
+        spreadsheetId: CONFIG.SPREADSHEET_ID,
+        range: `${sheetTitle}!A:L`,
+      });
+    }
 
     const rows = response.data.values;
     if (!rows || rows.length === 0) {
