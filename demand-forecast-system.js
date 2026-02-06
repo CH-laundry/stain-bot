@@ -1,5 +1,4 @@
 const { google } = require('googleapis');
-const nodemailer = require('nodemailer');
 const { OpenAI } = require('openai');
 
 // ==================== 設定區 ====================
@@ -8,19 +7,11 @@ const CONFIG = {
   SHEET_NAME: null, // 自動偵測第一個工作表
   EMAIL_TO: 'todayeasy2002@gmail.com',
   FORECAST_DAYS: 14,
-  SMTP: {
-    host: 'smtp.gmail.com',
-    port: 587,
-    secure: false, // 使用 STARTTLS
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASSWORD
-    },
-    tls: {
-      rejectUnauthorized: false
-    },
-    connectionTimeout: 10000, // 10秒超時
-    greetingTimeout: 10000
+  // 🔥 改用 SendGrid
+  SENDGRID: {
+    apiKey: process.env.SENDGRID_API_KEY,
+    fromEmail: 'forecast@ch-laundry.com',
+    fromName: 'C.H洗衣預測系統'
   }
 };
 
@@ -28,7 +19,6 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // ==================== Google Sheets 連接 ====================
 async function getGoogleSheetsClient() {
-  // 🔥 修正:使用現有的 googleAuth 模組
   const googleAuth = require('./services/googleAuth');
   
   if (!googleAuth.isAuthorized()) {
@@ -44,21 +34,17 @@ async function fetchOrderData() {
   try {
     const sheets = await getGoogleSheetsClient();
     
-    // 🔥 讀取營業紀錄試算表
     console.log('📥 正在讀取營業紀錄...');
     console.log(`試算表 ID: ${CONFIG.SPREADSHEET_ID}`);
     
-    // 取得所有工作表資訊,找到營業紀錄工作表 (gid=756780563)
     const spreadsheet = await sheets.spreadsheets.get({
       spreadsheetId: CONFIG.SPREADSHEET_ID
     });
     
-    // 找到 gid=756780563 的工作表
     let targetSheet = spreadsheet.data.sheets.find(
       sheet => sheet.properties.sheetId === 756780563
     );
     
-    // 如果找不到,就用第一個工作表
     if (!targetSheet) {
       console.log('⚠️ 找不到 gid=756780563,使用第一個工作表');
       targetSheet = spreadsheet.data.sheets[0];
@@ -67,7 +53,6 @@ async function fetchOrderData() {
     const sheetTitle = targetSheet.properties.title;
     console.log(`✅ 找到工作表: ${sheetTitle}`);
     
-    // 讀取所有資料 (A:I 是營業紀錄的欄位範圍)
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: CONFIG.SPREADSHEET_ID,
       range: `'${sheetTitle}'!A:I`,
@@ -80,12 +65,10 @@ async function fetchOrderData() {
 
     console.log(`✅ 讀取到 ${rows.length - 1} 筆紀錄`);
 
-    // 跳過標題行,解析營業紀錄
-    // 營業紀錄格式: 日期 | 客戶姓名 | Email | 地址 | 備註 | 項目 | 數量 | 單價 | 總額
     const orders = rows.slice(1)
-      .filter(row => row[0] && row[8]) // 必須有日期和總額
+      .filter(row => row[0] && row[8])
       .map(row => {
-        const dateStr = row[0] || ''; // 日期
+        const dateStr = row[0] || '';
         const totalAmount = parseInt(String(row[8]).replace(/[^0-9]/g, '')) || 0;
         
         return {
@@ -119,16 +102,14 @@ async function fetchOrderData() {
 
 // ==================== 數據分析引擎 ====================
 function analyzeHistoricalData(orders) {
-  // 按日期分組統計
   const dailyStats = {};
   const weekdayStats = Array(7).fill(0).map(() => ({ count: 0, revenue: 0, orders: [] }));
   
   orders.forEach(order => {
     const date = order.date;
     const orderDate = new Date(date);
-    const weekday = orderDate.getDay(); // 0=週日, 1=週一...
+    const weekday = orderDate.getDay();
     
-    // 每日統計
     if (!dailyStats[date]) {
       dailyStats[date] = {
         orderCount: 0,
@@ -148,13 +129,11 @@ function analyzeHistoricalData(orders) {
       dailyStats[date].deliveryToDoor++;
     }
     
-    // 項目統計
     if (!dailyStats[date].items[order.itemName]) {
       dailyStats[date].items[order.itemName] = 0;
     }
     dailyStats[date].items[order.itemName]++;
     
-    // 星期統計
     weekdayStats[weekday].count++;
     weekdayStats[weekday].revenue += order.orderTotal;
     weekdayStats[weekday].orders.push(order);
@@ -168,17 +147,14 @@ function generateForecast(dailyStats, weekdayStats, forecastDays = 14) {
   const dates = Object.keys(dailyStats).sort();
   const historicalDays = dates.length;
   
-  // 計算平均值
   const avgDailyOrders = dates.reduce((sum, date) => sum + dailyStats[date].orderCount, 0) / historicalDays;
   const avgDailyRevenue = dates.reduce((sum, date) => sum + dailyStats[date].revenue, 0) / historicalDays;
   
-  // 計算星期效應係數
   const weekdayMultipliers = weekdayStats.map((stat, idx) => {
     const weekdayAvg = stat.count / Math.max(1, Math.floor(historicalDays / 7));
     return weekdayAvg > 0 ? weekdayAvg / avgDailyOrders : 1;
   });
   
-  // 生成未來預測
   const forecasts = [];
   const today = new Date();
   
@@ -187,11 +163,9 @@ function generateForecast(dailyStats, weekdayStats, forecastDays = 14) {
     forecastDate.setDate(today.getDate() + i);
     const weekday = forecastDate.getDay();
     
-    // 基礎預測 × 星期效應係數
     const predictedOrders = Math.round(avgDailyOrders * weekdayMultipliers[weekday]);
     const predictedRevenue = Math.round(avgDailyRevenue * weekdayMultipliers[weekday]);
     
-    // 信心區間 (±20%)
     const orderRange = {
       min: Math.round(predictedOrders * 0.8),
       max: Math.round(predictedOrders * 1.2)
@@ -214,7 +188,6 @@ function generateForecast(dailyStats, weekdayStats, forecastDays = 14) {
 function generateRecommendations(forecasts, dailyStats, weekdayStats) {
   const recommendations = [];
   
-  // 找出最忙的日子
   const busiestDay = forecasts.reduce((max, day) => 
     day.predictedOrders > max.predictedOrders ? day : max
   , forecasts[0]);
@@ -227,9 +200,8 @@ function generateRecommendations(forecasts, dailyStats, weekdayStats) {
     });
   }
   
-  // 計算一週總需求
   const weeklyOrders = forecasts.slice(0, 7).reduce((sum, day) => sum + day.predictedOrders, 0);
-  const estimatedDetergent = Math.ceil(weeklyOrders * 0.8); // 假設每單平均用0.8L洗劑
+  const estimatedDetergent = Math.ceil(weeklyOrders * 0.8);
   
   recommendations.push({
     type: 'supplies',
@@ -237,7 +209,6 @@ function generateRecommendations(forecasts, dailyStats, weekdayStats) {
     message: `未來一週預計 ${weeklyOrders} 單,建議備貨洗劑約 ${estimatedDetergent}L`
   });
   
-  // 星期模式建議
   const weekdayAvg = weekdayStats.map((stat, idx) => ({
     day: ['週日', '週一', '週二', '週三', '週四', '週五', '週六'][idx],
     avg: stat.count
@@ -296,8 +267,6 @@ ${forecastSummary}
 
 // ==================== 計算預測準確度 ====================
 function calculateAccuracy(dailyStats) {
-  // 這裡會在有足夠歷史預測數據後實作
-  // 目前先返回 N/A
   return {
     last7Days: 'N/A',
     last30Days: 'N/A',
@@ -310,7 +279,6 @@ function generateLINEReport(forecasts, recommendations, aiInsights, accuracy) {
   const today = new Date().toLocaleDateString('zh-TW');
   const todayForecast = forecasts[0];
   
-  // 忙碌指數
   const busyLevel = todayForecast.predictedOrders < 30 ? '⭐⭐' :
                     todayForecast.predictedOrders < 45 ? '⭐⭐⭐' :
                     todayForecast.predictedOrders < 60 ? '⭐⭐⭐⭐' : '⭐⭐⭐⭐⭐';
@@ -346,7 +314,6 @@ function generateLINEReport(forecasts, recommendations, aiInsights, accuracy) {
 function generateEmailHTML(forecasts, recommendations, aiInsights, dailyStats, weekdayStats, accuracy) {
   const today = new Date().toLocaleDateString('zh-TW');
   
-  // 生成未來7天表格
   const forecastTableRows = forecasts.slice(0, 7).map(f => `
     <tr>
       <td>${f.date}</td>
@@ -357,7 +324,6 @@ function generateEmailHTML(forecasts, recommendations, aiInsights, dailyStats, w
     </tr>
   `).join('');
   
-  // 生成未來14天表格
   const forecast14TableRows = forecasts.map(f => `
     <tr>
       <td>${f.date}</td>
@@ -367,13 +333,11 @@ function generateEmailHTML(forecasts, recommendations, aiInsights, dailyStats, w
     </tr>
   `).join('');
   
-  // 歷史數據摘要
   const dates = Object.keys(dailyStats).sort();
   const totalOrders = dates.reduce((sum, date) => sum + dailyStats[date].orderCount, 0);
   const totalRevenue = dates.reduce((sum, date) => sum + dailyStats[date].revenue, 0);
   const avgDaily = Math.round(totalOrders / dates.length);
   
-  // 星期分析
   const weekdayAnalysis = weekdayStats.map((stat, idx) => {
     const dayName = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'][idx];
     return `<li>${dayName}: 平均 ${Math.round(stat.count / Math.max(1, Math.floor(dates.length / 7)))} 單/天</li>`;
@@ -478,40 +442,36 @@ function generateEmailHTML(forecasts, recommendations, aiInsights, dailyStats, w
   return html;
 }
 
-// ==================== 發送 Email ====================
+// ==================== 發送 Email (使用 SendGrid) ====================
 async function sendEmailReport(htmlContent, textContent) {
   try {
-    console.log('📧 準備發送 Email...');
+    console.log('📧 準備發送 Email (SendGrid)...');
     console.log(`收件人: ${CONFIG.EMAIL_TO}`);
     
-    const transporter = nodemailer.createTransport(CONFIG.SMTP);
+    const sgMail = require('@sendgrid/mail');
+    sgMail.setApiKey(CONFIG.SENDGRID.apiKey);
     
-    // 測試連線
-    console.log('🔌 測試 SMTP 連線...');
-    try {
-      await transporter.verify();
-      console.log('✅ SMTP 連線測試成功');
-    } catch (verifyError) {
-      console.warn('⚠️ SMTP 連線測試失敗,但仍嘗試發送:', verifyError.message);
-    }
-    
-    const mailOptions = {
-      from: `C.H洗衣預測系統 <${CONFIG.SMTP.auth.user}>`,
+    const msg = {
       to: CONFIG.EMAIL_TO,
+      from: {
+        email: CONFIG.SENDGRID.fromEmail,
+        name: CONFIG.SENDGRID.fromName
+      },
       subject: `📊 C.H洗衣需求預測報表 - ${new Date().toLocaleDateString('zh-TW')}`,
       text: textContent,
       html: htmlContent
     };
     
-    const info = await transporter.sendMail(mailOptions);
-    console.log('✅ Email 報表已發送');
-    console.log('📬 Message ID:', info.messageId);
+    await sgMail.send(msg);
+    console.log('✅ Email 報表已發送 (SendGrid)');
     
-    return { success: true, messageId: info.messageId };
+    return { success: true };
   } catch (error) {
     console.error('❌ Email 發送失敗:', error.message);
+    if (error.response) {
+      console.error('SendGrid Error:', error.response.body);
+    }
     
-    // 🔥 備用方案:把報表內容返回,讓主程式可以用其他方式發送
     return {
       success: false,
       error: error.message,
@@ -526,37 +486,28 @@ async function main() {
   try {
     console.log('🚀 開始生成需求預測報表...');
     
-    // 1. 讀取訂單數據
-    console.log('📥 讀取訂單數據...');
     const orders = await fetchOrderData();
     console.log(`✅ 讀取了 ${orders.length} 筆訂單記錄`);
     
-    // 2. 分析歷史數據
     console.log('📊 分析歷史數據...');
     const { dailyStats, weekdayStats } = analyzeHistoricalData(orders);
     
-    // 3. 生成預測
     console.log('🔮 生成未來預測...');
     const forecasts = generateForecast(dailyStats, weekdayStats, CONFIG.FORECAST_DAYS);
     
-    // 4. 生成建議
     console.log('💡 生成營運建議...');
     const recommendations = generateRecommendations(forecasts, dailyStats, weekdayStats);
     
-    // 5. AI 深度分析
     console.log('🤖 進行 AI 深度分析...');
     const aiInsights = await getAIInsights(dailyStats, forecasts, weekdayStats);
     
-    // 6. 計算準確度
     const accuracy = calculateAccuracy(dailyStats);
     
-    // 7. 生成報表
     console.log('📝 生成報表...');
     const lineReport = generateLINEReport(forecasts, recommendations, aiInsights, accuracy);
     const emailHTML = generateEmailHTML(forecasts, recommendations, aiInsights, dailyStats, weekdayStats, accuracy);
     
-    // 8. 嘗試發送 Email (失敗也不影響整體流程)
-    console.log('📧 嘗試發送 Email 報表...');
+    console.log('📧 發送 Email 報表...');
     const emailResult = await sendEmailReport(emailHTML, lineReport);
     
     if (!emailResult.success) {
@@ -564,7 +515,6 @@ async function main() {
       console.warn(`錯誤原因: ${emailResult.error}`);
     }
     
-    // 9. 輸出 LINE 報表內容
     console.log('\n' + '='.repeat(50));
     console.log('📱 LINE 報表內容:');
     console.log('='.repeat(50));
@@ -588,7 +538,6 @@ async function main() {
   }
 }
 
-// 如果直接執行此檔案
 if (require.main === module) {
   main()
     .then(() => process.exit(0))
@@ -598,7 +547,6 @@ if (require.main === module) {
     });
 }
 
-// 匯出供其他模組使用
 module.exports = {
   main,
   fetchOrderData,
