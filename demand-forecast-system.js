@@ -4,8 +4,8 @@ const { OpenAI } = require('openai');
 
 // ==================== 設定區 ====================
 const CONFIG = {
-  SPREADSHEET_ID: '14e1uaQ_4by1W7ELflSIyxo-a48f9LelG4KdkBovyY7s',
-  SHEET_NAME: 'C.H 洗衣 AI 學習記錄',
+  SPREADSHEET_ID: process.env.GOOGLE_SHEETS_ID_CUSTOMER, // 營業紀錄試算表
+  SHEET_NAME: null, // 自動偵測第一個工作表
   EMAIL_TO: 'todayeasy2002@gmail.com',
   FORECAST_DAYS: 14,
   SMTP: {
@@ -37,54 +37,71 @@ async function fetchOrderData() {
   try {
     const sheets = await getGoogleSheetsClient();
     
-    // 🔥 方法1: 先嘗試用指定的工作表名稱
-    let response;
-    try {
-      response = await sheets.spreadsheets.values.get({
-        spreadsheetId: CONFIG.SPREADSHEET_ID,
-        range: `${CONFIG.SHEET_NAME}!A:L`,
-      });
-    } catch (error) {
-      // 🔥 方法2: 如果失敗,自動讀取第一個工作表
-      console.log('⚠️ 指定的工作表名稱無效,嘗試讀取第一個工作表...');
-      
-      // 取得所有工作表資訊
-      const spreadsheet = await sheets.spreadsheets.get({
-        spreadsheetId: CONFIG.SPREADSHEET_ID
-      });
-      
-      const firstSheet = spreadsheet.data.sheets[0];
-      const sheetTitle = firstSheet.properties.title;
-      
-      console.log(`✅ 找到工作表: ${sheetTitle}`);
-      
-      // 用第一個工作表的名稱重新讀取
-      response = await sheets.spreadsheets.values.get({
-        spreadsheetId: CONFIG.SPREADSHEET_ID,
-        range: `${sheetTitle}!A:L`,
-      });
+    // 🔥 讀取營業紀錄試算表
+    console.log('📥 正在讀取營業紀錄...');
+    console.log(`試算表 ID: ${CONFIG.SPREADSHEET_ID}`);
+    
+    // 取得所有工作表資訊,找到營業紀錄工作表 (gid=756780563)
+    const spreadsheet = await sheets.spreadsheets.get({
+      spreadsheetId: CONFIG.SPREADSHEET_ID
+    });
+    
+    // 找到 gid=756780563 的工作表
+    let targetSheet = spreadsheet.data.sheets.find(
+      sheet => sheet.properties.sheetId === 756780563
+    );
+    
+    // 如果找不到,就用第一個工作表
+    if (!targetSheet) {
+      console.log('⚠️ 找不到 gid=756780563,使用第一個工作表');
+      targetSheet = spreadsheet.data.sheets[0];
     }
+    
+    const sheetTitle = targetSheet.properties.title;
+    console.log(`✅ 找到工作表: ${sheetTitle}`);
+    
+    // 讀取所有資料 (A:I 是營業紀錄的欄位範圍)
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: CONFIG.SPREADSHEET_ID,
+      range: `'${sheetTitle}'!A:I`,
+    });
 
     const rows = response.data.values;
     if (!rows || rows.length === 0) {
       throw new Error('找不到數據');
     }
 
-    // 跳過標題行,解析訂單數據
-    const orders = rows.slice(1).map(row => ({
-      date: row[0],           // 日期
-      time: row[1],           // 時間
-      orderId: row[2],        // 訂單編號
-      customerName: row[3],   // 客戶姓名
-      phone: row[4],          // 客戶電話
-      itemName: row[5],       // 項目名稱
-      quantity: parseInt(row[6]) || 1,     // 數量
-      unitPrice: parseInt(row[7]) || 0,    // 單價
-      subtotal: parseInt(row[8]) || 0,     // 小計
-      orderTotal: parseInt(row[9]) || 0,   // 訂單總額
-      paymentMethod: row[10], // 付款方式
-      deliveryMethod: row[11] // 配送方式
-    }));
+    console.log(`✅ 讀取到 ${rows.length - 1} 筆紀錄`);
+
+    // 跳過標題行,解析營業紀錄
+    // 營業紀錄格式: 日期 | 客戶姓名 | Email | 地址 | 備註 | 項目 | 數量 | 單價 | 總額
+    const orders = rows.slice(1)
+      .filter(row => row[0] && row[8]) // 必須有日期和總額
+      .map(row => {
+        const dateStr = row[0] || ''; // 日期
+        const totalAmount = parseInt(String(row[8]).replace(/[^0-9]/g, '')) || 0;
+        
+        return {
+          date: dateStr,
+          time: dateStr.includes(' ') ? dateStr.split(' ')[1] : '12:00:00',
+          orderId: `ORDER${Date.now()}${Math.random().toString(36).substr(2, 5)}`,
+          customerName: row[1] || '未知',
+          phone: row[2] || '',
+          itemName: row[5] || '洗衣服務',
+          quantity: parseInt(row[6]) || 1,
+          unitPrice: parseInt(row[7]) || 0,
+          subtotal: totalAmount,
+          orderTotal: totalAmount,
+          paymentMethod: 'Cash',
+          deliveryMethod: 'TakeMyself'
+        };
+      });
+
+    console.log(`✅ 成功解析 ${orders.length} 筆有效訂單`);
+    
+    if (orders.length === 0) {
+      throw new Error('沒有找到有效的訂單數據');
+    }
 
     return orders;
   } catch (error) {
