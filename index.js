@@ -2778,6 +2778,29 @@ cron.schedule('0 20 * * 0', async () => {
 
 console.log('⏰ 每週報告排程已啟動（每週日 20:00）');
 
+// 🔥 測試用:手動觸發需求預測報表
+app.get('/api/test-forecast', async (req, res) => {
+  try {
+    console.log('🔍 手動觸發需求預測報表...');
+    
+    const { main: generateForecast } = require('./demand-forecast-system');
+    const result = await generateForecast();
+    
+    res.json({
+      success: true,
+      message: '需求預測報表已生成並發送到 Email',
+      preview: '請檢查你的 Email: todayeasy2002@gmail.com'
+    });
+    
+  } catch (error) {
+    console.error('手動預測報表生成失敗:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // ====================================
 // 每日需求預測報表
 // ====================================
