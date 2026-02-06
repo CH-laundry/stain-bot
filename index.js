@@ -2615,6 +2615,47 @@ app.get('/api/pickup-schedule/today-alert', async (req, res) => {
   }
 });
 
+// ========================================
+// 🚀 一鍵啟動服務 API
+// ========================================
+app.post('/api/start-services', (req, res) => {
+  try {
+    const { exec } = require('child_process');
+    const os = require('os');
+    
+    // Windows 桌面路徑
+    const desktopPath = require('path').join(os.homedir(), 'Desktop');
+    const batPath = require('path').join(desktopPath, '啟動洗衣系統.bat');
+    
+    console.log('正在執行:', batPath);
+    
+    exec(`"${batPath}"`, (error, stdout, stderr) => {
+      if (error) {
+        console.error('啟動失敗:', error);
+        return res.json({ 
+          success: false, 
+          error: '批次檔執行失敗,請確認檔案是否存在於桌面' 
+        });
+      }
+      
+      console.log('✅ 服務已啟動');
+    });
+    
+    // 立即回傳成功(不等執行完)
+    res.json({ 
+      success: true, 
+      message: '所有服務正在啟動中,請稍候...' 
+    });
+    
+  } catch (error) {
+    console.error('API 錯誤:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
   console.log(`伺服器正在運行,端口:${PORT}`);
