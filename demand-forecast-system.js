@@ -9,11 +9,18 @@ const CONFIG = {
   EMAIL_TO: 'todayeasy2002@gmail.com',
   FORECAST_DAYS: 14,
   SMTP: {
-    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false, // 使用 STARTTLS
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASSWORD
-    }
+    },
+    tls: {
+      rejectUnauthorized: false
+    },
+    connectionTimeout: 10000, // 10秒超時
+    greetingTimeout: 10000
   }
 };
 
@@ -474,7 +481,19 @@ function generateEmailHTML(forecasts, recommendations, aiInsights, dailyStats, w
 // ==================== 發送 Email ====================
 async function sendEmailReport(htmlContent, textContent) {
   try {
+    console.log('📧 準備發送 Email...');
+    console.log(`收件人: ${CONFIG.EMAIL_TO}`);
+    
     const transporter = nodemailer.createTransport(CONFIG.SMTP);
+    
+    // 測試連線
+    console.log('🔌 測試 SMTP 連線...');
+    try {
+      await transporter.verify();
+      console.log('✅ SMTP 連線測試成功');
+    } catch (verifyError) {
+      console.warn('⚠️ SMTP 連線測試失敗,但仍嘗試發送:', verifyError.message);
+    }
     
     const mailOptions = {
       from: `C.H洗衣預測系統 <${CONFIG.SMTP.auth.user}>`,
@@ -484,11 +503,21 @@ async function sendEmailReport(htmlContent, textContent) {
       html: htmlContent
     };
     
-    await transporter.sendMail(mailOptions);
+    const info = await transporter.sendMail(mailOptions);
     console.log('✅ Email 報表已發送');
+    console.log('📬 Message ID:', info.messageId);
+    
+    return { success: true, messageId: info.messageId };
   } catch (error) {
-    console.error('❌ Email 發送失敗:', error);
-    throw error;
+    console.error('❌ Email 發送失敗:', error.message);
+    
+    // 🔥 備用方案:把報表內容返回,讓主程式可以用其他方式發送
+    return {
+      success: false,
+      error: error.message,
+      textContent: textContent,
+      htmlContent: htmlContent
+    };
   }
 }
 
@@ -526,11 +555,16 @@ async function main() {
     const lineReport = generateLINEReport(forecasts, recommendations, aiInsights, accuracy);
     const emailHTML = generateEmailHTML(forecasts, recommendations, aiInsights, dailyStats, weekdayStats, accuracy);
     
-    // 8. 發送報表
-    console.log('📧 發送 Email 報表...');
-    await sendEmailReport(emailHTML, lineReport);
+    // 8. 嘗試發送 Email (失敗也不影響整體流程)
+    console.log('📧 嘗試發送 Email 報表...');
+    const emailResult = await sendEmailReport(emailHTML, lineReport);
     
-    // 9. 輸出 LINE 報表內容 (可整合到你現有的 LINE 推播系統)
+    if (!emailResult.success) {
+      console.warn('⚠️ Email 發送失敗,但報表已生成');
+      console.warn(`錯誤原因: ${emailResult.error}`);
+    }
+    
+    // 9. 輸出 LINE 報表內容
     console.log('\n' + '='.repeat(50));
     console.log('📱 LINE 報表內容:');
     console.log('='.repeat(50));
@@ -542,8 +576,10 @@ async function main() {
     return {
       success: true,
       lineReport,
+      emailHTML,
       forecasts,
-      recommendations
+      recommendations,
+      emailSent: emailResult.success
     };
     
   } catch (error) {
