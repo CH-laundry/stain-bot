@@ -87,6 +87,7 @@
       <button class="tab" onclick="switchTab(event,'urgent')">⚡ 急件追蹤</button>
       <button class="tab" onclick="switchTab(event,'pickup-schedule')">🏠 收件排程</button>
       <button class="tab" onclick="switchTab(event,'revenue')">📊 營業報表</button>
+      <button class="tab" onclick="switchTab(event,'startup')">🚀 系統啟動</button>
       
     </div>
 
@@ -438,6 +439,28 @@
     <p style="text-align:center; color:#999;">尚未載入，請點「重新整理」。</p>
   </div>
 </div>  <!-- urgent-tab 結束 -->
+
+    <!-- 🚀 系統啟動分頁 -->
+<div id="startup-tab" class="tab-content">
+  <h3 style="color:#667eea; margin-bottom:20px;">🚀 一鍵啟動所有服務</h3>
+  
+  <div style="background:#f0f4ff; padding:30px; border-radius:15px; text-align:center;">
+    <p style="font-size:18px; margin-bottom:20px;">
+      點擊下方按鈕將啟動電腦上的 4 個服務:
+    </p>
+    <ul style="text-align:left; max-width:400px; margin:0 auto 30px; font-size:16px;">
+      <li>📊 營業記錄監控</li>
+      <li>📡 進度監聽系統</li>
+      <li>✅ 自動簽收監控</li>
+      <li>💰 自動收款機器人</li>
+    </ul>
+    <button class="btn btn-secondary" onclick="startAllServices()" 
+            style="font-size:20px; padding:20px 50px;">
+      🚀 啟動所有服務
+    </button>
+    <div id="startupResult" style="margin-top:20px;"></div>
+  </div>
+</div>
   
 <!-- 🔥🔥🔥 新增：收件排程分頁（開始）🔥🔥🔥 -->
 <!-- 🏠 收件排程分頁 -->
