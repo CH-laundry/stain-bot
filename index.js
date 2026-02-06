@@ -2778,6 +2778,28 @@ cron.schedule('0 20 * * 0', async () => {
 
 console.log('⏰ 每週報告排程已啟動（每週日 20:00）');
 
+// ====================================
+// 每日需求預測報表
+// ====================================
+
+// 需求預測報表 - 每天早上 8:00
+cron.schedule('0 8 * * *', async () => {
+  console.log('⏰ 開始生成需求預測報表...');
+  
+  try {
+    const { main: generateForecast } = require('./demand-forecast-system');
+    await generateForecast();
+    console.log('✅ 需求預測報表已發送');
+  } catch (error) {
+    console.error('❌ 需求預測報表失敗:', error.message);
+    logger.logError('需求預測報表失敗', error);
+  }
+}, {
+  timezone: "Asia/Taipei"
+});
+
+console.log('⏰ 需求預測報表排程已啟動(每天 08:00)');
+
 // 🔍 測試 token 詳細資訊
 app.get('/test-token-detail', async (req, res) => {
   try {
