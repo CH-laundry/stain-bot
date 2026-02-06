@@ -2778,7 +2778,7 @@ cron.schedule('0 20 * * 0', async () => {
 
 console.log('⏰ 每週報告排程已啟動（每週日 20:00）');
 
-// 🔥 測試用:手動觸發需求預測報表
+// 🔥 測試用:手動觸發需求預測報表 (整合 LINE 推播版)
 app.get('/api/test-forecast', async (req, res) => {
   try {
     console.log('🔍 手動觸發需求預測報表...');
@@ -2786,10 +2786,29 @@ app.get('/api/test-forecast', async (req, res) => {
     const { main: generateForecast } = require('./demand-forecast-system');
     const result = await generateForecast();
     
+    // 🔥 發送 LINE 推播
+    if (result.success && result.lineReport) {
+      try {
+        // 發送給管理員
+        if (process.env.ADMIN_USER_ID) {
+          await client.pushMessage(process.env.ADMIN_USER_ID, {
+            type: 'text',
+            text: result.lineReport
+          });
+          console.log('✅ LINE 報表已發送給管理員');
+        }
+      } catch (lineError) {
+        console.error('❌ LINE 發送失敗:', lineError.message);
+      }
+    }
+    
     res.json({
       success: true,
-      message: '需求預測報表已生成並發送到 Email',
-      preview: '請檢查你的 Email: todayeasy2002@gmail.com'
+      message: '需求預測報表已生成',
+      emailSent: result.emailSent || false,
+      lineSent: !!process.env.ADMIN_USER_ID,
+      preview: result.lineReport ? result.lineReport.substring(0, 200) + '...' : '',
+      note: result.emailSent ? 'Email 已發送' : 'Email 發送失敗 (Railway 封鎖 SMTP),但 LINE 已發送'
     });
     
   } catch (error) {
@@ -2802,7 +2821,7 @@ app.get('/api/test-forecast', async (req, res) => {
 });
 
 // ====================================
-// 每日需求預測報表
+// 每日需求預測報表 (整合 LINE 推播)
 // ====================================
 
 // 需求預測報表 - 每天早上 8:00
@@ -2811,8 +2830,22 @@ cron.schedule('0 8 * * *', async () => {
   
   try {
     const { main: generateForecast } = require('./demand-forecast-system');
-    await generateForecast();
-    console.log('✅ 需求預測報表已發送');
+    const result = await generateForecast();
+    
+    // 🔥 發送 LINE 推播給管理員
+    if (result.success && result.lineReport && process.env.ADMIN_USER_ID) {
+      try {
+        await client.pushMessage(process.env.ADMIN_USER_ID, {
+          type: 'text',
+          text: result.lineReport
+        });
+        console.log('✅ 需求預測報表已發送到 LINE');
+      } catch (lineError) {
+        console.error('❌ LINE 發送失敗:', lineError.message);
+      }
+    }
+    
+    console.log('✅ 需求預測報表生成完成');
   } catch (error) {
     console.error('❌ 需求預測報表失敗:', error.message);
     logger.logError('需求預測報表失敗', error);
