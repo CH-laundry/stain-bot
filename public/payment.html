@@ -3399,6 +3399,34 @@ function showTodayAlert() {
 }
 // 🔥🔥🔥 新增：收件排程功能（結束）🔥🔥🔥
 
+// ========================================
+// 🚀 一鍵啟動服務功能
+// ========================================
+async function startAllServices() {
+  var btn = event.target;
+  btn.disabled = true;
+  btn.textContent = '⏳ 啟動中...';
+  
+  try {
+    var res = await fetch('/api/start-services', { method: 'POST' });
+    var data = await res.json();
+    
+    var resultDiv = document.getElementById('startupResult');
+    if (data.success) {
+      resultDiv.innerHTML = '<p style="color:#28a745; font-size:18px;">✅ ' + data.message + '</p>';
+    } else {
+      resultDiv.innerHTML = '<p style="color:#dc3545; font-size:18px;">❌ ' + (data.error || '啟動失敗') + '</p>';
+    }
+  } catch (error) {
+    document.getElementById('startupResult').innerHTML = 
+      '<p style="color:#dc3545; font-size:18px;">❌ 連線失敗: ' + error.message + '</p>';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🚀 啟動所有服務';
+  }
+}
+
+    
    // ========================================
 // 📊 營業報表功能
 // ========================================
