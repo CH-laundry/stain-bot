@@ -346,12 +346,18 @@ function generateLINEReport(forecasts, recommendations, aiInsights, accuracy) {
   report += `忙碌指數: ${busyLevel}\n\n`;
   
   report += `【未來7天趨勢】\n`;
-  forecasts.slice(0, 7).forEach((f, idx) => {
-    const trend = idx > 0 ? 
-      (f.predictedOrders > forecasts[idx-1].predictedOrders ? '⬆️' : 
-       f.predictedOrders < forecasts[idx-1].predictedOrders ? '⬇️' : '→') : '';
-    report += `${f.weekday} ${f.date.slice(5)}: ${f.predictedOrders}單 ${trend}\n`;
-  });
+forecasts.slice(0, 7).forEach((f, idx) => {
+  const trend = idx > 0 ? 
+    (f.predictedOrders > forecasts[idx-1].predictedOrders ? '⬆️' : 
+     f.predictedOrders < forecasts[idx-1].predictedOrders ? '⬇️' : '→') : '';
+  
+  // 🌤️ 加入天氣資訊
+  const weather = weatherData && weatherData[idx] 
+    ? ` (${weatherData[idx].weather} ${weatherData[idx].avgTemp}°C${weatherData[idx].isRainy ? ' 🌧️' : ''})`
+    : '';
+  
+  report += `${f.weekday} ${f.date.slice(5)}: ${f.predictedOrders}單 ${trend}${weather}\n`;
+});
   
   report += `\n【AI 洞察分析】\n${aiInsights}\n\n`;
   
