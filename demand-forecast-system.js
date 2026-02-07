@@ -3,10 +3,16 @@ const { OpenAI } = require('openai');
 
 // ==================== 設定區 ====================
 const CONFIG = {
-  SPREADSHEET_ID: process.env.GOOGLE_SHEETS_ID_CUSTOMER, // 營業紀錄試算表
-  SHEET_NAME: null, // 自動偵測第一個工作表
+  SPREADSHEET_ID: process.env.GOOGLE_SHEETS_ID_CUSTOMER,
+  SHEET_NAME: null,
   EMAIL_TO: 'todayeasy2002@gmail.com',
   FORECAST_DAYS: 14,
+  // 🌤️ 天氣 API 設定
+  WEATHER: {
+    apiKey: process.env.OPENWEATHER_API_KEY,
+    city: 'Banqiao,TW', // 板橋,台灣
+    enabled: !!process.env.OPENWEATHER_API_KEY // 有 API Key 才啟用
+  },
   // 🔥 改用 SendGrid
  SENDGRID: {
   apiKey: process.env.SENDGRID_API_KEY,
