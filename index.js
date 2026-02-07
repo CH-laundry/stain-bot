@@ -2820,6 +2820,45 @@ app.get('/api/test-forecast', async (req, res) => {
   }
 });
 
+// 🔥 測試用:手動觸發月度報告  ⬅️ 在這裡加入!
+app.get('/api/test-monthly-report', async (req, res) => {
+  try {
+    console.log('📊 手動觸發月度報告...');
+    
+    const { main: generateMonthlyReport } = require('./monthly-report-system');
+    const result = await generateMonthlyReport();
+    
+    // 發送 LINE 推播
+    if (result.success && result.lineReport) {
+      try {
+        if (process.env.ADMIN_USER_ID) {
+          await client.pushMessage(process.env.ADMIN_USER_ID, {
+            type: 'text',
+            text: result.lineReport
+          });
+          console.log('✅ LINE 報表已發送給管理員');
+        }
+      } catch (lineError) {
+        console.error('❌ LINE 發送失敗:', lineError.message);
+      }
+    }
+    
+    res.json({
+      success: true,
+      message: '月度報告已生成',
+      preview: result.lineReport ? result.lineReport.substring(0, 200) + '...' : ''
+    });
+    
+  } catch (error) {
+    console.error('月度報告生成失敗:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+
 // ====================================
 // 每日需求預測報表 (整合 LINE 推播)
 // ====================================
@@ -2934,3 +2973,38 @@ app.get('/test-auth-email', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+// ====================================
+// 每月營收對比報告
+// ====================================
+// 每月 1 號早上 9:00 執行
+cron.schedule('0 9 1 * *', async () => {
+  console.log('📊 開始生成月度營收報告...');
+  
+  try {
+    const { main: generateMonthlyReport } = require('./monthly-report-system');
+    const result = await generateMonthlyReport();
+    
+    // 發送 LINE 推播給管理員
+    if (result.success && result.lineReport && process.env.ADMIN_USER_ID) {
+      try {
+        await client.pushMessage(process.env.ADMIN_USER_ID, {
+          type: 'text',
+          text: result.lineReport
+        });
+        console.log('✅ 月度報告已發送到 LINE');
+      } catch (lineError) {
+        console.error('❌ LINE 發送失敗:', lineError.message);
+      }
+    }
+    
+    console.log('✅ 月度報告生成完成');
+  } catch (error) {
+    console.error('❌ 月度報告失敗:', error.message);
+    logger.logError('月度報告失敗', error);
+  }
+}, {
+  timezone: "Asia/Taipei"
+});
+
+console.log('📊 月度營收報告排程已啟動 (每月 1 號 09:00)');
