@@ -8,11 +8,11 @@ const CONFIG = {
   EMAIL_TO: 'todayeasy2002@gmail.com',
   FORECAST_DAYS: 14,
   // 🔥 改用 SendGrid
-  SENDGRID: {
-    apiKey: process.env.SENDGRID_API_KEY,
-    fromEmail: 'forecast@ch-laundry.com',
-    fromName: 'C.H洗衣預測系統'
-  }
+ SENDGRID: {
+  apiKey: process.env.SENDGRID_API_KEY,
+  fromEmail: 'todayeasy2002@gmail.com', // 🔥 改成已驗證的 Email
+  fromName: 'C.H洗衣預測系統'
+ }
 };
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
