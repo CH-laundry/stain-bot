@@ -331,7 +331,7 @@ function calculateAccuracy(dailyStats) {
 }
 
 // ==================== 生成 LINE 格式報表 ====================
-function generateLINEReport(forecasts, recommendations, aiInsights, accuracy) {
+function generateLINEReport(forecasts, recommendations, aiInsights, accuracy, weatherData) {
   const today = new Date().toLocaleDateString('zh-TW');
   const todayForecast = forecasts[0];
   
@@ -373,18 +373,24 @@ forecasts.slice(0, 7).forEach((f, idx) => {
 }
 
 // ==================== 生成 Email HTML 報表 ====================
-function generateEmailHTML(forecasts, recommendations, aiInsights, dailyStats, weekdayStats, accuracy) {
+function generateEmailHTML(forecasts, recommendations, aiInsights, dailyStats, weekdayStats, accuracy, weatherData) {
   const today = new Date().toLocaleDateString('zh-TW');
   
-  const forecastTableRows = forecasts.slice(0, 7).map(f => `
-    <tr>
-      <td>${f.date}</td>
-      <td>${f.weekday}</td>
-      <td><strong>${f.predictedOrders}</strong></td>
-      <td>${f.orderRange.min} - ${f.orderRange.max}</td>
-      <td>$${f.predictedRevenue.toLocaleString()}</td>
-    </tr>
-  `).join('');
+  const forecastTableRows = forecasts.slice(0, 7).map((f, idx) => {
+  const weather = weatherData && weatherData[idx] 
+    ? `${weatherData[idx].weather} ${weatherData[idx].avgTemp}°C${weatherData[idx].isRainy ? ' 🌧️' : ''}` 
+    : '-';
+  return `
+  <tr>
+    <td>${f.date}</td>
+    <td>${f.weekday}</td>
+    <td><strong>${f.predictedOrders}</strong></td>
+    <td>${f.orderRange.min} - ${f.orderRange.max}</td>
+    <td>$${f.predictedRevenue.toLocaleString()}</td>
+    <td>${weather}</td>
+  </tr>
+`;
+}).join('');
   
   const forecast14TableRows = forecasts.map(f => `
     <tr>
@@ -448,6 +454,7 @@ function generateEmailHTML(forecasts, recommendations, aiInsights, dailyStats, w
         <th>預測訂單</th>
         <th>信心區間</th>
         <th>預測營收</th>
+        <th>天氣</th>
       </tr>
     </thead>
     <tbody>
@@ -570,8 +577,8 @@ async function main() {
    const accuracy = calculateAccuracy(dailyStats);
     
     console.log('📝 生成報表...');
-    const lineReport = generateLINEReport(forecasts, recommendations, aiInsights, accuracy);
-    const emailHTML = generateEmailHTML(forecasts, recommendations, aiInsights, dailyStats, weekdayStats, accuracy);
+   const lineReport = generateLINEReport(forecasts, recommendations, aiInsights, accuracy, weatherData);
+    const emailHTML = generateEmailHTML(forecasts, recommendations, aiInsights, dailyStats, weekdayStats, accuracy, weatherData);
     
     console.log('📧 發送 Email 報表...');
     const emailResult = await sendEmailReport(emailHTML, lineReport);
