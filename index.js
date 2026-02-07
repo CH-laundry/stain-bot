@@ -2823,7 +2823,6 @@ app.get('/api/test-forecast', async (req, res) => {
 // ====================================
 // 每日需求預測報表 (整合 LINE 推播)
 // ====================================
-
 // 需求預測報表 - 每天早上 8:00
 cron.schedule('0 8 * * *', async () => {
   console.log('⏰ 開始生成需求預測報表...');
@@ -2855,6 +2854,48 @@ cron.schedule('0 8 * * *', async () => {
 });
 
 console.log('⏰ 需求預測報表排程已啟動(每天 08:00)');
+
+// 🔥 測試用:手動觸發需求預測報表 (整合 LINE 推播版)
+app.get('/api/test-forecast', async (req, res) => {
+  try {
+    console.log('🔍 手動觸發需求預測報表...');
+    
+    const { main: generateForecast } = require('./demand-forecast-system');
+    const result = await generateForecast();
+    
+    // 🔥 發送 LINE 推播
+    if (result.success && result.lineReport) {
+      try {
+        // 發送給管理員
+        if (process.env.ADMIN_USER_ID) {
+          await client.pushMessage(process.env.ADMIN_USER_ID, {
+            type: 'text',
+            text: result.lineReport
+          });
+          console.log('✅ LINE 報表已發送給管理員');
+        }
+      } catch (lineError) {
+        console.error('❌ LINE 發送失敗:', lineError.message);
+      }
+    }
+    
+    res.json({
+      success: true,
+      message: '需求預測報表已生成',
+      emailSent: result.emailSent || false,
+      lineSent: !!process.env.ADMIN_USER_ID,
+      preview: result.lineReport ? result.lineReport.substring(0, 200) + '...' : '',
+      note: result.emailSent ? '✅ Email 和 LINE 都已發送' : '⚠️ Email 發送狀態未知,請檢查信箱'
+    });
+    
+  } catch (error) {
+    console.error('手動預測報表生成失敗:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
 
 // 🔍 測試 token 詳細資訊
 app.get('/test-token-detail', async (req, res) => {
