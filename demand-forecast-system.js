@@ -231,7 +231,7 @@ function generateRecommendations(forecasts, dailyStats, weekdayStats) {
   return recommendations;
 }
 
-// ==================== 取得天氣預報 ====================
+// ==================== 取得天氣預報 (WeatherAPI) ====================
 async function getWeatherForecast() {
   if (!CONFIG.WEATHER.enabled) {
     console.log('⚠️ 天氣 API 未啟用');
@@ -240,43 +240,29 @@ async function getWeatherForecast() {
   
   try {
     const fetch = require('node-fetch');
-    const url = `https://api.openweathermap.org/data/2.5/forecast?q=${CONFIG.WEATHER.city}&appid=${CONFIG.WEATHER.apiKey}&units=metric&lang=zh_tw`;
+    // 🌤️ 改用 WeatherAPI.com (支援 7 天預報)
+    const url = `https://api.weatherapi.com/v1/forecast.json?key=${CONFIG.WEATHER.apiKey}&q=${CONFIG.WEATHER.city}&days=7&lang=zh_tw`;
     
     const response = await fetch(url);
     const data = await response.json();
     
-    if (data.cod !== '200') {
-      console.error('天氣 API 錯誤:', data.message);
+    if (data.error) {
+      console.error('天氣 API 錯誤:', data.error.message);
       return null;
     }
     
     // 整理未來 7 天的天氣
-    const forecasts = data.list.slice(0, 14).map(item => ({
-      date: item.dt_txt.split(' ')[0],
-      temp: Math.round(item.main.temp),
-      weather: item.weather[0].description,
-      rain: item.rain ? item.rain['3h'] || 0 : 0,
-      isRainy: item.weather[0].main === 'Rain'
-    }));
+    const forecastDays = data.forecast.forecastday;
     
-    // 按日期分組取平均
-    const daily = {};
-    forecasts.forEach(f => {
-      if (!daily[f.date]) {
-        daily[f.date] = { temp: [], rain: 0, rainyCount: 0, weather: [] };
-      }
-      daily[f.date].temp.push(f.temp);
-      daily[f.date].rain += f.rain;
-      if (f.isRainy) daily[f.date].rainyCount++;
-      daily[f.date].weather.push(f.weather);
-    });
-    
-    return Object.entries(daily).slice(0, 7).map(([date, data]) => ({
-      date,
-      avgTemp: Math.round(data.temp.reduce((a, b) => a + b, 0) / data.temp.length),
-      totalRain: Math.round(data.rain * 10) / 10,
-      isRainy: data.rainyCount > 0,
-      weather: data.weather[0]
+    return forecastDays.map(day => ({
+      date: day.date,
+      avgTemp: Math.round(day.day.avgtemp_c),
+      maxTemp: Math.round(day.day.maxtemp_c),
+      minTemp: Math.round(day.day.mintemp_c),
+      totalRain: Math.round(day.day.totalprecip_mm * 10) / 10,
+      isRainy: day.day.totalprecip_mm > 0.1,
+      weather: day.day.condition.text,
+      humidity: day.day.avghumidity
     }));
     
   } catch (error) {
