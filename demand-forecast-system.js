@@ -565,13 +565,17 @@ async function main() {
     console.log('🔮 生成未來預測...');
     const forecasts = generateForecast(dailyStats, weekdayStats, CONFIG.FORECAST_DAYS);
     
-    console.log('💡 生成營運建議...');
-    const recommendations = generateRecommendations(forecasts, dailyStats, weekdayStats);
-    
-    console.log('🤖 進行 AI 深度分析...');
-    const aiInsights = await getAIInsights(dailyStats, forecasts, weekdayStats);
-    
-    const accuracy = calculateAccuracy(dailyStats);
+   console.log('💡 生成營運建議...');
+   const recommendations = generateRecommendations(forecasts, dailyStats, weekdayStats);
+
+   // 🌤️ 取得天氣預報
+   console.log('🌤️ 取得天氣預報...');
+   const weatherData = await getWeatherForecast();
+
+   console.log('🤖 進行 AI 深度分析...');
+   const aiInsights = await getAIInsights(dailyStats, forecasts, weekdayStats, weatherData);
+
+   const accuracy = calculateAccuracy(dailyStats);
     
     console.log('📝 生成報表...');
     const lineReport = generateLINEReport(forecasts, recommendations, aiInsights, accuracy);
