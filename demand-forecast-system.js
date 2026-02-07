@@ -231,15 +231,78 @@ function generateRecommendations(forecasts, dailyStats, weekdayStats) {
   return recommendations;
 }
 
-// ==================== 使用 AI 深度分析 ====================
-async function getAIInsights(dailyStats, forecasts, weekdayStats) {
+// ==================== 取得天氣預報 ====================
+async function getWeatherForecast() {
+  if (!CONFIG.WEATHER.enabled) {
+    console.log('⚠️ 天氣 API 未啟用');
+    return null;
+  }
+  
+  try {
+    const fetch = require('node-fetch');
+    const url = `https://api.openweathermap.org/data/2.5/forecast?q=${CONFIG.WEATHER.city}&appid=${CONFIG.WEATHER.apiKey}&units=metric&lang=zh_tw`;
+    
+    const response = await fetch(url);
+    const data = await response.json();
+    
+    if (data.cod !== '200') {
+      console.error('天氣 API 錯誤:', data.message);
+      return null;
+    }
+    
+    // 整理未來 7 天的天氣
+    const forecasts = data.list.slice(0, 14).map(item => ({
+      date: item.dt_txt.split(' ')[0],
+      temp: Math.round(item.main.temp),
+      weather: item.weather[0].description,
+      rain: item.rain ? item.rain['3h'] || 0 : 0,
+      isRainy: item.weather[0].main === 'Rain'
+    }));
+    
+    // 按日期分組取平均
+    const daily = {};
+    forecasts.forEach(f => {
+      if (!daily[f.date]) {
+        daily[f.date] = { temp: [], rain: 0, rainyCount: 0, weather: [] };
+      }
+      daily[f.date].temp.push(f.temp);
+      daily[f.date].rain += f.rain;
+      if (f.isRainy) daily[f.date].rainyCount++;
+      daily[f.date].weather.push(f.weather);
+    });
+    
+    return Object.entries(daily).slice(0, 7).map(([date, data]) => ({
+      date,
+      avgTemp: Math.round(data.temp.reduce((a, b) => a + b, 0) / data.temp.length),
+      totalRain: Math.round(data.rain * 10) / 10,
+      isRainy: data.rainyCount > 0,
+      weather: data.weather[0]
+    }));
+    
+  } catch (error) {
+    console.error('取得天氣預報失敗:', error.message);
+    return null;
+  }
+}
+
+// ==================== 使用 AI 深度分析 (含天氣) ====================
+async function getAIInsights(dailyStats, forecasts, weekdayStats, weatherData) {
   const historicalSummary = Object.entries(dailyStats).map(([date, stats]) => 
     `${date}: ${stats.orderCount}單, $${stats.revenue}`
   ).join('\n');
   
-  const forecastSummary = forecasts.slice(0, 7).map(f => 
-    `${f.date} (${f.weekday}): 預測${f.predictedOrders}單`
-  ).join('\n');
+  const forecastSummary = forecasts.slice(0, 7).map((f, idx) => {
+    const weather = weatherData && weatherData[idx] 
+      ? ` (${weatherData[idx].weather}, ${weatherData[idx].isRainy ? '有雨' : '無雨'})`
+      : '';
+    return `${f.date} (${f.weekday}): 預測${f.predictedOrders}單${weather}`;
+  }).join('\n');
+  
+  const weatherNote = weatherData 
+    ? '\n【天氣預報】\n' + weatherData.map(w => 
+        `${w.date}: ${w.weather}, ${w.avgTemp}°C, 降雨${w.totalRain}mm`
+      ).join('\n')
+    : '';
   
   const prompt = `你是 C.H 精緻洗衣的營運分析顧問。以下是歷史訂單數據和未來預測:
 
@@ -248,10 +311,11 @@ ${historicalSummary}
 
 【未來7天預測】
 ${forecastSummary}
+${weatherNote}
 
 請用繁體中文提供:
-1. 數據趨勢分析 (2-3句話)
-2. 潛在商機或風險提醒 (1-2句話)
+1. 數據趨勢分析 (考慮天氣影響,2-3句話)
+2. 潛在商機或風險提醒 (特別注意雨天對洗衣需求的影響,1-2句話)
 3. 具體行動建議 (1-2句話)
 
 請簡潔專業,直接給出洞察,不要客套話。`;
