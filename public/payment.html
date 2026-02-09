@@ -3456,16 +3456,26 @@ function displayRevenueReport(data) {
   html += '<th style="padding:12px; text-align:right;">訂單數</th>';
   html += '<th style="padding:12px; text-align:right;">日均單價</th>';
   html += '</tr></thead><tbody>';
+
+  // 🌟 定義星期幾
+  var weekdays = ['日', '一', '二', '三', '四', '五', '六'];
   
   dailyData.forEach(function(day, index) {
     var bgColor = index % 2 === 0 ? '#f8f9fa' : '#fff';
-    var dateStr = day.date || '-';
+     var dateStr = day.date || '-';
+    
+    // 🌟 計算星期幾
+    var weekday = '';
+    if (day.date) {
+      var date = new Date(day.date);
+      weekday = ' (' + weekdays[date.getDay()] + ')';
+    }
     var amount = day.amount || 0;
     var orders = day.orders || 0;
     var avgPrice = orders > 0 ? Math.round(amount / orders) : 0;
     
     html += '<tr style="background:' + bgColor + '; border-bottom:1px solid #e0e0e0;">';
-    html += '<td style="padding:12px;">' + dateStr + '</td>';
+   html += '<td style="padding:12px;">' + dateStr + weekday + '</td>';
     html += '<td style="padding:12px; text-align:right; font-weight:600; color:#667eea;">NT$ ' + amount.toLocaleString() + '</td>';
     html += '<td style="padding:12px; text-align:right;">' + orders + ' 筆</td>';
     html += '<td style="padding:12px; text-align:right; color:#999;">NT$ ' + avgPrice.toLocaleString() + '</td>';
