@@ -768,6 +768,7 @@
         var monthInput = document.getElementById('revenueMonth');
         if (monthInput) monthInput.value = monthStr;
       }
+      if (tabName === 'pickup-schedule') loadPickupSchedules(); 
     }
 
     async function loadCustomerNumbers() {
@@ -3332,7 +3333,7 @@ async function deleteSelectedPickups() {
     showResult('error', '❌ 刪除失敗：' + e.message);
   }
 }
-}
+
 
 // ✅ 標記已收件（並通知客人）
 async function completePickup(id, notifyCustomer) {
