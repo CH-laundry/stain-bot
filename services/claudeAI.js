@@ -2132,94 +2132,29 @@ console.log('✅ 非電話號碼，繼續處理');
     const tomorrowDayName = dayNames[tomorrowDay];
     const enhancedTimeInfo = `${timeInfo}\n明天是：${tomorrowDayName}`;
     
- // 🔴 超級重要：收件判斷要非常嚴格，避免誤判
-const isPickupQuestion = /(請來收|來收|可以來收|能來收|收件|收衣|到府收|收送|放好了|可以收嗎|能收嗎|來拿衣服|取件|準備好了|幫我收|麻煩來收|麻煩收|請收)/.test(userMessage) && 
-  !/(收到|收費|收據|收入|接收|簽收|驗收|什麼時候到|幾點到|到了嗎|快到了|讓我知道|通知我|跟我說|幾天|多久|什麼時候|週幾|星期幾|幾號|前到|前好|前拿|前領|能拿|可以拿|洗好|完工|幾天好|幾天會好|何時好|何時拿)/.test(userMessage);
+ // 🔴 超嚴格收件判斷：只有明確說「來收」「收件」才算
+const isPickupQuestion = (
+  // 必須包含以下明確關鍵字
+  /(請來收|可以來收嗎|能來收嗎|麻煩來收|到府收件|收衣服|幫我收|收件)/.test(userMessage) &&
+  // 排除所有可能誤判的情況
+  !/(收到|收費|收據|收入|接收|簽收|驗收|什麼時候到|幾點到|到了嗎|快到了|讓我知道|通知我|跟我說|幾天|多久|什麼時候|週幾|星期幾|幾號|前到|前好|前拿|前領|能拿|可以拿|洗好|完工|幾天好|幾天會好|何時好|何時拿|放好|準備好|來拿|取件)/.test(userMessage) &&
+  // 訊息長度合理（避免誤判長句子）
+  userMessage.length < 50
+);
     
     if (isPickupQuestion && userId && pickupRepliedUsers.has(userId)) {
       console.log('🔇 已回覆過收件問題，不重複回應');
       return null;
     }
     
-    // ⭐ 取得對話記憶
-    const history = getHistory(userId);
-    const messages = [];
+    // ⭐ 不使用對話記憶，每次都是獨立問答（提升準確率）
+const messages = [];
     
-    // 加入歷史對話
-    history.forEach(msg => {
-      messages.push({
-        role: msg.role,
-        content: msg.content
-      });
-    });
-    
-    // ⭐ 智能判斷是否為補充資訊（超強化版 - 防止重複「我們會去收回的」）
-const lastTenReplies = history.slice(-20); // 取最近 10 組對話（擴大範圍）
-
-// 🔴 計算最近回覆「我們會去收回的」或「週日會去收回的」的次數
-const recentPickupCount = lastTenReplies.filter(msg => 
-  msg.role === 'assistant' && 
-  (msg.content.includes('我們會去收回的') || 
-   msg.content.includes('週日會去收回的') ||
-   msg.content.includes('週日會幫您送回') ||
-   msg.content.includes('我們會幫您送回'))
-).length;
-
-console.log(`🔍 最近 10 組對話中，已回覆收件/送回 ${recentPickupCount} 次`);
-
-// 🔴 判斷是否為補充資訊（大幅擴充判斷條件）
-const isSupplementInfo = (
-  // 地址資訊
-  /路|號|樓|管理室|放好|拍照|社區|大樓|巷|弄|室|之/.test(userMessage) ||
-  // 電話號碼
-  /09\d{8}|0\d-?\d{6,8}/.test(userMessage) ||
-  // 物品數量/尺寸
-  /一件|兩件|三件|四件|五件|六件|七件|八件|九件|十件|單人|雙人|Queen|King|件|個|條|雙/.test(userMessage) ||
-  // 時間資訊
-  /週一|週二|週三|週四|週五|週六|週日|明天|後天|大後天|等會|稍後|待會|今天|下午|晚上|早上|中午/.test(userMessage) ||
-  // 確認語（擴充）
-  /^好的$|^好$|^了解$|^收到$|^OK$|^可以$|^謝謝$|^感謝$|現在拿到|已經放|拿到了|放好了|準備好/.test(userMessage.trim()) ||
-  // 地點說明
-  /放|擺|擱|丟|寄放|暫放|先放|等下放|到時候放/.test(userMessage) ||
-  // 數字或單位
-  /^\d+$/.test(userMessage.trim()) || // 純數字
-  /樓$|號$|巷$|弄$/.test(userMessage.trim()) // 結尾是樓號巷弄
-) && 
-userMessage.length < 100 && // 訊息不太長（從 80 放寬到 100）
-!/(可以|能不能|要|想|請|幫我|麻煩|我要|想要|需要|希望).*(收|來|送|拿|取)/.test(userMessage); // 不是新的收件/送回請求
-
-// 🔴 根據判斷結果，決定要加入哪種訊息
-if (recentPickupCount >= 1 && isSupplementInfo) {
-  console.log(`🔇 偵測到補充資訊（已回覆收件/送回 ${recentPickupCount} 次），強制簡短回覆`);
-  messages.push({
-    role: "user",
-    content: `【🔴 超級重要內部指令：前面對話已經回覆過收件或送回確認 ${recentPickupCount} 次了，這句只是補充細節（地址、電話、樓層、時間、數量等），你必須用最簡短的方式回覆，從以下選一個即可：
-
-✅ 允許的回覆（選一個）：
-- 「收到 💙」
-- 「好的 💙」
-- 「了解 💙」
-- 「好 💙」
-- 「收到地址 💙」
-- 「收到電話 💙」
-
-❌ 絕對禁止的回覆：
-- 「我們會去收回的，謝謝您」（已經說過了，不要再重複！）
-- 「週日會去收回的」（已經說過了，不要再重複！）
-- 「我們會幫您送回去的」（已經說過了，不要再重複！）
-- 任何超過 10 個字的回覆
-- 主動報價格
-- 詢問尺寸或類型
-
-記住：客人已經知道我們會去收/送了，不需要再重複說明！】\n\n${enhancedTimeInfo}\n\n客人問題：${userMessage}`
-  });
-} else {
-  // 一般訊息
-  messages.push({
-    role: "user",
-    content: `${enhancedTimeInfo}\n\n客人問題：${userMessage}`
-  });
-}
+   // ⭐ 直接傳送訊息給 AI，不做複雜判斷（提升準確率）
+messages.push({
+  role: "user",
+  content: `${enhancedTimeInfo}\n\n客人問題：${userMessage}`
+});
     
     console.log(`📜 對話記憶: ${history.length} 則歷史訊息`);
 
