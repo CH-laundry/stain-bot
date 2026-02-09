@@ -1705,7 +1705,7 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000);
 
-// 加入對話記憶
+// 加入對話記憶（新增時間戳記）
 function addToHistory(userId, role, content) {
   if (!userId) return;
   
@@ -1717,7 +1717,14 @@ function addToHistory(userId, role, content) {
   }
   
   const data = conversationHistory.get(userId);
-  data.messages.push({ role, content });
+  
+  // 🔴 新增：每則訊息都記錄時間戳記
+  data.messages.push({ 
+    role, 
+    content,
+    timestamp: Date.now() // 記錄這則訊息的時間
+  });
+  
   data.lastUpdate = Date.now();
   
   // 保留最近 10 則訊息（5 組對話）
@@ -1728,12 +1735,27 @@ function addToHistory(userId, role, content) {
   console.log(`💾 儲存對話記憶: ${userId}, 總計 ${data.messages.length} 則`);
 }
 
-// 取得對話記憶
+// 取得對話記憶（只取 30 分鐘內的）
 function getHistory(userId) {
   if (!userId || !conversationHistory.has(userId)) {
     return [];
   }
-  return conversationHistory.get(userId).messages;
+  
+  const data = conversationHistory.get(userId);
+  const now = Date.now();
+  const thirtyMinutesAgo = now - (30 * 60 * 1000); // 30 分鐘前的時間戳記
+  
+  // 🔴 過濾：只保留 30 分鐘內的訊息
+  const recentMessages = data.messages.filter(msg => {
+    // 如果訊息沒有 timestamp（舊版資料），保留它
+    if (!msg.timestamp) return true;
+    // 只保留 30 分鐘內的訊息
+    return msg.timestamp > thirtyMinutesAgo;
+  });
+  
+  console.log(`📜 取得對話記憶: ${userId}, 30分鐘內共 ${recentMessages.length} 則`);
+  
+  return recentMessages;
 }
 
 // ====================================
@@ -2147,14 +2169,55 @@ const isPickupQuestion = (
       return null;
     }
     
-    // ⭐ 不使用對話記憶，每次都是獨立問答（提升準確率）
+   // ⭐ 取得對話記憶（只取 30 分鐘內的）
+const history = getHistory(userId);
 const messages = [];
+
+// 🔴 只在有歷史訊息時才加入（避免空陣列）
+if (history.length > 0) {
+  console.log(`📜 載入 30 分鐘內的對話記憶: ${history.length} 則`);
+  history.forEach(msg => {
+    messages.push({
+      role: msg.role,
+      content: msg.content
+    });
+  });
+} else {
+  console.log('📜 無歷史對話（或已超過 30 分鐘）');
+}
     
-   // ⭐ 直接傳送訊息給 AI，不做複雜判斷（提升準確率）
-messages.push({
-  role: "user",
-  content: `${enhancedTimeInfo}\n\n客人問題：${userMessage}`
-});
+   // ⭐ 簡化版補充資訊判斷（只判斷最近 2 則訊息）
+const lastTwoMessages = history.slice(-4); // 取最近 2 組對話（4 則訊息）
+
+// 計算最近是否回覆過「收回」或「送回」
+const hasRecentPickupReply = lastTwoMessages.some(msg => 
+  msg.role === 'assistant' && 
+  (msg.content.includes('我們會去收回的') || 
+   msg.content.includes('我們會幫您送回'))
+);
+
+// 判斷是否為簡單補充資訊（地址、電話、樓層等）
+const isSimpleInfo = (
+  /^[0-9\-]+$/.test(userMessage.trim()) || // 純數字或電話
+  /^\d+樓$/.test(userMessage.trim()) || // 純樓層
+  /路|號|樓|管理室/.test(userMessage) && userMessage.length < 30 || // 簡短地址
+  /^好的?$|^了解$|^收到$|^OK$/i.test(userMessage.trim()) // 確認語
+);
+
+// 如果剛回覆過收件/送回 + 這句是簡單補充 → 提示 AI 簡短回覆
+if (hasRecentPickupReply && isSimpleInfo) {
+  console.log('🔇 偵測到簡單補充資訊，提示 AI 簡短回覆');
+  messages.push({
+    role: "user",
+    content: `【內部提示：這句是補充細節，請簡短回覆「收到 💙」或「好的 💙」即可，不要重複說「我們會去收回的」】\n\n${enhancedTimeInfo}\n\n客人問題：${userMessage}`
+  });
+} else {
+  // 一般訊息
+  messages.push({
+    role: "user",
+    content: `${enhancedTimeInfo}\n\n客人問題：${userMessage}`
+  });
+}
     
     console.log(`📜 對話記憶: ${history.length} 則歷史訊息`);
 
@@ -2257,6 +2320,10 @@ addToHistory(userId, "assistant", finalReply);
 if (isPickupQuestion && userId && finalReply) {
   pickupRepliedUsers.set(userId, Date.now());
 }
+
+    // ⭐ 儲存對話記憶（帶時間戳記）
+addToHistory(userId, "user", userMessage);
+addToHistory(userId, "assistant", finalReply);
 
 // ⭐ 記錄到 Google Sheets
 const emotion = detectEmotion(userMessage);
