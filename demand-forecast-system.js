@@ -164,18 +164,40 @@ function generateForecast(dailyStats, weekdayStats, forecastDays = 14) {
   const forecasts = [];
   const today = new Date();
   
-  for (let i = 1; i <= forecastDays; i++) {
-    const forecastDate = new Date(today);
-    forecastDate.setDate(today.getDate() + i);
-    const weekday = forecastDate.getDay();
+ // 🔥 2026 年過年連休日期 (一次性設定)
+const LUNAR_NEW_YEAR_2026 = [
+  '2026-02-14', '2026-02-15', '2026-02-16', '2026-02-17',
+  '2026-02-18', '2026-02-19', '2026-02-20', '2026-02-21'
+];
+
+for (let i = 1; i <= forecastDays; i++) {
+  const forecastDate = new Date(today);
+  forecastDate.setDate(today.getDate() + i);
+  const weekday = forecastDate.getDay();
+  const dateStr = forecastDate.toISOString().split('T')[0]; // 格式: 2026-02-14
+  
+  let predictedOrders = 0;
+  let predictedRevenue = 0;
+  
+  // 🔥 判斷是否為公休日
+  const isSaturday = weekday === 6; // 星期六
+  const isLunarNewYear = LUNAR_NEW_YEAR_2026.includes(dateStr); // 2026 過年
+  
+  if (isSaturday || isLunarNewYear) {
+    // 公休日: 訂單和營收都是 0
+    predictedOrders = 0;
+    predictedRevenue = 0;
+  } else {
+    // 正常營業日: 使用預測模型
+    predictedOrders = Math.round(avgDailyOrders * weekdayMultipliers[weekday]);
+    predictedRevenue = Math.round(avgDailyRevenue * weekdayMultipliers[weekday]);
+  }
     
-    const predictedOrders = Math.round(avgDailyOrders * weekdayMultipliers[weekday]);
-    const predictedRevenue = Math.round(avgDailyRevenue * weekdayMultipliers[weekday]);
-    
-    const orderRange = {
-      min: Math.round(predictedOrders * 0.8),
-      max: Math.round(predictedOrders * 1.2)
-    };
+    // 🔥 公休日的信心區間也是 0
+const orderRange = {
+  min: (isSaturday || isLunarNewYear) ? 0 : Math.round(predictedOrders * 0.8),
+  max: (isSaturday || isLunarNewYear) ? 0 : Math.round(predictedOrders * 1.2)
+};
     
     forecasts.push({
       date: forecastDate.toISOString().split('T')[0],
@@ -347,11 +369,16 @@ function generateLINEReport(forecasts, recommendations, aiInsights, accuracy, we
   
   report += `【未來7天趨勢】\n`;
 forecasts.slice(0, 7).forEach((f, idx) => {
-  const trend = idx > 0 ? 
+  // 🔥 公休日特殊顯示
+  if (f.isHoliday) {
+    report += `${f.weekday} ${f.date.slice(5)}: 公休 🔒\n`;
+    return;
+  }
+  
+  const trend = idx > 0 && !forecasts[idx-1].isHoliday ? 
     (f.predictedOrders > forecasts[idx-1].predictedOrders ? '⬆️' : 
      f.predictedOrders < forecasts[idx-1].predictedOrders ? '⬇️' : '→') : '';
   
-  // 🌤️ 加入天氣資訊
   const weather = weatherData && weatherData[idx] 
     ? ` (${weatherData[idx].weather} ${weatherData[idx].avgTemp}°C${weatherData[idx].isRainy ? ' 🌧️' : ''})`
     : '';
@@ -377,6 +404,19 @@ function generateEmailHTML(forecasts, recommendations, aiInsights, dailyStats, w
   const today = new Date().toLocaleDateString('zh-TW');
   
   const forecastTableRows = forecasts.slice(0, 7).map((f, idx) => {
+  // 🔥 公休日特殊顯示
+  if (f.isHoliday) {
+    return `
+    <tr style="background: #f8f9fa;">
+      <td>${f.date}</td>
+      <td>${f.weekday}</td>
+      <td colspan="4" style="text-align: center; color: #6c757d;">
+        <strong>🔒 公休日</strong>
+      </td>
+    </tr>
+    `;
+  }
+  
   const weather = weatherData && weatherData[idx] 
     ? `${weatherData[idx].weather} ${weatherData[idx].avgTemp}°C${weatherData[idx].isRainy ? ' 🌧️' : ''}` 
     : '-';
