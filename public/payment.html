@@ -462,29 +462,6 @@
   </div>
 </div>
   
-<!-- 🔥🔥🔥 新增：收件排程分頁（開始）🔥🔥🔥 -->
-<!-- 🏠 收件排程分頁 -->
-<div id="pickup-schedule-tab" class="tab-content">
-  <h3 style="color:#667eea; margin-bottom:20px;">🏠 收件排程管理</h3>
-  
-  <!-- 今日提醒 -->
-  <div id="todayAlert" style="display:none; background:#fff3cd; padding:15px; border-radius:10px; margin-bottom:20px; border-left:4px solid #ffc107;">
-    <h4 style="color:#856404; margin-bottom:10px;">🔔 今日收件提醒</h4>
-    <p id="alertMessage" style="color:#856404; margin:0;"></p>
-  </div>
-  
-  <!-- 操作列 -->
-  <div style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
-    <button class="btn btn-small btn-secondary" onclick="loadPickupSchedules()">🔄 重新整理</button>
-    <button class="btn btn-small" style="background:#52c41a;color:#fff;" onclick="showTodayAlert()">🔔 今日提醒</button>
-  </div>
-  
-  <!-- 收件列表 -->
-  <div id="pickupScheduleList">
-    <p style="text-align:center; color:#999;">尚未載入，請點「重新整理」。</p>
-  </div>
-</div>
-<!-- 🔥🔥🔥 新增：收件排程分頁（結束）🔥🔥🔥 -->
 
 <!-- 📝 人工通知分頁 -->
 <div id="manual-tab" class="tab-content">
@@ -683,6 +660,8 @@
   <div style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
     <button class="btn btn-small btn-secondary" onclick="loadPickupSchedules()">🔄 重新整理</button>
     <button class="btn btn-small" style="background:#52c41a;color:#fff;" onclick="showTodayAlert()">🔔 今日提醒</button>
+    <!-- ⭐ 新增：批次刪除按鈕 -->
+    <button class="btn btn-small btn-danger" onclick="deleteSelectedPickups()" id="batchDeleteBtn" style="display:none;">🗑️ 刪除已選 (<span id="selectedCount">0</span>)</button>
   </div>
   
   <!-- 收件列表 -->
@@ -3223,6 +3202,11 @@ async function loadPickupSchedules() {
   }
 }
 
+// ========================================
+// 🏠 收件排程多選刪除功能
+// ========================================
+var selectedPickups = [];
+
 // 渲染收件排程列表
 function renderPickupSchedules(grouped) {
   var wrap = document.getElementById('pickupScheduleList');
@@ -3254,7 +3238,7 @@ function renderPickupSchedules(grouped) {
       html += '<h5 style="color:#1890ff; margin-bottom:10px;">🤖 AI 承諾收件（' + aiSchedules.length + ' 筆）</h5>';
       
       aiSchedules.forEach(function(s) {
-        html += renderScheduleItem(s);
+        html += renderScheduleItemWithCheckbox(s);
       });
       
       html += '</div>';
@@ -3266,7 +3250,7 @@ function renderPickupSchedules(grouped) {
       html += '<h5 style="color:#667eea; margin-bottom:10px;">👤 客人要求收件（' + customerSchedules.length + ' 筆）</h5>';
       
       customerSchedules.forEach(function(s) {
-        html += renderScheduleItem(s);
+        html += renderScheduleItemWithCheckbox(s);
       });
       
       html += '</div>';
@@ -3274,14 +3258,20 @@ function renderPickupSchedules(grouped) {
   });
   
   wrap.innerHTML = html;
+  updateSelectedCount();
 }
 
-// 渲染單個收件項目
-function renderScheduleItem(s) {
+// ⭐ 新增：帶勾選框的收件項目
+function renderScheduleItemWithCheckbox(s) {
   var time = s.createdAt ? new Date(s.createdAt).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }) : '';
   var sourceLabel = s.source === 'ai' ? 'AI 回覆' : '客人說';
+  var isChecked = selectedPickups.includes(s.id) ? 'checked' : '';
   
-  return '<div class="user-item" style="display:block; margin-bottom:10px;">' +
+  return '<div class="user-item" style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">' +
+    // ⭐ 勾選框
+    '<input type="checkbox" ' + isChecked + ' onchange="togglePickupSelection(\'' + s.id + '\')" style="width:20px; height:20px; cursor:pointer; flex-shrink:0;">' +
+    
+    '<div style="flex:1;">' +
     '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">' +
     '<div>' +
     '<strong style="font-size:15px;">#' + (s.customerNumber || '?') + ' - ' + (s.customerName || '未知') + '</strong>' +
@@ -3294,10 +3284,54 @@ function renderScheduleItem(s) {
     '</div>' +
     '<div style="display:flex; gap:5px; flex-wrap:wrap;">' +
     '<button class="btn btn-small btn-secondary" onclick="completePickup(\'' + s.id + '\', true)">✅ 已收件（通知客人）</button>' +
-    '<button class="btn btn-small btn-danger" onclick="deletePickup(\'' + s.id + '\')">🗑️ 刪除（不通知）</button>' +
     '<button class="btn btn-small" style="background:#ff9800;color:#fff;" onclick="editPickupNote(\'' + s.id + '\')">✏️ 加備註</button>' +
     '</div>' +
+    '</div>' +
     '</div>';
+}
+
+// ⭐ 切換選取狀態
+function togglePickupSelection(id) {
+  var index = selectedPickups.indexOf(id);
+  if (index > -1) {
+    selectedPickups.splice(index, 1);
+  } else {
+    selectedPickups.push(id);
+  }
+  updateSelectedCount();
+}
+
+// ⭐ 更新已選數量
+function updateSelectedCount() {
+  var count = selectedPickups.length;
+  document.getElementById('selectedCount').textContent = count;
+  document.getElementById('batchDeleteBtn').style.display = count > 0 ? 'inline-block' : 'none';
+}
+
+// ⭐ 批次刪除
+async function deleteSelectedPickups() {
+  if (selectedPickups.length === 0) return;
+  
+  if (!confirm('確定要刪除已選的 ' + selectedPickups.length + ' 筆收件排程？\n\n（不會通知客人）')) return;
+  
+  try {
+    var successCount = 0;
+    for (var i = 0; i < selectedPickups.length; i++) {
+      var res = await fetch('/api/pickup-schedule/order/' + encodeURIComponent(selectedPickups[i]), {
+        method: 'DELETE'
+      });
+      var data = await res.json();
+      if (data.success) successCount++;
+    }
+    
+    showResult('success', '✅ 已刪除 ' + successCount + ' 筆收件排程');
+    selectedPickups = [];
+    loadPickupSchedules();
+    
+  } catch (e) {
+    showResult('error', '❌ 刪除失敗：' + e.message);
+  }
+}
 }
 
 // ✅ 標記已收件（並通知客人）
