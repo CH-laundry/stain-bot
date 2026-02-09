@@ -2132,9 +2132,9 @@ console.log('✅ 非電話號碼，繼續處理');
     const tomorrowDayName = dayNames[tomorrowDay];
     const enhancedTimeInfo = `${timeInfo}\n明天是：${tomorrowDayName}`;
     
-  // 🔴 超級重要：收件判斷要非常嚴格，避免誤判
-const isPickupQuestion = /(請來收|來收|可以來收|能來收|要收|收件|收衣|到府收|收送|放好了|可以收嗎|能收嗎|來拿|取件|準備好了|幫我收)/.test(userMessage) && 
-  !/(收到|收費|收據|收入|接收|簽收|驗收|什麼時候到|幾點到|到了|讓我知道|通知我|跟我說|拿過去|送過去|拿去|送來|拿來|過去給你們|來給你們)/.test(userMessage);  // 👈 加入排除條件
+ // 🔴 超級重要：收件判斷要非常嚴格，避免誤判
+const isPickupQuestion = /(請來收|來收|可以來收|能來收|收件|收衣|到府收|收送|放好了|可以收嗎|能收嗎|來拿衣服|取件|準備好了|幫我收|麻煩來收|麻煩收|請收)/.test(userMessage) && 
+  !/(收到|收費|收據|收入|接收|簽收|驗收|什麼時候到|幾點到|到了嗎|快到了|讓我知道|通知我|跟我說|幾天|多久|什麼時候|週幾|星期幾|幾號|前到|前好|前拿|前領|能拿|可以拿|洗好|完工|幾天好|幾天會好|何時好|何時拿)/.test(userMessage);
     
     if (isPickupQuestion && userId && pickupRepliedUsers.has(userId)) {
       console.log('🔇 已回覆過收件問題，不重複回應');
