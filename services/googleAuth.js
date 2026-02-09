@@ -31,6 +31,46 @@ function getOAuth2Client() {
             const token = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf8'));
             oauth2Client.setCredentials(token);
             console.log('✅ Google OAuth token 已載入:', TOKEN_PATH);
+            
+            // 🔥🔥🔥 自動刷新 Token (新增) 🔥🔥🔥
+            oauth2Client.on('tokens', (tokens) => {
+                try {
+                    console.log('🔄 Token 正在更新...');
+                    
+                    // 讀取現有 token
+                    let savedToken = {};
+                    if (fs.existsSync(TOKEN_PATH)) {
+                        savedToken = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf8'));
+                    }
+                    
+                    // 只在有新的 refresh_token 時更新
+                    if (tokens.refresh_token) {
+                        savedToken.refresh_token = tokens.refresh_token;
+                        console.log('✅ 已更新 refresh_token');
+                    }
+                    
+                    // 更新 access_token 和過期時間
+                    savedToken.access_token = tokens.access_token;
+                    savedToken.expiry_date = tokens.expiry_date;
+                    savedToken.token_type = tokens.token_type || savedToken.token_type;
+                    savedToken.scope = tokens.scope || savedToken.scope;
+                    
+                    // 儲存新的 token
+                    fs.writeFileSync(TOKEN_PATH, JSON.stringify(savedToken, null, 2), 'utf8');
+                    console.log('✅ Token 已自動更新並儲存');
+                    
+                    // 顯示過期時間
+                    if (tokens.expiry_date) {
+                        const expiryDate = new Date(tokens.expiry_date);
+                        console.log('⏰ Token 有效期至:', expiryDate.toLocaleString('zh-TW'));
+                    }
+                    
+                } catch (error) {
+                    console.error('❌ Token 自動更新失敗:', error.message);
+                }
+            });
+            // 🔥🔥🔥 結束 🔥🔥🔥
+            
         } catch (error) {
             console.error('❌ 載入 token 失敗:', error.message);
         }
@@ -81,6 +121,12 @@ async function getTokenFromCode(code) {
         // 驗證檔案確實存在
         if (fs.existsSync(TOKEN_PATH)) {
             console.log('✅ 驗證成功: Token 檔案已存在');
+            
+            // 顯示過期時間
+            if (tokens.expiry_date) {
+                const expiryDate = new Date(tokens.expiry_date);
+                console.log('⏰ Token 有效期至:', expiryDate.toLocaleString('zh-TW'));
+            }
         } else {
             console.error('❌ 驗證失敗: Token 檔案不存在!');
         }
