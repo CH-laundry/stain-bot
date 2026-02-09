@@ -1827,7 +1827,7 @@ app.post('/api/delivery/mark-signed-simple', async (req, res) => {
 });
 
 // ========================================
-// API 2: 金額>0發送支付連結
+// API 2: 金額>0發送支付連結（修復訊息不穩定問題）
 // ========================================
 app.post('/api/delivery/mark-signed-with-payment', async (req, res) => {
   try {
@@ -1840,7 +1840,9 @@ app.post('/api/delivery/mark-signed-with-payment', async (req, res) => {
       });
     }
 
-    // ✅ 更新外送紀錄為已簽收
+    console.log(`🔔 外送簽收付款流程開始: #${customerNumber} - ${customerName} - NT$${amount}`);
+
+    // ✅ 1. 更新外送紀錄為已簽收
     const fs = require('fs');
     const path = require('path');
     const FILE_PATH = path.join(__dirname, 'data', 'delivery.json');
@@ -1851,23 +1853,26 @@ app.post('/api/delivery/mark-signed-with-payment', async (req, res) => {
     if (order) {
       order.signed = true;
       fs.writeFileSync(FILE_PATH, JSON.stringify(data, null, 2), 'utf8');
+      console.log(`✅ 外送紀錄已標記簽收: ${id}`);
     }
 
+    // ✅ 2. 呼叫 deliveryService 建立訂單
     const result = await deliveryService.markSignedWithPayment(
       id,
       customerNumber,
       customerName,
       amount
     );
+    
+    console.log(`✅ 訂單已建立: ${result.orderId}`);
 
-    // 🔥🔥🔥 自動刪除取件追蹤記錄（開始）🔥🔥🔥
+    // 🔥🔥🔥 3. 自動刪除取件追蹤記錄 🔥🔥🔥
     try {
       const PICKUP_FILE = path.join(__dirname, 'data', 'pickup.json');
       if (fs.existsSync(PICKUP_FILE)) {
         const pickupData = JSON.parse(fs.readFileSync(PICKUP_FILE, 'utf8'));
         const originalLength = pickupData.orders ? pickupData.orders.length : 0;
         
-        // 刪除符合客戶編號的取件追蹤
         if (pickupData.orders) {
           pickupData.orders = pickupData.orders.filter(o => o.customerNumber !== customerNumber);
           fs.writeFileSync(PICKUP_FILE, JSON.stringify(pickupData, null, 2), 'utf8');
@@ -1881,12 +1886,95 @@ app.post('/api/delivery/mark-signed-with-payment', async (req, res) => {
     } catch (pickupErr) {
       console.error('⚠️ 刪除取件追蹤失敗（不影響簽收）:', pickupErr.message);
     }
-    // 🔥🔥🔥 自動刪除取件追蹤記錄（結束）🔥🔥🔥
 
-    res.json({
-      success: true,
-      orderId: result.orderId
-    });
+    // 🔥🔥🔥 4. 檢查並重新發送付款連結（修復訊息不穩定問題）🔥🔥🔥
+    console.log(`🔍 開始檢查訂單狀態...`);
+    
+    await new Promise(r => setTimeout(r, 2000)); // 等待 2 秒確保訂單建立完成
+    
+    const createdOrder = orderManager.getOrder(result.orderId);
+    
+    if (!createdOrder) {
+      console.error(`❌ 訂單建立失敗，找不到訂單: ${result.orderId}`);
+      return res.json({
+        success: false,
+        error: '訂單建立失敗'
+      });
+    }
+
+    console.log(`✅ 訂單確認存在: ${result.orderId}`);
+
+    // 🔥 重新發送付款連結（確保訊息送達）
+    try {
+      const rawBase = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.BASE_URL || process.env.PUBLIC_BASE_URL || '';
+      const baseURL = ensureHttpsBase(rawBase) || 'https://stain-bot-production-2593.up.railway.app';
+      const linepayUrl = `${baseURL}/payment/linepay/pay/${result.orderId}`;
+      const ecpayUrl = `${baseURL}/payment/ecpay/pay/${result.orderId}`;
+
+      let linepayShort = linepayUrl;
+      let ecpayShort = ecpayUrl;
+
+      // 生成短網址（加入重試）
+      for (let retry = 0; retry < 3; retry++) {
+        try {
+          const r1 = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(linepayUrl)}`);
+          const t1 = await r1.text();
+          if (t1 && t1.startsWith('http')) {
+            linepayShort = t1;
+            break;
+          }
+        } catch (e) {
+          if (retry === 2) console.log('⚠️ LINE Pay 短網址失敗，使用原網址');
+        }
+      }
+
+      for (let retry = 0; retry < 3; retry++) {
+        try {
+          const r2 = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(ecpayUrl)}`);
+          const t2 = await r2.text();
+          if (t2 && t2.startsWith('http')) {
+            ecpayShort = t2;
+            break;
+          }
+        } catch (e) {
+          if (retry === 2) console.log('⚠️ 綠界短網址失敗，使用原網址');
+        }
+      }
+
+      const message = `✅ 您的衣物已送達！\n\n` +
+        `感謝 ${customerName} 的支持\n` +
+        `金額：NT$ ${amount.toLocaleString()}\n\n` +
+        `請選擇付款方式：\n\n` +
+        `【信用卡付款】\n💙 ${ecpayShort}\n\n` +
+        `【LINE Pay】\n💙 ${linepayShort}\n\n` +
+        `✅ 付款後系統會自動通知我們\n感謝您的支持 💙`;
+
+      // 🔥 加入重試機制（最多 3 次）
+      let sent = false;
+      for (let retry = 0; retry < 3; retry++) {
+        try {
+          await client.pushMessage(createdOrder.userId, {
+            type: 'text',
+            text: message
+          });
+          sent = true;
+          console.log(`✅ 付款連結已發送給客人 (第 ${retry + 1} 次嘗試成功)`);
+          break;
+        } catch (sendErr) {
+          console.error(`❌ 發送失敗 (第 ${retry + 1} 次):`, sendErr.message);
+          if (retry < 2) {
+            await new Promise(r => setTimeout(r, 1000)); // 等待 1 秒後重試
+          }
+        }
+      }
+
+      if (!sent) {
+        console.error(`❌ 付款連結發送失敗（已重試 3 次）`);
+      }
+
+    } catch (messageErr) {
+      console.error('❌ 發送付款連結失敗:', messageErr.message);
+    }
 
     res.json({
       success: true,
@@ -1894,7 +1982,7 @@ app.post('/api/delivery/mark-signed-with-payment', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('API Error:', error);
+    console.error('❌ 外送簽收付款流程錯誤:', error);
     res.json({
       success: false,
       error: error.message
