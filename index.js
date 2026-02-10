@@ -3100,7 +3100,7 @@ console.log('📊 月度營收報告排程已啟動 (每月 1 號 09:00)');
 // ========================================
 
 
-// 🔹 API 1: 上傳污漬照片 (改用 Google Drive)
+// 🔹 API 1: 上傳污漬照片 (改用 Google Drive) - 修復版
 app.post('/api/stain-photos', async (req, res) => {
   try {
     const { photoBase64, thumbnailBase64, note, orderId } = req.body;
@@ -3126,22 +3126,25 @@ app.post('/api/stain-photos', async (req, res) => {
 
     // 🔥 上傳照片到 Google Drive
     const buffer = Buffer.from(photoBase64.split(',')[1], 'base64');
+    const stream = require('stream');
+    const bufferStream = new stream.PassThrough();
+    bufferStream.end(buffer);
+
     const driveResponse = await drive.files.create({
       requestBody: {
         name: photoId + '.jpg',
-        mimeType: 'image/jpeg',
-        parents: ['root']
+        mimeType: 'image/jpeg'
       },
       media: {
         mimeType: 'image/jpeg',
-        body: require('stream').Readable.from(buffer)
+        body: bufferStream
       },
-      fields: 'id, webViewLink, webContentLink'
+      fields: 'id'
     });
 
     const fileId = driveResponse.data.id;
 
-    // 設定檔案為公開
+    // 🔥🔥🔥 關鍵修復：設定檔案為公開 🔥🔥🔥
     await drive.permissions.create({
       fileId: fileId,
       requestBody: {
@@ -3150,7 +3153,10 @@ app.post('/api/stain-photos', async (req, res) => {
       }
     });
 
-    // 🔥 只在 Google Sheets 存連結
+    // 🔥 使用正確的圖片 URL 格式
+    const imageUrl = `https://drive.google.com/uc?export=view&id=${fileId}`;
+
+    // 🔥 儲存到 Google Sheets
     await sheets.spreadsheets.values.append({
       spreadsheetId,
       range: '污漬照片!A:F',
@@ -3159,7 +3165,7 @@ app.post('/api/stain-photos', async (req, res) => {
         values: [[
           photoId,
           fileId,
-          `https://drive.google.com/uc?export=view&id=${fileId}`,
+          imageUrl,
           note || '',
           timestamp,
           orderId || ''
@@ -3172,7 +3178,7 @@ app.post('/api/stain-photos', async (req, res) => {
     res.json({ 
       success: true, 
       photoId: photoId,
-      imageUrl: `https://drive.google.com/uc?export=view&id=${fileId}`,
+      imageUrl: imageUrl,
       message: '照片已儲存'
     });
 
@@ -3181,7 +3187,6 @@ app.post('/api/stain-photos', async (req, res) => {
     res.json({ success: false, error: error.message });
   }
 });
-
 // 🔹 API 2: 取得所有污漬照片 (修改版)
 app.get('/api/stain-photos', async (req, res) => {
   try {
