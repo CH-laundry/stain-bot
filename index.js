@@ -3100,7 +3100,7 @@ console.log('📊 月度營收報告排程已啟動 (每月 1 號 09:00)');
 // ========================================
 
 
-// 🔹 API 1: 上傳污漬照片 (改用 Google Drive) - 修復版
+// 🔹 API 1: 上傳污漬照片 (改用 Google Drive) - 完整修復版
 app.post('/api/stain-photos', async (req, res) => {
   try {
     const { photoBase64, thumbnailBase64, note, orderId } = req.body;
@@ -3144,7 +3144,7 @@ app.post('/api/stain-photos', async (req, res) => {
 
     const fileId = driveResponse.data.id;
 
-    // 🔥🔥🔥 關鍵修復：設定檔案為公開 🔥🔥🔥
+    // 🔥🔥🔥 設定檔案為公開（這是關鍵！）
     await drive.permissions.create({
       fileId: fileId,
       requestBody: {
@@ -3173,7 +3173,7 @@ app.post('/api/stain-photos', async (req, res) => {
       }
     });
 
-    logger.logToFile(`✅ 污漬照片已上傳到 Drive: ${photoId}`);
+    console.log(`✅ 污漬照片已上傳到 Drive: ${photoId}`);
     
     res.json({ 
       success: true, 
@@ -3205,6 +3205,143 @@ app.get('/api/stain-photos', async (req, res) => {
       spreadsheetId,
       range: '污漬照片!A:F',
     });
+
+    // 🔹 API 3: 刪除污漬照片
+app.delete('/api/stain-photos/:photoId', async (req, res) => {
+  try {
+    const { photoId } = req.params;
+    
+    const { google } = require('googleapis');
+    const googleAuth = require('./services/googleAuth');
+    
+    if (!googleAuth.isAuthorized()) {
+      return res.json({ success: false, error: '尚未授權 Google Sheets' });
+    }
+
+    const auth = googleAuth.getOAuth2Client();
+    const drive = google.drive({ version: 'v3', auth });
+    const sheets = google.sheets({ version: 'v4', auth });
+    const spreadsheetId = process.env.GOOGLE_SHEETS_ID_CUSTOMER;
+
+    // 1️⃣ 從 Google Sheets 找到這張照片的 fileId
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: '污漬照片!A:F',
+    });
+
+    const rows = response.data.values || [];
+    let rowIndex = -1;
+    let fileId = null;
+
+    for (let i = 1; i < rows.length; i++) {
+      if (rows[i][0] === photoId) {
+        rowIndex = i + 1; // Google Sheets 是 1-based
+        fileId = rows[i][1];
+        break;
+      }
+    }
+
+    if (!fileId) {
+      return res.json({ success: false, error: '找不到此照片' });
+    }
+
+    // 2️⃣ 從 Google Drive 刪除檔案
+    try {
+      await drive.files.delete({ fileId: fileId });
+      console.log(`✅ 已從 Drive 刪除照片: ${fileId}`);
+    } catch (driveError) {
+      console.log(`⚠️ Drive 刪除失敗（可能已被刪除）: ${driveError.message}`);
+    }
+
+    // 3️⃣ 從 Google Sheets 刪除這一列
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [{
+          deleteDimension: {
+            range: {
+              sheetId: 0, // 假設「污漬照片」工作表是第一個
+              dimension: 'ROWS',
+              startIndex: rowIndex - 1,
+              endIndex: rowIndex
+            }
+          }
+        }]
+      }
+    });
+
+    console.log(`✅ 已刪除污漬照片: ${photoId}`);
+    
+    res.json({ 
+      success: true, 
+      message: '照片已刪除'
+    });
+
+  } catch (error) {
+    console.error('刪除污漬照片失敗:', error);
+    res.json({ success: false, error: error.message });
+  }
+});
+
+    // 🔹 API 4: 更新污漬照片備註
+app.put('/api/stain-photos/:photoId', async (req, res) => {
+  try {
+    const { photoId } = req.params;
+    const { note } = req.body;
+    
+    const { google } = require('googleapis');
+    const googleAuth = require('./services/googleAuth');
+    
+    if (!googleAuth.isAuthorized()) {
+      return res.json({ success: false, error: '尚未授權 Google Sheets' });
+    }
+
+    const auth = googleAuth.getOAuth2Client();
+    const sheets = google.sheets({ version: 'v4', auth });
+    const spreadsheetId = process.env.GOOGLE_SHEETS_ID_CUSTOMER;
+
+    // 找到這張照片的位置
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: '污漬照片!A:F',
+    });
+
+    const rows = response.data.values || [];
+    let rowIndex = -1;
+
+    for (let i = 1; i < rows.length; i++) {
+      if (rows[i][0] === photoId) {
+        rowIndex = i + 1; // Google Sheets 是 1-based
+        break;
+      }
+    }
+
+    if (rowIndex === -1) {
+      return res.json({ success: false, error: '找不到此照片' });
+    }
+
+    // 更新備註（D 欄）
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `污漬照片!D${rowIndex}`,
+      valueInputOption: 'USER_ENTERED',
+      resource: {
+        values: [[note || '']]
+      }
+    });
+
+    console.log(`✅ 已更新照片備註: ${photoId}`);
+    
+    res.json({ 
+      success: true, 
+      message: '備註已更新'
+    });
+
+  } catch (error) {
+    console.error('更新備註失敗:', error);
+    res.json({ success: false, error: error.message });
+  }
+});
 
     const rows = response.data.values || [];
     
