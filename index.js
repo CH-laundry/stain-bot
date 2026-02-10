@@ -1533,7 +1533,7 @@ app.get('/api/revenue/report', async (req, res) => {
     );
 
     if (!targetSheet) {
-      return res.json({ success: false, error: '找不到營業記錄工作表' });
+      return res.json({ success: false, error: '找不到營業紀錄工作表' });
     }
 
     const sheetName = targetSheet.properties.title;
