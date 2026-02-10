@@ -3770,7 +3770,7 @@ async function loadStainPhotos() {
     
     var html = '';
     allStainPhotos.forEach(function(photo) {
-      var imgSrc = photo.thumbnailBase64 || photo.photoBase64 || '';
+      var imgSrc = photo.imageUrl || '';
       var note = photo.note || '無備註';
       var time = photo.timestamp || '';
       
@@ -3790,14 +3790,14 @@ async function loadStainPhotos() {
   }
 }
 
-// 顯示照片詳情
+// 顯示照片詳情 (修改版)
 function showPhotoDetail(photoId) {
   var photo = allStainPhotos.find(function(p) { return p.photoId === photoId; });
   if (!photo) return;
   
   currentPhotoId = photoId;
   
-  document.getElementById('detailImage').src = photo.photoBase64 || '';
+  document.getElementById('detailImage').src = photo.imageUrl || '';
   document.getElementById('detailNote').value = photo.note || '';
   document.getElementById('detailTime').textContent = photo.timestamp || '';
   document.getElementById('detailId').textContent = photo.photoId || '';
