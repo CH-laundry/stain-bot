@@ -17,7 +17,14 @@ function getOAuth2Client() {
     if (oauth2Client) return oauth2Client;
     
     const credentials = JSON.parse(fs.readFileSync(CREDENTIALS_PATH));
-    const { client_id, client_secret, redirect_uris } = credentials.web;
+    const { client_id, redirect_uris } = credentials.web;
+    
+    // 🔥 從環境變數讀取 client_secret (更安全)
+    const client_secret = process.env.GOOGLE_CLIENT_SECRET || credentials.web.client_secret;
+    
+    if (!client_secret) {
+        throw new Error('❌ 找不到 GOOGLE_CLIENT_SECRET！請在 Railway 設定環境變數');
+    }
     
     oauth2Client = new google.auth.OAuth2(
         client_id,
