@@ -92,7 +92,8 @@ function getAuthUrl() {
         prompt: 'consent',
         scope: [
             'https://www.googleapis.com/auth/spreadsheets',
-            'https://www.googleapis.com/auth/drive.file'
+            'https://www.googleapis.com/auth/drive.file',
+            'https://www.googleapis.com/auth/gmail.send'
         ],
     });
     
