@@ -3096,3 +3096,208 @@ cron.schedule('0 9 1 * *', async () => {
 });
 
 console.log('📊 月度營收報告排程已啟動 (每月 1 號 09:00)');
+
+// ========================================
+// 📸 污漬照片管理 API
+// ========================================
+
+// 🔹 API 1: 上傳污漬照片
+app.post('/api/stain-photos', async (req, res) => {
+  try {
+    const { photoBase64, thumbnailBase64, note, orderId } = req.body;
+    
+    if (!photoBase64) {
+      return res.json({ success: false, error: '缺少照片資料' });
+    }
+
+    const { google } = require('googleapis');
+    const googleAuth = require('./services/googleAuth');
+    
+    if (!googleAuth.isAuthorized()) {
+      return res.json({ success: false, error: '尚未授權 Google Sheets' });
+    }
+
+    const auth = googleAuth.getOAuth2Client();
+    const sheets = google.sheets({ version: 'v4', auth });
+    const spreadsheetId = process.env.GOOGLE_SHEETS_ID_CUSTOMER;
+
+    const photoId = 'STAIN_' + Date.now();
+    const timestamp = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
+
+    await sheets.spreadsheets.values.append({
+      spreadsheetId,
+      range: '污漬照片!A:F',
+      valueInputOption: 'USER_ENTERED',
+      resource: {
+        values: [[
+          photoId,
+          photoBase64,
+          thumbnailBase64 || '',
+          note || '',
+          timestamp,
+          orderId || ''
+        ]]
+      }
+    });
+
+    logger.logToFile(`✅ 污漬照片已上傳: ${photoId}`);
+    
+    res.json({ 
+      success: true, 
+      photoId: photoId,
+      message: '照片已儲存'
+    });
+
+  } catch (error) {
+    console.error('上傳污漬照片失敗:', error);
+    res.json({ success: false, error: error.message });
+  }
+});
+
+// 🔹 API 2: 取得所有污漬照片
+app.get('/api/stain-photos', async (req, res) => {
+  try {
+    const { google } = require('googleapis');
+    const googleAuth = require('./services/googleAuth');
+    
+    if (!googleAuth.isAuthorized()) {
+      return res.json({ success: false, error: '尚未授權 Google Sheets' });
+    }
+
+    const auth = googleAuth.getOAuth2Client();
+    const sheets = google.sheets({ version: 'v4', auth });
+    const spreadsheetId = process.env.GOOGLE_SHEETS_ID_CUSTOMER;
+
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: '污漬照片!A:F',
+    });
+
+    const rows = response.data.values || [];
+    
+    if (rows.length <= 1) {
+      return res.json({ success: true, photos: [] });
+    }
+
+    const photos = rows.slice(1).map(row => ({
+      photoId: row[0] || '',
+      photoBase64: row[1] || '',
+      thumbnailBase64: row[2] || '',
+      note: row[3] || '',
+      timestamp: row[4] || '',
+      orderId: row[5] || ''
+    })).reverse(); // 最新的在前面
+
+    res.json({ success: true, photos: photos, total: photos.length });
+
+  } catch (error) {
+    console.error('取得污漬照片失敗:', error);
+    res.json({ success: false, error: error.message });
+  }
+});
+
+// 🔹 API 3: 更新照片備註
+app.put('/api/stain-photos/:photoId', async (req, res) => {
+  try {
+    const { photoId } = req.params;
+    const { note } = req.body;
+
+    const { google } = require('googleapis');
+    const googleAuth = require('./services/googleAuth');
+    
+    if (!googleAuth.isAuthorized()) {
+      return res.json({ success: false, error: '尚未授權 Google Sheets' });
+    }
+
+    const auth = googleAuth.getOAuth2Client();
+    const sheets = google.sheets({ version: 'v4', auth });
+    const spreadsheetId = process.env.GOOGLE_SHEETS_ID_CUSTOMER;
+
+    // 讀取所有資料找到對應的行
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: '污漬照片!A:F',
+    });
+
+    const rows = response.data.values || [];
+    const rowIndex = rows.findIndex(row => row[0] === photoId);
+
+    if (rowIndex === -1) {
+      return res.json({ success: false, error: '找不到此照片' });
+    }
+
+    // 更新備註 (D 欄)
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `污漬照片!D${rowIndex + 1}`,
+      valueInputOption: 'USER_ENTERED',
+      resource: { values: [[note || '']] }
+    });
+
+    logger.logToFile(`✅ 照片備註已更新: ${photoId}`);
+    
+    res.json({ success: true, message: '備註已更新' });
+
+  } catch (error) {
+    console.error('更新照片備註失敗:', error);
+    res.json({ success: false, error: error.message });
+  }
+});
+
+// 🔹 API 4: 刪除污漬照片
+app.delete('/api/stain-photos/:photoId', async (req, res) => {
+  try {
+    const { photoId } = req.params;
+
+    const { google } = require('googleapis');
+    const googleAuth = require('./services/googleAuth');
+    
+    if (!googleAuth.isAuthorized()) {
+      return res.json({ success: false, error: '尚未授權 Google Sheets' });
+    }
+
+    const auth = googleAuth.getOAuth2Client();
+    const sheets = google.sheets({ version: 'v4', auth });
+    const spreadsheetId = process.env.GOOGLE_SHEETS_ID_CUSTOMER;
+
+    // 讀取所有資料找到對應的行
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: '污漬照片!A:F',
+    });
+
+    const rows = response.data.values || [];
+    const rowIndex = rows.findIndex(row => row[0] === photoId);
+
+    if (rowIndex === -1) {
+      return res.json({ success: false, error: '找不到此照片' });
+    }
+
+    // 刪除該行
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      resource: {
+        requests: [{
+          deleteDimension: {
+            range: {
+              sheetId: 0, // 假設污漬照片是第一個工作表,如果不是請調整
+              dimension: 'ROWS',
+              startIndex: rowIndex,
+              endIndex: rowIndex + 1
+            }
+          }
+        }]
+      }
+    });
+
+    logger.logToFile(`✅ 污漬照片已刪除: ${photoId}`);
+    
+    res.json({ success: true, message: '照片已刪除' });
+
+  } catch (error) {
+    console.error('刪除污漬照片失敗:', error);
+    res.json({ success: false, error: error.message });
+  }
+});
+
+console.log('📸 污漬照片 API 已載入');
