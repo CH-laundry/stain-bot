@@ -88,6 +88,7 @@
       <button class="tab" onclick="switchTab(event,'pickup-schedule')">🏠 收件排程</button>
       <button class="tab" onclick="switchTab(event,'revenue')">📊 營業報表</button>
       <button class="tab" onclick="switchTab(event,'startup')">🚀 系統啟動</button>
+      <button class="tab" onclick="switchTab(event,'stain-photo')">📸 污漬拍照</button>
       
     </div>
 
@@ -463,6 +464,76 @@
 </div>
   
 
+<!-- 📸 污漬拍照分頁 -->
+<div id="stain-photo-tab" class="tab-content">
+  <h3 style="color:#667eea; margin-bottom:20px;">📸 污漬拍照管理</h3>
+  
+  <!-- 拍照區 -->
+  <div style="background:#f8f9fa; padding:20px; border-radius:10px; margin-bottom:20px;">
+    <h4 style="color:#667eea; margin-bottom:15px;">📷 拍攝污漬照片</h4>
+    
+    <input type="file" id="stainPhotoInput" accept="image/*" capture="environment" style="display:none;">
+    <button class="btn btn-secondary" onclick="takeStainPhoto()" style="width:100%; font-size:18px; padding:20px;">
+      📷 開啟相機拍照
+    </button>
+    
+    <!-- 照片預覽 -->
+    <div id="photoPreview" style="display:none; margin-top:20px;">
+      <img id="previewImage" style="width:100%; max-width:400px; border-radius:10px; display:block; margin:0 auto;">
+      
+      <div class="form-group" style="margin-top:15px;">
+        <label>備註說明</label>
+        <textarea id="photoNote" placeholder="例如:領口黃漬、袖口油污等" style="min-height:80px;"></textarea>
+      </div>
+      
+      <div style="display:flex; gap:10px; margin-top:15px;">
+        <button class="btn btn-secondary" onclick="saveStainPhoto()" style="flex:1;">💾 儲存照片</button>
+        <button class="btn" onclick="cancelPhoto()" style="flex:1; background:#999;">✕ 取消</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- 操作列 -->
+  <div style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
+    <button class="btn btn-small btn-secondary" onclick="loadStainPhotos()">🔄 重新整理</button>
+    <span id="photoCount" style="padding:10px; color:#666; font-size:14px;">總共 0 張照片</span>
+  </div>
+  
+  <!-- 照片網格 -->
+  <div id="stainPhotoGrid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:15px;">
+    <p style="text-align:center; color:#999; grid-column:1/-1;">尚未載入,請點「重新整理」</p>
+  </div>
+</div>
+
+<!-- 照片詳情 Modal -->
+<div id="photoDetailModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.8); z-index:9999; padding:20px; overflow:auto;">
+  <div style="background:#fff; max-width:800px; margin:50px auto; border-radius:20px; padding:30px; position:relative;">
+    <button onclick="closePhotoDetail()" style="position:absolute; top:15px; right:15px; background:#dc3545; color:#fff; border:none; padding:8px 15px; border-radius:5px; cursor:pointer; font-size:16px;">✕</button>
+    
+    <h3 style="color:#667eea; margin-bottom:20px;">📸 照片詳情</h3>
+    
+    <img id="detailImage" style="width:100%; border-radius:10px; margin-bottom:20px;">
+    
+    <div class="form-group">
+      <label>備註說明</label>
+      <textarea id="detailNote" style="min-height:100px;"></textarea>
+    </div>
+    
+    <div style="font-size:13px; color:#999; margin-bottom:20px;">
+      <div>拍照時間:<span id="detailTime"></span></div>
+      <div>照片ID:<span id="detailId"></span></div>
+    </div>
+    
+    <div style="display:flex; gap:10px;">
+      <button class="btn btn-secondary" onclick="updatePhotoNote()" style="flex:1;">💾 更新備註</button>
+      <button class="btn btn-danger" onclick="deleteStainPhoto()" style="flex:1;">🗑️ 刪除照片</button>
+    </div>
+  </div>
+</div>
+
+<!-- 📝 人工通知分頁 -->
+
+    
 <!-- 📝 人工通知分頁 -->
 <div id="manual-tab" class="tab-content">
   <h3 style="color:#667eea; margin-bottom:20px;">📝 人工通知紀錄</h3>
@@ -3555,6 +3626,243 @@ function exportRevenue() {
   
   showResult('success', '✅ 營業報表已匯出');
 }
+
+    // ========================================
+// 📸 污漬拍照功能
+// ========================================
+
+var currentPhotoData = null;
+var currentPhotoId = null;
+var allStainPhotos = [];
+
+// 開啟相機拍照
+function takeStainPhoto() {
+  document.getElementById('stainPhotoInput').click();
+}
+
+// 監聽檔案選擇
+document.addEventListener('DOMContentLoaded', function() {
+  var input = document.getElementById('stainPhotoInput');
+  if (input) {
+    input.addEventListener('change', function(e) {
+      var file = e.target.files[0];
+      if (!file) return;
+      
+      var reader = new FileReader();
+      reader.onload = function(event) {
+        var img = new Image();
+        img.onload = function() {
+          // 壓縮照片
+          var canvas = document.createElement('canvas');
+          var maxWidth = 1200;
+          var maxHeight = 1200;
+          var width = img.width;
+          var height = img.height;
+          
+          if (width > height) {
+            if (width > maxWidth) {
+              height *= maxWidth / width;
+              width = maxWidth;
+            }
+          } else {
+            if (height > maxHeight) {
+              width *= maxHeight / height;
+              height = maxHeight;
+            }
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          var ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          // 原圖 Base64
+          var photoBase64 = canvas.toDataURL('image/jpeg', 0.8);
+          
+          // 縮圖 Base64
+          var thumbCanvas = document.createElement('canvas');
+          thumbCanvas.width = 200;
+          thumbCanvas.height = 200 * (height / width);
+          var thumbCtx = thumbCanvas.getContext('2d');
+          thumbCtx.drawImage(img, 0, 0, thumbCanvas.width, thumbCanvas.height);
+          var thumbnailBase64 = thumbCanvas.toDataURL('image/jpeg', 0.6);
+          
+          // 顯示預覽
+          document.getElementById('previewImage').src = photoBase64;
+          document.getElementById('photoPreview').style.display = 'block';
+          
+          currentPhotoData = {
+            photoBase64: photoBase64,
+            thumbnailBase64: thumbnailBase64
+          };
+        };
+        img.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+});
+
+// 取消拍照
+function cancelPhoto() {
+  document.getElementById('photoPreview').style.display = 'none';
+  document.getElementById('photoNote').value = '';
+  document.getElementById('stainPhotoInput').value = '';
+  currentPhotoData = null;
+}
+
+// 儲存照片
+async function saveStainPhoto() {
+  if (!currentPhotoData) {
+    alert('請先拍照');
+    return;
+  }
+  
+  var note = document.getElementById('photoNote').value.trim();
+  
+  try {
+    var res = await fetch('/api/stain-photos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        photoBase64: currentPhotoData.photoBase64,
+        thumbnailBase64: currentPhotoData.thumbnailBase64,
+        note: note,
+        orderId: ''
+      })
+    });
+    
+    var data = await res.json();
+    
+    if (data.success) {
+      showResult('success', '✅ 照片已儲存');
+      cancelPhoto();
+      loadStainPhotos();
+    } else {
+      showResult('error', '❌ 儲存失敗:' + (data.error || '未知錯誤'));
+    }
+  } catch (error) {
+    showResult('error', '❌ 連線失敗:' + error.message);
+  }
+}
+
+// 載入所有污漬照片
+async function loadStainPhotos() {
+  var grid = document.getElementById('stainPhotoGrid');
+  grid.innerHTML = '<p style="text-align:center; color:#999; grid-column:1/-1;">載入中...</p>';
+  
+  try {
+    var res = await fetch('/api/stain-photos');
+    var data = await res.json();
+    
+    if (!data.success) {
+      grid.innerHTML = '<p style="text-align:center; color:#dc3545; grid-column:1/-1;">載入失敗:' + (data.error || '未知錯誤') + '</p>';
+      return;
+    }
+    
+    allStainPhotos = data.photos || [];
+    document.getElementById('photoCount').textContent = '總共 ' + allStainPhotos.length + ' 張照片';
+    
+    if (allStainPhotos.length === 0) {
+      grid.innerHTML = '<p style="text-align:center; color:#999; grid-column:1/-1;">尚無照片</p>';
+      return;
+    }
+    
+    var html = '';
+    allStainPhotos.forEach(function(photo) {
+      var imgSrc = photo.thumbnailBase64 || photo.photoBase64 || '';
+      var note = photo.note || '無備註';
+      var time = photo.timestamp || '';
+      
+      html += '<div onclick="showPhotoDetail(\'' + photo.photoId + '\')" style="cursor:pointer; background:#fff; border-radius:10px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,.1); transition:all .3s;">' +
+        '<img src="' + imgSrc + '" style="width:100%; height:200px; object-fit:cover;">' +
+        '<div style="padding:10px;">' +
+        '<div style="font-size:13px; color:#333; margin-bottom:5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + note + '</div>' +
+        '<div style="font-size:11px; color:#999;">' + time + '</div>' +
+        '</div>' +
+        '</div>';
+    });
+    
+    grid.innerHTML = html;
+    
+  } catch (error) {
+    grid.innerHTML = '<p style="text-align:center; color:#dc3545; grid-column:1/-1;">載入失敗:' + error.message + '</p>';
+  }
+}
+
+// 顯示照片詳情
+function showPhotoDetail(photoId) {
+  var photo = allStainPhotos.find(function(p) { return p.photoId === photoId; });
+  if (!photo) return;
+  
+  currentPhotoId = photoId;
+  
+  document.getElementById('detailImage').src = photo.photoBase64 || '';
+  document.getElementById('detailNote').value = photo.note || '';
+  document.getElementById('detailTime').textContent = photo.timestamp || '';
+  document.getElementById('detailId').textContent = photo.photoId || '';
+  
+  document.getElementById('photoDetailModal').style.display = 'block';
+}
+
+// 關閉照片詳情
+function closePhotoDetail() {
+  document.getElementById('photoDetailModal').style.display = 'none';
+  currentPhotoId = null;
+}
+
+// 更新照片備註
+async function updatePhotoNote() {
+  if (!currentPhotoId) return;
+  
+  var note = document.getElementById('detailNote').value.trim();
+  
+  try {
+    var res = await fetch('/api/stain-photos/' + encodeURIComponent(currentPhotoId), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ note: note })
+    });
+    
+    var data = await res.json();
+    
+    if (data.success) {
+      showResult('success', '✅ 備註已更新');
+      closePhotoDetail();
+      loadStainPhotos();
+    } else {
+      showResult('error', '❌ 更新失敗:' + (data.error || '未知錯誤'));
+    }
+  } catch (error) {
+    showResult('error', '❌ 連線失敗:' + error.message);
+  }
+}
+
+// 刪除污漬照片
+async function deleteStainPhoto() {
+  if (!currentPhotoId) return;
+  if (!confirm('確定要刪除此照片？')) return;
+  
+  try {
+    var res = await fetch('/api/stain-photos/' + encodeURIComponent(currentPhotoId), {
+      method: 'DELETE'
+    });
+    
+    var data = await res.json();
+    
+    if (data.success) {
+      showResult('success', '✅ 照片已刪除');
+      closePhotoDetail();
+      loadStainPhotos();
+    } else {
+      showResult('error', '❌ 刪除失敗:' + (data.error || '未知錯誤'));
+    }
+  } catch (error) {
+    showResult('error', '❌ 連線失敗:' + error.message);
+  }
+}
+
+ </script>
 
  </script>
 </body>
