@@ -3301,3 +3301,127 @@ app.delete('/api/stain-photos/:photoId', async (req, res) => {
 });
 
 console.log('📸 污漬照片 API 已載入');
+
+// 🔹 API 1: 上傳污漬照片 (改用 Google Drive)
+app.post('/api/stain-photos', async (req, res) => {
+  try {
+    const { photoBase64, thumbnailBase64, note, orderId } = req.body;
+    
+    if (!photoBase64) {
+      return res.json({ success: false, error: '缺少照片資料' });
+    }
+
+    const { google } = require('googleapis');
+    const googleAuth = require('./services/googleAuth');
+    
+    if (!googleAuth.isAuthorized()) {
+      return res.json({ success: false, error: '尚未授權 Google Sheets' });
+    }
+
+    const auth = googleAuth.getOAuth2Client();
+    const drive = google.drive({ version: 'v3', auth });
+    const sheets = google.sheets({ version: 'v4', auth });
+    const spreadsheetId = process.env.GOOGLE_SHEETS_ID_CUSTOMER;
+
+    const photoId = 'STAIN_' + Date.now();
+    const timestamp = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
+
+    // 🔥 上傳照片到 Google Drive
+    const buffer = Buffer.from(photoBase64.split(',')[1], 'base64');
+    const driveResponse = await drive.files.create({
+      requestBody: {
+        name: photoId + '.jpg',
+        mimeType: 'image/jpeg',
+        parents: ['root']
+      },
+      media: {
+        mimeType: 'image/jpeg',
+        body: require('stream').Readable.from(buffer)
+      },
+      fields: 'id, webViewLink, webContentLink'
+    });
+
+    const fileId = driveResponse.data.id;
+
+    // 設定檔案為公開
+    await drive.permissions.create({
+      fileId: fileId,
+      requestBody: {
+        role: 'reader',
+        type: 'anyone'
+      }
+    });
+
+    // 🔥 只在 Google Sheets 存連結
+    await sheets.spreadsheets.values.append({
+      spreadsheetId,
+      range: '污漬照片!A:F',
+      valueInputOption: 'USER_ENTERED',
+      resource: {
+        values: [[
+          photoId,
+          fileId,
+          `https://drive.google.com/uc?export=view&id=${fileId}`,
+          note || '',
+          timestamp,
+          orderId || ''
+        ]]
+      }
+    });
+
+    logger.logToFile(`✅ 污漬照片已上傳到 Drive: ${photoId}`);
+    
+    res.json({ 
+      success: true, 
+      photoId: photoId,
+      imageUrl: `https://drive.google.com/uc?export=view&id=${fileId}`,
+      message: '照片已儲存'
+    });
+
+  } catch (error) {
+    console.error('上傳污漬照片失敗:', error);
+    res.json({ success: false, error: error.message });
+  }
+});
+
+// 🔹 API 2: 取得所有污漬照片 (修改版)
+app.get('/api/stain-photos', async (req, res) => {
+  try {
+    const { google } = require('googleapis');
+    const googleAuth = require('./services/googleAuth');
+    
+    if (!googleAuth.isAuthorized()) {
+      return res.json({ success: false, error: '尚未授權 Google Sheets' });
+    }
+
+    const auth = googleAuth.getOAuth2Client();
+    const sheets = google.sheets({ version: 'v4', auth });
+    const spreadsheetId = process.env.GOOGLE_SHEETS_ID_CUSTOMER;
+
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: '污漬照片!A:F',
+    });
+
+    const rows = response.data.values || [];
+    
+    if (rows.length <= 1) {
+      return res.json({ success: true, photos: [] });
+    }
+
+    const photos = rows.slice(1).map(row => ({
+      photoId: row[0] || '',
+      fileId: row[1] || '',
+      imageUrl: row[2] || '',
+      note: row[3] || '',
+      timestamp: row[4] || '',
+      orderId: row[5] || ''
+    })).reverse();
+
+    res.json({ success: true, photos: photos, total: photos.length });
+
+  } catch (error) {
+    console.error('取得污漬照片失敗:', error);
+    res.json({ success: false, error: error.message });
+  }
+});
