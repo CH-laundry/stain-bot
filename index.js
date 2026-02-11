@@ -3382,25 +3382,4 @@ app.put('/api/stain-photos/:photoId', async (req, res) => {
   }
 });
 
-    const rows = response.data.values || [];
     
-    if (rows.length <= 1) {
-      return res.json({ success: true, photos: [] });
-    }
-
-    const photos = rows.slice(1).map(row => ({
-      photoId: row[0] || '',
-      fileId: row[1] || '',
-      imageUrl: row[2] || '',
-      note: row[3] || '',
-      timestamp: row[4] || '',
-      orderId: row[5] || ''
-    })).reverse();
-
-    res.json({ success: true, photos: photos, total: photos.length });
-
-  } catch (error) {
-    console.error('取得污漬照片失敗:', error);
-    res.json({ success: false, error: error.message });
-  }
-});
