@@ -3838,7 +3838,7 @@ async function updatePhotoNote() {
   }
 }
 
-// 刪除污漬照片
+// 刪除污漬照片 (修復版)
 async function deleteStainPhoto() {
   if (!currentPhotoId) return;
   if (!confirm('確定要刪除此照片？')) return;
@@ -3853,6 +3853,7 @@ async function deleteStainPhoto() {
     if (data.success) {
       showResult('success', '✅ 照片已刪除');
       closePhotoDetail();
+      // 🔥🔥🔥 刪除後自動重新載入照片列表
       loadStainPhotos();
     } else {
       showResult('error', '❌ 刪除失敗:' + (data.error || '未知錯誤'));
