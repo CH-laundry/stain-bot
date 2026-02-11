@@ -3234,7 +3234,7 @@ app.get('/api/stain-photos', async (req, res) => {
   }
 });
 
-    // 🔹 API 3: 刪除污漬照片 (修復版)
+   // 🔹 API 3: 刪除污漬照片 (完整版)
 app.delete('/api/stain-photos/:photoId', async (req, res) => {
   try {
     const { photoId } = req.params;
@@ -3257,7 +3257,7 @@ app.delete('/api/stain-photos/:photoId', async (req, res) => {
       fields: 'sheets.properties'
     });
 
-    let sheetId = 0; // 預設值
+    let sheetId = 0;
     const targetSheet = sheetInfo.data.sheets.find(
       sheet => sheet.properties.title === '污漬照片'
     );
@@ -3278,7 +3278,7 @@ app.delete('/api/stain-photos/:photoId', async (req, res) => {
 
     for (let i = 1; i < rows.length; i++) {
       if (rows[i][0] === photoId) {
-        rowIndex = i + 1; // Google Sheets 是 1-based
+        rowIndex = i + 1;
         fileId = rows[i][1];
         break;
       }
@@ -3293,7 +3293,7 @@ app.delete('/api/stain-photos/:photoId', async (req, res) => {
       await drive.files.delete({ fileId: fileId });
       console.log(`✅ 已從 Drive 刪除照片: ${fileId}`);
     } catch (driveError) {
-      console.log(`⚠️ Drive 刪除失敗（可能已被刪除）: ${driveError.message}`);
+      console.log(`⚠️ Drive 刪除失敗: ${driveError.message}`);
     }
 
     // 4️⃣ 從 Google Sheets 刪除這一列
@@ -3303,7 +3303,7 @@ app.delete('/api/stain-photos/:photoId', async (req, res) => {
         requests: [{
           deleteDimension: {
             range: {
-              sheetId: sheetId, // 🔥 使用正確的 sheetId
+              sheetId: sheetId,
               dimension: 'ROWS',
               startIndex: rowIndex - 1,
               endIndex: rowIndex
