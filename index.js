@@ -3187,7 +3187,7 @@ app.post('/api/stain-photos', async (req, res) => {
     res.json({ success: false, error: error.message });
   }
 });
-// 🔹 API 2: 取得所有污漬照片 (修改版)
+// 🔹 API 2: 取得所有污漬照片 (修復版)
 app.get('/api/stain-photos', async (req, res) => {
   try {
     const { google } = require('googleapis');
@@ -3206,7 +3206,35 @@ app.get('/api/stain-photos', async (req, res) => {
       range: '污漬照片!A:F',
     });
 
-    // 🔹 API 3: 刪除污漬照片
+    const rows = response.data.values || [];
+    
+    if (rows.length <= 1) {
+      return res.json({ success: true, photos: [] });
+    }
+
+    const photos = rows.slice(1).map(row => {
+      const fileId = row[1] || '';
+      
+      return {
+        photoId: row[0] || '',
+        fileId: fileId,
+        // 🔥🔥🔥 使用正確的 Google Drive 圖片 URL 格式
+        imageUrl: fileId ? `https://drive.google.com/uc?export=view&id=${fileId}` : '',
+        note: row[3] || '',
+        timestamp: row[4] || '',
+        orderId: row[5] || ''
+      };
+    }).reverse();
+
+    res.json({ success: true, photos: photos, total: photos.length });
+
+  } catch (error) {
+    console.error('取得污漬照片失敗:', error);
+    res.json({ success: false, error: error.message });
+  }
+});
+
+    // 🔹 API 3: 刪除污漬照片 (修復版)
 app.delete('/api/stain-photos/:photoId', async (req, res) => {
   try {
     const { photoId } = req.params;
@@ -3223,7 +3251,22 @@ app.delete('/api/stain-photos/:photoId', async (req, res) => {
     const sheets = google.sheets({ version: 'v4', auth });
     const spreadsheetId = process.env.GOOGLE_SHEETS_ID_CUSTOMER;
 
-    // 1️⃣ 從 Google Sheets 找到這張照片的 fileId
+    // 1️⃣ 先取得工作表資訊，找到「污漬照片」的 sheetId
+    const sheetInfo = await sheets.spreadsheets.get({
+      spreadsheetId,
+      fields: 'sheets.properties'
+    });
+
+    let sheetId = 0; // 預設值
+    const targetSheet = sheetInfo.data.sheets.find(
+      sheet => sheet.properties.title === '污漬照片'
+    );
+    
+    if (targetSheet) {
+      sheetId = targetSheet.properties.sheetId;
+    }
+
+    // 2️⃣ 從 Google Sheets 找到這張照片的 fileId
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
       range: '污漬照片!A:F',
@@ -3245,7 +3288,7 @@ app.delete('/api/stain-photos/:photoId', async (req, res) => {
       return res.json({ success: false, error: '找不到此照片' });
     }
 
-    // 2️⃣ 從 Google Drive 刪除檔案
+    // 3️⃣ 從 Google Drive 刪除檔案
     try {
       await drive.files.delete({ fileId: fileId });
       console.log(`✅ 已從 Drive 刪除照片: ${fileId}`);
@@ -3253,14 +3296,14 @@ app.delete('/api/stain-photos/:photoId', async (req, res) => {
       console.log(`⚠️ Drive 刪除失敗（可能已被刪除）: ${driveError.message}`);
     }
 
-    // 3️⃣ 從 Google Sheets 刪除這一列
+    // 4️⃣ 從 Google Sheets 刪除這一列
     await sheets.spreadsheets.batchUpdate({
       spreadsheetId,
       requestBody: {
         requests: [{
           deleteDimension: {
             range: {
-              sheetId: 0, // 假設「污漬照片」工作表是第一個
+              sheetId: sheetId, // 🔥 使用正確的 sheetId
               dimension: 'ROWS',
               startIndex: rowIndex - 1,
               endIndex: rowIndex
