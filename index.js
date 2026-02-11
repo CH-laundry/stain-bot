@@ -3154,7 +3154,7 @@ app.post('/api/stain-photos', async (req, res) => {
     });
 
     // 🔥 使用正確的圖片 URL 格式
-    const imageUrl = `https://drive.usercontent.google.com/download?id=${fileId}&export=view`;
+const imageUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
 
     // 🔥 儲存到 Google Sheets
     await sheets.spreadsheets.values.append({
@@ -3216,14 +3216,14 @@ app.get('/api/stain-photos', async (req, res) => {
       const fileId = row[1] || '';
       
       return {
-        photoId: row[0] || '',
-        fileId: fileId,
-        // 🔥🔥🔥 使用正確的 Google Drive 圖片 URL 格式
-       imageUrl: fileId ? `https://drive.usercontent.google.com/download?id=${fileId}&export=view` : '',
-        note: row[3] || '',
-        timestamp: row[4] || '',
-        orderId: row[5] || ''
-      };
+  photoId: row[0] || '',
+  fileId: fileId,
+  // 🔥 使用 Google Drive 縮圖 API（最穩定）
+  imageUrl: fileId ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000` : '',
+  note: row[3] || '',
+  timestamp: row[4] || '',
+  orderId: row[5] || ''
+};
     }).reverse();
 
     res.json({ success: true, photos: photos, total: photos.length });
