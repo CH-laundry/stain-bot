@@ -2106,6 +2106,34 @@ if (isPhoneOnly) {
 }
 
 console.log('✅ 非電話號碼，繼續處理');
+    // 🧧 春節店休判斷（程式碼直接攔截，不經過 AI）
+const cnYear = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
+const cnMonth = cnYear.getMonth() + 1;
+const cnDay = cnYear.getDate();
+
+// 判斷是否在春節期間 2/14 ~ 2/21
+const isChineseNewYear = (cnMonth === 2 && cnDay >= 14 && cnDay <= 21);
+
+if (isChineseNewYear) {
+  console.log(`🧧 春節店休期間 ${cnMonth}/${cnDay}，檢查是否為收件/營業相關問題`);
+
+  // 收件/送件/營業時間相關問題 → 直接回覆店休
+  const isCNYSensitiveQuestion = (
+    /(來收|收件|收衣|可以收|能收|收送|到府|送回|送到家|送來|有送|可以送|能送|有營業|有開|開門嗎|營業嗎|幾點開|什麼時候開|幾號開|何時營業|今天有|明天有|可以來|能來|過年|年假|店休|休息|有在|有人|在嗎)/.test(userMessage)
+  );
+
+  if (isCNYSensitiveQuestion) {
+    console.log('🧧 春節期間收件/營業問題，直接回覆店休');
+    const cnyReply = `🧧 2/14(六)-2/21(六) 新春店休\n\n年後 2/22(日) 開始正常營業 💙\n屆時我們會立即為您服務，謝謝您`;
+
+    // 記錄到 Google Sheets
+    logToGoogleSheets(userId, userMessage, cnyReply, '春節店休', '正常');
+
+    return cnyReply;
+  }
+}
+
+console.log('✅ 非春節敏感問題，繼續處理');
     // 🔴 過濾純表情符號或看不懂的訊息（不回覆）
 const isEmojiOnly = /^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\s]+$/u.test(userMessage.trim());
 const isGibberish = userMessage.trim().length < 2 && !/[a-zA-Z0-9\u4e00-\u9fa5]/.test(userMessage); // 少於2字且沒有文字或數字
