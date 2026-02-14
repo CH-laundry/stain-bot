@@ -2177,14 +2177,20 @@ console.log('✅ 非表情符號，繼續處理');
     const currentDay = taipeiTime.getDay();
     const dayNames = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
     const currentDayName = dayNames[currentDay];
-    const timeInfo = `當前時間：${currentDayName} ${currentHour}:${taipeiTime.getMinutes().toString().padStart(2, '0')}`;
+   const currentMonth = taipeiTime.getMonth() + 1; // 月份
+const currentDate = taipeiTime.getDate();        // 日期
 
-    // ⭐ 加入明天星期判斷
-    const tomorrow = new Date(taipeiTime);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowDay = tomorrow.getDay();
-    const tomorrowDayName = dayNames[tomorrowDay];
-    const enhancedTimeInfo = `${timeInfo}\n明天是：${tomorrowDayName}`;
+const timeInfo = `當前時間：${currentMonth}月${currentDate}日（${currentDayName}）${currentHour}:${taipeiTime.getMinutes().toString().padStart(2, '0')}`;
+
+// ⭐ 加入明天日期判斷
+const tomorrow = new Date(taipeiTime);
+tomorrow.setDate(tomorrow.getDate() + 1);
+const tomorrowDay = tomorrow.getDay();
+const tomorrowDayName = dayNames[tomorrowDay];
+const tomorrowMonth = tomorrow.getMonth() + 1;
+const tomorrowDate = tomorrow.getDate();
+
+const enhancedTimeInfo = `${timeInfo}\n明天是：${tomorrowMonth}月${tomorrowDate}日（${tomorrowDayName}）`;
     
  // 🔴 超嚴格收件判斷：只有明確說「來收」「收件」才算
 const isPickupQuestion = (
