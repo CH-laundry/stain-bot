@@ -2347,10 +2347,6 @@ if (finalReply.includes('UNRELATED')) {
 }
   
 
-// ⭐ 儲存對話記憶
-addToHistory(userId, "user", userMessage);
-addToHistory(userId, "assistant", finalReply);
-
 if (isPickupQuestion && userId && finalReply) {
   pickupRepliedUsers.set(userId, Date.now());
 }
