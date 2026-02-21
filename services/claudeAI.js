@@ -1813,13 +1813,19 @@ function detectEmotion(message) {
 // ====================================
 function detectQuestionType(message) {
   if (/多少錢|價格|價錢|費用/.test(message)) return '價格詢問';
-  if (/收|來收|收件/.test(message)) return '收件問題';
-  if (/送到家|送回|約時間/.test(message)) return '送回問題';
-  if (/汙漬|髒|油漬|血/.test(message)) return '汙漬處理';
-  if (/怎麼這麼久|還沒好|太慢|都幾天/.test(message)) return '催件';
-  if (/是不是忘記|忘記來收|還沒來收/.test(message)) return '客訴-忘記收件';
-  if (/地毯|窗簾|包包|鞋/.test(message)) return '特殊項目';
-  if (/精品|名牌|LV|Gucci|Chanel|Canada Goose|Moncler/.test(message)) return '精品項目';
+  
+  // 🔴 修正：收件必須明確，排除「收到」「收費」等誤判
+  if (/請來收|可以來收|來收|收件|到府收件|幫我收|取件|準備好了/.test(message) && 
+      !/收到|收費|收據|收入|簽收|來拿|放好了|接收|驗收/.test(message)) return '收件問題';
+  
+  if (/送到家|送回|幫我送|請你們送|約送回時間/.test(message)) return '送回問題';
+  if (/拿|領|去取|過去拿|去拿|去領/.test(message)) return '取件問題';  // 新增取件分類
+  if (/汙漬|汗漬|油漬|血漬|髒|污/.test(message)) return '汙漬處理';
+  if (/怎麼這麼久|還沒好|太慢|都幾天|超過/.test(message)) return '催件';
+  if (/是不是忘記|忘記來收|還沒來收|怎麼還沒/.test(message)) return '客訴-忘記收件';
+  if (/地毯|窗簾|包包|鞋|手推車|汽座|娃娃|玩偶/.test(message)) return '特殊項目';
+  if (/精品|名牌|LV|Gucci|Chanel|Canada Goose|Moncler|Hermès|Hermes|Prada|Dior|Burberry/.test(message)) return '精品項目';
+  if (/洗好|好了嗎|好了沒|進度|可以拿了|完工/.test(message)) return '進度查詢';  // 新增
   return '其他';
 }
 
@@ -2099,9 +2105,6 @@ console.log('✅ 非表情符號，繼續處理');
             // 附上原本的查詢連結
             reply += `\n\n您也可以點此查看詳情 🔍\nhttps://liff.line.me/2004612704-JnzA1qN6#/home`;
 
-            // 寫入對話記憶 (讓 AI 知道剛才發生什麼事)
-            addToHistory(userId, "user", userMessage);
-            addToHistory(userId, "assistant", reply);
             
             // 寫入 Google Sheets (紀錄這次成功的查詢)
             logToGoogleSheets(userId, userMessage, reply, '進度查詢(自動)', '正常');
@@ -2134,6 +2137,36 @@ const tomorrowMonth = tomorrow.getMonth() + 1;
 const tomorrowDate = tomorrow.getDate();
 
 const enhancedTimeInfo = `${timeInfo}\n明天是：${tomorrowMonth}月${tomorrowDate}日（${tomorrowDayName}）`;
+
+// 🔴 新增：程式端直接判斷週六公休，不讓 LLM 自己推算
+let scheduleNote = '';
+
+if (isSaturday) {
+  scheduleNote = '\n【排程規則：今天週六公休，所有收送一律說「週六固定公休，週日才會去」】';
+} else if (isTomorrowSaturday) {
+  // 判斷地區
+  const isBanqiao = /板橋/.test(userMessage);
+  const hasUrgentKeyword = /等會|等一下|今天|現在|馬上|立刻/.test(userMessage);
+  
+  if (isBanqiao && hasUrgentKeyword) {
+    scheduleNote = '\n【排程規則：今天可以收（板橋+有急件關鍵字），明天是週六公休不收】';
+  } else {
+    scheduleNote = '\n【排程規則：明天週六公休，收件時間改成週日】';
+  }
+} else {
+  // 非週六相關
+  const isBanqiao = /板橋/.test(userMessage);
+  const hasUrgentKeyword = /等會|等一下|今天|現在|馬上|立刻/.test(userMessage);
+  const isOtherArea = /中和|新莊|土城|永和|萬華/.test(userMessage);
+  
+  if (isOtherArea) {
+    scheduleNote = '\n【排程規則：非板橋地區，一律明天收】';
+  } else if (isBanqiao && hasUrgentKeyword) {
+    scheduleNote = '\n【排程規則：板橋+急件關鍵字，今天收】';
+  } else if (isBanqiao) {
+    scheduleNote = '\n【排程規則：板橋但無急件關鍵字，明天收】';
+  }
+}
     
  // 🔴 超嚴格收件判斷：只有明確說「來收」「收件」才算
 const isPickupQuestion = (
@@ -2190,13 +2223,12 @@ if (hasRecentPickupReply && isSimpleInfo) {
   console.log('🔇 偵測到簡單補充資訊，提示 AI 簡短回覆');
   messages.push({
     role: "user",
-    content: `【內部提示：這句是補充細節，請簡短回覆「收到 💙」或「好的 💙」即可，不要重複說「我們會去收回的」】\n\n${enhancedTimeInfo}\n\n客人問題：${userMessage}`
+    content: `【內部提示：這句是補充細節，請簡短回覆「收到 💙」或「好的 💙」即可，不要重複說「我們會去收回的」】\n\n${enhancedTimeInfo}${scheduleNote}\n\n客人問題：${userMessage}`
   });
 } else {
-  // 一般訊息
   messages.push({
     role: "user",
-    content: `${enhancedTimeInfo}\n\n客人問題：${userMessage}`
+    content: `${enhancedTimeInfo}${scheduleNote}\n\n客人問題：${userMessage}`
   });
 }
     
