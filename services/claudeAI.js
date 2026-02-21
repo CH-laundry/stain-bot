@@ -2064,161 +2064,211 @@ if (isEmojiOnly || isGibberish) {
 
 console.log('✅ 非表情符號，繼續處理');
 
-   
+// ====================================
+// ✅ 直接貼這段：時間計算 + 收件硬決策（必須放在 try{} 最前面）
+// ====================================
 
-    // 👇👇👇 請插入這段 (開始) 👇👇👇
-    
-    // 1. 定義觸發關鍵字 (問進度、洗好了沒)
-    const isProgressQuery = /(好了嗎|好了沒|洗好了|進度|可以拿了嗎|完工|幾件好|好了)/.test(userMessage);
+// 🔴 第一步：先算時間（必須在所有判斷之前）
+const now = new Date();
+const taipeiTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
+const currentDay = taipeiTime.getDay();
+const dayNames = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
 
-    // 2. 如果是問進度，且有 User ID
-    if (isProgressQuery && userId) {
-        console.log('🔍 偵測到進度詢問，正在查詢即時資料庫...');
-        const progressData = await checkLaundryProgress(userId);
-
-        // 3. 如果成功查到資料 (代表店裡電腦有同步上來)
-        if (progressData) {
-            console.log('✅ 查到進度資料，生成回覆...');
-            const { total, finished, details } = progressData;
-            const notFinished = total - finished;
-            
-            // 處理清單顯示：完成打勾，未完成打漏斗
-            // details 裡的格式是 "襯衫 (掛衣號:1037)" 或 "POLO衫 (清潔中)"
-            const detailsStr = details.map(d => {
-                return d.includes('掛衣號') ? `✅ ${d}` : `⏳ ${d}`;
-            }).join('\n');
-
-           // 👇👇👇 修改後的漂亮回覆格式 (直接顯示件數) 👇👇👇
-            let reply = `${progressData.customerName}您好 💙 幫您查到了！\n`;
-            
-            // 直接清楚說明狀況
-            reply += `您這次送洗共有 ${total} 件，其中 ${finished} 件已經清洗完成 ✨\n\n`;
-            
-            if (notFinished === 0) {
-                reply += `🎉 全數完工！\n${detailsStr}\n\n您可以隨時來店取件或安排送回，謝謝您 💙`;
-            } else {
-                reply += `目前進度如下：\n${detailsStr}\n\n`;
-                reply += `還有 ${notFinished} 件正在努力清潔中，好了會立即通知您喔 💙`;
-            }
-            // 👆👆👆 修改結束 👆👆👆
-
-            // 附上原本的查詢連結
-            reply += `\n\n您也可以點此查看詳情 🔍\nhttps://liff.line.me/2004612704-JnzA1qN6#/home`;
-
-            
-            // 寫入 Google Sheets (紀錄這次成功的查詢)
-            logToGoogleSheets(userId, userMessage, reply, '進度查詢(自動)', '正常');
-
-            // 直接回傳結果，結束這個回合
-            return reply;
-        }
-        // 如果沒查到資料，程式會自動往下跑，讓 Claude AI 用原本的方式回答
-    }
-    // 👆👆👆 請插入這段 (結束) 👆👆👆
-
-    
-    const now = new Date();
-    const taipeiTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
-    const currentHour = taipeiTime.getHours();
-    const currentDay = taipeiTime.getDay();
-    const dayNames = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
-    const currentDayName = dayNames[currentDay];
-   const currentMonth = taipeiTime.getMonth() + 1; // 月份
-const currentDate = taipeiTime.getDate();        // 日期
-
-const timeInfo = `當前時間：${currentMonth}月${currentDate}日（${currentDayName}）${currentHour}:${taipeiTime.getMinutes().toString().padStart(2, '0')}`;
-
-// ⭐ 加入明天日期判斷
 const tomorrow = new Date(taipeiTime);
 tomorrow.setDate(tomorrow.getDate() + 1);
 const tomorrowDay = tomorrow.getDay();
-const tomorrowDayName = dayNames[tomorrowDay];
-const tomorrowMonth = tomorrow.getMonth() + 1;
-const tomorrowDate = tomorrow.getDate();
 
-const enhancedTimeInfo = `${timeInfo}\n明天是：${tomorrowMonth}月${tomorrowDate}日（${tomorrowDayName}）`;
+// ✅ 這兩個一定要在 tomorrowDay 算完後才宣告
+const isSaturday = currentDay === 6;
+const isTomorrowSaturday = tomorrowDay === 6;
 
-// 🔴 新增：程式端直接判斷週六公休，不讓 LLM 自己推算
-let scheduleNote = '';
+// 🔴 收件意圖硬決策（程式端直接回覆，不走 LLM）
+const isPickupIntent = (
+  /(請來收|可以來收|能來收|麻煩來收|到府收件|收衣服|幫我收|收件|準備好了)/.test(userMessage) &&
+  !/(收到|收費|收據|收入|簽收|接收|驗收|什麼時候到|幾點到|到了嗎|快到了|讓我知道|通知我|跟我說|來拿|取件|領|拿|洗好|好了|完工|進度|多久|幾天)/.test(userMessage) &&
+  userMessage.trim().length < 50
+);
 
-if (isSaturday) {
-  scheduleNote = '\n【排程規則：今天週六公休，所有收送一律說「週六固定公休，週日才會去」】';
-} else if (isTomorrowSaturday) {
-  // 判斷地區
+if (isPickupIntent && userId) {
+  let pickupReply = '';
+
   const isBanqiao = /板橋/.test(userMessage);
   const hasUrgentKeyword = /等會|等一下|今天|現在|馬上|立刻/.test(userMessage);
-  
-  if (isBanqiao && hasUrgentKeyword) {
-    scheduleNote = '\n【排程規則：今天可以收（板橋+有急件關鍵字），明天是週六公休不收】';
+  const isOtherArea = /中和|新莊|土城|永和|萬華/.test(userMessage);
+
+  // 週六：一律週日
+  if (isSaturday) {
+    pickupReply = '因為週六固定公休，我們週日會去收回的 💙';
+
+  // 今天週五（明天週六）：板橋急件可今天收，其它都週日
+  } else if (isTomorrowSaturday) {
+    if (isBanqiao && hasUrgentKeyword) {
+      pickupReply = '好的 💙 我們會去收回的，謝謝您';
+    } else {
+      pickupReply = '因為週六固定公休，我們週日會去收回的 💙';
+    }
+
+  // 非板橋地區：一律明天收（但已排除週六情境）
+  } else if (isOtherArea) {
+    pickupReply = '好的 💙 明天我們會去收回的，謝謝您';
+
+  // 板橋急件：今天收
+  } else if (isBanqiao && hasUrgentKeyword) {
+    pickupReply = '好的 💙 我們會去收回的，謝謝您';
+
+  // 板橋非急件：明天收
+  } else if (isBanqiao) {
+    pickupReply = '好的 💙 明天我們會去收回的，謝謝您';
+
+  // 沒講地區：保守當「明天收」
   } else {
-    scheduleNote = '\n【排程規則：明天週六公休，收件時間改成週日】';
+    pickupReply = '好的 💙 明天我們會去收回的，謝謝您';
   }
-} else {
-  // 非週六相關
+
+  console.log('📋 收件硬決策直出:', pickupReply);
+
+  addToHistory(userId, "user", userMessage);
+  addToHistory(userId, "assistant", pickupReply);
+  await logToGoogleSheets(userId, userMessage, pickupReply, '收件問題', '😊 正常');
+
+  return pickupReply;
+}
+
+// ✅ 走到這裡代表「不是收件」
+// 你原本的：模板過濾 / 電話過濾 / 進度查詢 / LLM … 繼續放下面就好
+
+// ====================================
+// 🔴 第二步：收件意圖硬決策（不走 LLM）
+// ====================================
+const isPickupIntent = (
+  /請來收|可以來收|能來收|麻煩來收|到府收件|收衣服|幫我收|收件|準備好了/.test(userMessage) &&
+  !/收到|收費|收據|收入|簽收|接收|什麼時候到|幾點到|讓我知道|通知我/.test(userMessage) &&
+  userMessage.length < 50
+);
+
+if (isPickupIntent && userId) {
+  let pickupReply = '';
+  
   const isBanqiao = /板橋/.test(userMessage);
   const hasUrgentKeyword = /等會|等一下|今天|現在|馬上|立刻/.test(userMessage);
   const isOtherArea = /中和|新莊|土城|永和|萬華/.test(userMessage);
   
-  if (isOtherArea) {
-    scheduleNote = '\n【排程規則：非板橋地區，一律明天收】';
+  if (isSaturday) {
+    pickupReply = '因為週六固定公休，我們週日會去收回的 💙';
+  } else if (isTomorrowSaturday) {
+    if (isBanqiao && hasUrgentKeyword) {
+      pickupReply = '好的 💙 我們會去收回的，謝謝您';
+    } else {
+      pickupReply = '因為週六固定公休，我們週日會去收回的 💙';
+    }
+  } else if (isOtherArea) {
+    pickupReply = '好的 💙 明天我們會去收回的，謝謝您';
   } else if (isBanqiao && hasUrgentKeyword) {
-    scheduleNote = '\n【排程規則：板橋+急件關鍵字，今天收】';
+    pickupReply = '好的 💙 我們會去收回的，謝謝您';
   } else if (isBanqiao) {
-    scheduleNote = '\n【排程規則：板橋但無急件關鍵字，明天收】';
+    pickupReply = '好的 💙 明天我們會去收回的，謝謝您';
+  } else {
+    pickupReply = '好的 💙 明天我們會去收回的，謝謝您';
   }
+  
+  console.log('📋 收件硬決策直出:', pickupReply);
+  addToHistory(userId, "user", userMessage);
+  addToHistory(userId, "assistant", pickupReply);
+  await logToGoogleSheets(userId, userMessage, pickupReply, '收件問題', '😊 正常');
+  return pickupReply;
 }
+
+// ====================================
+// 🔴 第三步：進度查詢
+// ====================================
+const isProgressQuery = /(好了嗎|好了沒|洗好了|進度|可以拿了嗎|完工|幾件好|好了)/.test(userMessage);
+
+if (isProgressQuery && userId) {
+  console.log('🔍 偵測到進度詢問，正在查詢即時資料庫...');
+  const progressData = await checkLaundryProgress(userId);
+
+  if (progressData) {
+    console.log('✅ 查到進度資料，生成回覆...');
+    const { total, finished, details } = progressData;
+    const notFinished = total - finished;
     
- // 🔴 超嚴格收件判斷：只有明確說「來收」「收件」才算
-const isPickupQuestion = (
-  // 必須包含以下明確關鍵字
-  /(請來收|可以來收嗎|能來收嗎|麻煩來收|到府收件|收衣服|幫我收|收件)/.test(userMessage) &&
-  // 排除所有可能誤判的情況
-  !/(收到|收費|收據|收入|接收|簽收|驗收|什麼時候到|幾點到|到了嗎|快到了|讓我知道|通知我|跟我說|幾天|多久|什麼時候|週幾|星期幾|幾號|前到|前好|前拿|前領|能拿|可以拿|洗好|完工|幾天好|幾天會好|何時好|何時拿|放好|準備好|來拿|取件)/.test(userMessage) &&
-  // 訊息長度合理（避免誤判長句子）
-  userMessage.length < 50
-);
+    const detailsStr = details.map(d => {
+      return d.includes('掛衣號') ? `✅ ${d}` : `⏳ ${d}`;
+    }).join('\n');
+
+    let reply = `${progressData.customerName}您好 💙 幫您查到了！\n`;
+    reply += `您這次送洗共有 ${total} 件，其中 ${finished} 件已經清洗完成 ✨\n\n`;
     
-    if (isPickupQuestion && userId && pickupRepliedUsers.has(userId)) {
-      console.log('🔇 已回覆過收件問題，不重複回應');
-      return null;
+    if (notFinished === 0) {
+      reply += `🎉 全數完工！\n${detailsStr}\n\n您可以隨時來店取件或安排送回，謝謝您 💙`;
+    } else {
+      reply += `目前進度如下：\n${detailsStr}\n\n`;
+      reply += `還有 ${notFinished} 件正在努力清潔中，好了會立即通知您喔 💙`;
     }
     
-   // ⭐ 取得對話記憶（只取 30 分鐘內的）
+    reply += `\n\n您也可以點此查看詳情 🔍\nhttps://liff.line.me/2004612704-JnzA1qN6#/home`;
+
+    addToHistory(userId, "user", userMessage);
+    addToHistory(userId, "assistant", reply);
+    logToGoogleSheets(userId, userMessage, reply, '進度查詢(自動)', '正常');
+    return reply;
+  }
+}
+
+// ====================================
+// 🔴 第四步：組裝傳給 LLM 的訊息
+// ====================================
+const timeInfo = `當前時間：${currentMonth}月${currentDate}日（${currentDayName}）${currentHour}:${taipeiTime.getMinutes().toString().padStart(2, '0')}`;
+const enhancedTimeInfo = `${timeInfo}\n明天是：${tomorrowMonth}月${tomorrowDate}日（${tomorrowDayName}）`;
+
+// scheduleNote：給 LLM 參考用（收件硬決策已在上面處理，這裡只是補充）
+let scheduleNote = '';
+if (isSaturday) {
+  scheduleNote = '\nSCHED: 今天週六公休，任何收送都回覆「週六固定公休，週日才會去收」';
+} else if (isTomorrowSaturday) {
+  scheduleNote = '\nSCHED: 明天週六公休，收件改說週日才去';
+} else {
+  const isOtherArea = /中和|新莊|土城|永和|萬華/.test(userMessage);
+  const isBanqiao = /板橋/.test(userMessage);
+  const hasUrgentKeyword = /等會|等一下|今天|現在|馬上|立刻/.test(userMessage);
+  
+  if (isOtherArea) {
+    scheduleNote = '\nSCHED: 非板橋地區，一律回覆明天去收';
+  } else if (isBanqiao && hasUrgentKeyword) {
+    scheduleNote = '\nSCHED: 板橋有急件關鍵字，今天去收';
+  } else if (isBanqiao) {
+    scheduleNote = '\nSCHED: 板橋無急件關鍵字，明天去收';
+  }
+}
+
+// isPickupQuestion 直接等於 isPickupIntent（合併，避免兩套邏輯）
+const isPickupQuestion = isPickupIntent;
+
 const history = getHistory(userId);
 const messages = [];
 
-// 🔴 只在有歷史訊息時才加入（避免空陣列）
 if (history.length > 0) {
   console.log(`📜 載入 30 分鐘內的對話記憶: ${history.length} 則`);
   history.forEach(msg => {
-    messages.push({
-      role: msg.role,
-      content: msg.content
-    });
+    messages.push({ role: msg.role, content: msg.content });
   });
 } else {
   console.log('📜 無歷史對話（或已超過 30 分鐘）');
 }
-    
-   // ⭐ 簡化版補充資訊判斷（只判斷最近 2 則訊息）
-const lastTwoMessages = history.slice(-4); // 取最近 2 組對話（4 則訊息）
 
-// 計算最近是否回覆過「收回」或「送回」
+const lastTwoMessages = history.slice(-4);
 const hasRecentPickupReply = lastTwoMessages.some(msg => 
   msg.role === 'assistant' && 
-  (msg.content.includes('我們會去收回的') || 
-   msg.content.includes('我們會幫您送回'))
+  (msg.content.includes('我們會去收回的') || msg.content.includes('我們會幫您送回'))
 );
 
-// 判斷是否為簡單補充資訊（地址、電話、樓層等）
 const isSimpleInfo = (
-  /^[0-9\-]+$/.test(userMessage.trim()) || // 純數字或電話
-  /^\d+樓$/.test(userMessage.trim()) || // 純樓層
-  /路|號|樓|管理室/.test(userMessage) && userMessage.length < 30 || // 簡短地址
-  /^好的?$|^了解$|^收到$|^OK$/i.test(userMessage.trim()) // 確認語
+  /^[0-9\-]+$/.test(userMessage.trim()) ||
+  /^\d+樓$/.test(userMessage.trim()) ||
+  (/路|號|樓|管理室/.test(userMessage) && userMessage.length < 30) ||
+  /^好的?$|^了解$|^收到$|^OK$/i.test(userMessage.trim())
 );
 
-// 如果剛回覆過收件/送回 + 這句是簡單補充 → 提示 AI 簡短回覆
 if (hasRecentPickupReply && isSimpleInfo) {
   console.log('🔇 偵測到簡單補充資訊，提示 AI 簡短回覆');
   messages.push({
@@ -2231,8 +2281,8 @@ if (hasRecentPickupReply && isSimpleInfo) {
     content: `${enhancedTimeInfo}${scheduleNote}\n\n客人問題：${userMessage}`
   });
 }
-    
-    console.log(`📜 對話記憶: ${history.length} 則歷史訊息`);
+
+console.log(`📜 對話記憶: ${history.length} 則歷史訊息`);
 
     
     // 判斷問題複雜度
