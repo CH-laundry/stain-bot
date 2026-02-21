@@ -2093,7 +2093,7 @@ const isTomorrowSaturday = tomorrowDay === 6;
 // ====================================
 const isPickupIntent = (
   /(請來收|可以來收|能來收|麻煩來收|到府收件|收衣服|幫我收|收件|準備好了)/.test(userMessage) &&
-  !/(收到|收費|收據|收入|簽收|接收|驗收|什麼時候到|幾點到|到了嗎|快到了|讓我知道|通知我|跟我說|來拿|取件|領|拿|洗好|好了|完工|進度|多久|幾天)/.test(userMessage) &&
+  !/(收到|收費|收據|收入|簽收|接收|驗收|什麼時候到|幾點到|到了嗎|快到了|讓我知道|通知我|跟我說|來拿|取件|領|洗好|好了|完工|進度|多久|幾天)/.test(userMessage) &&
   userMessage.trim().length < 50
 );
 
@@ -2196,7 +2196,6 @@ if (isSaturday) {
 // ✅ 後面你原本的「history / messages / 呼叫 Claude」照舊往下接
 
 // isPickupQuestion 直接等於 isPickupIntent（合併，避免兩套邏輯）
-const isPickupQuestion = isPickupIntent;
 
 const history = getHistory(userId);
 const messages = [];
@@ -2350,10 +2349,6 @@ if (finalReply.includes('UNRELATED')) {
   return null;
 }
   
-
-if (isPickupQuestion && userId && finalReply) {
-  pickupRepliedUsers.set(userId, Date.now());
-}
 
     // ⭐ 儲存對話記憶（帶時間戳記）
 addToHistory(userId, "user", userMessage);
