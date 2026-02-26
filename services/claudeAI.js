@@ -2087,6 +2087,34 @@ const tomorrowDate = tomorrow.getDate();
 const isSaturday = currentDay === 6;
 const isTomorrowSaturday = tomorrowDay === 6;
 
+ // ====================================
+// 🔴 取件硬決策（客人自己來拿衣服）
+// ====================================
+const isCustomerPickup = (
+  (
+    /(去拿|過去拿|去領|過去領|我去|我來拿|我來領|去取件|自己去|自己來|自己取|親自去|親自取|親自來拿)/.test(userMessage) ||
+    /(週[一二三四五日]|下週|明天|後天|[0-9]+號).{0,10}(拿|領|取件|去取|去拿|去領)/.test(userMessage) ||
+    /(拿|領|取件).{0,10}(週[一二三四五日]|下週|明天|後天|[0-9]+號)/.test(userMessage)
+  ) &&
+  !/(幫我收|來收|收件|到府|請來|麻煩來|可以來收|能來收|收衣服)/.test(userMessage)
+);
+
+if (isCustomerPickup && userId) {
+  let customerPickupReply = '';
+
+  if (/(什麼時候|幾點|可以拿了|好了嗎|能拿了|最快|可以領了)/.test(userMessage)) {
+    customerPickupReply = '是的 💙 因為還要檢查整理，明天方便時間就可以拿了，謝謝您\n\n營業時間：每日 10:30-20:00（週六公休）';
+  } else {
+    customerPickupReply = '好的 💙 我們在店裡等您，謝謝您\n\n營業時間：每日 10:30-20:00（週六公休）';
+  }
+
+  console.log('📋 取件硬決策直出:', customerPickupReply);
+  addToHistory(userId, "user", userMessage);
+  addToHistory(userId, "assistant", customerPickupReply);
+  await logToGoogleSheets(userId, userMessage, customerPickupReply, '取件問題', '😊 正常');
+  return customerPickupReply;
+}   
+
 // ====================================
 // 🔴 第二步：收件意圖硬決策（程式端直接回覆，不走 LLM）
 // （注意：isPickupIntent 只宣告一次，不要再寫第二段）
@@ -2094,7 +2122,7 @@ const isTomorrowSaturday = tomorrowDay === 6;
 const isPickupIntent = (
   /(請來收|可以來收|能來收|麻煩來收|到府收件|收衣服|幫我收|收件|準備好了)/.test(userMessage) &&
   !/(收到|收費|收據|收入|簽收|接收|驗收|什麼時候到|幾點到|到了嗎|快到了|讓我知道|通知我|跟我說|來拿|取件|領|洗好|完工|進度|多久|幾天)/.test(userMessage) &&
-  userMessage.trim().length < 50
+  userMessage.trim().length < 100
 );
 
 if (isPickupIntent && userId) {
