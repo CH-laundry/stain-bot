@@ -1598,7 +1598,19 @@ app.get('/api/revenue/report', async (req, res) => {
     });
 
     const dailyArray = Object.values(dailyRevenue).sort((a, b) => a.date.localeCompare(b.date));
-    const dailyAverage = dailyArray.length > 0 ? Math.round(monthlyTotal / dailyArray.length) : 0;
+   // 計算分母：當月已過天數，扣除週六（固定公休）
+const [y, m] = [parseInt(targetYear), parseInt(targetMonth)];
+const today = new Date();
+const isCurrentMonth = (today.getFullYear() === y && today.getMonth() + 1 === m);
+const lastDay = isCurrentMonth ? today.getDate() : new Date(y, m, 0).getDate();
+
+let workDays = 0;
+for (let d = 1; d <= lastDay; d++) {
+  const dow = new Date(y, m - 1, d).getDay();
+  if (dow !== 6) workDays++; // 扣除週六(6)
+}
+
+const dailyAverage = workDays > 0 ? Math.round(monthlyTotal / workDays) : 0;
 
     res.json({
       success: true,
