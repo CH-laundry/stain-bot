@@ -2162,8 +2162,11 @@ if (isPickupIntent && userId) {
 // ====================================
 // 🔴 第三步：進度查詢（你原本的邏輯保留）
 // ====================================
-const isProgressQuery = /(好了嗎|好了沒|洗好了|進度|可以拿了嗎|完工|幾件好|好了)/.test(userMessage);
+const isProgressQuery = /(好了嗎|好了沒|洗好了|進度查詢|可以拿了嗎|完工了嗎|幾件好了|衣服好了|洗完了嗎)/.test(userMessage);
 
+// 排除：客人是在描述衣物狀況，不是在查進度
+const isDescribingClothes = /(比較髒|有污漬|汙漬|很髒|要洗|要送洗|需要洗|髒掉|沾到)/.test(userMessage);
+    
 if (isProgressQuery && userId) {
   console.log('🔍 偵測到進度詢問，正在查詢即時資料庫...');
   const progressData = await checkLaundryProgress(userId);
