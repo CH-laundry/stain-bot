@@ -3233,29 +3233,37 @@ app.get('/api/daily-ai-insight', async (req, res) => {
     const avgOrder = orderCount > 0 ? Math.round(revenue / orderCount) : 0;
     const topItems = [...new Set(dayOrders.map(o => o.itemName))].slice(0, 5).join('、') || '無';
 
-    const { OpenAI } = require('openai');
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const Anthropic = require('@anthropic-ai/sdk');
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o',
-      messages: [{
-        role: 'user',
-        content: `你是 C.H 精緻洗衣的營運顧問，分析 ${date} 當天數據：
-營收: NT$${revenue}，訂單: ${orderCount} 單，客單價: NT$${avgOrder}，熱門項目: ${topItems}
-請用繁體中文回答：
-1. 當天表現評估
-2. 值得注意的地方
-3. 明天可改善的具體建議`
-      }],
-      max_tokens: 400
-    });
+const response = await anthropic.messages.create({
+  model: 'claude-opus-4-5',
+  max_tokens: 600,
+  messages: [{
+    role: 'user',
+    content: `你是一位專精台灣精緻洗衣市場的資深分析師，服務對象是 C.H 精緻洗衣的店長。
+以下是 ${date} 的營業數據：
+- 當日營收：NT$${revenue}
+- 訂單筆數：${orderCount} 筆
+- 平均客單價：NT$${avgOrder} 元
+- 主要洗滌品項：${topItems}
 
-    res.json({
-      success: true,
-      date,
-      stats: { revenue, orderCount, avgOrder },
-      insight: response.choices[0].message.content
-    });
+請以市場分析師角度，用繁體中文提供以下報告（語氣專業、精準、有數據依據）：
+
+1. 📊 當日營業表現評估（對比精緻洗衣業一般行情）
+2. 🔍 異常或值得關注的指標（如客單價過低、訂單量異常等）
+3. 💡 明日可執行的具體策略建議（含針對精緻洗衣市場的洞察）
+
+回答請簡潔有力，每點不超過 3 句，直接切入重點。`
+  }]
+});
+
+res.json({
+  success: true,
+  date,
+  stats: { revenue, orderCount, avgOrder },
+  insight: response.content[0].text
+});
 
   } catch (error) {
     console.error('每日AI分析失敗:', error);
