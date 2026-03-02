@@ -239,6 +239,79 @@ app.post('/api/pickup/auto-complete', async (req, res) => {
 const posSyncRouter = require('./pos-sync');
 app.use('/api/pos-sync', posSyncRouter);
 
+// POS 收款自動同步
+app.post('/api/pos/payment-notify', async (req, res) => {
+  try {
+    const { date, time, customerName, amount, paymentMethod, orderId } = req.body;
+    if (!amount || parseFloat(amount) <= 0) return res.json({ success: false, error: '金額無效' });
+
+    const { google } = require('googleapis');
+    const auth = googleAuth.getOAuth2Client();
+    const sheets = google.sheets({ version: 'v4', auth });
+    const spreadsheetId = process.env.GOOGLE_SHEETS_ID_CUSTOMER;
+
+    // 防止重複
+    const existing = await sheets.spreadsheets.values.get({ spreadsheetId, range: `'收款紀錄'!A:G` });
+    const rows = existing.data.values || [];
+    if (orderId && rows.some(r => r[6] && r[6].includes(orderId))) {
+      return res.json({ success: true, message: '已存在' });
+    }
+
+    await sheets.spreadsheets.values.append({
+      spreadsheetId,
+      range: `'收款紀錄'!A:G`,
+      valueInputOption: 'USER_ENTERED',
+      resource: { values: [[date, time, customerName || '未知', '', parseFloat(amount), paymentMethod || '其他', orderId || '']] }
+    });
+
+    console.log(`✅ POS收款同步：${customerName} NT$${amount} ${paymentMethod}`);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('POS收款錯誤:', error);
+    res.json({ success: false, error: error.message });
+  }
+});
+
+// 查詢收款統計
+app.get('/api/pos/payment-summary', async (req, res) => {
+  try {
+    const { month } = req.query;
+    const { google } = require('googleapis');
+    const auth = googleAuth.getOAuth2Client();
+    const sheets = google.sheets({ version: 'v4', auth });
+    const spreadsheetId = process.env.GOOGLE_SHEETS_ID_CUSTOMER;
+
+    const response = await sheets.spreadsheets.values.get({ spreadsheetId, range: `'收款紀錄'!A:G` });
+    const rows = (response.data.values || []).slice(1);
+
+    const records = [];
+    const methodTotals = {};
+    const dailyTotals = {};
+    let totalCollected = 0;
+
+    rows.forEach(row => {
+      if (month) {
+        const [y, m] = month.split('-');
+        if (!row[0] || !row[0].includes(y) || !row[0].includes(m.padStart(2,'0'))) return;
+      }
+      const amount = parseFloat(row[4] || 0);
+      const method = row[5] || '其他';
+      const dayKey = (row[0] || '').replace(/\//g, '-').substring(0, 10);
+
+      records.push({ date: row[0], time: row[1], customerName: row[2], amount, paymentMethod: method });
+      methodTotals[method] = (methodTotals[method] || 0) + amount;
+      dailyTotals[dayKey] = (dailyTotals[dayKey] || 0) + amount;
+      totalCollected += amount;
+    });
+
+    const dailyArray = Object.entries(dailyTotals).map(([date, amount]) => ({ date, amount })).sort((a, b) => a.date.localeCompare(b.date));
+
+    res.json({ success: true, records: records.reverse(), summary: { totalCollected, methodTotals, dailyTotals: dailyArray, count: records.length } });
+  } catch (error) {
+    res.json({ success: false, error: error.message, records: [], summary: {} });
+  }
+});
+
 // ====== LINE Client ======
 const client = new Client({
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
