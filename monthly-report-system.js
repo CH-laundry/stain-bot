@@ -83,9 +83,12 @@ async function fetchOrderData() {
 
 // ==================== 分析月度數據 ====================
 function analyzeMonthlyData(orders) {
-  const now = new Date();
-  const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  const lastMonth = `${now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear()}-${String(now.getMonth() === 0 ? 12 : now.getMonth()).padStart(2, '0')}`;
+ const now = new Date();
+// 月報報告「上個月」，對比「上上個月」
+const reportDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+const compareDate = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+const thisMonth = `${reportDate.getFullYear()}-${String(reportDate.getMonth() + 1).padStart(2, '0')}`;
+const lastMonth = `${compareDate.getFullYear()}-${String(compareDate.getMonth() + 1).padStart(2, '0')}`;
   
   // 本月數據
   const thisMonthOrders = orders.filter(o => o.date.startsWith(thisMonth));
