@@ -3608,6 +3608,7 @@ function displayRevenueReport(data) {
   html += '<th style="padding:12px; text-align:right;">營業額</th>';
   html += '<th style="padding:12px; text-align:right;">訂單數</th>';
   html += '<th style="padding:12px; text-align:right;">日均單價</th>';
+  html += '<th style="padding:12px; text-align:center;">AI 分析</th>';
   html += '</tr></thead><tbody>';
 
   // 🌟 定義星期幾
@@ -3628,10 +3629,11 @@ function displayRevenueReport(data) {
     var avgPrice = orders > 0 ? Math.round(amount / orders) : 0;
     
     html += '<tr style="background:' + bgColor + '; border-bottom:1px solid #e0e0e0;">';
-   html += '<td style="padding:12px;">' + dateStr + weekday + '</td>';
+    html += '<td style="padding:12px;">' + dateStr + weekday + '</td>';
     html += '<td style="padding:12px; text-align:right; font-weight:600; color:#667eea;">NT$ ' + amount.toLocaleString() + '</td>';
     html += '<td style="padding:12px; text-align:right;">' + orders + ' 筆</td>';
     html += '<td style="padding:12px; text-align:right; color:#999;">NT$ ' + avgPrice.toLocaleString() + '</td>';
+    html += '<td style="padding:12px; text-align:center;"><button onclick="showDailyInsight(\'' + day.date + '\',' + day.amount + ',' + day.orders + ')" style="padding:6px 12px; background:#667eea; color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:13px;">🤖 分析</button></td>';
     html += '</tr>';
   });
   
@@ -3988,5 +3990,41 @@ async function deleteStainPhoto() {
 }
 
  </script>
+  <!-- 🤖 AI 每日分析 Modal -->
+<div id="aiInsightModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:9999; padding:20px; overflow:auto;">
+  <div style="background:#fff; max-width:600px; margin:50px auto; border-radius:20px; padding:30px; position:relative;">
+    <button onclick="document.getElementById('aiInsightModal').style.display='none'" style="position:absolute; top:15px; right:15px; background:#dc3545; color:#fff; border:none; padding:8px 15px; border-radius:5px; cursor:pointer;">✕</button>
+    <h3 style="color:#667eea; margin-bottom:5px;">🤖 AI 市場分析報告</h3>
+    <div id="aiInsightDate" style="color:#999; font-size:14px; margin-bottom:20px;"></div>
+    <div id="aiInsightStats" style="display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:20px;"></div>
+    <div id="aiInsightContent" style="background:#f8f9fa; padding:20px; border-radius:10px; line-height:1.8; white-space:pre-wrap; font-size:14px; color:#333;">載入中...</div>
+  </div>
+</div>
+
+<script>
+async function showDailyInsight(date, revenue, orders) {
+  document.getElementById('aiInsightModal').style.display = 'block';
+  document.getElementById('aiInsightDate').textContent = date;
+  document.getElementById('aiInsightContent').textContent = '⏳ 分析師正在分析中，請稍候...';
+  
+  var avg = orders > 0 ? Math.round(revenue / orders) : 0;
+  document.getElementById('aiInsightStats').innerHTML =
+    '<div style="background:#f0f4ff;padding:12px;border-radius:8px;text-align:center;"><div style="font-size:20px;font-weight:bold;color:#667eea;">NT$'+revenue.toLocaleString()+'</div><div style="font-size:12px;color:#666;">當日營收</div></div>' +
+    '<div style="background:#e7f0ff;padding:12px;border-radius:8px;text-align:center;"><div style="font-size:20px;font-weight:bold;color:#1890ff;">'+orders+'筆</div><div style="font-size:12px;color:#666;">訂單數</div></div>' +
+    '<div style="background:#d4edda;padding:12px;border-radius:8px;text-align:center;"><div style="font-size:20px;font-weight:bold;color:#28a745;">NT$'+avg.toLocaleString()+'</div><div style="font-size:12px;color:#666;">客單價</div></div>';
+
+  try {
+    var res = await fetch('/api/daily-ai-insight?date=' + encodeURIComponent(date));
+    var data = await res.json();
+    if (data.success) {
+      document.getElementById('aiInsightContent').textContent = data.insight;
+    } else {
+      document.getElementById('aiInsightContent').textContent = '❌ 分析失敗：' + (data.error || '未知錯誤');
+    }
+  } catch(e) {
+    document.getElementById('aiInsightContent').textContent = '❌ 連線失敗：' + e.message;
+  }
+}
+</script>
 </body>
 </html>
