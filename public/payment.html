@@ -67,6 +67,7 @@
       .message-templates{grid-template-columns:1fr}
     }
   </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
   <div class="container">
@@ -752,7 +753,22 @@
     </div>
     <button onclick="loadPaymentRecordsList()" style="padding:8px 20px; background:#667eea; color:white; border:none; border-radius:6px; cursor:pointer;">🔍 查詢</button>
   </div>
+  <!-- 統計卡片 -->
   <div id="paymentRecordsSummary" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:15px; margin-bottom:20px;"></div>
+  <!-- 圖表區 -->
+  <div id="paymentChartsArea" style="display:none;">
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:20px;">
+      <div style="background:#f8f9fa; padding:20px; border-radius:10px;">
+        <h4 style="color:#667eea; margin-bottom:15px;">🥧 收款方式比例</h4>
+        <canvas id="pieChart" width="300" height="300"></canvas>
+      </div>
+      <div style="background:#f8f9fa; padding:20px; border-radius:10px;">
+        <h4 style="color:#667eea; margin-bottom:15px;">📊 每日收款金額</h4>
+        <canvas id="barChart" width="300" height="300"></canvas>
+      </div>
+    </div>
+  </div>
+  <!-- 明細列表 -->
   <div id="paymentRecordsList"><p style="text-align:center; color:#999;">請選擇月份後點擊查詢</p></div>
 </div>
 
@@ -3908,7 +3924,7 @@ async function deleteStainPhoto() {
 }
 
 
-    async function loadPaymentRecordsList() {
+   async function loadPaymentRecordsList() {
   var month = document.getElementById('paymentRecordsMonth').value;
   if (!month) { alert('請選擇月份'); return; }
   try {
@@ -3918,17 +3934,47 @@ async function deleteStainPhoto() {
     var summary = data.summary || {};
     var records = data.records || [];
 
-    // 顯示統計
-    var summaryHtml = '';
+    // 統計卡片
     var methodColors = { '現金':'#28a745', '儲值卡':'#667eea', '信用卡':'#1890ff', '其他':'#999' };
-    summaryHtml += '<div style="background:#fff3cd;padding:15px;border-radius:10px;text-align:center;"><div style="font-size:24px;font-weight:bold;color:#fd7e14;">NT$ ' + (summary.totalCollected||0).toLocaleString() + '</div><div style="color:#666;">本月總收款</div></div>';
+    var summaryHtml = '<div style="background:#fff3cd;padding:15px;border-radius:10px;text-align:center;"><div style="font-size:24px;font-weight:bold;color:#fd7e14;">NT$ ' + (summary.totalCollected||0).toLocaleString() + '</div><div style="color:#666;">本月總收款</div></div>';
     for (var m in (summary.methodTotals||{})) {
       var color = methodColors[m] || '#999';
       summaryHtml += '<div style="background:#f8f9fa;padding:15px;border-radius:10px;text-align:center;"><div style="font-size:20px;font-weight:bold;color:'+color+';">NT$ '+summary.methodTotals[m].toLocaleString()+'</div><div style="color:#666;">'+m+'</div></div>';
     }
     document.getElementById('paymentRecordsSummary').innerHTML = summaryHtml;
 
-    // 顯示明細
+    // 顯示圖表區
+    document.getElementById('paymentChartsArea').style.display = 'block';
+
+    // 圓餅圖（收款方式比例）
+    var pieCtx = document.getElementById('pieChart').getContext('2d');
+    if (window._pieChart) window._pieChart.destroy();
+    var methodLabels = Object.keys(summary.methodTotals || {});
+    var methodValues = methodLabels.map(function(k) { return summary.methodTotals[k]; });
+    var pieColors = methodLabels.map(function(k) { return methodColors[k] || '#ccc'; });
+    window._pieChart = new Chart(pieCtx, {
+      type: 'pie',
+      data: { labels: methodLabels, datasets: [{ data: methodValues, backgroundColor: pieColors }] },
+      options: { responsive: false, plugins: { legend: { position: 'bottom' } } }
+    });
+
+    // 長條圖（每日收款）
+    var dailyMap = {};
+    records.forEach(function(r) { dailyMap[r.date] = (dailyMap[r.date]||0) + r.amount; });
+    var dailyDates = Object.keys(dailyMap).sort();
+    var dailyAmounts = dailyDates.map(function(d) { return dailyMap[d]; });
+    var barCtx = document.getElementById('barChart').getContext('2d');
+    if (window._barChart) window._barChart.destroy();
+    window._barChart = new Chart(barCtx, {
+      type: 'bar',
+      data: {
+        labels: dailyDates.map(function(d) { return d.substring(5); }),
+        datasets: [{ label: '收款金額', data: dailyAmounts, backgroundColor: '#667eea' }]
+      },
+      options: { responsive: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+    });
+
+    // 明細列表
     if (records.length === 0) { document.getElementById('paymentRecordsList').innerHTML = '<p style="text-align:center;color:#999;">此月份沒有收款紀錄</p>'; return; }
     var html = '<table style="width:100%;border-collapse:collapse;">';
     html += '<tr style="background:#667eea;color:white;"><th style="padding:10px;">日期</th><th>時間</th><th>客戶</th><th>金額</th><th>方式</th></tr>';
