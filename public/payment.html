@@ -767,6 +767,10 @@
       <div style="font-size:32px; font-weight:bold; color:#28a745;" id="totalOrders">-</div>
       <div style="font-size:14px; color:#666; margin-top:5px;">總訂單數</div>
     </div>
+    <div style="background:#fff3cd; padding:20px; border-radius:10px; text-align:center;">
+      <div style="font-size:32px; font-weight:bold; color:#fd7e14;" id="actualCollected">-</div>
+      <div style="font-size:14px; color:#666; margin-top:5px;">實際已收款（POS）</div>
+    </div>
   </div>
 
   <!-- 每日營業額列表 -->
@@ -3542,6 +3546,7 @@ async function loadRevenueReport() {
     
     currentRevenueData = data;
     displayRevenueReport(data);
+    loadPaymentRecords();
     
   } catch (e) {
     wrap.innerHTML = '<p style="text-align:center; color:#dc3545;">載入失敗：' + e.message + '</p>';
@@ -3871,6 +3876,19 @@ async function deleteStainPhoto() {
   } catch (error) {
     showResult('error', '❌ 連線失敗:' + error.message);
   }
+}
+
+    async function loadPaymentRecords() {
+  var monthInput = document.getElementById('revenueMonth').value;
+  try {
+    var url = '/api/pos/payment-summary' + (monthInput ? '?month=' + encodeURIComponent(monthInput) : '');
+    var res = await fetch(url);
+    var data = await res.json();
+    if (!data.success) return;
+    var summary = data.summary || {};
+    var el = document.getElementById('actualCollected');
+    if (el) el.textContent = 'NT$ ' + (summary.totalCollected || 0).toLocaleString();
+  } catch(e) { console.error(e); }
 }
 
  </script>
