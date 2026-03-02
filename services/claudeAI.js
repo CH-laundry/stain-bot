@@ -2127,27 +2127,29 @@ const isPickupIntent = (
 
 if (isPickupIntent && userId) {
   let pickupReply = '';
+  const addressMatch = userMessage.match(/地址：\s*(.+)/);
+const fullAddress = addressMatch ? addressMatch[1].trim() : '';
 
   const isBanqiao = /板橋/.test(userMessage);
   const hasUrgentKeyword = /等會|等一下|今天|現在|馬上|立刻/.test(userMessage);
   const isOtherArea = /中和|新莊|土城|永和|萬華/.test(userMessage);
 
   if (isSaturday) {
-    pickupReply = '因為週六固定公休，我們週日會去收回的 💙';
+    pickupReply = '因為週六固定公休，我們週日會去收回的 💙' + (fullAddress ? `\n地址：${fullAddress}` : '');
   } else if (isTomorrowSaturday) {
     if (isBanqiao && hasUrgentKeyword) {
-      pickupReply = '好的 💙 我們會去收回的，謝謝您';
+      pickupReply = '好的 💙 我們會去收回的，謝謝您' + (fullAddress ? `\n地址：${fullAddress}` : '');
     } else {
-      pickupReply = '因為週六固定公休，我們週日會去收回的 💙';
+      pickupReply = '因為週六固定公休，我們週日會去收回的 💙' + (fullAddress ? `\n地址：${fullAddress}` : '');
     }
   } else if (isOtherArea) {
-    pickupReply = '好的 💙 明天我們會去收回的，謝謝您';
+    pickupReply = '好的 💙 明天我們會去收回的，謝謝您' + (fullAddress ? `\n地址：${fullAddress}` : '');
   } else if (isBanqiao && hasUrgentKeyword) {
-    pickupReply = '好的 💙 我們會去收回的，謝謝您';
+    pickupReply = '好的 💙 我們會去收回的，謝謝您' + (fullAddress ? `\n地址：${fullAddress}` : '');
   } else if (isBanqiao) {
-    pickupReply = '好的 💙 明天我們會去收回的，謝謝您';
+    pickupReply = '好的 💙 明天我們會去收回的，謝謝您' + (fullAddress ? `\n地址：${fullAddress}` : '');
   } else {
-    pickupReply = '好的 💙 明天我們會去收回的，謝謝您';
+    pickupReply = '好的 💙 明天我們會去收回的，謝謝您' + (fullAddress ? `\n地址：${fullAddress}` : '');
   }
 
   console.log('📋 收件硬決策直出:', pickupReply);
