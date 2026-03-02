@@ -1146,6 +1146,24 @@ async function handleLinePayConfirm(transactionId, orderId, parentOrderId) {
       orderManager.updateOrderStatus(order.orderId, 'paid', 'LINE Pay');
       logger.logToFile(`[LINEPAY][SUCCESS] ${order.orderId} 付款成功`);
 
+      // 寫入收款紀錄
+try {
+  const { google } = require('googleapis');
+  const googleAuth = require('./services/googleAuth');
+  const auth = googleAuth.getOAuth2Client();
+  const sheets = google.sheets({ version: 'v4', auth });
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei' }).replace(/\//g, '/');
+  const timeStr = now.toLocaleTimeString('zh-TW', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit' });
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: process.env.GOOGLE_SHEETS_ID_CUSTOMER,
+    range: `'收款紀錄'!A:G`,
+    valueInputOption: 'USER_ENTERED',
+    resource: { values: [[dateStr, timeStr, order.userName || '未知', '', parseFloat(order.amount), 'LINE Pay', order.orderId]] }
+  });
+  console.log(`✅ LINE Pay 收款紀錄已寫入`);
+} catch(e) { console.error('寫入收款紀錄失敗:', e.message); }
+
     // 🔥🔥🔥 【請貼在這裡：LINE Pay 成功後加入同步清單】 🔥🔥🔥
     if (global.pendingSyncOrders) {
          global.pendingSyncOrders.push({
@@ -1242,6 +1260,24 @@ app.all('/payment/ecpay/callback', async (req, res) => {
       ) {
         orderManager.updateOrderStatus(oid, 'paid', 'ECPay');
         logger.logToFile(`[ECPAY][UPDATE] 訂單 ${oid} 狀態更新為已付款`);
+
+        // 寫入收款紀錄
+try {
+  const { google } = require('googleapis');
+  const googleAuth = require('./services/googleAuth');
+  const auth = googleAuth.getOAuth2Client();
+  const sheets = google.sheets({ version: 'v4', auth });
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei' }).replace(/\//g, '/');
+  const timeStr = now.toLocaleTimeString('zh-TW', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit' });
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: process.env.GOOGLE_SHEETS_ID_CUSTOMER,
+    range: `'收款紀錄'!A:G`,
+    valueInputOption: 'USER_ENTERED',
+    resource: { values: [[dateStr, timeStr, userName || '未知', '', parseFloat(Number(data.TradeAmt || data.Amount || 0)), '信用卡', oid]] }
+  });
+  console.log(`✅ ECPay 收款紀錄已寫入`);
+} catch(e) { console.error('寫入收款紀錄失敗:', e.message); }
 
         // 🔥 通知店裡電腦 (同步清單)
         if (global.pendingSyncOrders) {
