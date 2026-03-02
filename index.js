@@ -3224,14 +3224,35 @@ app.get('/api/daily-ai-insight', async (req, res) => {
     const { date } = req.query;
     if (!date) return res.status(400).json({ error: '缺少日期參數' });
 
-    const { fetchOrderData } = require('./monthly-report-system');
-    const orders = await fetchOrderData();
+    const { google } = require('googleapis');
+const googleAuth = require('./services/googleAuth');
+const auth = googleAuth.getOAuth2Client();
+const sheets = google.sheets({ version: 'v4', auth });
+const spreadsheetId = process.env.GOOGLE_SHEETS_ID_CUSTOMER;
 
-    const dayOrders = orders.filter(o => o.date.startsWith(date));
-    const revenue = dayOrders.reduce((sum, o) => sum + o.amount, 0);
-    const orderCount = dayOrders.length;
-    const avgOrder = orderCount > 0 ? Math.round(revenue / orderCount) : 0;
-    const topItems = [...new Set(dayOrders.map(o => o.itemName))].slice(0, 5).join('、') || '無';
+const sheetInfo = await sheets.spreadsheets.get({ spreadsheetId, fields: 'sheets.properties' });
+const targetSheet = sheetInfo.data.sheets.find(s => s.properties.sheetId === 756780563);
+if (!targetSheet) return res.status(500).json({ error: '找不到營業紀錄工作表' });
+
+const response = await sheets.spreadsheets.values.get({
+  spreadsheetId,
+  range: `'${targetSheet.properties.title}'!A:I`
+});
+
+const rows = (response.data.values || []).slice(1);
+const dayRows = rows.filter(row => {
+  if (!row[0]) return false;
+  const d = row[0].toString().replace(/\//g, '-').substring(0, 10);
+  return d === date;
+});
+
+const revenue = dayRows.reduce((sum, row) => {
+  const cleaned = String(row[8] || '0').replace(/[^0-9]/g, '');
+  return sum + (parseInt(cleaned, 10) || 0);
+}, 0);
+const orderCount = dayRows.length;
+const avgOrder = orderCount > 0 ? Math.round(revenue / orderCount) : 0;
+const topItems = '精緻洗衣服務';
 
     const Anthropic = require('@anthropic-ai/sdk');
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
