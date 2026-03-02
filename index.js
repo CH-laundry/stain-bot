@@ -3218,6 +3218,51 @@ cron.schedule('0 9 1 * *', async () => {
 
 console.log('📊 月度營收報告排程已啟動 (每月 1 號 09:00)');
 
+// 每日 AI 深度分析
+app.get('/api/daily-ai-insight', async (req, res) => {
+  try {
+    const { date } = req.query;
+    if (!date) return res.status(400).json({ error: '缺少日期參數' });
+
+    const { fetchOrderData } = require('./monthly-report-system');
+    const orders = await fetchOrderData();
+
+    const dayOrders = orders.filter(o => o.date.startsWith(date));
+    const revenue = dayOrders.reduce((sum, o) => sum + o.amount, 0);
+    const orderCount = dayOrders.length;
+    const avgOrder = orderCount > 0 ? Math.round(revenue / orderCount) : 0;
+    const topItems = [...new Set(dayOrders.map(o => o.itemName))].slice(0, 5).join('、') || '無';
+
+    const { OpenAI } = require('openai');
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [{
+        role: 'user',
+        content: `你是 C.H 精緻洗衣的營運顧問，分析 ${date} 當天數據：
+營收: NT$${revenue}，訂單: ${orderCount} 單，客單價: NT$${avgOrder}，熱門項目: ${topItems}
+請用繁體中文回答：
+1. 當天表現評估
+2. 值得注意的地方
+3. 明天可改善的具體建議`
+      }],
+      max_tokens: 400
+    });
+
+    res.json({
+      success: true,
+      date,
+      stats: { revenue, orderCount, avgOrder },
+      insight: response.choices[0].message.content
+    });
+
+  } catch (error) {
+    console.error('每日AI分析失敗:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ========================================
 
 
