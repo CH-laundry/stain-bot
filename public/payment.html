@@ -89,6 +89,7 @@
       <button class="tab" onclick="switchTab(event,'revenue')">📊 營業報表</button>
       <button class="tab" onclick="switchTab(event,'startup')">🚀 系統啟動</button>
       <button class="tab" onclick="switchTab(event,'stain-photo')">📸 污漬拍照</button>
+      <button class="tab" onclick="switchTab(event,'payment-records')">💰 收款紀錄</button>
       
     </div>
 
@@ -739,6 +740,20 @@
   <div id="pickupScheduleList">
     <p style="text-align:center; color:#999;">尚未載入，請點「重新整理」。</p>
   </div>
+</div>
+
+  <!-- 💰 收款紀錄分頁 -->
+<div id="payment-records-tab" class="tab-content">
+  <h3 style="color:#667eea; margin-bottom:20px;">💰 收款紀錄</h3>
+  <div style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap; align-items:flex-end;">
+    <div>
+      <label style="display:block; margin-bottom:5px;">選擇月份</label>
+      <input type="month" id="paymentRecordsMonth" style="padding:8px; border:1px solid #ddd; border-radius:6px;">
+    </div>
+    <button onclick="loadPaymentRecordsList()" style="padding:8px 20px; background:#667eea; color:white; border:none; border-radius:6px; cursor:pointer;">🔍 查詢</button>
+  </div>
+  <div id="paymentRecordsSummary" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:15px; margin-bottom:20px;"></div>
+  <div id="paymentRecordsList"><p style="text-align:center; color:#999;">請選擇月份後點擊查詢</p></div>
 </div>
 
   <!-- 📊 營業報表分頁 -->
@@ -3888,6 +3903,40 @@ async function deleteStainPhoto() {
     var summary = data.summary || {};
     var el = document.getElementById('actualCollected');
     if (el) el.textContent = 'NT$ ' + (summary.totalCollected || 0).toLocaleString();
+  } catch(e) { console.error(e); }
+}
+
+
+    async function loadPaymentRecordsList() {
+  var month = document.getElementById('paymentRecordsMonth').value;
+  if (!month) { alert('請選擇月份'); return; }
+  try {
+    var res = await fetch('/api/pos/payment-summary?month=' + month);
+    var data = await res.json();
+    if (!data.success) return;
+    var summary = data.summary || {};
+    var records = data.records || [];
+
+    // 顯示統計
+    var summaryHtml = '';
+    var methodColors = { '現金':'#28a745', '儲值卡':'#667eea', '信用卡':'#1890ff', '其他':'#999' };
+    summaryHtml += '<div style="background:#fff3cd;padding:15px;border-radius:10px;text-align:center;"><div style="font-size:24px;font-weight:bold;color:#fd7e14;">NT$ ' + (summary.totalCollected||0).toLocaleString() + '</div><div style="color:#666;">本月總收款</div></div>';
+    for (var m in (summary.methodTotals||{})) {
+      var color = methodColors[m] || '#999';
+      summaryHtml += '<div style="background:#f8f9fa;padding:15px;border-radius:10px;text-align:center;"><div style="font-size:20px;font-weight:bold;color:'+color+';">NT$ '+summary.methodTotals[m].toLocaleString()+'</div><div style="color:#666;">'+m+'</div></div>';
+    }
+    document.getElementById('paymentRecordsSummary').innerHTML = summaryHtml;
+
+    // 顯示明細
+    if (records.length === 0) { document.getElementById('paymentRecordsList').innerHTML = '<p style="text-align:center;color:#999;">此月份沒有收款紀錄</p>'; return; }
+    var html = '<table style="width:100%;border-collapse:collapse;">';
+    html += '<tr style="background:#667eea;color:white;"><th style="padding:10px;">日期</th><th>時間</th><th>客戶</th><th>金額</th><th>方式</th></tr>';
+    records.forEach(function(r, i) {
+      var bg = i%2===0 ? '#fff' : '#f8f9fa';
+      html += '<tr style="background:'+bg+';"><td style="padding:8px;text-align:center;">'+r.date+'</td><td style="text-align:center;">'+r.time+'</td><td style="text-align:center;">'+(r.customerName||'-')+'</td><td style="text-align:center;font-weight:bold;">NT$ '+r.amount.toLocaleString()+'</td><td style="text-align:center;">'+r.paymentMethod+'</td></tr>';
+    });
+    html += '</table>';
+    document.getElementById('paymentRecordsList').innerHTML = html;
   } catch(e) { console.error(e); }
 }
 
