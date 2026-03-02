@@ -3257,7 +3257,7 @@ const topItems = '精緻洗衣服務';
     const Anthropic = require('@anthropic-ai/sdk');
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-const response = await anthropic.messages.create({
+const aiResponse = await anthropic.messages.create({
   model: 'claude-opus-4-5',
   max_tokens: 600,
   messages: [{
@@ -3283,7 +3283,7 @@ res.json({
   success: true,
   date,
   stats: { revenue, orderCount, avgOrder },
-  insight: response.content[0].text
+ insight: aiResponse.content[0].text
 });
 
   } catch (error) {
