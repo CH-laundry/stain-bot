@@ -3797,11 +3797,25 @@ function compressImage(base64, maxSize = 30000) {
 
     
 
+    // 儲存照片（帶壓縮功能）
+async function saveStainPhoto() {
+  if (!currentPhotoData) {
+    alert('請先拍照');
+    return;
+  }
+  
+  var note = document.getElementById('photoNote').value.trim();
+  
+  try {
+    // 🔥 壓縮照片
+    const compressedPhoto = await compressImage(currentPhotoData.photoBase64, 30000);
+    console.log('原始大小:', currentPhotoData.photoBase64.length, '壓縮後:', compressedPhoto.length);
+    
     var res = await fetch('/api/stain-photos', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        photoBase64: currentPhotoData.photoBase64,
+        photoBase64: compressedPhoto,  // 🔥 使用壓縮後的照片
         thumbnailBase64: currentPhotoData.thumbnailBase64,
         note: note,
         orderId: ''
