@@ -3761,7 +3761,7 @@ function cancelPhoto() {
 }
 
 // 🔥🔥🔥 加入這段：壓縮照片函數 🔥🔥🔥
-function compressImage(base64, maxSize = 200000) {  // 200KB
+function compressImage(base64, maxSize = 30000) {
   return new Promise((resolve) => {
     const img = new Image();
     img.onload = function() {
@@ -3769,12 +3769,12 @@ function compressImage(base64, maxSize = 200000) {  // 200KB
       let width = img.width;
       let height = img.height;
       
-      let quality = 0.9;  // 更高品質
+      let quality = 0.6;
+      const targetSize = maxSize * 0.75;
       
-      // 幾乎不壓縮尺寸
-      if (width > 2000) {
-        height = (2000 / width) * height;
-        width = 2000;
+      if (width > 800) {
+        height = (800 / width) * height;
+        width = 800;
       }
       
       canvas.width = width;
@@ -3783,10 +3783,8 @@ function compressImage(base64, maxSize = 200000) {  // 200KB
       ctx.drawImage(img, 0, 0, width, height);
       
       let compressed = canvas.toDataURL('image/jpeg', quality);
-      
-      // 只在超過 200KB 時才壓縮
-      while (compressed.length > maxSize && quality > 0.7) {
-        quality -= 0.05;
+      while (compressed.length > targetSize && quality > 0.1) {
+        quality -= 0.1;
         compressed = canvas.toDataURL('image/jpeg', quality);
       }
       
@@ -3810,7 +3808,7 @@ async function saveStainPhoto() {
   
   try {
     // 🔥 壓縮照片
-    const compressedPhoto = await compressImage(currentPhotoData.photoBase64, 200000);  // ⭐ 改成 200KB
+    const compressedPhoto = await compressImage(currentPhotoData.photoBase64, 30000);
     console.log('原始大小:', currentPhotoData.photoBase64.length, '壓縮後:', compressedPhoto.length);
     
     var res = await fetch('/api/stain-photos', {
@@ -3931,13 +3929,8 @@ async function updatePhotoNote() {
 }
 
 // 刪除污漬照片 (修復版)
-// 刪除污漬照片（修復版）
 async function deleteStainPhoto() {
-  if (!currentPhotoId) {
-    alert('無法取得照片 ID');
-    return;
-  }
-  
+  if (!currentPhotoId) return;
   if (!confirm('確定要刪除此照片？')) return;
   
   try {
@@ -3950,12 +3943,13 @@ async function deleteStainPhoto() {
     if (data.success) {
       showResult('success', '✅ 照片已刪除');
       closePhotoDetail();
-      loadStainPhotos();  // 重新載入照片列表
+      // 🔥🔥🔥 刪除後自動重新載入照片列表
+      loadStainPhotos();
     } else {
-      showResult('error', '❌ 刪除失敗: ' + (data.error || '未知錯誤'));
+      showResult('error', '❌ 刪除失敗:' + (data.error || '未知錯誤'));
     }
   } catch (error) {
-    showResult('error', '❌ 連線失敗: ' + error.message);
+    showResult('error', '❌ 連線失敗:' + error.message);
   }
 }
 
