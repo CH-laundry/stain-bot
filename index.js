@@ -3328,7 +3328,7 @@ app.post('/api/stain-photos', async (req, res) => {
     const driveResponse = await drive.files.create({
       requestBody: {
         name: photoId + '.jpg',
-        mimeType: 'image/jpeg'
+        mimeType: 'image/jpeg',
         parents: ['1_hKq0VHfWbeK1uiQCF6X76pMNxzr42ed']
       },
       media: {
