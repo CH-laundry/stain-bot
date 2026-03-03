@@ -3843,6 +3843,35 @@ async function saveStainPhoto() {
   var note = document.getElementById('photoNote').value.trim();
   
   try {
+
+    // 🔥 新增：壓縮照片
+    const compressedPhoto = await compressImage(currentPhotoData.photoBase64, 30000);
+    console.log('原始大小:', currentPhotoData.photoBase64.length, '壓縮後:', compressedPhoto.length);
+    
+    var res = await fetch('/api/stain-photos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        photoBase64: compressedPhoto,  // 🔥 改這裡：使用壓縮後的照片
+        thumbnailBase64: currentPhotoData.thumbnailBase64,
+        note: note,
+        orderId: ''
+      })
+    });
+    
+    var data = await res.json();
+    
+    if (data.success) {
+      showResult('success', '✅ 照片已儲存');
+      cancelPhoto();
+      loadStainPhotos();
+    } else {
+      showResult('error', '❌ 儲存失敗:' + (data.error || '未知錯誤'));
+    }
+  } catch (error) {
+    showResult('error', '❌ 連線失敗:' + error.message);
+  }
+}
     var res = await fetch('/api/stain-photos', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
