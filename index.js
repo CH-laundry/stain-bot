@@ -3329,6 +3329,7 @@ app.post('/api/stain-photos', async (req, res) => {
       requestBody: {
         name: photoId + '.jpg',
         mimeType: 'image/jpeg'
+        parents: ['1_hKq0VHfWbeK1uiQCF6X76pMNxzr42ed']
       },
       media: {
         mimeType: 'image/jpeg',
