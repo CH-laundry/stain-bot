@@ -3296,6 +3296,7 @@ res.json({
 
 
 // 🔹 API 1: 上傳污漬照片 (改用 Google Drive) - 完整修復版
+// 🔹 API 1: 上傳污漬照片 (Base64 直接存 Sheets)
 app.post('/api/stain-photos', async (req, res) => {
   try {
     const { photoBase64, thumbnailBase64, note, orderId } = req.body;
@@ -3312,47 +3313,13 @@ app.post('/api/stain-photos', async (req, res) => {
     }
 
     const auth = googleAuth.getOAuth2Client();
-    const drive = google.drive({ version: 'v3', auth });
     const sheets = google.sheets({ version: 'v4', auth });
     const spreadsheetId = process.env.GOOGLE_SHEETS_ID_CUSTOMER;
 
     const photoId = 'STAIN_' + Date.now();
     const timestamp = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
 
-    // 🔥 上傳照片到 Google Drive
-    const buffer = Buffer.from(photoBase64.split(',')[1], 'base64');
-    const stream = require('stream');
-    const bufferStream = new stream.PassThrough();
-    bufferStream.end(buffer);
-
-    const driveResponse = await drive.files.create({
-      requestBody: {
-        name: photoId + '.jpg',
-        mimeType: 'image/jpeg',
-        parents: ['1_hKq0VHfWbeK1uiQCF6X76pMNxzr42ed']
-      },
-      media: {
-        mimeType: 'image/jpeg',
-        body: bufferStream
-      },
-      fields: 'id'
-    });
-
-    const fileId = driveResponse.data.id;
-
-    // 🔥🔥🔥 設定檔案為公開（這是關鍵！）
-    await drive.permissions.create({
-      fileId: fileId,
-      requestBody: {
-        role: 'reader',
-        type: 'anyone'
-      }
-    });
-
-    // 🔥 使用正確的圖片 URL 格式
-const imageUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
-
-    // 🔥 儲存到 Google Sheets
+    // 🔥 直接存 Base64，不上傳到 Drive
     await sheets.spreadsheets.values.append({
       spreadsheetId,
       range: '污漬照片!A:F',
@@ -3360,8 +3327,8 @@ const imageUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
       resource: {
         values: [[
           photoId,
-          fileId,
-          imageUrl,
+          '',  // fileId 留空
+          photoBase64,  // 直接存 Base64
           note || '',
           timestamp,
           orderId || ''
@@ -3369,12 +3336,12 @@ const imageUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
       }
     });
 
-    console.log(`✅ 污漬照片已上傳到 Drive: ${photoId}`);
+    console.log(`✅ 污漬照片已儲存: ${photoId}`);
     
     res.json({ 
       success: true, 
       photoId: photoId,
-      imageUrl: imageUrl,
+      imageUrl: photoBase64,
       message: '照片已儲存'
     });
 
@@ -3409,18 +3376,15 @@ app.get('/api/stain-photos', async (req, res) => {
     }
 
     const photos = rows.slice(1).map(row => {
-      const fileId = row[1] || '';
-      
-      return {
-  photoId: row[0] || '',
-  fileId: fileId,
-  // 🔥 使用 Google Drive 縮圖 API（最穩定）
-  imageUrl: fileId ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000` : '',
-  note: row[3] || '',
-  timestamp: row[4] || '',
-  orderId: row[5] || ''
-};
-    }).reverse();
+  return {
+    photoId: row[0] || '',
+    fileId: row[1] || '',
+    imageUrl: row[2] || '',  // 🔥 直接用 Base64
+    note: row[3] || '',
+    timestamp: row[4] || '',
+    orderId: row[5] || ''
+  };
+}).reverse();
 
     res.json({ success: true, photos: photos, total: photos.length });
 
