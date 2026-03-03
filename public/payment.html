@@ -3760,6 +3760,79 @@ function cancelPhoto() {
   currentPhotoData = null;
 }
 
+// 🔥🔥🔥 加入這段：壓縮照片函數 🔥🔥🔥
+function compressImage(base64, maxSize = 30000) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = function() {
+      const canvas = document.createElement('canvas');
+      let width = img.width;
+      let height = img.height;
+      
+      let quality = 0.6;
+      const targetSize = maxSize * 0.75;
+      
+      if (width > 800) {
+        height = (800 / width) * height;
+        width = 800;
+      }
+      
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      
+      let compressed = canvas.toDataURL('image/jpeg', quality);
+      while (compressed.length > targetSize && quality > 0.1) {
+        quality -= 0.1;
+        compressed = canvas.toDataURL('image/jpeg', quality);
+      }
+      
+      resolve(compressed);
+    };
+    img.src = base64;
+  });
+}
+
+// 🔥🔥🔥 加入這段：儲存照片函數 🔥🔥🔥
+async function saveStainPhoto() {
+  if (!currentPhotoData) {
+    alert('請先拍照');
+    return;
+  }
+  
+  var note = document.getElementById('photoNote').value.trim();
+  
+  try {
+    // 🔥 壓縮照片
+    const compressedPhoto = await compressImage(currentPhotoData.photoBase64, 30000);
+    console.log('原始大小:', currentPhotoData.photoBase64.length, '壓縮後:', compressedPhoto.length);
+    
+    var res = await fetch('/api/stain-photos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        photoBase64: compressedPhoto,  // 🔥 使用壓縮後的照片
+        thumbnailBase64: currentPhotoData.thumbnailBase64,
+        note: note,
+        orderId: ''
+      })
+    });
+    
+    var data = await res.json();
+    
+    if (data.success) {
+      showResult('success', '✅ 照片已儲存');
+      cancelPhoto();
+      loadStainPhotos();
+    } else {
+      showResult('error', '❌ 儲存失敗:' + (data.error || '未知錯誤'));
+    }
+  } catch (error) {
+    showResult('error', '❌ 連線失敗:' + error.message);
+  }
+}
+    
 // 儲存照片
 async function saveStainPhoto() {
   if (!currentPhotoData) {
