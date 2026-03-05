@@ -1728,7 +1728,7 @@ const MODEL_COSTS = {
     input: 3.00 / 1000000,   // $3.00 per million input tokens
     output: 15.00 / 1000000  // $15.00 per million output tokens
   },
-  'claude-3-5-haiku-20241022': {
+  'claude-haiku-4-5-20251001': {
     input: 0.80 / 1000000,   // $0.80 per million input tokens
     output: 4.00 / 1000000   // $4.00 per million output tokens
   }
@@ -2286,7 +2286,7 @@ console.log(`📜 對話記憶: ${history.length} 則歷史訊息`);
     // 選擇模型
     const modelToUse = isComplexQuestion 
       ? "claude-sonnet-4-20250514"  // 複雜問題用 Sonnet 4（準確率高）
-      : "claude-3-5-haiku-20241022"; // 簡單問題用 Haiku 3.5（便宜 95%）
+      : "claude-haiku-4-5-20251001"; // 簡單問題用 Haiku 3.5（便宜 95%）
     
     console.log(`🤖 使用模型: ${modelToUse} (${isComplexQuestion ? '複雜問題' : '簡單問題'})`);
     
