@@ -4020,6 +4020,7 @@ async function deleteStainPhoto() {
     // 明細列表
     if (records.length === 0) { document.getElementById('paymentRecordsList').innerHTML = '<p style="text-align:center;color:#999;">此月份沒有收款紀錄</p>'; return; }
     var html = '<table style="width:100%;border-collapse:collapse;">';
+    html = '<style>table td, table th { font-family: Arial, "Microsoft JhengHei", sans-serif; }</style>' + html;
     html += '<tr style="background:#667eea;color:white;"><th style="padding:10px;">日期</th><th>時間</th><th>客戶</th><th>金額</th><th>方式</th></tr>';
     records.forEach(function(r, i) {
       var bg = i%2===0 ? '#fff' : '#f8f9fa';
