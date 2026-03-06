@@ -292,7 +292,12 @@ app.get('/api/pos/payment-summary', async (req, res) => {
     rows.forEach(row => {
       if (month) {
         const [y, m] = month.split('-');
-        if (!row[0] || !row[0].includes(y) || !row[0].includes(m.padStart(2,'0'))) return;
+        if (!row[0]) return;
+const rowDate = row[0].toString().replace(/\//g, '-').split('-');
+if (rowDate.length < 3) return;
+const rowYear = rowDate[0];
+const rowMonth = rowDate[1].padStart(2, '0');
+if (rowYear !== y || rowMonth !== m.padStart(2, '0')) return;
       }
       const amount = parseFloat(row[4] || 0);
       const method = row[5] || '其他';
