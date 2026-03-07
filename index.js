@@ -239,6 +239,40 @@ app.post('/api/pickup/auto-complete', async (req, res) => {
 const posSyncRouter = require('./pos-sync');
 app.use('/api/pos-sync', posSyncRouter);
 
+app.delete('/api/pos/payment-record/:rowId', async (req, res) => {
+  try {
+    const { google } = require('googleapis');
+    const auth = googleAuth.getOAuth2Client();
+    const sheets = google.sheets({ version: 'v4', auth });
+    const spreadsheetId = process.env.GOOGLE_SHEETS_ID_CUSTOMER;
+    const range = `'收款紀錄'!A:G`;
+    const response = await sheets.spreadsheets.values.get({ spreadsheetId, range });
+    const rows = response.data.values || [];
+    const rowId = decodeURIComponent(req.params.rowId);
+    let targetRow = -1;
+    for (let i = 1; i < rows.length; i++) {
+      const r = rows[i];
+      if (r[6] && r[6] === rowId) { targetRow = i + 1; break; }
+      const composed = (r[0]||'') + '_' + (r[1]||'') + '_' + (i-1);
+      if (composed === rowId) { targetRow = i + 1; break; }
+    }
+    if (targetRow === -1) return res.json({ success: false, error: '找不到此紀錄' });
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [{
+          deleteDimension: {
+            range: { sheetId: 209427705, dimension: 'ROWS', startIndex: targetRow - 1, endIndex: targetRow }
+          }
+        }]
+      }
+    });
+    res.json({ success: true });
+  } catch(e) {
+    res.json({ success: false, error: e.message });
+  }
+});
+
 // POS 收款自動同步
 app.post('/api/pos/payment-notify', async (req, res) => {
   try {
