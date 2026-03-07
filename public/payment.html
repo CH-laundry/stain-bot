@@ -3995,10 +3995,48 @@ async function deleteStainPhoto() {
     var methodLabels = Object.keys(summary.methodTotals || {});
     var methodValues = methodLabels.map(function(k) { return summary.methodTotals[k]; });
     var pieColors = methodLabels.map(function(k) { return methodColors[k] || '#ccc'; });
+    var total = methodValues.reduce(function(a, b) { return a + b; }, 0);
     window._pieChart = new Chart(pieCtx, {
       type: 'pie',
       data: { labels: methodLabels, datasets: [{ data: methodValues, backgroundColor: pieColors }] },
-      options: { responsive: false, plugins: { legend: { position: 'bottom' } } }
+      options: {
+        responsive: false,
+        plugins: {
+          legend: { position: 'bottom' },
+          tooltip: {
+            callbacks: {
+              label: function(ctx) {
+                var val = ctx.parsed;
+                var pct = total > 0 ? Math.round(val / total * 100) : 0;
+                return ctx.label + ': NT$ ' + val.toLocaleString() + ' (' + pct + '%)';
+              }
+            }
+          },
+          datalabels: false
+        }
+      },
+      plugins: [{
+        id: 'pieLabels',
+        afterDatasetDraw: function(chart) {
+          var ctx2 = chart.ctx;
+          chart.data.datasets.forEach(function(dataset, i) {
+            var meta = chart.getDatasetMeta(i);
+            meta.data.forEach(function(arc, index) {
+              var val = dataset.data[index];
+              var pct = total > 0 ? Math.round(val / total * 100) : 0;
+              if (pct < 3) return;
+              var pos = arc.tooltipPosition();
+              ctx2.save();
+              ctx2.fillStyle = '#fff';
+              ctx2.font = 'bold 13px Arial';
+              ctx2.textAlign = 'center';
+              ctx2.textBaseline = 'middle';
+              ctx2.fillText(pct + '%', pos.x, pos.y);
+              ctx2.restore();
+            });
+          });
+        }
+      }]
     });
 
     // 長條圖（每日收款）
@@ -4021,16 +4059,32 @@ async function deleteStainPhoto() {
     if (records.length === 0) { document.getElementById('paymentRecordsList').innerHTML = '<p style="text-align:center;color:#999;">此月份沒有收款紀錄</p>'; return; }
     var html = '<table style="width:100%;border-collapse:collapse;">';
     html = '<style>table td, table th { font-family: Arial, "Microsoft JhengHei", sans-serif; }</style>' + html;
-    html += '<tr style="background:#667eea;color:white;"><th style="padding:10px;">日期</th><th>時間</th><th>客戶</th><th>金額</th><th>方式</th></tr>';
+    html += '<tr style="background:#667eea;color:white;"><th style="padding:10px;">日期</th><th>時間</th><th>客戶</th><th>金額</th><th>方式</th><th>操作</th></tr>';
     records.forEach(function(r, i) {
       var bg = i%2===0 ? '#fff' : '#f8f9fa';
-      html += '<tr style="background:'+bg+';"><td style="padding:8px;text-align:center;">'+r.date+'</td><td style="text-align:center;">'+r.time+'</td><td style="text-align:center;">'+(r.customerName||'-')+'</td><td style="text-align:center;font-weight:bold;">NT$ '+r.amount.toLocaleString()+'</td><td style="text-align:center;">'+r.paymentMethod+'</td></tr>';
+      var rowId = r.orderId || r.id || (r.date + '_' + r.time + '_' + i);
+      html += '<tr style="background:'+bg+';"><td style="padding:8px;text-align:center;">'+r.date+'</td><td style="text-align:center;">'+r.time+'</td><td style="text-align:center;">'+(r.customerName||'-')+'</td><td style="text-align:center;font-weight:bold;">NT$ '+r.amount.toLocaleString()+'</td><td style="text-align:center;">'+r.paymentMethod+'</td><td style="text-align:center;"><button onclick="deletePaymentRecord(\''+rowId+'\', \''+r.date+'\', \''+r.time+'\')" style="padding:4px 10px;background:#dc3545;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:12px;">🗑️</button></td></tr>';
     });
     html += '</table>';
     document.getElementById('paymentRecordsList').innerHTML = html;
   } catch(e) { console.error(e); }
 }
-
+async function deletePaymentRecord(rowId, date, time) {
+  if (!confirm('確定刪除此筆收款紀錄？\n日期：' + date + '\n時間：' + time)) return;
+  try {
+    var res = await fetch('/api/pos/payment-record/' + encodeURIComponent(rowId), { method: 'DELETE' });
+    var data = await res.json();
+    if (data.success) {
+      showResult('success', '✅ 已刪除');
+      loadPaymentRecordsList();
+    } else {
+      showResult('error', '❌ 刪除失敗：' + (data.error || '未知'));
+    }
+  } catch(e) {
+    showResult('error', '❌ 連線失敗：' + e.message);
+  }
+}
+    
  </script>
   <!-- 🤖 AI 每日分析 Modal -->
 <div id="aiInsightModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:9999; padding:20px; overflow:auto;">
