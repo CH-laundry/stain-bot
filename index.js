@@ -252,8 +252,10 @@ app.delete('/api/pos/payment-record/:rowId', async (req, res) => {
     let targetRow = -1;
     for (let i = 1; i < rows.length; i++) {
       const r = rows[i];
+      // 方法1: orderId 完全比對
       if (r[6] && r[6] === rowId) { targetRow = i + 1; break; }
-      const composed = (r[0]||'') + '_' + (r[1]||'') + '_' + (i-1);
+      // 方法2: date+time+amount 合併比對
+      const composed = (r[0]||'').trim() + '_' + (r[1]||'').trim() + '_' + (r[4]||'').toString().trim();
       if (composed === rowId) { targetRow = i + 1; break; }
     }
     if (targetRow === -1) return res.json({ success: false, error: '找不到此紀錄' });
