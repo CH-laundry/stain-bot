@@ -4062,7 +4062,7 @@ async function deleteStainPhoto() {
     html += '<tr style="background:#667eea;color:white;"><th style="padding:10px;">日期</th><th>時間</th><th>客戶</th><th>金額</th><th>方式</th><th>操作</th></tr>';
     records.forEach(function(r, i) {
       var bg = i%2===0 ? '#fff' : '#f8f9fa';
-      var rowId = r.orderId || r.id || (r.date + '_' + r.time + '_' + i);
+      var rowId = (r.orderId && r.orderId.trim()) ? r.orderId : (r.date + '_' + r.time + '_' + r.amount);
       html += '<tr style="background:'+bg+';"><td style="padding:8px;text-align:center;">'+r.date+'</td><td style="text-align:center;">'+r.time+'</td><td style="text-align:center;">'+(r.customerName||'-')+'</td><td style="text-align:center;font-weight:bold;">NT$ '+r.amount.toLocaleString()+'</td><td style="text-align:center;">'+r.paymentMethod+'</td><td style="text-align:center;"><button onclick="deletePaymentRecord(\''+rowId+'\', \''+r.date+'\', \''+r.time+'\')" style="padding:4px 10px;background:#dc3545;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:12px;">🗑️</button></td></tr>';
     });
     html += '</table>';
