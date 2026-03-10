@@ -242,7 +242,10 @@ app.use('/api/pos-sync', posSyncRouter);
 app.delete('/api/pos/payment-record/:rowId', async (req, res) => {
   try {
     const { google } = require('googleapis');
-    const auth = googleAuth.getOAuth2Client();
+    const auth = new (require('googleapis').google.auth.GoogleAuth)({
+  credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT),
+  scopes: ['https://www.googleapis.com/auth/spreadsheets']
+});
     const sheets = google.sheets({ version: 'v4', auth });
     const spreadsheetId = process.env.GOOGLE_SHEETS_ID_CUSTOMER;
     const range = `'收款紀錄'!A:G`;
@@ -282,7 +285,10 @@ app.post('/api/pos/payment-notify', async (req, res) => {
     if (!amount || parseFloat(amount) <= 0) return res.json({ success: false, error: '金額無效' });
 
     const { google } = require('googleapis');
-    const auth = googleAuth.getOAuth2Client();
+    const auth = new (require('googleapis').google.auth.GoogleAuth)({
+  credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT),
+  scopes: ['https://www.googleapis.com/auth/spreadsheets']
+});
     const sheets = google.sheets({ version: 'v4', auth });
     const spreadsheetId = process.env.GOOGLE_SHEETS_ID_CUSTOMER;
 
