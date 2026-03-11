@@ -88,6 +88,7 @@
       <button class="tab" onclick="switchTab(event,'urgent')">⚡ 急件追蹤</button>
       <button class="tab" onclick="switchTab(event,'pickup-schedule')">🏠 收件排程</button>
       <button class="tab" onclick="switchTab(event,'revenue')">📊 營業報表</button>
+      <button class="tab" onclick="switchTab(event,'item-analysis')">🧺 品項分析</button>
       <button class="tab" onclick="switchTab(event,'startup')">🚀 系統啟動</button>
       <button class="tab" onclick="switchTab(event,'stain-photo')">📸 污漬拍照</button>
       <button class="tab" onclick="switchTab(event,'payment-records')">💰 收款紀錄</button>
@@ -811,6 +812,63 @@
   </div>
 </div>
 
+  <!-- 🧺 品項分析標籤頁 -->
+<div id="item-analysis-tab" class="tab-content">
+  <h3 style="color:#667eea; margin-bottom:20px;">🧺 品項清潔分析</h3>
+
+  <!-- 時間範圍選擇 -->
+  <div style="display:flex; gap:10px; margin-bottom:20px; align-items:center; flex-wrap:wrap;">
+    <div style="display:flex; gap:5px;">
+      <button id="rangeDaily" onclick="setItemRange('daily')" style="padding:8px 18px; border-radius:20px; border:2px solid #667eea; background:#667eea; color:#fff; cursor:pointer; font-weight:600;">每日</button>
+      <button id="rangeWeekly" onclick="setItemRange('weekly')" style="padding:8px 18px; border-radius:20px; border:2px solid #667eea; background:#fff; color:#667eea; cursor:pointer; font-weight:600;">每週</button>
+      <button id="rangeMonthly" onclick="setItemRange('monthly')" style="padding:8px 18px; border-radius:20px; border:2px solid #667eea; background:#fff; color:#667eea; cursor:pointer; font-weight:600;">每月</button>
+    </div>
+    <input type="date" id="itemBaseDate" style="padding:8px; border:2px solid #e0e0e0; border-radius:8px;">
+    <button onclick="loadItemAnalysis()" style="padding:8px 20px; background:#667eea; color:#fff; border:none; border-radius:8px; cursor:pointer; font-weight:600;">🔍 查詢</button>
+  </div>
+
+  <!-- 統計資訊列 -->
+  <div id="itemSummaryBar" style="background:#f0f4ff; padding:15px; border-radius:10px; margin-bottom:20px; display:none;">
+    <span id="itemRangeLabel" style="font-weight:600; color:#667eea;"></span>
+    <span id="itemTotalCount" style="margin-left:15px; color:#333;"></span>
+  </div>
+
+  <!-- 圖表區 -->
+  <div id="itemChartsArea" style="display:none;">
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:25px;">
+      <div style="background:#f8f9fa; padding:20px; border-radius:12px;">
+        <h4 style="color:#667eea; margin-bottom:15px;">🥧 品項比例</h4>
+        <div style="position:relative; height:300px; display:flex; align-items:center; justify-content:center;">
+          <canvas id="itemPieChart"></canvas>
+        </div>
+      </div>
+      <div style="background:#f8f9fa; padding:20px; border-radius:12px;">
+        <h4 style="color:#667eea; margin-bottom:15px;">📊 品項數量排行（前10）</h4>
+        <div style="position:relative; height:300px;">
+          <canvas id="itemBarChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 品項明細表 -->
+  <div id="itemTableArea" style="display:none; margin-bottom:25px;">
+    <h4 style="color:#667eea; margin-bottom:12px;">📋 品項明細</h4>
+    <div id="itemTable"></div>
+  </div>
+
+  <!-- AI 分析區 -->
+  <div id="itemAiArea" style="display:none;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <h4 style="color:#667eea; margin:0;">🤖 AI 品項深度分析</h4>
+      <button onclick="loadItemAiAnalysis()" id="itemAiBtn" style="padding:8px 20px; background:linear-gradient(135deg,#667eea,#764ba2); color:#fff; border:none; border-radius:8px; cursor:pointer; font-weight:600;">✨ 開始 AI 分析</button>
+    </div>
+    <div id="itemAiContent" style="background:#f8f9fa; padding:20px; border-radius:10px; line-height:1.8; white-space:pre-wrap; font-size:14px; color:#333; min-height:80px;">
+      點擊「開始 AI 分析」取得深度洞察
+    </div>
+  </div>
+</div>
+
   </div>  <!-- container 結束 -->
 
     
@@ -880,6 +938,9 @@
       if (tabName === 'records') loadRecords();
       if (tabName === 'payment-records') loadPaymentRecordsList();
       if (tabName === 'revenue') {
+      if (tabName === 'item-analysis') {
+  document.getElementById('itemBaseDate').value = new Date().toISOString().substring(0, 10);
+}  
         var now = new Date();
         var monthStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
         var monthInput = document.getElementById('revenueMonth');
@@ -4098,6 +4159,164 @@ async function deletePaymentRecord(rowId, date, time) {
 </div>
 
 <script>
+// ========================================
+// 🧺 品項分析功能
+// ========================================
+var currentItemRange = 'daily';
+var currentItemData = null;
+
+function setItemRange(range) {
+  currentItemRange = range;
+  document.getElementById('rangeDaily').style.background = range === 'daily' ? '#667eea' : '#fff';
+  document.getElementById('rangeDaily').style.color = range === 'daily' ? '#fff' : '#667eea';
+  document.getElementById('rangeWeekly').style.background = range === 'weekly' ? '#667eea' : '#fff';
+  document.getElementById('rangeWeekly').style.color = range === 'weekly' ? '#fff' : '#667eea';
+  document.getElementById('rangeMonthly').style.background = range === 'monthly' ? '#667eea' : '#fff';
+  document.getElementById('rangeMonthly').style.color = range === 'monthly' ? '#fff' : '#667eea';
+}
+
+async function loadItemAnalysis() {
+  const dateInput = document.getElementById('itemBaseDate').value || new Date().toISOString().substring(0, 10);
+  
+  document.getElementById('itemChartsArea').style.display = 'none';
+  document.getElementById('itemTableArea').style.display = 'none';
+  document.getElementById('itemAiArea').style.display = 'none';
+  document.getElementById('itemSummaryBar').style.display = 'none';
+  document.getElementById('itemAiContent').textContent = '點擊「開始 AI 分析」取得深度洞察';
+
+  try {
+    const res = await fetch(`/api/item-analysis?range=${currentItemRange}&date=${dateInput}`);
+    const data = await res.json();
+    if (!data.success) { alert('載入失敗: ' + data.error); return; }
+
+    currentItemData = data;
+
+    // 更新摘要列
+    const rangeLabel = { daily: '每日', weekly: '每週', monthly: '每月' }[currentItemRange];
+    document.getElementById('itemRangeLabel').textContent = `📅 ${rangeLabel}分析：${data.startDate}${data.startDate !== data.endDate ? ' ~ ' + data.endDate : ''}`;
+    document.getElementById('itemTotalCount').textContent = `總計 ${data.totalCount} 件`;
+    document.getElementById('itemSummaryBar').style.display = 'block';
+
+    if (data.items.length === 0) {
+      alert('此時間範圍沒有品項資料');
+      return;
+    }
+
+    // 渲染圓餅圖
+    const top8 = data.items.slice(0, 8);
+    const otherCount = data.items.slice(8).reduce((s, i) => s + i.count, 0);
+    const pieLabels = top8.map(i => i.name);
+    const pieData = top8.map(i => i.count);
+    if (otherCount > 0) { pieLabels.push('其他'); pieData.push(otherCount); }
+
+    const pieColors = ['#667eea','#764ba2','#f093fb','#f5576c','#4facfe','#00f2fe','#43e97b','#38f9d7','#fa709a','#fee140'];
+
+    if (window._itemPieChart) window._itemPieChart.destroy();
+    const pieCtx = document.getElementById('itemPieChart').getContext('2d');
+    window._itemPieChart = new Chart(pieCtx, {
+      type: 'pie',
+      data: { labels: pieLabels, datasets: [{ data: pieData, backgroundColor: pieColors }] },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 8 } },
+          tooltip: {
+            callbacks: {
+              label: function(ctx) {
+                var total = ctx.dataset.data.reduce(function(a,b){return a+b;},0);
+                var pct = total > 0 ? Math.round(ctx.parsed / total * 100) : 0;
+                return ctx.label + ': ' + ctx.parsed + ' 件 (' + pct + '%)';
+              }
+            }
+          }
+        }
+      }
+    });
+
+    // 渲染長條圖
+    const top10 = data.items.slice(0, 10);
+    if (window._itemBarChart) window._itemBarChart.destroy();
+    const barCtx = document.getElementById('itemBarChart').getContext('2d');
+    window._itemBarChart = new Chart(barCtx, {
+      type: 'bar',
+      data: {
+        labels: top10.map(i => i.name.length > 8 ? i.name.substring(0, 8) + '...' : i.name),
+        datasets: [{
+          label: '件數',
+          data: top10.map(i => i.count),
+          backgroundColor: '#667eea'
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        indexAxis: 'y',
+        plugins: { legend: { display: false } },
+        scales: { x: { beginAtZero: true, ticks: { stepSize: 1 } } }
+      }
+    });
+
+    // 渲染明細表
+    var tableHtml = '<table style="width:100%; border-collapse:collapse;">';
+    tableHtml += '<tr style="background:#667eea; color:#fff;"><th style="padding:10px; text-align:left;">品項</th><th style="padding:10px; text-align:center;">件數</th><th style="padding:10px; text-align:center;">占比</th><th style="padding:10px; text-align:right;">營收</th></tr>';
+    data.items.forEach(function(item, i) {
+      var bg = i % 2 === 0 ? '#fff' : '#f8f9fa';
+      tableHtml += '<tr style="background:' + bg + '; border-bottom:1px solid #e0e0e0;">' +
+        '<td style="padding:10px;">' + item.name + '</td>' +
+        '<td style="padding:10px; text-align:center; font-weight:600;">' + item.count + '</td>' +
+        '<td style="padding:10px; text-align:center;">' +
+          '<div style="background:#e0e0e0; border-radius:10px; height:8px; width:100%; margin-bottom:3px;"><div style="background:#667eea; border-radius:10px; height:8px; width:' + item.percent + '%;"></div></div>' +
+          item.percent + '%' +
+        '</td>' +
+        '<td style="padding:10px; text-align:right;">NT$ ' + item.revenue.toLocaleString() + '</td>' +
+        '</tr>';
+    });
+    tableHtml += '</table>';
+    document.getElementById('itemTable').innerHTML = tableHtml;
+
+    document.getElementById('itemChartsArea').style.display = 'block';
+    document.getElementById('itemTableArea').style.display = 'block';
+    document.getElementById('itemAiArea').style.display = 'block';
+
+  } catch (e) {
+    alert('載入失敗: ' + e.message);
+  }
+}
+
+async function loadItemAiAnalysis() {
+  if (!currentItemData || !currentItemData.items) { alert('請先查詢品項資料'); return; }
+  
+  var btn = document.getElementById('itemAiBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ 分析中...';
+  document.getElementById('itemAiContent').textContent = '🤖 AI 正在深度分析品項數據，請稍候...';
+
+  try {
+    var res = await fetch('/api/item-ai-analysis', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        range: currentItemData.range,
+        startDate: currentItemData.startDate,
+        endDate: currentItemData.endDate,
+        items: currentItemData.items,
+        totalCount: currentItemData.totalCount
+      })
+    });
+    var data = await res.json();
+    if (data.success) {
+      document.getElementById('itemAiContent').textContent = data.analysis;
+    } else {
+      document.getElementById('itemAiContent').textContent = '❌ 分析失敗: ' + (data.error || '未知錯誤');
+    }
+  } catch (e) {
+    document.getElementById('itemAiContent').textContent = '❌ 連線失敗: ' + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '✨ 重新分析';
+  }
+}
 async function showDailyInsight(date, revenue, orders) {
   document.getElementById('aiInsightModal').style.display = 'block';
   document.getElementById('aiInsightDate').textContent = date;
