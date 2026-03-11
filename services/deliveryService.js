@@ -161,23 +161,6 @@ async function markSignedWithPayment(deliveryId, customerNumber, customerName, a
     const ecpayUrl = `${baseURL}/payment/ecpay/pay/${orderId}`;
     const linepayUrl = `${baseURL}/payment/linepay/pay/${orderId}`;
     
-    // 發送 LINE 訊息 + 支付連結
-    const message = 
-      `已經送回管理室了💙金額是 NT$ ${amount.toLocaleString()},以下提供兩種付款方式,您可以依方便選擇 謝謝您\n\n` +
-      `訂單編號: ${orderId}\n\n` +
-      `💚 LINE Pay 付款:\n${linepayUrl}\n\n` +
-      `💳 信用卡付款:\n${ecpayUrl}`;
-    
-    if (!lineClient) {
-      throw new Error('LINE Client 未初始化');
-    }
-    
-    await lineClient.pushMessage(userId, {
-      type: 'text',
-      text: message
-    });
-    
-    console.log(`✅ 已簽收並發送支付: ${customerName}, 訂單: ${orderId}`);
     
     return {
       success: true,
