@@ -4070,7 +4070,20 @@ async function deleteStainPhoto() {
       options: {
         responsive: false,
         plugins: {
-          legend: { position: 'bottom' },
+         legend: {
+            position: 'bottom',
+            labels: {
+              generateLabels: function(chart) {
+                var data = chart.data;
+                var total = data.datasets[0].data.reduce(function(a,b){return a+b;},0);
+                return data.labels.map(function(label, i) {
+                  var val = data.datasets[0].data[i];
+                  var pct = total > 0 ? Math.round(val/total*100) : 0;
+                  return { text: label+' '+pct+'%', fillStyle: data.datasets[0].backgroundColor[i], index: i };
+                });
+              }
+            }
+          },
           tooltip: {
             callbacks: {
               label: function(ctx) {
@@ -4083,28 +4096,7 @@ async function deleteStainPhoto() {
           datalabels: false
         }
       },
-      plugins: [{
-        id: 'pieLabels',
-        afterDatasetDraw: function(chart) {
-          var ctx2 = chart.ctx;
-          chart.data.datasets.forEach(function(dataset, i) {
-            var meta = chart.getDatasetMeta(i);
-            meta.data.forEach(function(arc, index) {
-              var val = dataset.data[index];
-              var pct = total > 0 ? Math.round(val / total * 100) : 0;
-              if (pct < 3) return;
-              var pos = arc.tooltipPosition();
-              ctx2.save();
-              ctx2.fillStyle = '#fff';
-              ctx2.font = 'bold 13px Arial';
-              ctx2.textAlign = 'center';
-              ctx2.textBaseline = 'middle';
-              ctx2.fillText(pct + '%', pos.x, pos.y);
-              ctx2.restore();
-            });
-          });
-        }
-      }]
+     
     });
 
     // 長條圖（每日收款）
