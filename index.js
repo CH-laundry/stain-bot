@@ -3265,6 +3265,132 @@ cron.schedule('0 9 1 * *', async () => {
 
 console.log('📊 月度營收報告排程已啟動 (每月 1 號 09:00)');
 
+// ========================================
+// 📊 品項分析 API
+// ========================================
+app.get('/api/item-analysis', async (req, res) => {
+  try {
+    const { range, date } = req.query; // range: 'daily' | 'weekly' | 'monthly'
+    if (!range) return res.status(400).json({ success: false, error: '缺少 range 參數' });
+
+    const { google } = require('googleapis');
+    const googleAuth = require('./services/googleAuth');
+    const auth = googleAuth.getOAuth2Client();
+    const sheets = google.sheets({ version: 'v4', auth });
+    const spreadsheetId = process.env.GOOGLE_SHEETS_ID_CUSTOMER;
+
+    const sheetInfo = await sheets.spreadsheets.get({ spreadsheetId, fields: 'sheets.properties' });
+    const targetSheet = sheetInfo.data.sheets.find(s => s.properties.sheetId === 756780563);
+    if (!targetSheet) return res.status(500).json({ success: false, error: '找不到營業紀錄工作表' });
+
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `'${targetSheet.properties.title}'!A:I`
+    });
+
+    const rows = (response.data.values || []).slice(1);
+    const now = new Date();
+    const baseDate = date ? new Date(date) : now;
+
+    // 計算時間範圍
+    let startDate, endDate;
+    if (range === 'daily') {
+      const d = baseDate.toISOString().substring(0, 10);
+      startDate = d; endDate = d;
+    } else if (range === 'weekly') {
+      const day = baseDate.getDay();
+      const mon = new Date(baseDate); mon.setDate(baseDate.getDate() - (day === 0 ? 6 : day - 1));
+      const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+      startDate = mon.toISOString().substring(0, 10);
+      endDate = sun.toISOString().substring(0, 10);
+    } else { // monthly
+      const y = baseDate.getFullYear();
+      const m = String(baseDate.getMonth() + 1).padStart(2, '0');
+      startDate = `${y}-${m}-01`;
+      endDate = `${y}-${m}-${new Date(y, baseDate.getMonth() + 1, 0).getDate()}`;
+    }
+
+    // 統計品項
+    const itemCount = {};
+    const itemRevenue = {};
+    let totalCount = 0;
+
+    rows.forEach(row => {
+      if (!row[0] || !row[5]) return;
+      const rowDate = row[0].toString().replace(/\//g, '-').substring(0, 10);
+      if (rowDate < startDate || rowDate > endDate) return;
+
+      const item = row[5].toString().trim();
+      const amount = parseInt(String(row[8] || '0').replace(/[^0-9]/g, ''), 10) || 0;
+
+      itemCount[item] = (itemCount[item] || 0) + 1;
+      itemRevenue[item] = (itemRevenue[item] || 0) + amount;
+      totalCount++;
+    });
+
+    // 排序
+    const sorted = Object.entries(itemCount)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, count]) => ({
+        name,
+        count,
+        revenue: itemRevenue[name] || 0,
+        percent: totalCount > 0 ? Math.round(count / totalCount * 100) : 0
+      }));
+
+    res.json({
+      success: true,
+      range,
+      startDate,
+      endDate,
+      totalCount,
+      items: sorted
+    });
+
+  } catch (error) {
+    console.error('品項分析錯誤:', error);
+    res.json({ success: false, error: error.message });
+  }
+});
+
+// 品項 AI 分析
+app.post('/api/item-ai-analysis', async (req, res) => {
+  try {
+    const { range, startDate, endDate, items, totalCount } = req.body;
+    if (!items || items.length === 0) return res.json({ success: false, error: '沒有品項資料' });
+
+    const Anthropic = require('@anthropic-ai/sdk');
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+    const top10 = items.slice(0, 10).map(i => `${i.name}: ${i.count} 件 (${i.percent}%, NT$${i.revenue.toLocaleString()})`).join('\n');
+    const rangeLabel = range === 'daily' ? '當日' : range === 'weekly' ? '本週' : '本月';
+
+    const aiResponse = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 800,
+      messages: [{
+        role: 'user',
+        content: `你是 C.H 精緻洗衣的市場分析顧問，請根據以下${rangeLabel}（${startDate} ~ ${endDate}）清潔品項數據，用繁體中文提供專業分析報告。
+
+【${rangeLabel}品項統計】（共 ${totalCount} 件）
+${top10}
+
+請提供以下四個面向的分析（每點 2-3 句，直接切入重點）：
+
+1. 🔥 最熱門品項趨勢（哪些品項占主力、為什麼）
+2. 🌱 季節性變化洞察（依品項推測目前季節特徵）
+3. 👥 客戶行為洞察（客人送洗習慣、品項組合模式）
+4. 💡 定價與促銷建議（針對高頻品項的具體建議）`
+      }]
+    });
+
+    res.json({ success: true, analysis: aiResponse.content[0].text });
+  } catch (error) {
+    console.error('品項 AI 分析錯誤:', error);
+    res.json({ success: false, error: error.message });
+  }
+});
+
 // 每日 AI 深度分析
 app.get('/api/daily-ai-insight', async (req, res) => {
   try {
