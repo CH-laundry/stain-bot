@@ -918,13 +918,12 @@
       }
     }
 
-    function switchTab(evt, tabName) {
+   function switchTab(evt, tabName) {
       document.querySelectorAll('.tab').forEach(function(tab) { tab.classList.remove('active'); });
       document.querySelectorAll('.tab-content').forEach(function(content) { content.classList.remove('active'); });
       if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
       var pane = document.getElementById(tabName + '-tab');
       if (pane) pane.classList.add('active');
-
       if (tabName === 'payment') loadCustomTemplates();
       if (tabName === 'customers') displaySavedCustomers();
       if (tabName === 'templates') displayTemplates();
@@ -937,10 +936,18 @@
       if (tabName === 'manual') loadManuals();
       if (tabName === 'records') loadRecords();
       if (tabName === 'payment-records') loadPaymentRecordsList();
-      if (tabName === 'revenue') {
       if (tabName === 'item-analysis') {
-  document.getElementById('itemBaseDate').value = new Date().toISOString().substring(0, 10);
-}  
+        document.getElementById('itemBaseDate').value = new Date().toISOString().substring(0, 10);
+      }
+      if (tabName === 'revenue') {
+        var now = new Date();
+        var monthStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+        var monthInput = document.getElementById('revenueMonth');
+        if (monthInput) monthInput.value = monthStr;
+      }
+      if (tabName === 'pickup-schedule') loadPickupSchedules(); 
+}
+
         var now = new Date();
         var monthStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
         var monthInput = document.getElementById('revenueMonth');
