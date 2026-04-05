@@ -1946,6 +1946,129 @@ app.delete('/api/notify-templates/:index', (req, res) => {
 const deliveryService = require('./services/deliveryService');
 deliveryService.setLineClient(client);
 
+// ========== 📦 外送排程 → 轉取件追蹤 ==========
+app.post('/api/delivery/convert-to-pickup', async (req, res) => {
+  try {
+    const { id, customerNumber, customerName } = req.body;
+    if (!id || !customerNumber || !customerName) {
+      return res.json({ success: false, error: '缺少必要參數' });
+    }
+
+    // 1. 客戶編號轉換：K0000625 → 625
+    const cleanNo = String(customerNumber).replace(/\D/g, '').replace(/^0+/, '') || customerNumber;
+    console.log(`[轉取件] 編號轉換: ${customerNumber} → ${cleanNo}`);
+
+    // 2. 用客戶姓名比對找 userId
+    let userId = null;
+
+    // 方法 A: 從 customerDB 找
+    try {
+      const allCustomers = customerDB.getAllCustomers();
+      const found = allCustomers.find(c => {
+        const cName = (c.displayName || c.name || '').replace(/\s/g, '');
+        const inputName = customerName.replace(/\s/g, '');
+        return cName && inputName && (cName.includes(inputName) || inputName.includes(cName));
+      });
+      if (found) userId = found.userId;
+    } catch (e) { console.log('customerDB 比對失敗:', e.message); }
+
+    // 方法 B: 從 orderManager 的客戶編號找
+    if (!userId) {
+      try {
+        const allCustNums = orderManager.getAllCustomerNumbers();
+        const found2 = allCustNums.find(c => {
+          const cNo = String(c.number).replace(/\D/g, '').replace(/^0+/, '');
+          return cNo === cleanNo;
+        });
+        if (found2) userId = found2.userId;
+      } catch (e) { console.log('orderManager 比對失敗:', e.message); }
+    }
+
+    // 方法 C: 從 /data/users.json 找
+    if (!userId) {
+      try {
+        const USERS_FILE = path.join('/data', 'users.json');
+        if (fs.existsSync(USERS_FILE)) {
+          const userList = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
+          const found3 = userList.find(u => {
+            const uName = (u.name || '').replace(/\s/g, '');
+            const inputName = customerName.replace(/\s/g, '');
+            return uName && inputName && (uName.includes(inputName) || inputName.includes(uName));
+          });
+          if (found3) userId = found3.userId;
+        }
+      } catch (e) { console.log('users.json 比對失敗:', e.message); }
+    }
+
+    if (!userId) {
+      return res.json({
+        success: false,
+        error: `找不到客戶「${customerName}」(編號:${cleanNo}) 的 LINE User ID，請至取件追蹤頁面手動新增`
+      });
+    }
+
+    console.log(`[轉取件] 找到 userId: ${userId}`);
+
+    // 3. 寫入 pickup-tracking.json（靜默加入，不發 LINE 通知）
+    const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
+    const PICKUP_FILE = path.join(baseDir, 'pickup-tracking.json');
+
+    let pickupData = { orders: [] };
+    if (fs.existsSync(PICKUP_FILE)) {
+      pickupData = JSON.parse(fs.readFileSync(PICKUP_FILE, 'utf8'));
+    }
+
+    // 檢查是否已存在
+    const alreadyExists = pickupData.orders.some(o => {
+      const oNo = String(o.customerNumber).replace(/\D/g, '').replace(/^0+/, '');
+      return oNo === cleanNo;
+    });
+
+    if (alreadyExists) {
+      console.log(`[轉取件] 編號 ${cleanNo} 已在取件追蹤中`);
+    } else {
+      const now = new Date();
+      const reminderAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+      reminderAt.setHours(11, 0, 0, 0);
+
+      pickupData.orders.push({
+        customerNumber: cleanNo,
+        customerName: customerName,
+        userId: userId,
+        createdAt: now.toISOString(),
+        nextReminderAt: reminderAt.toISOString(),
+        reminderCount: 0,
+        pickedUp: false
+      });
+
+      fs.writeFileSync(PICKUP_FILE, JSON.stringify(pickupData, null, 2), 'utf8');
+      console.log(`✅ [轉取件] 已將 ${customerName}(${cleanNo}) 加入取件追蹤`);
+    }
+
+    // 4. 從 delivery.json 刪除這筆
+    const DELIVERY_FILE = path.join(__dirname, 'data', 'delivery.json');
+    if (fs.existsSync(DELIVERY_FILE)) {
+      const deliveryData = JSON.parse(fs.readFileSync(DELIVERY_FILE, 'utf8'));
+      const originalLen = deliveryData.orders.length;
+      deliveryData.orders = deliveryData.orders.filter(o => o.id !== id);
+      fs.writeFileSync(DELIVERY_FILE, JSON.stringify(deliveryData, null, 2), 'utf8');
+      const deleted = originalLen - deliveryData.orders.length;
+      console.log(`✅ [轉取件] 已從外送排程刪除 ${deleted} 筆`);
+    }
+
+    res.json({
+      success: true,
+      message: `✅ 已將 ${customerName}(#${cleanNo}) 轉入取件追蹤，7天後開始提醒`,
+      userId: userId
+    });
+
+  } catch (error) {
+    console.error('❌ 轉取件追蹤失敗:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+// ========== 📦 轉取件追蹤結束 ==========
+
 // ========================================
 // ========================================
 // API 1: 金額=0的簡單通知
