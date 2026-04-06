@@ -238,6 +238,86 @@ app.post('/api/pickup/auto-complete', async (req, res) => {
 });
 // ========== 🆕 結束 ==========
 
+// 🧺 外送排程轉取件追蹤
+app.post('/api/delivery/transfer-to-pickup', async (req, res) => {
+  try {
+    const { id, customerNumber, customerName } = req.body;
+    if (!id || !customerNumber || !customerName) {
+      return res.json({ success: false, error: '缺少必要參數' });
+    }
+
+    const cleanNo = String(customerNumber).replace(/^K0+/, '') || customerNumber;
+
+    let userId = null;
+    try {
+      const usersFile = path.join('/data', 'users.json');
+      if (fs.existsSync(usersFile)) {
+        const users = JSON.parse(fs.readFileSync(usersFile, 'utf8'));
+        const found = users.find(u => u.name && u.name.includes(customerName));
+        if (found) userId = found.userId;
+      }
+    } catch (e) {
+      console.log('users.json 讀取失敗:', e.message);
+    }
+
+    if (!userId) {
+      try {
+        const customers = orderManager.getAllCustomerNumbers();
+        const found = customers.find(c =>
+          c.name && c.name.includes(customerName)
+        );
+        if (found) userId = found.userId;
+      } catch (e) {}
+    }
+
+    if (!userId) {
+      return res.json({
+        success: false,
+        error: '找不到此客戶的 LINE ID，請至取件追蹤頁面手動新增'
+      });
+    }
+
+    const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
+    const PICKUP_FILE = path.join(baseDir, 'pickup-tracking.json');
+
+    let pickupData = { orders: [] };
+    if (fs.existsSync(PICKUP_FILE)) {
+      pickupData = JSON.parse(fs.readFileSync(PICKUP_FILE, 'utf8'));
+    }
+
+    const exists = pickupData.orders.find(o =>
+      String(o.customerNumber).replace(/^0+/, '') === cleanNo
+    );
+    if (!exists) {
+      pickupData.orders.push({
+        customerNumber: cleanNo,
+        customerName: customerName,
+        userId: userId,
+        addedAt: new Date().toISOString(),
+        nextReminderAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        reminderCount: 0,
+        pickedUp: false,
+        daysPassed: 0
+      });
+      fs.writeFileSync(PICKUP_FILE, JSON.stringify(pickupData, null, 2), 'utf8');
+    }
+
+    const DELIVERY_FILE = path.join(__dirname, 'data', 'delivery.json');
+    if (fs.existsSync(DELIVERY_FILE)) {
+      const deliveryData = JSON.parse(fs.readFileSync(DELIVERY_FILE, 'utf8'));
+      deliveryData.orders = deliveryData.orders.filter(o => o.id !== id);
+      fs.writeFileSync(DELIVERY_FILE, JSON.stringify(deliveryData, null, 2), 'utf8');
+    }
+
+    console.log(`✅ 已將 #${cleanNo} ${customerName} 從外送排程轉入取件追蹤`);
+    res.json({ success: true });
+
+  } catch (error) {
+    console.error('轉取件追蹤失敗:', error);
+    res.json({ success: false, error: error.message });
+  }
+});
+
 // ⭐ 新增:載入洗衣軟體同步路由
 const posSyncRouter = require('./pos-sync');
 app.use('/api/pos-sync', posSyncRouter);
