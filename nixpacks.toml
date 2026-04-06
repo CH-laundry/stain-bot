@@ -1,5 +1,0 @@
-[phases.install]
-cmd = "npm install"
-
-[phases.setup]
-nixPkgs = ["ffmpeg"]
