@@ -91,13 +91,13 @@ const thisMonth = `${reportDate.getFullYear()}-${String(reportDate.getMonth() + 
 const lastMonth = `${compareDate.getFullYear()}-${String(compareDate.getMonth() + 1).padStart(2, '0')}`;
   
   // 本月數據
-  const thisMonthOrders = orders.filter(o => o.date.startsWith(thisMonth));
+  const thisMonthOrders = orders.filter(o => o.date.replace(/\//g, '-').startsWith(thisMonth));
   const thisMonthRevenue = thisMonthOrders.reduce((sum, o) => sum + o.amount, 0);
   const thisMonthCount = thisMonthOrders.length;
   const thisMonthAvgOrder = thisMonthCount > 0 ? Math.round(thisMonthRevenue / thisMonthCount) : 0;
   
   // 上月數據
-  const lastMonthOrders = orders.filter(o => o.date.startsWith(lastMonth));
+  const lastMonthOrders = orders.filter(o => o.date.replace(/\//g, '-').startsWith(lastMonth));
   const lastMonthRevenue = lastMonthOrders.reduce((sum, o) => sum + o.amount, 0);
   const lastMonthCount = lastMonthOrders.length;
   const lastMonthAvgOrder = lastMonthCount > 0 ? Math.round(lastMonthRevenue / lastMonthCount) : 0;
