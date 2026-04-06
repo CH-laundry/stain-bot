@@ -1954,19 +1954,22 @@ function renderDeliveryList() {
         '<div style="display:flex; gap:5px; flex-wrap:wrap;">';
 
       if (!signed) {
-        html +=
-          '<button class="btn btn-small btn-secondary" onclick="markDeliverySigned(\'' +
-          id +
-          '\')">✅ 已簽收</button>';
-      }
+  html +=
+    '<button class="btn btn-small btn-secondary" onclick="markDeliverySigned(\'' +
+    id +
+    '\')">✅ 已簽收</button>' +
+    '<button class="btn btn-small" style="background:#52c41a;color:#fff;" onclick="transferToPickup(\'' +
+    id +
+    '\')">🧺 轉取件追蹤</button>';
+}
 
-      html +=
-        '<button class="btn btn-small" style="background:#ff9800;color:#fff;" onclick="editDelivery(\'' +
-        id +
-        '\')">✏️ 編輯</button>' +
-        '<button class="btn btn-small btn-danger" onclick="deleteDelivery(\'' +
-        id +
-        '\')">🗑️ 刪除</button>' +
+html +=
+  '<button class="btn btn-small" style="background:#ff9800;color:#fff;" onclick="editDelivery(\'' +
+  id +
+  '\')">✏️ 編輯</button>' +
+  '<button class="btn btn-small btn-danger" onclick="deleteDelivery(\'' +
+  id +
+  '\')">🗑️ 刪除</button>' +
         '</div>' +
         '</div>';
     });
@@ -2088,6 +2091,42 @@ async function deleteDelivery(id) {
       loadDeliveries(false);
     } else {
       showResult('error', '❌ 刪除失敗：' + (data.error || '未知錯誤'));
+    }
+  } catch (e) {
+    showResult('error', '❌ 連線失敗：' + e.message);
+  }
+}
+
+    // 轉移到取件追蹤
+async function transferToPickup(id) {
+  var record = findDeliveryById(id);
+  if (!record) { alert('找不到此紀錄'); return; }
+
+  if (!confirm(
+    '確定將此筆轉為取件追蹤？\n\n' +
+    '客戶：#' + (record.customerNumber || '') + ' - ' + (record.customerName || '') + '\n\n' +
+    '將自動：\n' +
+    '1. 從外送排程刪除\n' +
+    '2. 加入取件追蹤（7天後提醒）\n\n' +
+    '不會發送任何通知給客人'
+  )) return;
+
+  try {
+    var res = await fetch('/api/delivery/transfer-to-pickup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: id,
+        customerNumber: record.customerNumber,
+        customerName: record.customerName
+      })
+    });
+    var data = await res.json();
+    if (data.success) {
+      showResult('success', '✅ 已轉入取件追蹤！7天後自動提醒');
+      loadDeliveries(false);
+    } else {
+      showResult('error', '❌ ' + (data.error || '操作失敗'));
     }
   } catch (e) {
     showResult('error', '❌ 連線失敗：' + e.message);
