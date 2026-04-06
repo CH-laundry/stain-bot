@@ -90,7 +90,7 @@ const compareDate = new Date(now.getFullYear(), now.getMonth() - 2, 1);
 const thisMonth = `${reportDate.getFullYear()}-${String(reportDate.getMonth() + 1).padStart(2, '0')}`;
 const lastMonth = `${compareDate.getFullYear()}-${String(compareDate.getMonth() + 1).padStart(2, '0')}`;
   
-  // 本月數據
+// 本月數據
   const thisMonthOrders = orders.filter(o => o.date.replace(/\//g, '-').startsWith(thisMonth));
   const thisMonthRevenue = thisMonthOrders.reduce((sum, o) => sum + o.amount, 0);
   const thisMonthCount = thisMonthOrders.length;
