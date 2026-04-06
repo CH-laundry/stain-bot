@@ -20,7 +20,7 @@ const messageHandler = require('./services/message');
 console.log('🔧 正在載入 AI 客服模組...');
 const claudeAI = require('./services/claudeAI');
 console.log('✅ AI 客服模組已載入');
-const { createVideo, waitForVideo } = require('./kling-video');
+// const { createVideo, waitForVideo } = require('./kling-video');
 const Anthropic = require('@anthropic-ai/sdk');
 const anthropic = new Anthropic({ apiKey: process.env.CLAUDE_API_KEY });
 const { Client } = require('@line/bot-sdk');
