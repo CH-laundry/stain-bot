@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 require('dotenv').config();
-const { Server } = require('@modelcontextprotocol/sdk/server/index.js');
-const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio.js');
-const {
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
-} = require('@modelcontextprotocol/sdk/types.js');
-const { LaundryAPI } = require('./laundry-api.js');
+} from '@modelcontextprotocol/sdk/types.js';
+import { LaundryAPI } from './laundry-api.js';
 
 // 從環境變數讀取配置
 const API_BASE_URL = process.env.LAUNDRY_API_BASE_URL || 'http://lk2.ao-lan.cn';

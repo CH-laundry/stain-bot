@@ -1,75 +1,73 @@
 const { google } = require('googleapis');
-const fs = require('fs');
-const path = require('path');
 
-// 讀取憑證
-const CREDENTIALS_PATH = path.join(__dirname, '../credentials.json');
-const TOKEN_PATH = path.join(__dirname, '../token.json');
-
-// OAuth2 客戶端
-let oauth2Client = null;
+// Service Account 客戶端 (永久授權，不會過期)
+let serviceAccountClient = null;
 
 /**
- * 初始化 OAuth2 客戶端
+ * 初始化 Service Account 客戶端
+ * 優先使用 GOOGLE_SERVICE_ACCOUNT 環境變數
+ * 備用：GOOGLE_SHEETS_CREDENTIALS 或 GOOGLE_SHEETS_CREDS
  */
 function getOAuth2Client() {
-    if (oauth2Client) return oauth2Client;
-    
-    const credentials = JSON.parse(fs.readFileSync(CREDENTIALS_PATH));
-    const { client_id, client_secret, redirect_uris } = credentials.web;
-    
-    oauth2Client = new google.auth.OAuth2(
-        client_id,
-        client_secret,
-        redirect_uris[0]
-    );
-    
-    // 如果已有 token,載入它
-    if (fs.existsSync(TOKEN_PATH)) {
-        const token = JSON.parse(fs.readFileSync(TOKEN_PATH));
-        oauth2Client.setCredentials(token);
+    if (serviceAccountClient) return serviceAccountClient;
+
+    // 依序嘗試各個環境變數
+    const rawCreds =
+        process.env.GOOGLE_SERVICE_ACCOUNT ||
+        process.env.GOOGLE_SHEETS_CREDENTIALS ||
+        process.env.GOOGLE_SHEETS_CREDS ||
+        process.env.GOOGLE_APPLICATION_CREDENTIALS;
+
+    if (!rawCreds) {
+        throw new Error('❌ 找不到 Service Account 憑證！請確認 Railway 環境變數 GOOGLE_SERVICE_ACCOUNT 已設定');
     }
-    
-    return oauth2Client;
-}
 
-/**
- * 生成授權 URL
- */
-function getAuthUrl() {
-    const oauth2Client = getOAuth2Client();
-    
-    const authUrl = oauth2Client.generateAuthUrl({
-        access_type: 'offline',
-        scope: [
+    let credentials;
+    try {
+        credentials = JSON.parse(rawCreds);
+    } catch (e) {
+        throw new Error('❌ Service Account 憑證 JSON 格式錯誤：' + e.message);
+    }
+
+    serviceAccountClient = new google.auth.GoogleAuth({
+        credentials,
+        scopes: [
             'https://www.googleapis.com/auth/spreadsheets',
-            'https://www.googleapis.com/auth/drive.file'
-        ],
+            'https://www.googleapis.com/auth/drive',
+            'https://www.googleapis.com/auth/gmail.send'
+        ]
     });
-    
-    return authUrl;
-}
 
-/**
- * 處理授權碼,取得 token
- */
-async function getTokenFromCode(code) {
-    const oauth2Client = getOAuth2Client();
-    
-    const { tokens } = await oauth2Client.getToken(code);
-    oauth2Client.setCredentials(tokens);
-    
-    // 儲存 token
-    fs.writeFileSync(TOKEN_PATH, JSON.stringify(tokens));
-    
-    return tokens;
+    console.log('✅ Service Account 已初始化，永久有效');
+    return serviceAccountClient;
 }
 
 /**
  * 檢查是否已授權
+ * Service Account 只要環境變數存在就算授權，永遠回傳 true
  */
 function isAuthorized() {
-    return fs.existsSync(TOKEN_PATH);
+    const hasCreds =
+        !!(process.env.GOOGLE_SERVICE_ACCOUNT ||
+           process.env.GOOGLE_SHEETS_CREDENTIALS ||
+           process.env.GOOGLE_SHEETS_CREDS ||
+           process.env.GOOGLE_APPLICATION_CREDENTIALS);
+
+    console.log('🔍 Service Account 授權狀態:', hasCreds ? '✅ 已授權' : '❌ 未授權');
+    return hasCreds;
+}
+
+/**
+ * 以下兩個函數保留介面相容性（OAuth 流程不再需要，但不移除以防其他地方有呼叫）
+ */
+function getAuthUrl() {
+    console.warn('⚠️ 已改用 Service Account，不需要 OAuth 授權流程');
+    return null;
+}
+
+async function getTokenFromCode(code) {
+    console.warn('⚠️ 已改用 Service Account，不需要 OAuth Token');
+    return null;
 }
 
 module.exports = {

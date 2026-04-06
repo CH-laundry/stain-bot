@@ -1,6 +1,13 @@
+# OAuth 憑證和 Token
+credentials.json
+token.json
+
+# 環境變數
 .env
+
+# Node modules
 node_modules/
-*.logservice-account.json 
-credentials.json 
-.env 
-token.json 
+
+# 日誌檔案
+logs.txt
+*.log

@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI 小鎮入口</title>
+  <script>
+    (function () {
+      // 保留查詢參數與 hash
+      var q = window.location.search || '';
+      var h = window.location.hash || '';
+      // 從 /public/portal/ai-town/ 走到 /public/ai-town/
+      var target = '../../ai-town/' + q + h;
+      window.location.replace(target);
+    })();
+  </script>
+</head>
+<body>
+  <noscript>即將前往 AI 小鎮…</noscript>
+</body>
+</html>

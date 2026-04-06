@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>LINE Pay 付款</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://static.line-scdn.net/liff/edge/versions/2.22.0/sdk.js"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; text-align: center; padding: 40px; background: #f6f9fc; margin: 0; }
+    .container { max-width: 400px; margin: 0 auto; background: white; border-radius: 16px; padding: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    h2 { margin: 0 0 16px; font-size: 24px; }
+    .btn { display: block; width: 100%; padding: 16px; background: #06C755; color: white; text-decoration: none; border-radius: 12px; font-weight: bold; margin: 20px 0; font-size: 18px; }
+    .btn:active { opacity: 0.8; }
+    .loading { color: #666; font-size: 16px; }
+    .success { color: #06C755; }
+    .error { color: #e74c3c; }
+    .info { background: #f0f0f0; padding: 12px; border-radius: 8px; font-size: 14px; margin: 12px 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div id="content">
+      <p class="loading">正在載入付款資訊...</p>
+    </div>
+  </div>
+
+  <script>
+    async function main() {
+      try {
+        await liff.init({ liffId: '2008313382-3Xna6abB' });
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const status = urlParams.get('status');
+        const orderId = urlParams.get('orderId');
+        const txId = urlParams.get('txId');
+        const content = document.getElementById('content');
+
+        if (status === 'success') {
+          content.innerHTML = `
+            <h2 class="success">付款成功！</h2>
+            <div class="info">
+              <div>訂單編號：${orderId}</div>
+              <div>交易編號：${txId}</div>
+            </div>
+            <button class="btn" onclick="liff.closeWindow()">關閉視窗</button>
+          `;
+          return;
+        }
+
+        if (status === 'failed' || status === 'error') {
+          content.innerHTML = `
+            <h2 class="error">付款失敗</h2>
+            <p>請重新嘗試或聯繫客服</p>
+            <button class="btn" onclick="location.reload()">重新付款</button>
+          `;
+          return;
+        }
+
+        if (status === 'cancel') {
+          content.innerHTML = `
+            <h2>已取消付款</h2>
+            <button class="btn" onclick="location.reload()">返回</button>
+          `;
+          return;
+        }
+
+        if (!orderId) {
+          content.innerHTML = `<p class="error">缺少訂單編號</p>`;
+          return;
+        }
+
+        const res = await fetch(`/api/linepay/url/${orderId}`);
+        const data = await res.json();
+
+        if (data.success && data.paymentUrl) {
+          content.innerHTML = `
+            <p>請點擊下方按鈕前往付款</p>
+            <a href="${data.paymentUrl}" class="btn">前往 LINE Pay 付款</a>
+            <p style="font-size:12px;color:#888;margin-top:16px;">付款完成後會自動顯示結果</p>
+          `;
+        } else {
+          content.innerHTML = `<p class="error">載入失敗：${data.error || '未知錯誤'}</p>`;
+        }
+      } catch (err) {
+        document.getElementById('content').innerHTML = `<p class="error">系統錯誤：${err.message}</p>`;
+      }
+    }
+
+    main();
+  </script>
+</body>
+</html>

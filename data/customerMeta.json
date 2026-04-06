@@ -1,0 +1,60 @@
+// ===== 客戶編號（customerNo）API  =====
+const META_FILE = path.join(__dirname, 'data', 'customerMeta.json');
+
+function ensureMetaFile() {
+  const dataDir = path.join(__dirname, 'data');
+  if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+  if (!fs.existsSync(META_FILE)) {
+    fs.writeFileSync(META_FILE, JSON.stringify({ nextNo: 1, map: {} }, null, 2));
+  }
+}
+function readMeta() { ensureMetaFile(); return JSON.parse(fs.readFileSync(META_FILE, 'utf8')); }
+function writeMeta(meta) { fs.writeFileSync(META_FILE, JSON.stringify(meta, null, 2)); }
+ensureMetaFile();
+
+/**
+ * 取得或產生客戶編號（格式：可選 prefix + 6位數，例：CH000123）
+ * 若該 userId 已有編號就回傳既有值；沒有就依 nextNo 產生並寫檔。
+ */
+app.post('/api/customer-id/assign', async (req, res) => {
+  try {
+    const { userId, prefix = 'CH' } = req.body || {};
+    if (!userId) return res.status(400).json({ success: false, message: '缺少 userId' });
+
+    const meta = readMeta();
+    if (meta.map[userId]?.customerNo) {
+      return res.json({ success: true, assigned: false, customerNo: meta.map[userId].customerNo });
+    }
+
+    const no = meta.nextNo || 1;
+    const customerNo = `${prefix}${String(no).padStart(6, '0')}`;
+    meta.map[userId] = { customerNo, assignedAt: Date.now() };
+    meta.nextNo = no + 1;
+    writeMeta(meta);
+
+    // 也同步回寫到你的 customerDB（若它支援擴充欄位）
+    const user = customerDB.getCustomer(userId) || { userId };
+    user.customerNo = customerNo;
+    await customerDB.saveCustomer(userId, user.displayName || user.userName || userId, user);
+
+    logger.logToFile(`✅ 指派客戶編號: ${userId} -> ${customerNo}`);
+    res.json({ success: true, assigned: true, customerNo });
+  } catch (e) {
+    logger.logError('指派客戶編號失敗', e);
+    res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+// 查詢某 userId 的客戶編號（沒有則回傳不存在）
+app.get('/api/customer-id/:userId', (req, res) => {
+  const meta = readMeta();
+  const info = meta.map[req.params.userId];
+  if (!info) return res.json({ success: false, message: '尚未指派' });
+  res.json({ success: true, customerNo: info.customerNo, assignedAt: info.assignedAt });
+});
+
+// 只看下一個將要使用的編號（不前進）
+app.get('/api/customer-id/peek/next', (req, res) => {
+  const meta = readMeta();
+  res.json({ success: true, nextNo: meta.nextNo, preview: `CH${String(meta.nextNo).padStart(6, '0')}` });
+});

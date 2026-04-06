@@ -1212,10 +1212,8 @@ async function handleLinePayConfirm(transactionId, orderId, parentOrderId) {
       // 寫入收款紀錄
 try {
   const { google } = require('googleapis');
-  const auth = new google.auth.GoogleAuth({
-    credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT),
-    scopes: ['https://www.googleapis.com/auth/spreadsheets']
-  });
+  const googleAuth = require('./services/googleAuth');
+  const auth = googleAuth.getOAuth2Client();
   const sheets = google.sheets({ version: 'v4', auth });
   const now = new Date();
   const dateStr = now.toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei' }).replace(/\//g, '/');
@@ -1314,19 +1312,13 @@ app.all('/payment/ecpay/callback', async (req, res) => {
       return;
     }
 
-    // 5) 記錄日誌與通知
-    const merchantTradeNo = data.MerchantTradeNo;
-    const amount = Number(data.TradeAmt || data.Amount || 0);
-    const payType = data.PaymentType || 'ECPay';
-    const userId = data.CustomField1 || '';
-    const userName = data.CustomField2 || '';
-
-    // ✅【更新訂單狀態】Bug Fix: 改用 orderId 精準比對，userName 移至前面宣告
+    // ✅【更新訂單狀態】
     const allOrders = orderManager.getAllOrders();
     for (const order of allOrders) {
       const oid = order.orderId;
       if (
-        oid === merchantTradeNo &&
+        order.userId === data.CustomField1 &&
+        Number(order.amount) === Number(data.TradeAmt || data.Amount || 0) &&
         order.status !== 'paid'
       ) {
         orderManager.updateOrderStatus(oid, 'paid', 'ECPay');
@@ -1335,10 +1327,8 @@ app.all('/payment/ecpay/callback', async (req, res) => {
         // 寫入收款紀錄
 try {
   const { google } = require('googleapis');
-  const auth = new google.auth.GoogleAuth({
-    credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT),
-    scopes: ['https://www.googleapis.com/auth/spreadsheets']
-  });
+  const googleAuth = require('./services/googleAuth');
+  const auth = googleAuth.getOAuth2Client();
   const sheets = google.sheets({ version: 'v4', auth });
   const now = new Date();
   const dateStr = now.toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei' }).replace(/\//g, '/');
@@ -1347,7 +1337,7 @@ try {
     spreadsheetId: process.env.GOOGLE_SHEETS_ID_CUSTOMER,
     range: `'收款紀錄'!A:G`,
     valueInputOption: 'USER_ENTERED',
-    resource: { values: [[dateStr, timeStr, userName || '未知', '', parseFloat(amount), '信用卡', oid]] }
+    resource: { values: [[dateStr, timeStr, userName || '未知', '', parseFloat(Number(data.TradeAmt || data.Amount || 0)), '信用卡', oid]] }
   });
   console.log(`✅ ECPay 收款紀錄已寫入`);
 } catch(e) { console.error('寫入收款紀錄失敗:', e.message); }
@@ -1357,13 +1347,20 @@ try {
             global.pendingSyncOrders.push({
                 orderId: oid,
                 amount: Number(order.amount),
-                payType: 'CREDIT'
+                payType: 'CREDIT' 
             });
             console.log(`[Payment] 綠界訂單 ${oid} 已加入同步佇列`);
         }
-        break;
+        break; 
       }
     }
+
+    // 5) 記錄日誌與通知
+    const merchantTradeNo = data.MerchantTradeNo;
+    const amount = Number(data.TradeAmt || data.Amount || 0);
+    const payType = data.PaymentType || 'ECPay';
+    const userId = data.CustomField1 || '';   
+    const userName = data.CustomField2 || ''; 
 
     logger.logToFile(`[ECPAY][SUCCESS] ${merchantTradeNo} 成功 NT$${amount}`);
 
@@ -2893,31 +2890,43 @@ app.get('/api/pickup-schedule/today-alert', async (req, res) => {
 // ========================================
 // 🚀 一鍵啟動服務 API
 // ========================================
-app.post('/api/start-services', async (req, res) => {
+app.post('/api/start-services', (req, res) => {
   try {
-    const axios = require('axios');
-    const ngrokUrl = 'https://fbe0-61-219-57-189.ngrok-free.app';
+    const { exec } = require('child_process');
+    const os = require('os');
     
-    console.log('🔗 正在連線到電腦:', ngrokUrl);
+    // Windows 桌面路徑
+    const desktopPath = require('path').join(os.homedir(), 'Desktop');
+    const batPath = require('path').join(desktopPath, '啟動洗衣系統.bat');
     
-    const response = await axios.post(`${ngrokUrl}/start`, {}, { 
-      timeout: 10000 
+    console.log('正在執行:', batPath);
+    
+    exec(`"${batPath}"`, (error, stdout, stderr) => {
+      if (error) {
+        console.error('啟動失敗:', error);
+        return res.json({ 
+          success: false, 
+          error: '批次檔執行失敗,請確認檔案是否存在於桌面' 
+        });
+      }
+      
+      console.log('✅ 服務已啟動');
     });
     
+    // 立即回傳成功(不等執行完)
     res.json({ 
       success: true, 
-      message: '✅ 電腦已收到指令,正在啟動 4 個服務...' 
+      message: '所有服務正在啟動中,請稍候...' 
     });
     
   } catch (error) {
-    console.error('❌ 連線失敗:', error.message);
-    res.json({ 
+    console.error('API 錯誤:', error);
+    res.status(500).json({ 
       success: false, 
-      error: '❌ 無法連線到電腦\n\n請確認:\n1. 電腦是否開機\n2. 桌面的「啟動.bat」是否執行中' 
+      error: error.message 
     });
   }
-});
-// ===== 財經新聞圖片產生路由 =====
+});// ===== 財經新聞圖片產生路由 =====
 const puppeteer = require('puppeteer-core');
 const chromium = require('@sparticuz/chromium');
 const cloudinary = require('cloudinary').v2;
@@ -3200,22 +3209,13 @@ async function generateDailyAdVideo(topic = null) {
       max_tokens: 300,
       messages: [{
         role: 'user',
-       content: `${userPrompt}
-你是專業廣告導演，請生成一段有完整敘事的10秒廣告影片提示詞。
-
-必須包含以下結構：
-1. 開場（0-3秒）：問題或情境帶入，例如「衣服髒了、有污漬」
-2. 過程（3-7秒）：C.H精緻洗衣專業處理的畫面，例如「工作人員仔細清潔、機器運作」
-3. 結果（7-10秒）：衣物煥然一新，客人滿意微笑取件
-
-風格要求：
-- cinematic commercial style, 4K quality
-- warm and trustworthy tone
-- smooth camera transitions between scenes
-- soft natural lighting, Taiwan local neighborhood feel
-- show before and after contrast
-
-只回傳英文提示詞，150字以內，不要其他說明`
+        content: `${userPrompt}
+要求：
+- 畫面要有洗衣、衣物蓬鬆乾淨的意象
+- 風格：清新、專業、台灣本地感
+- 只回傳英文提示詞，不要其他說明`
+      }]
+    });
 
     const prompt = msg.content[0].text.trim();
     console.log('生成提示詞：', prompt);
@@ -4036,3 +4036,4 @@ app.put('/api/stain-photos/:photoId', async (req, res) => {
   }
 });
 
+    

@@ -732,6 +732,12 @@ function createECPayPaymentLink(userId, userName, amount) {
     ItemName: '洗衣服務費用',
     ReturnURL: `${baseURL}/payment/ecpay/callback`,
     ClientBackURL: `${baseURL}/payment/success`,
+    // 🔴 新增這三個，避免跳出返回造成容易失效、並延長有效時間（分鐘）
+    ExpireDate: '1440', // 24 小時（分鐘）
+    OrderResultURL: `${baseURL}/payment/success`,
+    ClientRedirectURL: `${baseURL}/payment/success`,
+
+    // 付款方式可留 ALL，或你固定用信用卡可設 'Credit'
     ChoosePayment: 'ALL',
     EncryptType: 1,
     CustomField1: userId,
@@ -774,6 +780,7 @@ function generateECPayCheckMacValue(params) {
 
   return crypto.createHash('sha256').update(checkString).digest('hex').toUpperCase();
 }
+
 
 /* =================== 導出模組 =================== */
 module.exports = { 

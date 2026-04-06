@@ -4,6 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>C.H 精緻洗衣 - 付款管理系統</title>
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#667eea">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="C.H洗衣">
+  <link rel="apple-touch-icon" href="/icon-192.png">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
@@ -24,7 +30,7 @@
     .quick-search { display: flex; gap: 10px; }
     .btn { width: 100%; padding: 15px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; border: none; border-radius: 12px; font-size: 18px; font-weight: 600; cursor: pointer; transition: all .3s; }
     .btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(102,126,234,.6); }
-    .btn:disabled { background: #ccc; cursor: not-allowed; }
+    .btn:disabled { background: #ccc; cursor: not-allowed; transform: none; }
     .btn-small { padding: 10px 20px; font-size: 14px; width: auto; }
     .btn-secondary { background: linear-gradient(135deg, #52c41a 0%, #389e0d 100%); }
     .btn-danger { background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); }
@@ -53,7 +59,7 @@
     .customer-card { background: #f0f4ff; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #667eea; }
     .customer-card h4 { color: #667eea; margin-bottom: 10px; }
     .customer-card p { margin: 5px 0; font-size: 14px; color: #333; }
-    .template-item { background: #fff; padding: 12px; margin-bottom: 10px; border-radius: 8px; }
+    .template-item { background: #fff; padding: 12px; margin-bottom: 10px; border-radius: 8px; border: 1px solid #e0e0e0; }
     @media (max-width: 768px){
       .container{padding:20px}
       h1{font-size:24px}
@@ -61,6 +67,9 @@
       .message-templates{grid-template-columns:1fr}
     }
   </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+  <script>Chart.register(ChartDataLabels);</script>
 </head>
 <body>
   <div class="container">
@@ -69,13 +78,25 @@
 
     <div class="tabs">
       <button class="tab active" onclick="switchTab(event,'payment')">💳 發送付款</button>
+      <button class="tab" onclick="switchTab(event,'notify')">📢 純文字通知</button>
       <button class="tab" onclick="switchTab(event,'orders')">📦 訂單管理</button>
       <button class="tab" onclick="switchTab(event,'customers')">📋 客戶編號</button>
       <button class="tab" onclick="switchTab(event,'templates')">📝 訊息模板</button>
       <button class="tab" onclick="switchTab(event,'users')">👥 客戶列表</button>
+      <button class="tab" onclick="switchTab(event,'pickup')">🧺 取件追蹤</button>
+      <button class="tab" onclick="switchTab(event,'delivery')">🚚 外送排程</button>
+      <button class="tab" onclick="switchTab(event,'manual')">📝 人工通知</button>
+      <button class="tab" onclick="switchTab(event,'records')">👤 客人紀錄</button>
+      <button class="tab" onclick="switchTab(event,'urgent')">⚡ 急件追蹤</button>
+      <button class="tab" onclick="switchTab(event,'pickup-schedule')">🏠 收件排程</button>
+      <button class="tab" onclick="switchTab(event,'revenue')">📊 營業報表</button>
+      <button class="tab" onclick="switchTab(event,'item-analysis')">🧺 品項分析</button>
+      <button class="tab" onclick="switchTab(event,'startup')">🚀 系統啟動</button>
+      <button class="tab" onclick="switchTab(event,'stain-photo')">📸 污漬拍照</button>
+      <button class="tab" onclick="switchTab(event,'payment-records')">💰 收款紀錄</button>
+      
     </div>
 
-    <!-- 發送付款 -->
     <div id="payment-tab" class="tab-content active">
       <div class="form-group">
         <label>🔍 快速查詢</label>
@@ -130,9 +151,10 @@
           <textarea id="customMessage" placeholder="輸入訊息內容,使用 {amount} 會自動替換成金額&#10;&#10;例如: 您好,已收回衣物,金額 NT$ {amount},請儘速付款,謝謝!"></textarea>
         </div>
 
-        <button type="submit" class="btn" id="submitBtn">💙 發送付款連結</button>
+       <button type="submit" class="btn" id="submitBtn">💙 發送付款連結</button>
       </form>
 
+     
       <div class="loading" id="loading">
         <div class="loading-spinner"></div>
         <p>正在發送...</p>
@@ -140,7 +162,6 @@
       <div class="result" id="result"></div>
     </div>
 
-    <!-- 訂單管理 -->
     <div id="orders-tab" class="tab-content">
       <h3 style="color:#667eea; margin-bottom:20px;">📦 訂單管理</h3>
       <div style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
@@ -168,7 +189,6 @@
 
       <div id="orderList"><p style="text-align:center; color:#999;">尚未載入訂單，請點「重新整理」。</p></div>
 
-      <!-- 客戶付款歷史 Modal -->
       <div id="customerHistoryModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:1000; padding:20px; overflow:auto;">
         <div style="background:#fff; max-width:800px; margin:50px auto; border-radius:20px; padding:30px; position:relative;">
           <button onclick="closeCustomerHistory()" style="position:absolute; top:15px; right:15px; background:#dc3545; color:#fff; border:none; padding:8px 15px; border-radius:5px; cursor:pointer; font-size:16px;">✕</button>
@@ -178,9 +198,16 @@
       </div>
     </div>
 
-    <!-- 客戶編號管理 -->
     <div id="customers-tab" class="tab-content">
       <h3 style="color:#667eea; margin-bottom:20px;">📋 客戶編號管理</h3>
+      ### 客戶編號管理
+    <input id="user-id-input" placeholder="User ID (e.g. Uxxxxxx)" style="width:300px;margin:5px;">
+    <input id="user-name-input" placeholder="姓名" style="width:150px;margin:5px;">
+    <button id="save-user" style="margin:5px;">儲存 User ID</button>
+    <button id="send-payment" style="margin:5px;">發送支付連結</button>
+    <input id="amount" type="number" placeholder="金額" style="width:120px;margin:5px;">
+
+<div id="customer-list" style="margin-top:15px; max-height:200px; overflow-y:auto; border:1px solid #ccc; padding:10px;"></div>
       <div class="form-group">
         <label>客戶編號</label>
         <input type="text" id="newCustomerNumber" placeholder="例如: 755">
@@ -201,7 +228,6 @@
       </div>
     </div>
 
-    <!-- 訊息模板管理 -->
     <div id="templates-tab" class="tab-content">
       <h3 style="color:#667eea; margin-bottom:20px;">📝 訊息模板管理</h3>
       <div class="form-group">
@@ -216,85 +242,970 @@
       </div>
     </div>
 
-    <!-- 客戶列表 -->
     <div id="users-tab" class="tab-content">
       <h3 style="color:#667eea; margin-bottom:20px;">👥 客戶列表</h3>
       <button class="btn btn-secondary btn-small" onclick="loadUsers()" style="margin-bottom:20px;">🔄 重新載入</button>
       <div id="userList"><p style="text-align:center; color:#999;">尚未載入，請點「重新載入」。</p></div>
     </div>
+<!-- 🧺 取件追蹤分頁 -->
+    <div id="pickup-tab" class="tab-content">
+      <h3 style="color:#667eea; margin-bottom:20px;">🧺 取件追蹤管理</h3>
+      
+      <div class="form-group">
+        <label>🔍 快速查詢客戶（用客戶編號）</label>
+        <div class="quick-search">
+          <input type="text" id="pickupSearch" placeholder="輸入編號（例如: 001、625）">
+          <button class="btn btn-small" onclick="searchForPickup()">查詢</button>
+        </div>
+      </div>
+
+      <div id="pickupCustomerCard" class="customer-card" style="display:none;">
+        <h4>✅ 客戶資訊</h4>
+        <p><strong>編號:</strong> <span id="pickupCardNumber"></span></p>
+        <p><strong>姓名:</strong> <span id="pickupCardName"></span></p>
+        <p><strong>User ID:</strong> <span id="pickupCardUserId"></span></p>
+      </div>
+
+      <div style="background:#f8f9fa; padding:20px; border-radius:10px; margin-bottom:20px;">
+        <h4 style="color:#667eea; margin-bottom:15px;">➕ 新增取件追蹤</h4>
+        <div class="form-group">
+          <label>客戶編號 *</label>
+          <input type="text" id="pickupNumber" placeholder="001">
+        </div>
+        <div class="form-group">
+          <label>客戶姓名 *</label>
+          <input type="text" id="pickupName" placeholder="王小明">
+        </div>
+        <div class="form-group">
+          <label>User ID *</label>
+          <input type="text" id="pickupUserId" placeholder="U123...">
+        </div>
+        <button class="btn btn-secondary" onclick="startPickup()">🎯 開始追蹤（7天後11點提醒）</button>
+      </div>
+
+      <div style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
+        <button class="btn btn-small btn-secondary" onclick="loadPickups()">🔄 重新整理</button>
+        <button class="btn btn-small btn-secondary" onclick="editTemplate()">📝 編輯模板</button>
+      </div>
+
+      <div id="pickupList"><p style="text-align:center; color:#999;">尚未載入，請點「重新整理」。</p></div>
+    </div>
+
+  <!-- 🚚 外送排程分頁 -->
+<div id="delivery-tab" class="tab-content">
+  <h3 style="color:#667eea; margin-bottom:20px;">🚚 外送排程 / 紀錄</h3>
+  
+  <!-- 快速查詢 -->
+  <div class="form-group">
+    <label>🔍 快速查詢客戶（用客戶編號）</label>
+    <div class="quick-search">
+      <input type="text" id="deliverySearch" placeholder="輸入編號（例如: 001、625）">
+      <button class="btn btn-small" onclick="searchForDelivery()">查詢</button>
+    </div>
   </div>
 
-  <script>
-    // ====== 全域狀態 ======
-    let savedCustomers = JSON.parse(localStorage.getItem('customerNumbers') || '{}');
-    let savedTemplates = JSON.parse(localStorage.getItem('messageTemplates') || '[]');
-    let allUsers = [];
-    let allOrders = [];
+  <!-- 客戶資訊卡片 -->
+  <div id="deliveryCustomerCard" class="customer-card" style="display:none;">
+    <h4>✅ 客戶資訊</h4>
+    <p><strong>編號:</strong> <span id="deliveryCardNumber"></span></p>
+    <p><strong>姓名:</strong> <span id="deliveryCardName"></span></p>
+  </div>
 
-    if (savedTemplates.length === 0) {
-      savedTemplates = [
-        '您好,已收回衣物,金額 NT$ {amount},請儘速付款,謝謝!',
-        '您的衣物已清洗完成,金額 NT$ {amount},可付款取件',
-        '衣物處理中,預付金額 NT$ {amount}',
-        '訂金收訖 NT$ {amount},感謝您的支持!'
-      ];
-      localStorage.setItem('messageTemplates', JSON.stringify(savedTemplates));
+  <!-- 新增外送紀錄 -->
+  <div style="background:#f8f9fa; padding:20px; border-radius:10px; margin-bottom:20px;">
+    <h4 style="color:#667eea; margin-bottom:15px;">➕ 新增外送紀錄</h4>
+
+    <div class="form-group">
+      <label>客戶編號 *</label>
+      <input type="text" id="deliveryNumber" placeholder="001">
+    </div>
+
+    <div class="form-group">
+      <label>客戶姓名 *</label>
+      <input type="text" id="deliveryName" placeholder="王小明">
+    </div>
+
+    <div class="form-group">
+      <label>金額 (NT$) *</label>
+      <input type="number" id="deliveryAmount" min="0" placeholder="300">
+    </div>
+
+    <div class="form-group">
+      <label>通知狀態</label>
+      <div style="display:flex; gap:15px; flex-wrap:wrap;">
+        <label style="display:flex; align-items:center; gap:5px; font-size:14px;">
+          <input type="radio" name="deliveryNotifyStatus" value="not_sent" checked> 未發送自動通知
+        </label>
+        <label style="display:flex; align-items:center; gap:5px; font-size:14px;">
+          <input type="radio" name="deliveryNotifyStatus" value="sent"> 已發送自動通知
+        </label>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>指定外送日期（可選）</label>
+      <input type="date" id="deliveryDate">
+      <small style="display:block; color:#999; margin-top:5px;">
+        若有指定，當天打開系統會自動提醒你今天有哪些外送。
+      </small>
+    </div>
+
+    <div class="form-group">
+      <label>備註</label>
+      <textarea id="deliveryNote" placeholder="例如：晚上 8 點前送達、需先電話聯絡等"></textarea>
+    </div>
+
+    <button class="btn btn-secondary" onclick="addDelivery()">💾 新增外送紀錄</button>
+  </div>
+
+  <!-- 操作列 -->
+  <div style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
+    <button class="btn btn-small btn-secondary" onclick="loadDeliveries(true)">🔄 重新整理</button>
+  </div>
+
+  <!-- 外送紀錄列表（依日期分組） -->
+  <div id="deliveryList">
+    <p style="text-align:center; color:#999;">尚未載入，請點「重新整理」。</p>
+  </div>
+</div>
+
+<!-- ⚡ 急件追蹤分頁 -->
+<div id="urgent-tab" class="tab-content">
+  <h3 style="color:#667eea; margin-bottom:20px;">⚡ 急件追蹤管理</h3>
+  
+  <!-- 快速查詢 -->
+  <div class="form-group">
+    <label>🔍 快速查詢客戶（用客戶編號）</label>
+    <div class="quick-search">
+      <input type="text" id="urgentSearch" placeholder="輸入編號（例如: 001、625）">
+      <button class="btn btn-small" onclick="searchForUrgent()">查詢</button>
+    </div>
+  </div>
+
+  <!-- 客戶資訊卡片 -->
+  <div id="urgentCustomerCard" class="customer-card" style="display:none;">
+    <h4>✅ 客戶資訊</h4>
+    <p><strong>編號:</strong> <span id="urgentCardNumber"></span></p>
+    <p><strong>姓名:</strong> <span id="urgentCardName"></span></p>
+  </div>
+
+  <!-- 新增急件追蹤 -->
+  <div style="background:#f8f9fa; padding:20px; border-radius:10px; margin-bottom:20px;">
+    <h4 style="color:#667eea; margin-bottom:15px;">➕ 新增急件追蹤</h4>
+
+    <div class="form-group">
+      <label>客戶編號 *</label>
+      <input type="text" id="urgentNumber" placeholder="001">
+    </div>
+
+    <div class="form-group">
+      <label>客戶姓名 *</label>
+      <input type="text" id="urgentName" placeholder="王小明">
+    </div>
+
+    <div class="form-group">
+      <label>衣物編號範圍 *</label>
+      <input type="text" id="urgentClothesRange" placeholder="例如: 001-005">
+      <small style="display:block; color:#999; margin-top:5px;">
+        格式：起始編號-結束編號
+      </small>
+    </div>
+
+    <div class="form-group">
+      <label>急件追蹤日期（去工廠提醒）*</label>
+      <input type="date" id="urgentTrackDate">
+      <small style="display:block; color:#999; margin-top:5px;">
+        當天打開系統會自動提醒你去工廠追蹤衣物
+      </small>
+    </div>
+
+    <div class="form-group">
+      <label>取件提醒日期（客戶要拿）*</label>
+      <input type="date" id="urgentPickupDate">
+      <small style="display:block; color:#999; margin-top:5px;">
+        當天打開系統會自動提醒你客戶要取件了
+      </small>
+    </div>
+
+    <div class="form-group">
+      <label>備註</label>
+      <textarea id="urgentNote" placeholder="例如：客戶要參加婚禮、急需等"></textarea>
+    </div>
+
+    <button class="btn btn-secondary" onclick="addUrgent()">💾 新增急件追蹤</button>
+  </div>
+
+  <!-- 操作列 -->
+  <div style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
+    <button class="btn btn-small btn-secondary" onclick="loadUrgents(true)">🔄 重新整理</button>
+  </div>
+
+  <!-- 急件追蹤列表 -->
+  <div id="urgentList">
+    <p style="text-align:center; color:#999;">尚未載入，請點「重新整理」。</p>
+  </div>
+</div>  <!-- urgent-tab 結束 -->
+
+    <!-- 🚀 系統啟動分頁 -->
+<div id="startup-tab" class="tab-content">
+  <h3 style="color:#667eea; margin-bottom:20px;">🚀 一鍵啟動所有服務</h3>
+  
+  <div style="background:#f0f4ff; padding:30px; border-radius:15px; text-align:center;">
+    <p style="font-size:18px; margin-bottom:20px;">
+      點擊下方按鈕將啟動電腦上的 4 個服務:
+    </p>
+    <ul style="text-align:left; max-width:400px; margin:0 auto 30px; font-size:16px;">
+      <li>📊 營業記錄監控</li>
+      <li>📡 進度監聽系統</li>
+      <li>✅ 自動簽收監控</li>
+      <li>💰 自動收款機器人</li>
+    </ul>
+    <button class="btn btn-secondary" onclick="startAllServices()" 
+            style="font-size:20px; padding:20px 50px;">
+      🚀 啟動所有服務
+    </button>
+    <div id="startupResult" style="margin-top:20px;"></div>
+  </div>
+</div>
+  
+
+<!-- 📸 污漬拍照分頁 -->
+<div id="stain-photo-tab" class="tab-content">
+  <h3 style="color:#667eea; margin-bottom:20px;">📸 污漬拍照管理</h3>
+  
+  <!-- 拍照區 -->
+  <div style="background:#f8f9fa; padding:20px; border-radius:10px; margin-bottom:20px;">
+    <h4 style="color:#667eea; margin-bottom:15px;">📷 拍攝污漬照片</h4>
+    
+    <input type="file" id="stainPhotoInput" accept="image/*" capture="environment" style="display:none;">
+    <button class="btn btn-secondary" onclick="takeStainPhoto()" style="width:100%; font-size:18px; padding:20px;">
+      📷 開啟相機拍照
+    </button>
+    
+    <!-- 照片預覽 -->
+    <div id="photoPreview" style="display:none; margin-top:20px;">
+      <img id="previewImage" style="width:100%; max-width:400px; border-radius:10px; display:block; margin:0 auto;">
+      
+      <div class="form-group" style="margin-top:15px;">
+        <label>備註說明</label>
+        <textarea id="photoNote" placeholder="例如:領口黃漬、袖口油污等" style="min-height:80px;"></textarea>
+      </div>
+      
+      <div style="display:flex; gap:10px; margin-top:15px;">
+        <button class="btn btn-secondary" onclick="saveStainPhoto()" style="flex:1;">💾 儲存照片</button>
+        <button class="btn" onclick="cancelPhoto()" style="flex:1; background:#999;">✕ 取消</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- 操作列 -->
+  <div style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
+    <button class="btn btn-small btn-secondary" onclick="loadStainPhotos()">🔄 重新整理</button>
+    <span id="photoCount" style="padding:10px; color:#666; font-size:14px;">總共 0 張照片</span>
+  </div>
+  
+  <!-- 照片網格 -->
+  <div id="stainPhotoGrid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:15px;">
+    <p style="text-align:center; color:#999; grid-column:1/-1;">尚未載入,請點「重新整理」</p>
+  </div>
+</div>
+
+<!-- 照片詳情 Modal -->
+<div id="photoDetailModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.8); z-index:9999; padding:20px; overflow:auto;">
+  <div style="background:#fff; max-width:800px; margin:50px auto; border-radius:20px; padding:30px; position:relative;">
+    <button onclick="closePhotoDetail()" style="position:absolute; top:15px; right:15px; background:#dc3545; color:#fff; border:none; padding:8px 15px; border-radius:5px; cursor:pointer; font-size:16px;">✕</button>
+    
+    <h3 style="color:#667eea; margin-bottom:20px;">📸 照片詳情</h3>
+    
+    <img id="detailImage" style="width:100%; border-radius:10px; margin-bottom:20px;">
+    
+    <div class="form-group">
+      <label>備註說明</label>
+      <textarea id="detailNote" style="min-height:100px;"></textarea>
+    </div>
+    
+    <div style="font-size:13px; color:#999; margin-bottom:20px;">
+      <div>拍照時間:<span id="detailTime"></span></div>
+      <div>照片ID:<span id="detailId"></span></div>
+    </div>
+    
+    <div style="display:flex; gap:10px;">
+      <button class="btn btn-secondary" onclick="updatePhotoNote()" style="flex:1;">💾 更新備註</button>
+      <button class="btn btn-danger" onclick="deleteStainPhoto()" style="flex:1;">🗑️ 刪除照片</button>
+    </div>
+  </div>
+</div>
+
+<!-- 📝 人工通知分頁 -->
+
+    
+<!-- 📝 人工通知分頁 -->
+<div id="manual-tab" class="tab-content">
+  <h3 style="color:#667eea; margin-bottom:20px;">📝 人工通知紀錄</h3>
+  
+  <!-- 快速查詢 -->
+  <div class="form-group">
+    <label>🔍 快速查詢客戶（用客戶編號）</label>
+    <div class="quick-search">
+      <input type="text" id="manualSearch" placeholder="輸入編號（例如: 001、625）">
+      <button class="btn btn-small" onclick="searchForManual()">查詢</button>
+    </div>
+  </div>
+
+  <!-- 客戶資訊卡片 -->
+  <div id="manualCustomerCard" class="customer-card" style="display:none;">
+    <h4>✅ 客戶資訊</h4>
+    <p><strong>編號:</strong> <span id="manualCardNumber"></span></p>
+    <p><strong>姓名:</strong> <span id="manualCardName"></span></p>
+  </div>
+
+  <!-- 新增人工通知 -->
+  <div style="background:#f8f9fa; padding:20px; border-radius:10px; margin-bottom:20px;">
+    <h4 style="color:#667eea; margin-bottom:15px;">➕ 新增人工通知紀錄</h4>
+
+    <div class="form-group">
+      <label>客戶編號 *</label>
+      <input type="text" id="manualNumber" placeholder="001">
+    </div>
+
+    <div class="form-group">
+      <label>客戶姓名 *</label>
+      <input type="text" id="manualName" placeholder="王小明">
+    </div>
+
+<!-- ⭐ 新增金額欄位 -->
+    <div class="form-group">
+      <label>金額 (NT$)</label>
+      <input type="number" id="manualAmount" min="0" placeholder="300">
+      <small style="display:block; color:#999; margin-top:5px;">
+        若不需要收費，請填 0 或留空
+      </small>
+    </div>
+    
+    <div class="form-group">
+      <label>是否需要外送 *</label>
+      <div style="display:flex; gap:15px; flex-wrap:wrap;">
+        <label style="display:flex; align-items:center; gap:5px; font-size:14px;">
+          <input type="radio" name="manualNeedDelivery" value="yes" checked> 需要外送
+        </label>
+        <label style="display:flex; align-items:center; gap:5px; font-size:14px;">
+          <input type="radio" name="manualNeedDelivery" value="no"> 不需要外送
+        </label>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>通知內容</label>
+      <textarea id="manualContent" placeholder="例如：已通知客戶衣物處理完成、已告知取件時間等"></textarea>
+    </div>
+
+    <button class="btn btn-secondary" onclick="addManual()">💾 新增人工通知紀錄</button>
+  </div>
+
+  <!-- 操作列 -->
+  <div style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
+    <button class="btn btn-small btn-secondary" onclick="loadManuals()">🔄 重新整理</button>
+  </div>
+
+  <!-- 人工通知列表（依日期分組） -->
+  <div id="manualList">
+    <p style="text-align:center; color:#999;">尚未載入，請點「重新整理」。</p>
+  </div>
+</div>
+
+<!-- 👤 客人紀錄分頁 -->
+<div id="records-tab" class="tab-content">
+  <h3 style="color:#667eea; margin-bottom:20px;">👤 客人對話紀錄</h3>
+  <p style="color:#666; font-size:14px; margin-bottom:20px;">
+    自動記錄所有在 LINE 官方帳號與您對話過的客人
+  </p>
+
+  <!-- 搜尋功能 -->
+  <div class="form-group">
+    <label>🔍 搜尋客人</label>
+    <input type="text" id="recordSearchInput" placeholder="輸入姓名或 User ID" oninput="searchRecords()">
+  </div>
+
+  <!-- 統計資訊 -->
+  <div id="recordStats" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:15px; margin-bottom:20px;">
+    <div style="background:#f0f4ff; padding:15px; border-radius:10px; text-align:center;">
+      <div style="font-size:24px; font-weight:bold; color:#667eea;" id="totalRecords">0</div>
+      <div style="font-size:14px; color:#666;">總客人數</div>
+    </div>
+    <div style="background:#e7f0ff; padding:15px; border-radius:10px; text-align:center;">
+      <div style="font-size:24px; font-weight:bold; color:#1890ff;" id="todayRecords">0</div>
+      <div style="font-size:14px; color:#666;">今日新增</div>
+    </div>
+    <div style="background:#d4edda; padding:15px; border-radius:10px; text-align:center;">
+      <div style="font-size:24px; font-weight:bold; color:#28a745;" id="weekRecords">0</div>
+      <div style="font-size:14px; color:#666;">本週新增</div>
+    </div>
+  </div>
+
+  <!-- 操作列 -->
+  <div style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
+    <button class="btn btn-small btn-secondary" onclick="loadRecords()">🔄 重新整理</button>
+    <button class="btn btn-small" style="background:#52c41a;" onclick="exportRecords()">📊 匯出資料</button>
+  </div>
+
+  <!-- 客人列表 -->
+  <div id="recordList">
+    <p style="text-align:center; color:#999;">尚未載入，請點「重新整理」。</p>
+  </div>
+</div>  
+
+  
+  <!-- 📢 純文字通知分頁 -->
+<div id="notify-tab" class="tab-content">
+  <h3 style="color:#667eea; margin-bottom:20px;">📢 純文字通知（無付款連結）</h3>
+  <p style="color: #666; font-size: 14px; margin-bottom: 20px;">適用於：已付款客戶、僅需通知送達等情況</p>
+
+  <!-- 快速搜尋 -->
+  <div class="form-group">
+    <label>🔍 快速查詢客戶</label>
+    <div class="quick-search">
+      <input type="text" id="notifySearch" placeholder="輸入編號或姓名">
+      <button class="btn btn-small" onclick="searchForNotify()">查詢</button>
+    </div>
+  </div>
+
+  <!-- 客戶資訊卡片 -->
+  <div id="notifyCustomerCard" class="customer-card" style="display:none;">
+    <h4>✅ 客戶資訊</h4>
+    <p><strong>編號:</strong> <span id="notifyCardNumber"></span></p>
+    <p><strong>姓名:</strong> <span id="notifyCardName"></span></p>
+    <p><strong>User ID:</strong> <span id="notifyCardUserId"></span></p>
+  </div>
+
+  <!-- 發送表單 -->
+  <form id="notificationForm">
+    <div class="form-group">
+      <label>客戶 User ID *</label>
+      <input type="text" id="notifyUserId" placeholder="U1234567890abcdef" required>
+    </div>
+    <div class="form-group">
+      <label>客戶姓名 *</label>
+      <input type="text" id="notifyUserName" placeholder="王小明" required>
+    </div>
+    
+    <div class="form-group">
+      <label>通知訊息模板</label>
+      <div id="notifyTemplateList" style="max-height: 300px; overflow-y: auto; border: 2px solid #e0e0e0; border-radius: 10px; padding: 15px; background: #f8f9fa; margin-bottom: 15px;">
+        <p style="color:#999; text-align:center;">尚無模板，請先新增模板</p>
+      </div>
+      <textarea id="notifyMessage" placeholder="輸入通知內容，例如：&#10;&#10;親愛的客戶您好，您的衣物已送達店內，歡迎取件，謝謝！" required style="min-height: 150px;"></textarea>
+    </div>
+
+    <button type="submit" class="btn" style="background: linear-gradient(135deg, #52c41a 0%, #389e0d 100%);">📢 發送純文字通知</button>
+  </form>
+
+  <!-- 模板管理區 -->
+  <div style="margin-top: 40px; padding-top: 30px; border-top: 3px solid #e0e0e0;">
+    <h4 style="color:#667eea; margin-bottom:20px;">📝 管理通知模板</h4>
+    
+    <div class="form-group">
+      <label>新增通知模板</label>
+      <textarea id="newNotifyTemplate" placeholder="輸入新模板內容&#10;&#10;例如：親愛的客戶您好，您的衣物已送達店內，歡迎取件！" style="min-height: 100px;"></textarea>
+    </div>
+    
+    <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+      <button type="button" class="btn btn-secondary" onclick="addNotifyTemplate()">➕ 新增模板</button>
+      <button type="button" class="btn btn-small" style="background: #ff9800;" onclick="loadNotifyTemplates()">🔄 重新載入</button>
+    </div>
+  </div>
+</div>
+
+ <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+      <button type="button" class="btn btn-secondary" onclick="addNotifyTemplate()">➕ 新增模板</button>
+      <button type="button" class="btn btn-small" style="background: #ff9800;" onclick="loadNotifyTemplates()">🔄 重新載入</button>
+    </div>
+  </div>
+</div>
+
+<!-- 🏠 收件排程分頁 -->
+<div id="pickup-schedule-tab" class="tab-content">
+  <h3 style="color:#667eea; margin-bottom:20px;">🏠 收件排程管理</h3>
+  
+  <!-- 今日提醒 -->
+  <div id="todayAlert" style="display:none; background:#fff3cd; padding:15px; border-radius:10px; margin-bottom:20px; border-left:4px solid #ffc107;">
+    <h4 style="color:#856404; margin-bottom:10px;">🔔 今日收件提醒</h4>
+    <p id="alertMessage" style="color:#856404; margin:0;"></p>
+  </div>
+  
+  <!-- 操作列 -->
+  <div style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
+    <button class="btn btn-small btn-secondary" onclick="loadPickupSchedules()">🔄 重新整理</button>
+    <button class="btn btn-small" style="background:#52c41a;color:#fff;" onclick="showTodayAlert()">🔔 今日提醒</button>
+    <!-- ⭐ 新增：批次刪除按鈕 -->
+    <button class="btn btn-small btn-danger" onclick="deleteSelectedPickups()" id="batchDeleteBtn" style="display:none;">🗑️ 刪除已選 (<span id="selectedCount">0</span>)</button>
+  </div>
+  
+  <!-- 收件列表 -->
+  <div id="pickupScheduleList">
+    <p style="text-align:center; color:#999;">尚未載入，請點「重新整理」。</p>
+  </div>
+</div>
+
+  <!-- 💰 收款紀錄分頁 -->
+<div id="payment-records-tab" class="tab-content">
+  <h3 style="color:#667eea; margin-bottom:20px;">💰 收款紀錄</h3>
+  <div style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap; align-items:flex-end;">
+    <div>
+      <label style="display:block; margin-bottom:5px;">選擇月份</label>
+      <input type="month" id="paymentRecordsMonth" style="padding:8px; border:1px solid #ddd; border-radius:6px;">
+    </div>
+    <button onclick="loadPaymentRecordsList()" style="padding:8px 20px; background:#667eea; color:white; border:none; border-radius:6px; cursor:pointer;">🔍 查詢</button>
+  </div>
+  <!-- 統計卡片 -->
+  <div id="paymentRecordsSummary" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:15px; margin-bottom:20px;"></div>
+  <!-- 圖表區 -->
+  <div id="paymentChartsArea" style="display:none;">
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:20px;">
+      <div style="background:#f8f9fa; padding:20px; border-radius:10px;">
+        <h4 style="color:#667eea; margin-bottom:15px;">🥧 收款方式比例</h4>
+        <canvas id="pieChart" width="300" height="300"></canvas>
+      </div>
+      <div style="background:#f8f9fa; padding:20px; border-radius:10px;">
+        <h4 style="color:#667eea; margin-bottom:15px;">📊 每日收款金額</h4>
+        <canvas id="barChart" width="300" height="300"></canvas>
+      </div>
+    </div>
+  </div>
+  <!-- 明細列表 -->
+  <div id="paymentRecordsList"><p style="text-align:center; color:#999;">請選擇月份後點擊查詢</p></div>
+</div>
+
+  <!-- 📊 營業報表分頁 -->
+<div id="revenue-tab" class="tab-content">
+  <h3 style="color:#667eea; margin-bottom:20px;">📊 營業報表</h3>
+  
+  <!-- 月份選擇器 -->
+  <div style="display:flex; gap:10px; margin-bottom:20px; align-items:center;">
+    <label style="font-size:14px; color:#666;">選擇月份：</label>
+    <input type="month" id="revenueMonth" style="padding:8px; border-radius:8px; border:2px solid #e0e0e0;">
+    <button class="btn btn-small btn-secondary" onclick="loadRevenueReport()">🔍 查詢</button>
+    <button class="btn btn-small" style="background:#52c41a;color:#fff;" onclick="exportRevenue()">📊 匯出 Excel</button>
+  </div>
+
+  <!-- 統計卡片 -->
+  <div id="revenueStats" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:15px; margin-bottom:30px;">
+    <div style="background:#f0f4ff; padding:20px; border-radius:10px; text-align:center;">
+      <div style="font-size:32px; font-weight:bold; color:#667eea;" id="monthlyTotal">-</div>
+      <div style="font-size:14px; color:#666; margin-top:5px;">本月總營業額</div>
+    </div>
+    <div style="background:#e7f0ff; padding:20px; border-radius:10px; text-align:center;">
+      <div style="font-size:32px; font-weight:bold; color:#1890ff;" id="dailyAverage">-</div>
+      <div style="font-size:14px; color:#666; margin-top:5px;">日均營業額</div>
+    </div>
+    <div style="background:#d4edda; padding:20px; border-radius:10px; text-align:center;">
+      <div style="font-size:32px; font-weight:bold; color:#28a745;" id="totalOrders">-</div>
+      <div style="font-size:14px; color:#666; margin-top:5px;">總訂單數</div>
+    </div>
+    <div style="background:#fff3cd; padding:20px; border-radius:10px; text-align:center;">
+      <div style="font-size:32px; font-weight:bold; color:#fd7e14;" id="actualCollected">-</div>
+      <div style="font-size:14px; color:#666; margin-top:5px;">實際已收款（POS）</div>
+    </div>
+  </div>
+
+  <!-- 每日營業額列表 -->
+  <h4 style="color:#667eea; margin-bottom:15px;">📅 每日營業額明細</h4>
+  <div id="dailyRevenueList">
+    <p style="text-align:center; color:#999;">請選擇月份後點擊「查詢」</p>
+  </div>
+</div>
+
+  <!-- 🧺 品項分析標籤頁 -->
+<div id="item-analysis-tab" class="tab-content">
+  <h3 style="color:#667eea; margin-bottom:20px;">🧺 品項清潔分析</h3>
+
+  <!-- 時間範圍選擇 -->
+  <div style="display:flex; gap:10px; margin-bottom:20px; align-items:center; flex-wrap:wrap;">
+    <div style="display:flex; gap:5px;">
+      <button id="rangeDaily" onclick="setItemRange('daily')" style="padding:8px 18px; border-radius:20px; border:2px solid #667eea; background:#667eea; color:#fff; cursor:pointer; font-weight:600;">每日</button>
+      <button id="rangeWeekly" onclick="setItemRange('weekly')" style="padding:8px 18px; border-radius:20px; border:2px solid #667eea; background:#fff; color:#667eea; cursor:pointer; font-weight:600;">每週</button>
+      <button id="rangeMonthly" onclick="setItemRange('monthly')" style="padding:8px 18px; border-radius:20px; border:2px solid #667eea; background:#fff; color:#667eea; cursor:pointer; font-weight:600;">每月</button>
+    </div>
+    <input type="date" id="itemBaseDate" style="padding:8px; border:2px solid #e0e0e0; border-radius:8px;">
+    <button onclick="loadItemAnalysis()" style="padding:8px 20px; background:#667eea; color:#fff; border:none; border-radius:8px; cursor:pointer; font-weight:600;">🔍 查詢</button>
+  </div>
+
+  <!-- 統計資訊列 -->
+  <div id="itemSummaryBar" style="background:#f0f4ff; padding:15px; border-radius:10px; margin-bottom:20px; display:none;">
+    <span id="itemRangeLabel" style="font-weight:600; color:#667eea;"></span>
+    <span id="itemTotalCount" style="margin-left:15px; color:#333;"></span>
+  </div>
+
+  <!-- 圖表區 -->
+  <div id="itemChartsArea" style="display:none;">
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:25px;">
+      <div style="background:#f8f9fa; padding:20px; border-radius:12px;">
+        <h4 style="color:#667eea; margin-bottom:15px;">🥧 品項比例</h4>
+        <div style="position:relative; height:300px; display:flex; align-items:center; justify-content:center;">
+          <canvas id="itemPieChart"></canvas>
+        </div>
+      </div>
+      <div style="background:#f8f9fa; padding:20px; border-radius:12px;">
+        <h4 style="color:#667eea; margin-bottom:15px;">📊 品項數量排行（前10）</h4>
+        <div style="position:relative; height:300px;">
+          <canvas id="itemBarChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 品項明細表 -->
+  <div id="itemTableArea" style="display:none; margin-bottom:25px;">
+    <h4 style="color:#667eea; margin-bottom:12px;">📋 品項明細</h4>
+    <div id="itemTable"></div>
+  </div>
+
+  <!-- AI 分析區 -->
+  <div id="itemAiArea" style="display:none;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <h4 style="color:#667eea; margin:0;">🤖 AI 品項深度分析</h4>
+      <button onclick="loadItemAiAnalysis()" id="itemAiBtn" style="padding:8px 20px; background:linear-gradient(135deg,#667eea,#764ba2); color:#fff; border:none; border-radius:8px; cursor:pointer; font-weight:600;">✨ 開始 AI 分析</button>
+    </div>
+    <div id="itemAiContent" style="background:#f8f9fa; padding:20px; border-radius:10px; line-height:1.8; white-space:pre-wrap; font-size:14px; color:#333; min-height:80px;">
+      點擊「開始 AI 分析」取得深度洞察
+    </div>
+  </div>
+</div>
+
+  </div>  <!-- container 結束 -->
+
+    
+    <!-- 模板編輯 Modal -->  
+
+    
+    <!-- 模板編輯 Modal -->
+    <div id="templateModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:9999;">
+      <div style="background:#fff; max-width:600px; margin:50px auto; padding:30px; border-radius:15px;">
+        <h3>📝 編輯提醒模板</h3>
+        <p style="font-size:13px; color:#666; margin-bottom:15px;">可用變數：{客戶姓名}、{客戶編號}、{已過天數}</p>
+        <textarea id="templateText" style="width:100%; min-height:120px; padding:10px; margin:15px 0; border:2px solid #e0e0e0; border-radius:8px;"></textarea>
+        <div style="display:flex; gap:10px;">
+          <button class="btn btn-secondary" onclick="saveTemplatePickup()">💾 儲存</button>
+          <button class="btn" onclick="closeTemplateModal()">取消</button>
+        </div>
+      </div>
+    </div>
+  <script>
+    var allUsers = [];
+    var allOrders = [];
+    var savedCustomers = {};
+    var savedTemplates = [];
+    var allPickupOrders = [];
+    var allDeliveries = [];
+    var allUrgents = [];
+    var allManuals = [];
+    var allRecords = [];
+
+    function getCustomerLabel(userId, userName) {
+  var found = Object.entries(savedCustomers).find(function(entry) {
+    return entry[1].userId === userId;
+  });
+  if (found) {
+    return '#' + found[0] + ' - ' + (userName || '-');
+  }
+  return userName || '-';
+}
+
+    async function initLoad() {
+      try {
+        await loadCustomerNumbers();
+        await loadTemplates();
+        loadCustomTemplates();
+      } catch (error) {
+        console.error('初始化失敗:', error);
+      }
     }
 
-    // ====== 分頁切換 ======
-    function switchTab(evt, tabName) {
-      document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
-      document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+   function switchTab(evt, tabName) {
+      document.querySelectorAll('.tab').forEach(function(tab) { tab.classList.remove('active'); });
+      document.querySelectorAll('.tab-content').forEach(function(content) { content.classList.remove('active'); });
       if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
-      const pane = document.getElementById(`${tabName}-tab`);
+      var pane = document.getElementById(tabName + '-tab');
       if (pane) pane.classList.add('active');
-
-      if (tabName === 'payment')  loadCustomTemplates();
+      if (tabName === 'payment') loadCustomTemplates();
       if (tabName === 'customers') displaySavedCustomers();
       if (tabName === 'templates') displayTemplates();
-      if (tabName === 'users')     loadUsers();
-      if (tabName === 'orders')    loadOrders();
+      if (tabName === 'users') loadUsers();
+      if (tabName === 'orders') loadOrders();
+      if (tabName === 'pickup') loadPickups();
+      if (tabName === 'notify') loadNotifyTemplates();
+      if (tabName === 'delivery') loadDeliveries(true);
+      if (tabName === 'urgent') loadUrgents(true);
+      if (tabName === 'manual') loadManuals();
+      if (tabName === 'records') loadRecords();
+      if (tabName === 'payment-records') loadPaymentRecordsList();
+      if (tabName === 'item-analysis') {
+        document.getElementById('itemBaseDate').value = new Date().toISOString().substring(0, 10);
+      }
+      if (tabName === 'revenue') {
+
+        var now = new Date();
+        var monthStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+        var monthInput = document.getElementById('revenueMonth');
+        if (monthInput) monthInput.value = monthStr;
+      }
+      if (tabName === 'pickup-schedule') loadPickupSchedules(); 
     }
 
-    // ====== 模板 ======
+    async function loadCustomerNumbers() {
+      try {
+        var res = await fetch('/api/customer-numbers');
+        var data = await res.json();
+        if (data.success) {
+          savedCustomers = {};
+          (data.customers || []).forEach(function(c) {
+            savedCustomers[c.number] = { name: c.name, userId: c.userId };
+          });
+        }
+      } catch (error) {
+        console.error('載入客戶編號失敗:', error);
+      }
+    }
+
+   async function saveCustomerNumber() {
+     var number = document.getElementById('newCustomerNumber').value.trim();
+     var name = document.getElementById('newCustomerName').value.trim();
+     var userId = document.getElementById('newCustomerUserId').value.trim();
+     if (!number || !name || !userId) {
+       alert('請完整輸入 編號 / 姓名 / User ID');
+       return;
+     }
+
+     // ⭐ 新增：檢查編號是否重複
+     if (savedCustomers[number]) {
+       showResult('error', '❌ 此編號已存在：#' + number + ' (' + savedCustomers[number].name + ')');
+       return;
+     }
+
+     // ⭐ 新增：檢查 User ID 是否重複
+     var existingUser = Object.entries(savedCustomers).find(function(item) {
+       return item[1].userId === userId;
+     });
+     if (existingUser) {
+       showResult('error', '❌ 此 User ID 已存在：#' + existingUser[0] + ' (' + existingUser[1].name + ')');
+       return;
+     }
+
+      try {
+        var res = await fetch('/api/customer-numbers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ number: number, name: name, userId: userId })
+        });
+        var data = await res.json();
+        if (data.success) {
+          showResult('success', '✅ 已儲存客戶編號');
+          document.getElementById('newCustomerNumber').value = '';
+          document.getElementById('newCustomerName').value = '';
+          document.getElementById('newCustomerUserId').value = '';
+          await loadCustomerNumbers();
+          displaySavedCustomers();
+        } else {
+          showResult('error', '❌ 儲存失敗: ' + (data.error || '未知錯誤'));
+        }
+      } catch (error) {
+        showResult('error', '❌ 連線失敗: ' + error.message);
+      }
+    }
+
+   function displaySavedCustomers() {
+      var wrap = document.getElementById('savedCustomers');
+      
+      // ✅ 按編號排序（001, 002, 003...）
+      var entries = Object.entries(savedCustomers).sort(function(a, b) {
+        return parseInt(a[0]) - parseInt(b[0]);
+      });
+      
+      if (entries.length === 0) {
+        wrap.innerHTML = '<p style="color:#999;">尚無資料</p>';
+        return;
+      }
+      
+      wrap.innerHTML = entries.map(function(item) {
+        var no = item[0];
+        var c = item[1];
+        return '<div class="user-item" style="justify-content:space-between;">' +
+          '<div class="user-info" onclick="fillCustomer(\'' + c.userId + '\',\'' + c.name + '\')">' +
+          '<strong>#' + no + ' - ' + c.name + '</strong>' +
+          '<small>User ID: ' + c.userId + '</small>' +
+          '</div>' +
+          '<button class="btn btn-small btn-danger" onclick="removeSavedCustomer(\'' + no + '\')">刪除</button>' +
+          '</div>';
+      }).join('');
+    }
+
+    async function removeSavedCustomer(number) {
+      if (!confirm('刪除編號 #' + number + ' ?')) return;
+      try {
+        var res = await fetch('/api/customer-numbers/' + encodeURIComponent(number), { method: 'DELETE' });
+        var data = await res.json();
+        if (data.success) {
+          await loadCustomerNumbers();
+          displaySavedCustomers();
+        } else {
+          alert('刪除失敗: ' + (data.error || '未知錯誤'));
+        }
+      } catch (error) {
+        alert('連線失敗: ' + error.message);
+      }
+    }
+
+    function fillCustomer(userId, name) {
+      document.getElementById('userId').value = userId;
+      document.getElementById('userName').value = name;
+      switchTab({ currentTarget: document.querySelector('.tab') }, 'payment');
+    }
+
+    async function loadTemplates() {
+      try {
+        var res = await fetch('/api/templates');
+        var data = await res.json();
+        if (data.success) {
+          savedTemplates = data.templates || [];
+        }
+      } catch (error) {
+        console.error('載入模板失敗:', error);
+      }
+    }
+
     function loadCustomTemplates() {
-      const container = document.getElementById('customTemplates');
-      let html = '';
-      savedTemplates.forEach((template, index) => {
-        const preview = template.length > 30 ? template.substring(0,30) + '...' : template;
-        html += `<button type="button" class="template-btn" onclick="selectTemplate(event, ${index})">${preview}</button>`;
+      var container = document.getElementById('customTemplates');
+      if (!container) return;
+      var html = '';
+      savedTemplates.forEach(function(template, index) {
+        var preview = template.length > 30 ? template.substring(0, 30) + '...' : template;
+        html += '<button type="button" class="template-btn" onclick="selectTemplate(event, ' + index + ')">' + preview + '</button>';
       });
       container.innerHTML = html;
     }
+
     function selectTemplate(evt, index) {
-      const el = document.getElementById('customMessage');
+      var el = document.getElementById('customMessage');
       if (el) el.value = savedTemplates[index] || '';
-      document.querySelectorAll('.template-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.template-btn').forEach(function(btn) { btn.classList.remove('active'); });
       if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
     }
 
-    // ====== 快速查詢 ======
+    async function saveTemplate() {
+      var content = document.getElementById('newTemplateContent').value.trim();
+      if (!content) {
+        alert('請輸入模板內容');
+        return;
+      }
+
+      try {
+        var res = await fetch('/api/templates', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: content })
+        });
+        var data = await res.json();
+        if (data.success) {
+          showResult('success', '✅ 已新增模板');
+          document.getElementById('newTemplateContent').value = '';
+          await loadTemplates();
+          displayTemplates();
+          loadCustomTemplates();
+        } else {
+          showResult('error', '❌ 儲存失敗: ' + (data.error || '未知錯誤'));
+        }
+      } catch (error) {
+        showResult('error', '❌ 連線失敗: ' + error.message);
+      }
+    }
+
+    function displayTemplates() {
+      var wrap = document.getElementById('templateList');
+      if (savedTemplates.length === 0) {
+        wrap.innerHTML = '<p style="color:#999;">尚無模板</p>';
+        return;
+      }
+      wrap.innerHTML = savedTemplates.map(function(t, i) {
+        return '<div class="template-item">' +
+          '<div style="white-space:pre-wrap;">' + t + '</div>' +
+          '<div style="margin-top:10px; display:flex; gap:10px;">' +
+          '<button class="btn btn-small btn-secondary" onclick="editTemplate(' + i + ')">編輯</button>' +
+          '<button class="btn btn-small btn-danger" onclick="deleteTemplate(' + i + ')">刪除</button>' +
+          '</div>' +
+          '</div>';
+      }).join('');
+    }
+
+    async function editTemplate(index) {
+      var newContent = prompt('修改模板內容：', savedTemplates[index] || '');
+      if (newContent === null) return;
+
+      try {
+        var res = await fetch('/api/templates/' + index, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: newContent })
+        });
+        var data = await res.json();
+        if (data.success) {
+          await loadTemplates();
+          displayTemplates();
+          loadCustomTemplates();
+        } else {
+          alert('更新失敗: ' + (data.error || '未知錯誤'));
+        }
+      } catch (error) {
+        alert('連線失敗: ' + error.message);
+      }
+    }
+
+    async function deleteTemplate(index) {
+      if (!confirm('確定刪除此模板？')) return;
+
+      try {
+        var res = await fetch('/api/templates/' + index, { method: 'DELETE' });
+        var data = await res.json();
+        if (data.success) {
+          await loadTemplates();
+          displayTemplates();
+          loadCustomTemplates();
+        } else {
+          alert('刪除失敗: ' + (data.error || '未知錯誤'));
+        }
+      } catch (error) {
+        alert('連線失敗: ' + error.message);
+      }
+    }
+
     function quickSearchCustomer() {
-      const query = document.getElementById('quickSearch').value.trim();
-      if (!query) { alert('請輸入編號或姓名'); return; }
+      var query = document.getElementById('quickSearch').value.trim();
+      if (!query) {
+        alert('請輸入編號或姓名');
+        return;
+      }
 
       if (savedCustomers[query]) {
-        const c = savedCustomers[query];
+        var c = savedCustomers[query];
         document.getElementById('userId').value = c.userId || '';
         document.getElementById('userName').value = c.name || '';
         showCustomerCard(query, c.name, c.userId);
         return;
       }
-      const found = Object.entries(savedCustomers).find(([num, data]) => (data.name||'').includes(query));
+
+      var found = Object.entries(savedCustomers).find(function(item) {
+        return (item[1].name || '').includes(query);
+      });
       if (found) {
-        const [number, c] = found;
+        var number = found[0];
+        var c = found[1];
         document.getElementById('userId').value = c.userId || '';
         document.getElementById('userName').value = c.name || '';
         showCustomerCard(number, c.name, c.userId);
         return;
       }
+
       alert('找不到此客戶');
     }
+
     function showCustomerCard(number, name, userId) {
       document.getElementById('cardNumber').textContent = number;
       document.getElementById('cardName').textContent = name;
@@ -302,14 +1213,13 @@
       document.getElementById('customerCard').style.display = 'block';
     }
 
-    // ====== 發送付款表單 ======
-    document.getElementById('paymentForm').addEventListener('submit', async (e) => {
+    document.getElementById('paymentForm').addEventListener('submit', async function(e) {
       e.preventDefault();
-      const userId = document.getElementById('userId').value.trim();
-      const userName = document.getElementById('userName').value.trim();
-      const amount = parseInt(document.getElementById('amount').value, 10);
-      const paymentType = document.querySelector('input[name="paymentType"]:checked').value;
-      const customMessage = document.getElementById('customMessage').value.trim().replace('{amount}', (amount||0).toLocaleString());
+      var userId = document.getElementById('userId').value.trim();
+      var userName = document.getElementById('userName').value.trim();
+      var amount = parseInt(document.getElementById('amount').value, 10);
+      var paymentType = document.querySelector('input[name="paymentType"]:checked').value;
+      var customMessage = document.getElementById('customMessage').value.trim().replace('{amount}', (amount || 0).toLocaleString());
 
       if (!userId || !userName || !amount) {
         showResult('error', '請填寫所有必填欄位!');
@@ -321,354 +1231,3127 @@
       document.getElementById('result').style.display = 'none';
 
       try {
-        const res = await fetch('/send-payment', {
+        var res = await fetch('/send-payment', {
           method: 'POST',
-          headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({ userId, userName, amount, paymentType, customMessage })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: userId, userName: userName, amount: amount, paymentType: paymentType, customMessage: customMessage })
         });
-        let data = {};
-        try { data = await res.json(); } catch { data = { success:false, error:'後端未回傳 JSON' }; }
+        var data = {};
+        try {
+          data = await res.json();
+        } catch {
+          data = { success: false, error: '後端未回傳 JSON' };
+        }
 
         if (data.success) {
-          let msg = `✅ 付款連結已發送給 ${userName}!<br><br>金額: NT$ ${amount.toLocaleString()}<br>`;
+          var msg = '✅ 付款連結已發送給 ' + userName + '!<br><br>金額: NT$ ' + amount.toLocaleString() + '<br>';
           if (paymentType === 'both') msg += '付款方式: 信用卡 + LINE Pay<br>';
           else if (paymentType === 'ecpay') msg += '付款方式: 綠界支付<br>';
           else msg += '付款方式: LINE Pay<br>';
-          if (customMessage) msg += `<br>附加訊息: ${customMessage}`;
+          if (customMessage) msg += '<br>附加訊息: ' + customMessage;
           showResult('success', msg);
           document.getElementById('paymentForm').reset();
           document.getElementById('customerCard').style.display = 'none';
         } else {
-          showResult('error', `❌ 發送失敗: ${data.error || '伺服器無回應'}`);
+          showResult('error', '❌ 發送失敗: ' + (data.error || '伺服器無回應'));
         }
       } catch (err) {
-        showResult('error', `❌ 錯誤: ${err.message}`);
+        showResult('error', '❌ 錯誤: ' + err.message);
       } finally {
         document.getElementById('submitBtn').disabled = false;
         document.getElementById('loading').style.display = 'none';
       }
     });
-
-    // ====== 訂單管理 ======
-    async function loadOrders() {
-      const orderListDiv = document.getElementById('orderList');
+   async function loadOrders() {
+      var orderListDiv = document.getElementById('orderList');
       orderListDiv.innerHTML = '<p style="text-align:center; color:#999;">載入中...</p>';
       try {
-        const res = await fetch('/api/orders');
-        const data = await res.json();
+        var res = await fetch('/api/orders');
+        var data = await res.json();
         if (!data.success) throw new Error(data.error || '載入失敗');
         allOrders = Array.isArray(data.orders) ? data.orders : [];
-        displayOrderStats(data.statistics || { total:0, pending:0, paid:0, expired:0, needReminder:0 });
+        displayOrderStats(data.statistics || { total: 0, pending: 0, paid: 0, expired: 0, needReminder: 0 });
         displayOrders(allOrders);
       } catch (err) {
         allOrders = [];
-        displayOrderStats({ total:0, pending:0, paid:0, expired:0, needReminder:0 });
-        orderListDiv.innerHTML = `<p style="color:#dc3545; text-align:center;">載入失敗：${err.message}</p>`;
+        displayOrderStats({ total: 0, pending: 0, paid: 0, expired: 0, needReminder: 0 });
+        orderListDiv.innerHTML = '<p style="color:#dc3545; text-align:center;">載入失敗：' + err.message + '</p>';
       }
     }
 
     function displayOrderStats(stats) {
-      const s = Object.assign({ total:0, pending:0, paid:0, expired:0, needReminder:0 }, stats||{});
-      const el = document.getElementById('orderStats');
-      el.innerHTML = `
-        <div style="background:#f0f4ff; padding:15px; border-radius:10px; text-align:center;">
-          <div style="font-size:24px; font-weight:bold; color:#667eea;">${s.total}</div>
-          <div style="font-size:14px; color:#666;">總訂單數</div>
-        </div>
-        <div style="background:#fff3cd; padding:15px; border-radius:10px; text-align:center;">
-          <div style="font-size:24px; font-weight:bold; color:#ffc107;">${s.pending}</div>
-          <div style="font-size:14px; color:#666;">待付款</div>
-        </div>
-        <div style="background:#d4edda; padding:15px; border-radius:10px; text-align:center;">
-          <div style="font-size:24px; font-weight:bold; color:#28a745;">${s.paid}</div>
-          <div style="font-size:14px; color:#666;">已付款</div>
-        </div>
-        <div style="background:#f8d7da; padding:15px; border-radius:10px; text-align:center;">
-          <div style="font-size:24px; font-weight:bold; color:#dc3545;">${s.expired}</div>
-          <div style="font-size:14px; color:#666;">已過期</div>
-        </div>
-        <div style="background:#e7f0ff; padding:15px; border-radius:10px; text-align:center;">
-          <div style="font-size:24px; font-weight:bold; color:#0066cc;">${s.needReminder}</div>
-          <div style="font-size:14px; color:#666;">需提醒</div>
-        </div>
-      `;
+      var s = stats || {};
+      var el = document.getElementById('orderStats');
+      el.innerHTML = 
+        '<div style="background:#f0f4ff; padding:15px; border-radius:10px; text-align:center;">' +
+        '<div style="font-size:24px; font-weight:bold; color:#667eea;">' + (s.total || 0) + '</div>' +
+        '<div style="font-size:14px; color:#666;">總訂單數</div>' +
+        '</div>' +
+        '<div style="background:#fff3cd; padding:15px; border-radius:10px; text-align:center;">' +
+        '<div style="font-size:24px; font-weight:bold; color:#ffc107;">' + (s.pending || 0) + '</div>' +
+        '<div style="font-size:14px; color:#666;">待付款</div>' +
+        '</div>' +
+        '<div style="background:#d4edda; padding:15px; border-radius:10px; text-align:center;">' +
+        '<div style="font-size:24px; font-weight:bold; color:#28a745;">' + (s.paid || 0) + '</div>' +
+        '<div style="font-size:14px; color:#666;">已付款</div>' +
+        '</div>' +
+        '<div style="background:#f8d7da; padding:15px; border-radius:10px; text-align:center;">' +
+        '<div style="font-size:24px; font-weight:bold; color:#dc3545;">' + (s.expired || 0) + '</div>' +
+        '<div style="font-size:14px; color:#666;">已過期</div>' +
+        '</div>' +
+        '<div style="background:#e7f0ff; padding:15px; border-radius:10px; text-align:center;">' +
+        '<div style="font-size:24px; font-weight:bold; color:#0066cc;">' + (s.needReminder || 0) + '</div>' +
+        '<div style="font-size:14px; color:#666;">需提醒</div>' +
+        '</div>';
     }
 
     function displayOrders(orders) {
-      const wrap = document.getElementById('orderList');
+      var wrap = document.getElementById('orderList');
       if (!orders || orders.length === 0) {
         wrap.innerHTML = '<p style="text-align:center; color:#999;">尚無訂單記錄</p>';
         return;
       }
-      let html = '';
-      orders.forEach(order => {
-        const createdDate = order.createdAt ? new Date(order.createdAt).toLocaleString('zh-TW') : '-';
-        const expiryDate  = order.expiryTime ? new Date(order.expiryTime).toLocaleString('zh-TW') : '-';
-        let statusBadge = '';
-        let actionButtons = '';
+      var html = '';
+      orders.forEach(function(order) {
+        var createdDate = order.createdAt ? new Date(order.createdAt).toLocaleString('zh-TW') : '-';
+        var expiryDate = order.expiryTime ? new Date(order.expiryTime).toLocaleString('zh-TW') : '-';
+        var statusBadge = '';
+        var actionButtons = '';
 
         if (order.status === 'paid') {
           statusBadge = '<span style="background:#28a745; color:#fff; padding:5px 10px; border-radius:5px; font-size:12px;">✅ 已付款</span>';
         } else if (order.isExpired) {
           statusBadge = '<span style="background:#dc3545; color:#fff; padding:5px 10px; border-radius:5px; font-size:12px;">❌ 已過期</span>';
-          actionButtons = `<button class="btn btn-small btn-secondary" onclick="renewOrder('${order.orderId||''}')">🔄 續約重發</button>`;
+          actionButtons = '<button class="btn btn-small btn-secondary" onclick="renewOrder(\'' + (order.orderId || '') + '\')">🔄 續約重發</button>';
         } else {
-          statusBadge = `<span style="background:#ffc107; color:#fff; padding:5px 10px; border-radius:5px; font-size:12px;">⏰ 剩餘 ${order.remainingHours ?? '-'} 小時</span>`;
-          actionButtons = `
-            <button class="btn btn-small btn-secondary" onclick="copyPaymentLink('${order.orderId||''}')">📋 複製連結</button>
-            <button class="btn btn-small btn-secondary" onclick="sendSingleReminder('${order.orderId||''}')">⏰ 提醒</button>
-          `;
+          statusBadge = '<span style="background:#ffc107; color:#fff; padding:5px 10px; border-radius:5px; font-size:12px;">⏰ 剩餘 ' + (order.remainingHours || '-') + ' 小時</span>';
+          actionButtons = 
+            '<button class="btn btn-small btn-secondary" onclick="copyPaymentLink(\'' + (order.orderId || '') + '\')">📋 複製連結</button>' +
+            '<button class="btn btn-small btn-secondary" onclick="sendSingleReminder(\'' + (order.orderId || '') + '\')">⏰ 提醒</button>';
         }
-        actionButtons += ` <button class="btn btn-small btn-danger" onclick="deleteOrder('${order.orderId||''}')">刪除</button>`;
+        actionButtons += ' <button class="btn btn-small btn-danger" onclick="deleteOrder(\'' + (order.orderId || '') + '\')">刪除</button>';
 
-        html += `
-          <div class="user-item" style="display:block;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-              <div>
-                <strong style="font-size:16px; cursor:pointer; color:#667eea;" onclick="showCustomerHistory('${order.userId||''}', '${order.userName||''}')" title="點擊查看付款歷史">${order.userName||'-'}</strong>
-                ${statusBadge}
-              </div>
-              <div style="font-size:18px; font-weight:bold; color:#667eea;">NT$ ${(order.amount||0).toLocaleString()}</div>
-            </div>
-            <div style="font-size:13px; color:#666; margin-bottom:10px;">
-              <div>訂單編號: ${order.orderId || '-'}</div>
-              <div>建立時間: ${createdDate}</div>
-              <div>過期時間: ${expiryDate}</div>
-              ${order.retryCount > 0 ? `<div>重試次數: ${order.retryCount}</div>` : ''}
-              ${order.paymentMethod ? `<div>付款方式: <span style="color:#28a745; font-weight:bold;">${order.paymentMethod}</span></div>` : ''}
-            </div>
-            <div style="display:flex; gap:10px; flex-wrap:wrap;">
-              ${actionButtons}
-            </div>
-          </div>
-        `;
+        html += 
+          '<div class="user-item" style="display:block;">' +
+          '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">' +
+          '<div>' +
+          '<strong style="font-size:16px; cursor:pointer; color:#667eea;" onclick="showCustomerHistory(\'' + (order.userId || '') + '\', \'' + (order.userName || '') + '\')" title="點擊查看付款歷史">' + getCustomerLabel(order.userId, order.userName) + '</strong>' +
+          statusBadge +
+          '</div>' +
+          '<div style="font-size:18px; font-weight:bold; color:#667eea;">NT$ ' + ((order.amount || 0).toLocaleString()) + '</div>' +
+          '</div>' +
+          '<div style="font-size:13px; color:#666; margin-bottom:10px;">' +
+          '<div>訂單編號: ' + (order.orderId || '-') + '</div>' +
+          '<div>建立時間: ' + createdDate + '</div>' +
+          '<div>過期時間: ' + expiryDate + '</div>' +
+          (order.retryCount > 0 ? '<div>重試次數: ' + order.retryCount + '</div>' : '') +
+          (order.paymentMethod ? '<div>付款方式: <span style="color:#28a745; font-weight:bold;">' + order.paymentMethod + '</span></div>' : '') +
+          '</div>' +
+          '<div style="display:flex; gap:10px; flex-wrap:wrap;">' +
+          actionButtons +
+          '</div>' +
+          '</div>';
       });
       wrap.innerHTML = html;
     }
 
     function searchOrders() {
-      const q = (document.getElementById('orderSearchInput').value || '').toLowerCase().trim();
-      if (!q) { filterOrders(); return; }
-      const filtered = (allOrders||[]).filter(o =>
-        (o.orderId||'').toLowerCase().includes(q) || (o.userName||'').toLowerCase().includes(q)
-      );
+      var q = (document.getElementById('orderSearchInput').value || '').toLowerCase().trim();
+      if (!q) {
+        filterOrders();
+        return;
+      }
+      var filtered = (allOrders || []).filter(function(o) {
+        return (o.orderId || '').toLowerCase().includes(q) || (o.userName || '').toLowerCase().includes(q);
+      });
       displayOrders(filtered);
       if (filtered.length === 0) {
         document.getElementById('orderList').innerHTML = '<p style="text-align:center; color:#999;">找不到符合的訂單</p>';
       }
     }
+
     function filterOrders() {
-      const status = document.getElementById('orderStatusFilter').value;
-      if (!status) { displayOrders(allOrders); return; }
-      const filtered = (allOrders||[]).filter(o => {
+      var status = document.getElementById('orderStatusFilter').value;
+      if (!status) {
+        displayOrders(allOrders);
+        return;
+      }
+      var filtered = (allOrders || []).filter(function(o) {
         if (status === 'expired') return !!o.isExpired;
-        return (o.status||'') === status;
+        return (o.status || '') === status;
       });
       displayOrders(filtered);
     }
 
-    // ====== 與後端互動 ======
     async function sendReminders() {
       try {
-        const r = await fetch('/api/orders/send-reminders', { method:'POST' });
-        const d = await r.json();
-        if (d.success) { showResult('success', d.message || `✅ 已發送提醒：${d.sent||0} 筆`); loadOrders(); }
-        else showResult('error', `❌ 發送失敗：${d.error||'未知錯誤'}`);
+        var r = await fetch('/api/orders/send-reminders', { method: 'POST' });
+        var d = await r.json();
+        if (d.success) {
+          showResult('success', d.message || ('✅ 已發送提醒：' + (d.sent || 0) + ' 筆'));
+          loadOrders();
+        } else {
+          showResult('error', '❌ 發送失敗：' + (d.error || '未知錯誤'));
+        }
       } catch (e) {
-        showResult('error', `❌ 無法連線提醒 API：${e.message}`);
-      }
-    }
-    async function cleanExpired() {
-      try {
-        const r = await fetch('/api/orders/clean-expired', { method:'POST' });
-        const d = await r.json();
-        if (d.success) { showResult('success', d.message || `🧹 已清理 ${d.cleaned||0} 筆過期訂單`); loadOrders(); }
-        else showResult('error', `❌ 清理失敗：${d.error||'未知錯誤'}`);
-      } catch (e) {
-        showResult('error', `❌ 無法連線清理 API：${e.message}`);
-      }
-    }
-    async function renewOrder(orderId) {
-      if (!orderId) return alert('找不到訂單編號');
-      try {
-        const r = await fetch(`/api/order/${orderId}/renew`, { method:'POST' });
-        const d = await r.json();
-        if (d.success) { showResult('success', '🔄 已續約並重新發送付款連結'); loadOrders(); }
-        else showResult('error', `❌ 續約失敗：${d.error||'未知錯誤'}`);
-      } catch (e) {
-        showResult('error', `❌ 無法連線續約 API：${e.message}`);
-      }
-    }
-    function copyPaymentLink(orderId) {
-      const url = `${location.origin}/payment/linepay/pay/${orderId}`;
-      navigator.clipboard.writeText(url).then(
-        () => showResult('success','📋 已複製付款連結'),
-        () => showResult('error','❌ 複製失敗，請手動複製：<br>'+url)
-      );
-    }
-    function sendSingleReminder(orderId) {
-      // 單筆提醒 = 直接續約重發
-      return renewOrder(orderId);
-    }
-    async function deleteOrder(orderId) {
-      if (!confirm(`確定要刪除訂單：${orderId} 嗎？`)) return;
-      try {
-        const r = await fetch(`/api/order/${orderId}`, { method:'DELETE' });
-        const d = await r.json();
-        if (d.success) { showResult('success', '🗑️ 訂單已刪除'); loadOrders(); }
-        else showResult('error', `❌ 刪除失敗：${d.error||'未知錯誤'}`);
-      } catch (e) {
-        showResult('error', `❌ 無法連線刪除 API：${e.message}`);
+        showResult('error', '❌ 無法連線提醒 API：' + e.message);
       }
     }
 
-    // 客戶付款歷史（後端沒提供 userId 查詢就用前端過濾）
+    async function cleanExpired() {
+      try {
+        var r = await fetch('/api/orders/clean-expired', { method: 'POST' });
+        var d = await r.json();
+        if (d.success) {
+          showResult('success', d.message || ('🧹 已清理 ' + (d.cleaned || 0) + ' 筆過期訂單'));
+          loadOrders();
+        } else {
+          showResult('error', '❌ 清理失敗：' + (d.error || '未知錯誤'));
+        }
+      } catch (e) {
+        showResult('error', '❌ 無法連線清理 API：' + e.message);
+      }
+    }
+
+    async function renewOrder(orderId) {
+      if (!orderId) return alert('找不到訂單編號');
+      try {
+        var r = await fetch('/api/order/' + orderId + '/renew', { method: 'POST' });
+        var d = await r.json();
+        if (d.success) {
+          showResult('success', '🔄 已續約並重新發送付款連結');
+          loadOrders();
+        } else {
+          showResult('error', '❌ 續約失敗：' + (d.error || '未知錯誤'));
+        }
+      } catch (e) {
+        showResult('error', '❌ 無法連線續約 API：' + e.message);
+      }
+    }
+
+    function copyPaymentLink(orderId) {
+      var url = window.location.origin + '/payment/linepay/pay/' + orderId;
+      navigator.clipboard.writeText(url).then(
+        function() { showResult('success', '📋 已複製付款連結'); },
+        function() { showResult('error', '❌ 複製失敗，請手動複製：<br>' + url); }
+      );
+    }
+
+    function sendSingleReminder(orderId) {
+      return renewOrder(orderId);
+    }
+
+    async function deleteOrder(orderId) {
+      if (!confirm('確定要刪除訂單：' + orderId + ' 嗎？')) return;
+      try {
+        var r = await fetch('/api/order/' + orderId, { method: 'DELETE' });
+        var d = await r.json();
+        if (d.success) {
+          showResult('success', '🗑️ 訂單已刪除');
+          loadOrders();
+        } else {
+          showResult('error', '❌ 刪除失敗：' + (d.error || '未知錯誤'));
+        }
+      } catch (e) {
+        showResult('error', '❌ 無法連線刪除 API：' + e.message);
+      }
+    }
+
     async function showCustomerHistory(userId, userName) {
-      const modal = document.getElementById('customerHistoryModal');
-      const content = document.getElementById('customerHistoryContent');
+      var modal = document.getElementById('customerHistoryModal');
+      var content = document.getElementById('customerHistoryContent');
       modal.style.display = 'block';
       content.innerHTML = '<p style="text-align:center; color:#999;">載入中...</p>';
 
       try {
-        const hist = (allOrders||[]).filter(o => o.userId === userId);
+        var hist = (allOrders || []).filter(function(o) { return o.userId === userId; });
         if (!hist || hist.length === 0) {
-          content.innerHTML = `<p style="text-align:center; color:#999;">客戶 ${userName} 尚無訂單記錄</p>`;
+          content.innerHTML = '<p style="text-align:center; color:#999;">客戶 ' + userName + ' 尚無訂單記錄</p>';
           return;
         }
-        let html = `<div class="customer-card"><h4>${userName}</h4><p>User ID：${userId}</p></div>`;
-        hist.forEach(o => {
-          const created = o.createdAt ? new Date(o.createdAt).toLocaleString('zh-TW') : '-';
-          const status = o.status || (o.isExpired ? 'expired' : 'pending');
-          html += `
-            <div class="template-item">
-              <div><strong>訂單編號：</strong>${o.orderId || '-'}</div>
-              <div><strong>金額：</strong>NT$ ${(o.amount||0).toLocaleString()}</div>
-              <div><strong>狀態：</strong>${status}</div>
-              <div><strong>建立時間：</strong>${created}</div>
-            </div>
-          `;
+        var html = '<div class="customer-card"><h4>' + userName + '</h4><p>User ID：' + userId + '</p></div>';
+        hist.forEach(function(o) {
+          var created = o.createdAt ? new Date(o.createdAt).toLocaleString('zh-TW') : '-';
+          var status = o.status || (o.isExpired ? 'expired' : 'pending');
+          html += 
+            '<div class="template-item">' +
+            '<div><strong>訂單編號：</strong>' + (o.orderId || '-') + '</div>' +
+            '<div><strong>金額：</strong>NT$ ' + ((o.amount || 0).toLocaleString()) + '</div>' +
+            '<div><strong>狀態：</strong>' + status + '</div>' +
+            '<div><strong>建立時間：</strong>' + created + '</div>' +
+            '</div>';
         });
         content.innerHTML = html;
       } catch (e) {
-        content.innerHTML = `<p style="color:#dc3545;">載入失敗：${e.message}</p>`;
+        content.innerHTML = '<p style="color:#dc3545;">載入失敗：' + e.message + '</p>';
       }
     }
-    function closeCustomerHistory(){ document.getElementById('customerHistoryModal').style.display='none'; }
 
-    // ====== 客戶編號 ======
-    function displaySavedCustomers() {
-      const wrap = document.getElementById('savedCustomers');
-      const entries = Object.entries(savedCustomers);
-      if (entries.length === 0) { wrap.innerHTML = '<p style="color:#999;">尚無資料</p>'; return; }
-      wrap.innerHTML = entries.map(([no,c]) => `
-        <div class="user-item" style="justify-content:space-between;">
-          <div class="user-info" onclick="document.getElementById('userId').value='${c.userId||''}';document.getElementById('userName').value='${c.name||''}';switchTab({currentTarget:document.querySelector('.tab')},'payment')">
-            <strong>#${no}　${c.name||'-'}</strong>
-            <small>User ID: ${c.userId||'-'}</small>
-          </div>
-          <button class="btn btn-small btn-danger" onclick="removeSavedCustomer('${no}')">刪除</button>
-        </div>
-      `).join('');
-    }
-    function saveCustomerNumber() {
-      const no = document.getElementById('newCustomerNumber').value.trim();
-      const name = document.getElementById('newCustomerName').value.trim();
-      const userId = document.getElementById('newCustomerUserId').value.trim();
-      if (!no || !name || !userId) return alert('請完整輸入 編號 / 姓名 / User ID');
-
-      savedCustomers[no] = { name, userId };
-      localStorage.setItem('customerNumbers', JSON.stringify(savedCustomers));
-      document.getElementById('newCustomerNumber').value=''; document.getElementById('newCustomerName').value=''; document.getElementById('newCustomerUserId').value='';
-      displaySavedCustomers();
-      showResult('success','✅ 已儲存客戶編號');
-    }
-    function removeSavedCustomer(no) {
-      if (!confirm(`刪除編號 #${no} ?`)) return;
-      delete savedCustomers[no];
-      localStorage.setItem('customerNumbers', JSON.stringify(savedCustomers));
-      displaySavedCustomers();
+    function closeCustomerHistory() {
+      document.getElementById('customerHistoryModal').style.display = 'none';
     }
 
-    // ====== 模板管理 ======
-    function displayTemplates() {
-      const wrap = document.getElementById('templateList');
-      if (savedTemplates.length === 0) { wrap.innerHTML = '<p style="color:#999;">尚無模板</p>'; return; }
-      wrap.innerHTML = savedTemplates.map((t, i) => `
-        <div class="template-item">
-          <div style="white-space:pre-wrap;">${t}</div>
-          <div style="margin-top:10px; display:flex; gap:10px;">
-            <button class="btn btn-small btn-secondary" onclick="editTemplate(${i})">編輯</button>
-            <button class="btn btn-small btn-danger" onclick="deleteTemplate(${i})">刪除</button>
-          </div>
-        </div>
-      `).join('');
-    }
-    function saveTemplate() {
-      const t = document.getElementById('newTemplateContent').value.trim();
-      if (!t) return alert('請輸入模板內容');
-      savedTemplates.push(t);
-      localStorage.setItem('messageTemplates', JSON.stringify(savedTemplates));
-      document.getElementById('newTemplateContent').value=''; displayTemplates();
-      if (document.getElementById('payment-tab').classList.contains('active')) loadCustomTemplates();
-      showResult('success','✅ 已新增模板');
-    }
-    function editTemplate(i) {
-      const nv = prompt('修改模板內容：', savedTemplates[i] || '');
-      if (nv === null) return;
-      savedTemplates[i] = nv;
-      localStorage.setItem('messageTemplates', JSON.stringify(savedTemplates));
-      displayTemplates(); loadCustomTemplates();
-    }
-    function deleteTemplate(i) {
-      if (!confirm('確定刪除此模板？')) return;
-      savedTemplates.splice(i,1);
-      localStorage.setItem('messageTemplates', JSON.stringify(savedTemplates));
-      displayTemplates(); loadCustomTemplates();
-    }
-
-    // ====== 客戶列表 ======
     async function loadUsers() {
-      const wrap = document.getElementById('userList');
+      var wrap = document.getElementById('userList');
       wrap.innerHTML = '<p style="text-align:center; color:#999;">載入中...</p>';
-      try {
-        const r = await fetch('/api/users');
-        const d = await r.json();
-        allUsers = Array.isArray(d.users) ? d.users : [];
-      } catch {
-        allUsers = Object.entries(savedCustomers).map(([no, c]) => ({ userId: c.userId, name: c.name, number: no }));
-      }
-
-      if (allUsers.length === 0) {
+      
+      // ✅ 直接從 savedCustomers 讀取並排序
+      var entries = Object.entries(savedCustomers).sort(function(a, b) {
+        return parseInt(a[0]) - parseInt(b[0]);
+      });
+      
+      if (entries.length === 0) {
         wrap.innerHTML = '<p style="text-align:center; color:#999;">尚無客戶資料</p>';
         return;
       }
-      wrap.innerHTML = allUsers.map(u => `
-        <div class="user-item">
-          <div class="user-info" onclick="document.getElementById('userId').value='${u.userId||''}';document.getElementById('userName').value='${u.name||''}';switchTab({currentTarget:document.querySelector('.tab')},'payment')">
-            <strong>${u.name||'-'}</strong>
-            <small>User ID: ${u.userId||'-'}${u.number ? '｜編號: '+u.number : ''}</small>
-          </div>
-          <button class="btn btn-small btn-secondary" onclick="prefillCustomer('${u.userId||''}','${u.name||''}')">帶入</button>
-        </div>
-      `).join('');
-    }
-    function prefillCustomer(uid, name){
-      document.getElementById('userId').value = uid||''; document.getElementById('userName').value = name||'';
-      switchTab({currentTarget:document.querySelector('.tab')}, 'payment');
+      
+      wrap.innerHTML = entries.map(function(item) {
+        var no = item[0];
+        var c = item[1];
+        return '<div class="user-item">' +
+          '<div class="user-info" onclick="fillCustomer(\'' + c.userId + '\',\'' + c.name + '\')">' +
+          '<strong>#' + no + ' - ' + c.name + '</strong>' +
+          '<small>User ID: ' + c.userId + '</small>' +
+          '</div>' +
+          '<button class="btn btn-small btn-secondary" onclick="fillCustomer(\'' + c.userId + '\',\'' + c.name + '\')">帶入</button>' +
+          '</div>';
+      }).join('');
     }
 
-    // ====== 共用提示 ======
     function showResult(type, html) {
-      const el = document.getElementById('result');
-      el.className = `result ${type==='success'?'success':'error'}`;
+      var el = document.getElementById('result');
+      el.className = 'result ' + (type === 'success' ? 'success' : 'error');
       el.innerHTML = html;
       el.style.display = 'block';
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
-    document.addEventListener('DOMContentLoaded', () => {
-      loadCustomTemplates();
+    document.addEventListener('DOMContentLoaded', function() {
+      initLoad();
     });
-  </script>
+    // ========================================
+    // 🧺 取件追蹤功能
+    // ========================================
+
+    function searchForPickup() {
+      var num = document.getElementById('pickupSearch').value.trim();
+      if (!num) return alert('請輸入編號');
+      
+      if (savedCustomers[num]) {
+        var c = savedCustomers[num];
+        document.getElementById('pickupNumber').value = num;
+        document.getElementById('pickupName').value = c.name;
+        document.getElementById('pickupUserId').value = c.userId;
+        document.getElementById('pickupCardNumber').textContent = num;
+        document.getElementById('pickupCardName').textContent = c.name;
+        document.getElementById('pickupCardUserId').textContent = c.userId;
+        document.getElementById('pickupCustomerCard').style.display = 'block';
+      } else {
+        alert('找不到此客戶編號');
+      }
+    }
+
+    async function startPickup() {
+      var num = document.getElementById('pickupNumber').value.trim();
+      var name = document.getElementById('pickupName').value.trim();
+      var userId = document.getElementById('pickupUserId').value.trim();
+      
+      if (!num || !name || !userId) return alert('請填寫完整');
+      
+      try {
+        var res = await fetch('/api/pickup/add', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ customerNumber: num, customerName: name, userId: userId })
+        });
+        var data = await res.json();
+        
+        if (data.success) {
+          showResult('success', '✅ 已開始追蹤！7天後11點自動提醒');
+          document.getElementById('pickupNumber').value = '';
+          document.getElementById('pickupName').value = '';
+          document.getElementById('pickupUserId').value = '';
+          document.getElementById('pickupCustomerCard').style.display = 'none';
+          loadPickups();
+        } else {
+          showResult('error', '❌ ' + data.message);
+        }
+      } catch (e) {
+        showResult('error', '❌ 連線失敗');
+      }
+    }
+
+    async function loadPickups() {
+      try {
+        var res = await fetch('/api/pickup/orders');
+        var data = await res.json();
+        
+        if (data.success) {
+          allPickupOrders = data.orders || [];
+          var html = '';
+          if (allPickupOrders.length === 0) {
+            html = '<p style="color:#999; text-align:center;">尚無追蹤訂單</p>';
+          } else {
+            allPickupOrders.forEach(function(o) {
+              var status = o.pickedUp ? '✅ 已簽收' : '⏰ 追蹤中 (' + o.daysPassed + '天)';
+              html += '<div class="user-item" style="display:block; opacity:' + (o.pickedUp ? '0.6' : '1') + ';">' +
+                '<div style="margin-bottom:10px;"><strong style="font-size:16px;">#' + o.customerNumber + ' - ' + o.customerName + '</strong> <span style="background:' + (o.pickedUp ? '#28a745' : '#ffc107') + '; color:#fff; padding:5px 10px; border-radius:5px; font-size:12px;">' + status + '</span></div>' +
+                '<div style="font-size:13px; color:#666; margin-bottom:10px;">' +
+                '下次提醒: ' + new Date(o.nextReminderAt).toLocaleString('zh-TW') + '<br>' +
+                '已提醒: ' + o.reminderCount + ' 次</div>' +
+                '<div style="display:flex; gap:5px; flex-wrap:wrap;">';
+              
+              if (!o.pickedUp) {
+                html += '<button class="btn btn-small btn-secondary" onclick="remindNow(\'' + o.customerNumber + '\')">🔔 立即提醒</button>' +
+                        '<button class="btn btn-small" style="background:#ff9800;color:#fff;" onclick="delay14(\'' + o.customerNumber + '\')">⏰ 延14天</button>' +
+                        '<button class="btn btn-small btn-secondary" onclick="markDone(\'' + o.customerNumber + '\')">✅ 簽收</button>';
+              }
+              html += '<button class="btn btn-small btn-danger" onclick="deletePick(\'' + o.customerNumber + '\')">刪除</button>' +
+                      '</div></div>';
+            });
+          }
+          document.getElementById('pickupList').innerHTML = html;
+        }
+      } catch (e) {
+        showResult('error', '❌ 載入失敗');
+      }
+    }
+
+    async function remindNow(num) {
+      try {
+        var res = await fetch('/api/pickup/remind/' + num, { method: 'POST' });
+        var data = await res.json();
+        if (data.success) {
+          showResult('success', '✅ 提醒已發送');
+          loadPickups();
+        } else {
+          showResult('error', '❌ ' + data.message);
+        }
+      } catch (e) {
+        showResult('error', '❌ 發送失敗');
+      }
+    }
+
+    async function delay14(num) {
+      if (!confirm('延遲14天後提醒？')) return;
+      try {
+        var res = await fetch('/api/pickup/delay', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ customerNumber: num })
+        });
+        var data = await res.json();
+        if (data.success) {
+          showResult('success', '✅ 已延遲14天');
+          loadPickups();
+        } else {
+          showResult('error', '❌ ' + data.message);
+        }
+      } catch (e) {
+        showResult('error', '❌ 操作失敗');
+      }
+    }
+
+    async function markDone(num) {
+      if (!confirm('標記為已簽收？')) return;
+      try {
+        var res = await fetch('/api/pickup/complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ customerNumber: num })
+        });
+        var data = await res.json();
+        if (data.success) {
+          showResult('success', '✅ 已簽收');
+          loadPickups();
+        } else {
+          showResult('error', '❌ ' + data.message);
+        }
+      } catch (e) {
+        showResult('error', '❌ 操作失敗');
+      }
+    }
+
+    async function deletePick(num) {
+      if (!confirm('刪除此追蹤？')) return;
+      try {
+        var res = await fetch('/api/pickup/order/' + num, { method: 'DELETE' });
+        var data = await res.json();
+        if (data.success) {
+          showResult('success', '✅ 已刪除');
+          loadPickups();
+        } else {
+          showResult('error', '❌ ' + data.message);
+        }
+      } catch (e) {
+        showResult('error', '❌ 刪除失敗');
+      }
+    }
+
+    async function editTemplate() {
+      try {
+        var res = await fetch('/api/pickup/template');
+        var data = await res.json();
+        if (data.success) {
+          document.getElementById('templateText').value = data.template;
+          document.getElementById('templateModal').style.display = 'block';
+        }
+      } catch (e) {
+        showResult('error', '❌ 載入失敗');
+      }
+    }
+
+    function closeTemplateModal() {
+      document.getElementById('templateModal').style.display = 'none';
+    }
+
+    async function saveTemplatePickup() {
+      var text = document.getElementById('templateText').value.trim();
+      if (!text) return alert('請輸入模板');
+      
+      try {
+        var res = await fetch('/api/pickup/template', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ template: text })
+        });
+        var data = await res.json();
+        if (data.success) {
+          showResult('success', '✅ 模板已儲存');
+          closeTemplateModal();
+        } else {
+          showResult('error', '❌ 儲存失敗');
+        }
+      } catch (e) {
+        showResult('error', '❌ 連線失敗');
+      }
+    }
+
+    // ========================================
+// 🚚 外送排程 / 紀錄 功能
+// ========================================
+
+// 依客戶編號快速帶入
+function searchForDelivery() {
+  var num = document.getElementById('deliverySearch').value.trim();
+  if (!num) return alert('請輸入編號');
+
+  if (savedCustomers[num]) {
+    var c = savedCustomers[num];
+    document.getElementById('deliveryNumber').value = num;
+    document.getElementById('deliveryName').value = c.name || '';
+    document.getElementById('deliveryCardNumber').textContent = num;
+    document.getElementById('deliveryCardName').textContent = c.name || '';
+    document.getElementById('deliveryCustomerCard').style.display = 'block';
+  } else {
+    alert('找不到此客戶編號');
+  }
+}
+
+// 新增外送紀錄
+async function addDelivery() {
+  var num   = document.getElementById('deliveryNumber').value.trim();
+  var name  = document.getElementById('deliveryName').value.trim();
+  var amt   = document.getElementById('deliveryAmount').value.trim();
+  var note  = document.getElementById('deliveryNote').value.trim();
+  var date  = document.getElementById('deliveryDate').value || null;
+  var notifyStatus = document.querySelector('input[name="deliveryNotifyStatus"]:checked').value; // 'not_sent' or 'sent'
+
+  if (!num || !name || !amt) {
+    alert('請至少填寫 編號 / 姓名 / 金額');
+    return;
+  }
+
+  var amount = parseInt(amt, 10);
+  if (isNaN(amount) || amount < 0) {
+    alert('金額格式不正確');
+    return;
+  }
+
+  try {
+    var res = await fetch('/api/delivery/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customerNumber: num,
+        customerName : name,
+        amount       : amount,
+        notifyStatus : notifyStatus,  // 'not_sent' | 'sent'
+        note         : note,
+        scheduledDate: date          // 'YYYY-MM-DD' 或 null
+      })
+    });
+
+    var data = await res.json();
+    if (data.success) {
+      showResult('success', '✅ 已新增外送紀錄');
+      document.getElementById('deliveryNumber').value = '';
+      document.getElementById('deliveryName').value  = '';
+      document.getElementById('deliveryAmount').value = '';
+      document.getElementById('deliveryNote').value = '';
+      document.getElementById('deliveryDate').value = '';
+      document.querySelector('input[name="deliveryNotifyStatus"][value="not_sent"]').checked = true;
+      document.getElementById('deliveryCustomerCard').style.display = 'none';
+      loadDeliveries(false);
+    } else {
+      showResult('error', '❌ 新增失敗：' + (data.error || '未知錯誤'));
+    }
+  } catch (e) {
+    showResult('error', '❌ 連線失敗：' + e.message);
+  }
+}
+
+// 🚚 載入外送紀錄（加強版：自動重試 + 錯誤處理）
+async function loadDeliveries(showAlert) {
+  var wrap = document.getElementById('deliveryList');
+  if (!wrap) return;
+
+  wrap.innerHTML = '<p style="text-align:center; color:#999;">載入中...</p>';
+
+  // ⭐ 自動重試最多 3 次
+  for (let retry = 0; retry < 3; retry++) {
+    try {
+      var res = await fetch('/api/delivery/orders');
+      
+      // 檢查 HTTP 狀態
+      if (!res.ok) {
+        throw new Error('HTTP ' + res.status + ': ' + res.statusText);
+      }
+      
+      // 檢查回應格式
+      var contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('伺服器回應格式錯誤');
+      }
+      
+      var data = await res.json();
+      
+      if (!data.success) {
+        throw new Error(data.error || '載入失敗');
+      }
+
+      // ⭐ 資料清理：過濾掉不完整的訂單
+      allDeliveries = (data.orders || []).filter(function(o) {
+        return o && o.id && o.customerNumber && o.customerName;
+      });
+      
+      console.log('✅ 成功載入', allDeliveries.length, '筆外送紀錄');
+      
+      // 渲染列表
+      renderDeliveryList();
+      
+      // 顯示今日提醒
+      if (showAlert) {
+        checkTodayDeliveryAlerts();
+      }
+      
+      return; // ✅ 成功就跳出重試循環
+      
+    } catch (e) {
+      console.error(`載入失敗（第 ${retry + 1} 次）:`, e.message);
+      
+      // 如果是最後一次重試還是失敗
+      if (retry === 2) {
+        allDeliveries = [];
+        wrap.innerHTML = 
+          '<div style="text-align:center; padding:30px;">' +
+          '<p style="color:#dc3545; font-size:16px; margin-bottom:15px;">❌ 載入失敗</p>' +
+          '<p style="color:#666; font-size:14px; margin-bottom:20px;">' + e.message + '</p>' +
+          '<button class="btn btn-small btn-secondary" onclick="loadDeliveries(false)">🔄 重試</button>' +
+          '</div>';
+        return;
+      }
+      
+      // 等待 1 秒後重試
+      await new Promise(r => setTimeout(r, 1000));
+    }
+  }
+}
+
+    
+
+// 依日期分組顯示外送紀錄
+function renderDeliveryList() {
+  var wrap = document.getElementById('deliveryList');
+  if (!wrap) return;
+
+  // ⭐ 新增：過濾掉資料不完整的訂單
+  var validDeliveries = (allDeliveries || []).filter(function(o) {
+    return o && o.customerNumber && o.customerName;
+  });
+
+  if (!validDeliveries || validDeliveries.length === 0) {
+    wrap.innerHTML = '<p style="text-align:center; color:#999;">目前沒有外送紀錄</p>';
+    return;
+  }
+
+  // 依日期分組（只取日期，不含時間）
+  var groups = {};
+  validDeliveries.forEach(function(o) {
+    var rawDate =
+      (o.createdDate || o.createdAt || '').toString().substring(0, 10) ||
+      '未指定日期';
+    if (!groups[rawDate]) groups[rawDate] = [];
+    groups[rawDate].push(o);
+  });
+
+  var dates = Object.keys(groups).sort().reverse(); // 新的日期在前
+  var todayStr = new Date().toISOString().substring(0, 10);
+
+  var html = '';
+  dates.forEach(function(dk) {
+    var tag = (dk === todayStr) ? '（今天）' : '';
+    html +=
+      '<h4 style="margin-top:10px; margin-bottom:8px; color:#667eea;">📅 ' +
+      dk +
+      ' ' +
+      tag +
+      '</h4>';
+
+    groups[dk].forEach(function(o) {
+      var id = o.id || o.recordId || '';
+      var notifyStatus = o.notifyStatus || 'not_sent';
+      var signed = !!(o.signed || o.isSigned);
+      var badgeNotify =
+        notifyStatus === 'sent'
+          ? '<span style="background:#1890ff;color:#fff;padding:3px 8px;border-radius:5px;font-size:12px;">📨 已發送自動通知</span>'
+          : '<span style="background:#faad14;color:#fff;padding:3px 8px;border-radius:5px;font-size:12px;">⌛ 未發送自動通知</span>';
+
+      var badgeSigned = signed
+        ? '<span style="background:#52c41a;color:#fff;padding:3px 8px;border-radius:5px;font-size:12px;margin-left:5px;">✅ 已簽收</span>'
+        : '';
+
+      var scheduled = o.scheduledDate
+        ? new Date(o.scheduledDate).toLocaleDateString('zh-TW')
+        : '未指定';
+
+      html +=
+        '<div class="user-item" style="display:block; margin-bottom:8px; opacity:' +
+        (signed ? '0.6' : '1') +
+        ';">' +
+        '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">' +
+        '<div>' +
+        '<strong style="font-size:15px;">#' +
+        (o.customerNumber || '') +
+        ' - ' +
+        (o.customerName || '') +
+        '</strong> ' +
+        badgeNotify +
+        badgeSigned +
+        '</div>' +
+        '<div style="font-size:18px; font-weight:bold; color:#667eea;">NT$ ' +
+        ((o.amount || 0).toLocaleString()) +
+        '</div>' +
+        '</div>' +
+        '<div style="font-size:13px; color:#666; margin-bottom:8px;">' +
+        '<div>指定外送日期：' +
+        scheduled +
+        '</div>' +
+        (o.note
+          ? '<div>備註：' + (o.note || '').replace(/\n/g, '<br>') + '</div>'
+          : '') +
+        '</div>' +
+        '<div style="display:flex; gap:5px; flex-wrap:wrap;">';
+
+      if (!signed) {
+        html +=
+          '<button class="btn btn-small btn-secondary" onclick="markDeliverySigned(\'' +
+          id +
+          '\')">✅ 已簽收</button>';
+      }
+
+      html +=
+        '<button class="btn btn-small" style="background:#ff9800;color:#fff;" onclick="editDelivery(\'' +
+        id +
+        '\')">✏️ 編輯</button>' +
+        '<button class="btn btn-small btn-danger" onclick="deleteDelivery(\'' +
+        id +
+        '\')">🗑️ 刪除</button>' +
+        '</div>' +
+        '</div>';
+    });
+  });
+
+  wrap.innerHTML = html;
+}
+
+// 依 ID 找到紀錄
+function findDeliveryById(id) {
+  return (allDeliveries || []).find(function(o) {
+    return (o.id || o.recordId || '') === id;
+  });
+}
+
+
+// ✅ 標記已簽收
+async function markDeliverySigned(id) {
+  if (!id) return;
+  
+  var record = findDeliveryById(id);
+  if (!record) {
+    alert('找不到此紀錄');
+    return;
+  }
+
+  var amount = parseInt(record.amount || 0, 10);
+  var customerNumber = record.customerNumber;
+  var customerName = record.customerName;
+  
+  // 情況 1: 金額 = 0 → 只發送簡單訊息
+  if (amount === 0) {
+    if (!confirm('確認將此外送紀錄標記為「已簽收」?\n\n將發送訊息:\n「已經送回管理室了💙謝謝您」')) {
+      return;
+    }
+    
+    try {
+      var res = await fetch('/api/delivery/mark-signed-simple', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          id: id,
+          customerNumber: customerNumber,
+          customerName: customerName
+        })
+      });
+      
+      var data = await res.json();
+      
+      if (data.success) {
+        showResult('success', '✅ 已標記為已簽收並發送通知');
+        loadDeliveries(false);
+      } else {
+        showResult('error', '❌ 操作失敗: ' + (data.error || '未知錯誤'));
+      }
+    } catch (e) {
+      showResult('error', '❌ 連線失敗: ' + e.message);
+    }
+    return;
+  }
+
+  // 情況 2: 金額 > 0 → 發送支付連結
+  if (!confirm(
+    '確認將此外送紀錄標記為「已簽收」?\n\n' +
+    '客戶: #' + customerNumber + ' - ' + customerName + '\n' +
+    '金額: NT$ ' + amount.toLocaleString() + '\n\n' +
+    '將自動:\n' +
+    '1. 發送付款訊息 + LINE Pay 和 ECPay 連結\n' +
+    '2. 建立訂單追蹤\n' +
+    '3. 付款成功後自動通知'
+  )) {
+    return;
+  }
+
+  try {
+    var res = await fetch('/api/delivery/mark-signed-with-payment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        id: id,
+        customerNumber: customerNumber,
+        customerName: customerName,
+        amount: amount
+      })
+    });
+    
+    var data = await res.json();
+    
+    if (data.success) {
+      showResult('success', 
+        '✅ 已標記為已簽收並發送付款連結\n\n' +
+        '訂單編號: ' + (data.orderId || '-') + '\n' +
+        '金額: NT$ ' + amount.toLocaleString()
+      );
+      
+      loadDeliveries(false);
+      loadOrders();
+    } else {
+      showResult('error', '❌ 操作失敗: ' + (data.error || '未知錯誤'));
+    }
+  } catch (e) {
+    showResult('error', '❌ 連線失敗: ' + e.message);
+  }
+}
+
+// 刪除外送紀錄
+async function deleteDelivery(id) {
+  if (!id) return;
+  if (!confirm('確定要刪除此外送紀錄？')) return;
+  // ... 下面保持不變
+
+  try {
+    var res = await fetch('/api/delivery/order/' + encodeURIComponent(id), {
+      method: 'DELETE'
+    });
+    var data = await res.json();
+    if (data.success) {
+      showResult('success', '✅ 已刪除外送紀錄');
+      loadDeliveries(false);
+    } else {
+      showResult('error', '❌ 刪除失敗：' + (data.error || '未知錯誤'));
+    }
+  } catch (e) {
+    showResult('error', '❌ 連線失敗：' + e.message);
+  }
+}
+
+// 編輯外送紀錄（簡單版，用 prompt）
+async function editDelivery(id) {
+  var record = findDeliveryById(id);
+  if (!record) {
+    alert('找不到此紀錄');
+    return;
+  }
+
+  var amountStr = prompt('修改金額（目前：' + (record.amount || 0) + '）', record.amount || 0);
+  if (amountStr === null) return;
+  var amount = parseInt(amountStr, 10);
+  if (isNaN(amount) || amount < 0) {
+    alert('金額格式不正確');
+    return;
+  }
+
+  var note = prompt('修改備註（可以留空）', record.note || '');
+  if (note === null) note = record.note || '';
+
+  var notifyOk = confirm('是否已發送自動通知？\n「確定」= 已發送自動通知\n「取消」= 未發送自動通知');
+  var notifyStatus = notifyOk ? 'sent' : 'not_sent';
+
+  var dateStr = prompt(
+    '指定外送日期（格式：YYYY-MM-DD，可留空表示不變）\n目前：' +
+      (record.scheduledDate || '未指定'),
+    record.scheduledDate || ''
+  );
+  if (dateStr !== null && dateStr.trim() === '') dateStr = null;
+
+  try {
+    var res = await fetch('/api/delivery/update', {
+      method: 'POST', // 也可以改成 PUT，看你後端怎麼寫
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id          : id,
+        amount      : amount,
+        note        : note,
+        notifyStatus: notifyStatus,
+        scheduledDate: dateStr
+      })
+    });
+    var data = await res.json();
+    if (data.success) {
+      showResult('success', '✅ 外送紀錄已更新');
+      loadDeliveries(false);
+    } else {
+      showResult('error', '❌ 更新失敗：' + (data.error || '未知錯誤'));
+    }
+  } catch (e) {
+    showResult('error', '❌ 連線失敗：' + e.message);
+  }
+}
+
+// 今天有排程就自動跳提醒
+function checkTodayDeliveryAlerts() {
+  if (!allDeliveries || allDeliveries.length === 0) return;
+
+  var today = new Date().toISOString().substring(0, 10);
+
+  var todayList = allDeliveries.filter(function(o) {
+    var sd = (o.scheduledDate || '').toString().substring(0, 10);
+    var signed = !!(o.signed || o.isSigned);
+    return sd === today && !signed;
+  });
+
+  if (todayList.length === 0) return;
+
+  var msg = '📣 今天共有 ' + todayList.length + ' 筆外送排程：\n\n';
+  todayList.forEach(function(o) {
+    msg +=
+      '#'+ (o.customerNumber || '') +
+      ' ' + (o.customerName || '') +
+      ' 金額 NT$ ' + ((o.amount || 0).toLocaleString()) +
+      '\n';
+  });
+
+  alert(msg);
+}
+
+    // ========================================
+   // ========================================
+// 📢 純文字通知功能（獨立分頁版）
+// ========================================
+
+var notifyTemplatesData = [];
+
+// 快速搜尋客戶（純文字通知用）
+function searchForNotify() {
+  var query = document.getElementById('notifySearch').value.trim();
+  if (!query) {
+    alert('請輸入編號或姓名');
+    return;
+  }
+
+  // 先找編號
+  if (savedCustomers[query]) {
+    var c = savedCustomers[query];
+    document.getElementById('notifyUserId').value = c.userId || '';
+    document.getElementById('notifyUserName').value = c.name || '';
+    document.getElementById('notifyCardNumber').textContent = query;
+    document.getElementById('notifyCardName').textContent = c.name;
+    document.getElementById('notifyCardUserId').textContent = c.userId;
+    document.getElementById('notifyCustomerCard').style.display = 'block';
+    return;
+  }
+
+  // 再找姓名
+  var found = Object.entries(savedCustomers).find(function(item) {
+    return (item[1].name || '').includes(query);
+  });
+  if (found) {
+    var number = found[0];
+    var c = found[1];
+    document.getElementById('notifyUserId').value = c.userId || '';
+    document.getElementById('notifyUserName').value = c.name || '';
+    document.getElementById('notifyCardNumber').textContent = number;
+    document.getElementById('notifyCardName').textContent = c.name;
+    document.getElementById('notifyCardUserId').textContent = c.userId;
+    document.getElementById('notifyCustomerCard').style.display = 'block';
+    return;
+  }
+
+  alert('找不到此客戶');
+}
+
+// 載入通知模板
+async function loadNotifyTemplates() {
+  try {
+    var res = await fetch('/api/notify-templates');
+    var data = await res.json();
+    if (data.success) {
+      notifyTemplatesData = data.templates || [];
+      displayNotifyTemplates();
+    }
+  } catch (error) {
+    console.error('載入通知模板失敗:', error);
+  }
+}
+
+// 顯示通知模板列表（可選擇、編輯、刪除）
+function displayNotifyTemplates() {
+  var container = document.getElementById('notifyTemplateList');
+  if (!container) return;
+  
+  if (notifyTemplatesData.length === 0) {
+    container.innerHTML = '<p style="color:#999; text-align:center;">尚無模板，請先新增模板</p>';
+    return;
+  }
+  
+  var html = '';
+  notifyTemplatesData.forEach(function(template, index) {
+    html += '<div class="template-item" style="margin-bottom: 10px;">' +
+      '<div style="background: #fff; padding: 12px; border-radius: 8px; border: 2px solid #e0e0e0;">' +
+      '<div style="white-space: pre-wrap; margin-bottom: 10px; color: #333; line-height: 1.6;">' + template + '</div>' +
+      '<div style="display: flex; gap: 8px; flex-wrap: wrap;">' +
+      '<button class="btn btn-small" style="background: #667eea;" onclick="useNotifyTemplate(' + index + ')">✅ 使用</button>' +
+      '<button class="btn btn-small btn-secondary" onclick="editNotifyTemplate(' + index + ')">✏️ 編輯</button>' +
+      '<button class="btn btn-small btn-danger" onclick="deleteNotifyTemplate(' + index + ')">🗑️ 刪除</button>' +
+      '</div>' +
+      '</div>' +
+      '</div>';
+  });
+  container.innerHTML = html;
+}
+
+// 使用模板
+function useNotifyTemplate(index) {
+  var el = document.getElementById('notifyMessage');
+  if (el) el.value = notifyTemplatesData[index] || '';
+  showResult('success', '✅ 已套用模板');
+}
+
+// 新增通知模板
+async function addNotifyTemplate() {
+  var content = document.getElementById('newNotifyTemplate').value.trim();
+  if (!content) {
+    alert('請輸入模板內容');
+    return;
+  }
+
+  try {
+    var res = await fetch('/api/notify-templates', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: content })
+    });
+    var data = await res.json();
+    if (data.success) {
+      showResult('success', '✅ 已新增通知模板');
+      document.getElementById('newNotifyTemplate').value = '';
+      await loadNotifyTemplates();
+    } else {
+      showResult('error', '❌ 新增失敗: ' + (data.error || '未知錯誤'));
+    }
+  } catch (error) {
+    showResult('error', '❌ 連線失敗: ' + error.message);
+  }
+}
+
+// 編輯通知模板
+async function editNotifyTemplate(index) {
+  var newContent = prompt('修改模板內容：', notifyTemplatesData[index] || '');
+  if (newContent === null) return;
+  if (!newContent.trim()) {
+    alert('模板內容不能為空');
+    return;
+  }
+
+  try {
+    var res = await fetch('/api/notify-templates/' + index, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: newContent.trim() })
+    });
+    var data = await res.json();
+    if (data.success) {
+      showResult('success', '✅ 模板已更新');
+      await loadNotifyTemplates();
+    } else {
+      showResult('error', '❌ 更新失敗: ' + (data.error || '未知錯誤'));
+    }
+  } catch (error) {
+    showResult('error', '❌ 連線失敗: ' + error.message);
+  }
+}
+
+// 刪除通知模板
+async function deleteNotifyTemplate(index) {
+  if (!confirm('確定刪除此模板？')) return;
+
+  try {
+    var res = await fetch('/api/notify-templates/' + index, { method: 'DELETE' });
+    var data = await res.json();
+    if (data.success) {
+      showResult('success', '✅ 模板已刪除');
+      await loadNotifyTemplates();
+    } else {
+      showResult('error', '❌ 刪除失敗: ' + (data.error || '未知錯誤'));
+    }
+  } catch (error) {
+    showResult('error', '❌ 連線失敗: ' + error.message);
+  }
+}
+
+// 發送純文字通知
+document.getElementById('notificationForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  
+  var userId = document.getElementById('notifyUserId').value.trim();
+  var userName = document.getElementById('notifyUserName').value.trim();
+  var message = document.getElementById('notifyMessage').value.trim();
+
+  if (!userId || !userName || !message) {
+    showResult('error', '❌ 請填寫所有欄位！');
+    return;
+  }
+
+  try {
+    var res = await fetch('/send-notification', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: userId,
+        userName: userName,
+        message: message
+      })
+    });
+
+    var data = await res.json();
+
+    if (data.success) {
+      showResult('success', '✅ 通知已成功發送給 ' + userName + '！<br><br>訊息內容：<br>' + message);
+      document.getElementById('notificationForm').reset();
+      document.getElementById('notifyCustomerCard').style.display = 'none';
+    } else {
+      showResult('error', '❌ 發送失敗: ' + (data.error || '伺服器無回應'));
+    }
+  } catch (err) {
+    showResult('error', '❌ 錯誤: ' + err.message);
+  }
+});
+
+// 頁面載入時初始化
+document.addEventListener('DOMContentLoaded', function() {
+  initLoad();
+  loadNotifyTemplates();
+  loadDeliveries(true);
+  checkTodayDeliveryAlerts();
+});
+
+// ========================================
+// 👤 客人紀錄功能
+// ========================================
+
+// 載入客人紀錄
+async function loadRecords() {
+  var wrap = document.getElementById('recordList');
+  if (!wrap) return;
+  
+  wrap.innerHTML = '<p style="text-align:center; color:#999;">載入中...</p>';
+  
+  try {
+    var res = await fetch('/api/customer-records');
+    
+    // ⭐ 先檢查 HTTP 狀態
+    if (!res.ok) {
+      throw new Error('HTTP ' + res.status + ': ' + res.statusText);
+    }
+    
+    // ⭐ 檢查回應格式
+    var contentType = res.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      throw new Error('伺服器回應格式錯誤（非 JSON）');
+    }
+    
+    var data = await res.json();
+    
+    if (!data.success) {
+      throw new Error(data.error || '載入失敗');
+    }
+    
+    allRecords = Array.isArray(data.records) ? data.records : [];
+    updateRecordStats(data.statistics || {});
+    displayRecords(allRecords);
+    
+  } catch (e) {
+    console.error('載入客人紀錄失敗:', e);
+    allRecords = [];
+    wrap.innerHTML = '<p style="text-align:center; color:#dc3545;">載入失敗：' + e.message + '</p>';
+  }
+}
+
+// 更新統計資訊
+function updateRecordStats(stats) {
+  document.getElementById('totalRecords').textContent = stats.total || 0;
+  document.getElementById('todayRecords').textContent = stats.today || 0;
+  document.getElementById('weekRecords').textContent = stats.week || 0;
+}
+
+// 顯示客人紀錄列表
+function displayRecords(records) {
+  var wrap = document.getElementById('recordList');
+  if (!wrap) return;
+  
+  if (!records || records.length === 0) {
+    wrap.innerHTML = '<p style="text-align:center; color:#999;">尚無客人紀錄</p>';
+    return;
+  }
+  
+  var html = '';
+  records.forEach(function(r) {
+    var firstContactDate = r.firstContact ? new Date(r.firstContact).toLocaleString('zh-TW') : '-';
+    var lastContactDate = r.lastContact ? new Date(r.lastContact).toLocaleString('zh-TW') : '-';
+    var messageCount = r.messageCount || 0;
+    
+    // 判斷是否為新客人（7天內）
+    var isNew = false;
+    if (r.firstContact) {
+      var daysDiff = (Date.now() - new Date(r.firstContact).getTime()) / (1000 * 60 * 60 * 24);
+      isNew = daysDiff <= 7;
+    }
+    
+    var newBadge = isNew 
+      ? '<span style="background:#52c41a;color:#fff;padding:3px 8px;border-radius:5px;font-size:12px;margin-left:5px;">🆕 新客人</span>'
+      : '';
+// ⭐⭐⭐ 新增：檢查是否已加入客戶編號 ⭐⭐⭐
+    var customerNumber = null;
+    var customerName = null;
+    
+    // 在 savedCustomers 中尋找此 User ID
+    Object.entries(savedCustomers).forEach(function(entry) {
+      if (entry[1].userId === r.userId) {
+        customerNumber = entry[0];
+        customerName = entry[1].name;
+      }
+    });
+    
+    var existingBadge = customerNumber 
+      ? '<span style="background:#1890ff;color:#fff;padding:3px 8px;border-radius:5px;font-size:12px;margin-left:5px;">✅ 已加入編號：#' + customerNumber + '</span>'
+      : '';
+    
+    html +=
+      '<div class="user-item" style="display:block; margin-bottom:10px;">' +
+      '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">' +
+      '<div>' +
+      '<strong style="font-size:16px;">' + (r.displayName || '未知') + '</strong> ' +
+      newBadge +
+      existingBadge + 
+      '</div>' +
+      '<div style="font-size:14px; color:#667eea; font-weight:600;">對話 ' + messageCount + ' 次</div>' +
+      '</div>' +
+      '<div style="font-size:13px; color:#666; margin-bottom:8px;">' +
+      '<div><strong>User ID:</strong> ' + (r.userId || '-') + '</div>' +
+      '<div><strong>首次對話:</strong> ' + firstContactDate + '</div>' +
+      '<div><strong>最後對話:</strong> ' + lastContactDate + '</div>' +
+      '</div>' +
+      '<div style="display:flex; gap:5px; flex-wrap:wrap;">' +
+      '<button class="btn btn-small btn-secondary" onclick="copyUserId(\'' + (r.userId || '') + '\')">📋 複製 User ID</button>' +
+      '<button class="btn btn-small" style="background:#1890ff;color:#fff;" onclick="viewRecordDetail(\'' + (r.userId || '') + '\')">👁️ 查看詳情</button>' +
+      (customerNumber 
+        ? '<button class="btn btn-small" style="background:#999;color:#fff;" disabled>✅ 已有編號 #' + customerNumber + '</button>'
+        : '<button class="btn btn-small" style="background:#52c41a;color:#fff;" onclick="addCustomerNumber(\'' + (r.userId || '') + '\', \'' + (r.displayName || '') + '\')">➕ 新增編號</button>'
+      ) +
+      '</div>' +
+      '</div>';
+  });
+  
+  wrap.innerHTML = html;
+}
+
+// 搜尋客人紀錄
+function searchRecords() {
+  var query = (document.getElementById('recordSearchInput').value || '').toLowerCase().trim();
+  
+  if (!query) {
+    displayRecords(allRecords);
+    return;
+  }
+  
+  var filtered = (allRecords || []).filter(function(r) {
+    return (r.displayName || '').toLowerCase().includes(query) || 
+           (r.userId || '').toLowerCase().includes(query);
+  });
+  
+  displayRecords(filtered);
+  
+  if (filtered.length === 0) {
+    document.getElementById('recordList').innerHTML = '<p style="text-align:center; color:#999;">找不到符合的客人</p>';
+  }
+}
+
+// 複製 User ID
+function copyUserId(userId) {
+  if (!userId) return;
+  
+  navigator.clipboard.writeText(userId).then(
+    function() { 
+      showResult('success', '📋 已複製 User ID'); 
+    },
+    function() { 
+      showResult('error', '❌ 複製失敗，User ID: ' + userId); 
+    }
+  );
+}
+
+// 查看客人詳情（改進版 - 顯示在視窗中）
+async function viewRecordDetail(userId) {
+  if (!userId) return;
+  
+  try {
+    var res = await fetch('/api/customer-records/' + encodeURIComponent(userId));
+    var data = await res.json();
+    
+    if (!data.success) {
+      alert('無法載入客人詳情');
+      return;
+    }
+    
+    var record = data.record;
+    
+    // 建立彈出視窗
+    var modal = document.createElement('div');
+    modal.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:9999; display:flex; align-items:center; justify-content:center; padding:20px;';
+    
+    var content = document.createElement('div');
+    content.style.cssText = 'background:#fff; border-radius:20px; padding:30px; max-width:600px; width:100%; max-height:80vh; overflow-y:auto;';
+    
+    var html = '<h3 style="color:#667eea; margin-bottom:20px;">👤 客人詳細資訊</h3>';
+    html += '<div style="background:#f0f4ff; padding:20px; border-radius:10px; margin-bottom:20px;">';
+    html += '<p style="margin:8px 0;"><strong>姓名：</strong>' + (record.displayName || '未知') + '</p>';
+    html += '<p style="margin:8px 0;"><strong>User ID：</strong><br><span style="font-size:12px; word-break:break-all;">' + (record.userId || '-') + '</span></p>';
+    html += '<p style="margin:8px 0;"><strong>首次對話：</strong>' + (record.firstContact ? new Date(record.firstContact).toLocaleString('zh-TW') : '-') + '</p>';
+    html += '<p style="margin:8px 0;"><strong>最後對話：</strong>' + (record.lastContact ? new Date(record.lastContact).toLocaleString('zh-TW') : '-') + '</p>';
+    html += '<p style="margin:8px 0;"><strong>對話次數：</strong>' + (record.messageCount || 0) + ' 次</p>';
+    html += '</div>';
+    
+    if (record.lastMessage) {
+      html += '<div style="background:#f8f9fa; padding:15px; border-radius:10px; margin-bottom:20px;">';
+      html += '<p style="margin:0 0 8px 0; font-weight:600; color:#333;">📝 最後訊息：</p>';
+      html += '<p style="margin:0; color:#666; white-space:pre-wrap; line-height:1.6;">' + record.lastMessage + '</p>';
+      html += '</div>';
+    }
+    
+    html += '<div style="display:flex; gap:10px;">';
+    html += '<button class="btn btn-secondary" style="flex:1;" onclick="this.closest(\'[data-modal]\').remove()">關閉</button>';
+    html += '<button class="btn" style="flex:1; background:#52c41a;" onclick="addCustomerNumberFromDetail(\'' + record.userId + '\', \'' + (record.displayName || '') + '\')">➕ 新增編號</button>';
+    html += '</div>';
+    
+    content.innerHTML = html;
+    modal.setAttribute('data-modal', 'true');
+    modal.appendChild(content);
+    document.body.appendChild(modal);
+    
+    // 點擊背景關閉
+    modal.addEventListener('click', function(e) {
+      if (e.target === modal) modal.remove();
+    });
+    
+  } catch (e) {
+    alert('載入失敗：' + e.message);
+  }
+}
+
+// 匯出客人資料
+function exportRecords() {
+  if (!allRecords || allRecords.length === 0) {
+    alert('目前沒有客人紀錄可匯出');
+    return;
+  }
+  
+  // 建立 CSV 內容
+  var csv = '姓名,User ID,首次對話,最後對話,對話次數\n';
+  
+  allRecords.forEach(function(r) {
+    var name = (r.displayName || '未知').replace(/,/g, '');
+    var userId = r.userId || '';
+    var first = r.firstContact ? new Date(r.firstContact).toLocaleString('zh-TW') : '';
+    var last = r.lastContact ? new Date(r.lastContact).toLocaleString('zh-TW') : '';
+    var count = r.messageCount || 0;
+    
+    csv += name + ',' + userId + ',' + first + ',' + last + ',' + count + '\n';
+  });
+  
+  // 下載 CSV
+  var blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  var link = document.createElement('a');
+  var url = URL.createObjectURL(blob);
+  var timestamp = new Date().toISOString().substring(0, 10);
+  
+  link.setAttribute('href', url);
+  link.setAttribute('download', 'customer_records_' + timestamp + '.csv');
+  link.style.visibility = 'hidden';
+  
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  
+  showResult('success', '✅ 客人紀錄已匯出');
+}
+    
+// ========================================
+// 📝 人工通知功能
+// ========================================
+
+// 快速搜尋客戶
+function searchForManual() {
+  var num = document.getElementById('manualSearch').value.trim();
+  if (!num) return alert('請輸入編號');
+  
+  if (savedCustomers[num]) {
+    var c = savedCustomers[num];
+    document.getElementById('manualNumber').value = num;
+    document.getElementById('manualName').value = c.name || '';
+    document.getElementById('manualCardNumber').textContent = num;
+    document.getElementById('manualCardName').textContent = c.name || '';
+    document.getElementById('manualCustomerCard').style.display = 'block';
+  } else {
+    alert('找不到此客戶編號');
+  }
+}
+
+// 新增人工通知紀錄
+async function addManual() {
+  var num = document.getElementById('manualNumber').value.trim();
+  var name = document.getElementById('manualName').value.trim();
+  var needDelivery = document.querySelector('input[name="manualNeedDelivery"]:checked').value;
+  var content = document.getElementById('manualContent').value.trim();
+  var amount = document.getElementById('manualAmount').value.trim();
+  
+  if (!num || !name) {
+    alert('請至少填寫 編號 / 姓名');
+    return;
+  }
+  var amountValue = parseInt(amount) || 0; // ⭐ 轉換金額
+  
+  try {
+    var res = await fetch('/api/manual/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customerNumber: num,
+        customerName: name,
+        needDelivery: needDelivery,
+        content: content,
+        amount: amountValue,
+      })
+    });
+    
+    var data = await res.json();
+    if (data.success) {
+      showResult('success', '✅ 已新增人工通知紀錄');
+      document.getElementById('manualNumber').value = '';
+      document.getElementById('manualName').value = '';
+      document.getElementById('manualAmount').value = ''; // ⭐ 清空金額
+      document.querySelector('input[name="manualNeedDelivery"][value="yes"]').checked = true;
+      document.getElementById('manualContent').value = '';
+      document.getElementById('manualCustomerCard').style.display = 'none';
+      loadManuals();
+    } else {
+      showResult('error', '❌ 新增失敗：' + (data.error || '未知錯誤'));
+    }
+  } catch (e) {
+    showResult('error', '❌ 連線失敗：' + e.message);
+  }
+}
+
+// 載入人工通知列表
+async function loadManuals() {
+  var wrap = document.getElementById('manualList');
+  if (!wrap) return;
+  
+  wrap.innerHTML = '<p style="text-align:center; color:#999;">載入中...</p>';
+  
+  try {
+    var res = await fetch('/api/manual/orders');
+    var data = await res.json();
+    if (!data.success) throw new Error(data.error || '載入失敗');
+    
+    allManuals = Array.isArray(data.orders) ? data.orders : [];
+    renderManualList();
+  } catch (e) {
+    allManuals = [];
+    wrap.innerHTML = '<p style="text-align:center; color:#dc3545;">載入失敗：' + e.message + '</p>';
+  }
+}
+
+// 顯示人工通知列表（依日期分組）
+function renderManualList() {
+  var wrap = document.getElementById('manualList');
+  if (!wrap) return;
+  
+  if (!allManuals || allManuals.length === 0) {
+    wrap.innerHTML = '<p style="text-align:center; color:#999;">目前沒有人工通知紀錄</p>';
+    return;
+  }
+  
+  // 依日期分組
+  var groups = {};
+  allManuals.forEach(function(o) {
+    var rawDate = (o.createdDate || o.createdAt || '').toString().substring(0, 10) || '未指定日期';
+    if (!groups[rawDate]) groups[rawDate] = [];
+    groups[rawDate].push(o);
+  });
+  
+  var dates = Object.keys(groups).sort().reverse(); // 新的日期在前
+  var todayStr = new Date().toISOString().substring(0, 10);
+  
+  var html = '';
+  dates.forEach(function(dk) {
+    var tag = (dk === todayStr) ? '（今天）' : '';
+    html += '<h4 style="margin-top:10px; margin-bottom:8px; color:#667eea;">📅 ' + dk + ' ' + tag + '</h4>';
+    
+    groups[dk].forEach(function(o) {
+      var id = o.id || o.recordId || '';
+      var notified = !!(o.notified || o.isNotified);
+      var paid = !!(o.paid || o.isPaid); // ⭐ 付款狀態
+      var amount = parseInt(o.amount) || 0; // ⭐ 金額
+      var needDelivery = o.needDelivery === 'yes' ? '需要外送' : '不需要外送';
+      
+      var badgeNotified = notified
+        ? '<span style="background:#52c41a;color:#fff;padding:3px 8px;border-radius:5px;font-size:12px;margin-left:5px;">✅ 已通知</span>'
+        : '<span style="background:#faad14;color:#fff;padding:3px 8px;border-radius:5px;font-size:12px;margin-left:5px;">⌛ 未通知</span>';
+      
+      var badgeDelivery = o.needDelivery === 'yes'
+        ? '<span style="background:#1890ff;color:#fff;padding:3px 8px;border-radius:5px;font-size:12px;margin-left:5px;">🚚 需外送</span>'
+        : '<span style="background:#999;color:#fff;padding:3px 8px;border-radius:5px;font-size:12px;margin-left:5px;">📦 不需外送</span>';
+
+       // ⭐ 付款狀態標記
+      var badgePaid = '';
+      if (amount > 0) {
+        badgePaid = paid
+          ? '<span style="background:#52c41a;color:#fff;padding:3px 8px;border-radius:5px;font-size:12px;margin-left:5px;">💰 已付款</span>'
+          : '<span style="background:#ff4d4f;color:#fff;padding:3px 8px;border-radius:5px;font-size:12px;margin-left:5px;">💳 未付款</span>';
+      }
+      
+      var createdTime = '';
+      if (o.createdDate || o.createdAt) {
+        var d = new Date(o.createdDate || o.createdAt);
+        createdTime = d.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+      }
+      
+      html +=
+        '<div class="user-item" style="display:block; margin-bottom:8px; opacity:' +
+        (notified ? '0.7' : '1') +
+        ';">' +
+        '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">' +
+        '<div>' +
+        '<strong style="font-size:15px;">#' +
+        (o.customerNumber || '') +
+        ' - ' +
+        (o.customerName || '') +
+        '</strong> ' +
+        badgeNotified +
+        badgeDelivery +
+        '</div>' +
+        '<div style="font-size:12px; color:#999;">' + createdTime + '</div>' +
+        '</div>' +
+        '<div style="font-size:13px; color:#666; margin-bottom:8px;">' +
+        (o.content ? '<div>📝 內容：' + (o.content || '').replace(/\n/g, '<br>') + '</div>' : '<div style="color:#999;">（無通知內容）</div>') +
+        '</div>' +
+        '<div style="display:flex; gap:5px; flex-wrap:wrap;">';
+      
+      if (!notified) {
+        html +=
+          '<button class="btn btn-small btn-secondary" onclick="markManualNotified(\'' + id + '\')">✅ 已通知</button>';
+      }
+
+      // ⭐ 付款按鈕（只在有金額且未付款時顯示）
+      if (amount > 0 && !paid) {
+        html += '<button class="btn btn-small" style="background:#52c41a;color:#fff;" onclick="markManualPaid(\'' + id + '\')">💰 已付款</button>';
+      }
+      
+      html +=
+        '<button class="btn btn-small" style="background:#ff9800;color:#fff;" onclick="editManual(\'' + id + '\')">✏️ 編輯</button>' +
+        '<button class="btn btn-small btn-danger" onclick="deleteManual(\'' + id + '\')">🗑️ 刪除</button>' +
+        '</div>' +
+        '</div>';
+    });
+  });
+  
+  wrap.innerHTML = html;
+}
+
+// 標記已通知
+async function markManualNotified(id) {
+  if (!confirm('確認標記為「已通知」？')) return;
+  
+  try {
+    var res = await fetch('/api/manual/mark-notified', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: id })
+    });
+    
+    var data = await res.json();
+    if (data.success) {
+      showResult('success', '✅ 已標記為已通知');
+      loadManuals();
+    } else {
+      showResult('error', '❌ 操作失敗：' + (data.error || '未知錯誤'));
+    }
+  } catch (e) {
+    showResult('error', '❌ 連線失敗：' + e.message);
+  }
+}
+
+// ⭐⭐⭐ 在這裡加入新函數 ⭐⭐⭐
+// 標記已付款
+async function markManualPaid(id) {
+  if (!confirm('確認標記為「已付款」？')) return;
+  
+  try {
+    var res = await fetch('/api/manual/mark-paid', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: id })
+    });
+    
+    var data = await res.json();
+    if (data.success) {
+      showResult('success', '✅ 已標記為已付款');
+      loadManuals();
+    } else {
+      showResult('error', '❌ 操作失敗：' + (data.error || '未知錯誤'));
+    }
+  } catch (e) {
+    showResult('error', '❌ 連線失敗：' + e.message);
+  }
+}
+// ⭐⭐⭐ 新函數結束 ⭐⭐⭐
+    
+// 編輯人工通知
+async function editManual(id) {
+  var manual = allManuals.find(function(o) {
+    return (o.id || o.recordId) === id;
+  });
+  
+  if (!manual) {
+    alert('找不到此紀錄');
+    return;
+  }
+
+ // ⭐ 新增金額編輯
+  var amountStr = prompt('修改金額（目前：' + (manual.amount || 0) + '）', manual.amount || 0);
+  if (amountStr === null) return;
+  var amount = parseInt(amountStr) || 0;
+  
+  var needDelivery = confirm('是否需要外送？\n「確定」= 需要外送\n「取消」= 不需要外送');
+  var needDeliveryValue = needDelivery ? 'yes' : 'no';
+  
+  var content = prompt('修改通知內容（可以留空）', manual.content || '');
+  if (content === null) content = manual.content || '';
+  
+  try {
+    var res = await fetch('/api/manual/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: id,
+        needDelivery: needDeliveryValue,
+        content: content,
+        amount: amount,
+      })
+    });
+    
+    var data = await res.json();
+    if (data.success) {
+      showResult('success', '✅ 人工通知已更新');
+      loadManuals();
+    } else {
+      showResult('error', '❌ 更新失敗：' + (data.error || '未知錯誤'));
+    }
+  } catch (e) {
+    showResult('error', '❌ 連線失敗：' + e.message);
+  }
+}
+
+// 刪除人工通知
+async function deleteManual(id) {
+  if (!confirm('確定要刪除此人工通知紀錄？')) return;
+  
+  try {
+    var res = await fetch('/api/manual/order/' + encodeURIComponent(id), {
+      method: 'DELETE'
+    });
+    
+    var data = await res.json();
+    if (data.success) {
+      showResult('success', '✅ 已刪除人工通知紀錄');
+      loadManuals();
+    } else {
+      showResult('error', '❌ 刪除失敗：' + (data.error || '未知錯誤'));
+    }
+  } catch (e) {
+    showResult('error', '❌ 連線失敗：' + e.message);
+  }
+}    
+    
+// ========================================
+// ⚡ 急件追蹤功能
+// ========================================
+
+// 快速搜尋客戶
+function searchForUrgent() {
+  var num = document.getElementById('urgentSearch').value.trim();
+  if (!num) return alert('請輸入編號');
+  
+  if (savedCustomers[num]) {
+    var c = savedCustomers[num];
+    document.getElementById('urgentNumber').value = num;
+    document.getElementById('urgentName').value = c.name || '';
+    document.getElementById('urgentCardNumber').textContent = num;
+    document.getElementById('urgentCardName').textContent = c.name || '';
+    document.getElementById('urgentCustomerCard').style.display = 'block';
+  } else {
+    alert('找不到此客戶編號');
+  }
+}
+
+// 新增急件追蹤
+async function addUrgent() {
+  var num = document.getElementById('urgentNumber').value.trim();
+  var name = document.getElementById('urgentName').value.trim();
+  var clothesRange = document.getElementById('urgentClothesRange').value.trim();
+  var trackDate = document.getElementById('urgentTrackDate').value;
+  var pickupDate = document.getElementById('urgentPickupDate').value;
+  var note = document.getElementById('urgentNote').value.trim();
+  
+  if (!num || !name || !clothesRange || !trackDate || !pickupDate) {
+    alert('請填寫所有必填欄位（*）');
+    return;
+  }
+  
+  try {
+    var res = await fetch('/api/urgent/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customerNumber: num,
+        customerName: name,
+        clothesRange: clothesRange,
+        trackDate: trackDate,
+        pickupDate: pickupDate,
+        note: note
+      })
+    });
+    
+    var data = await res.json();
+    if (data.success) {
+      showResult('success', '✅ 已新增急件追蹤');
+      document.getElementById('urgentNumber').value = '';
+      document.getElementById('urgentName').value = '';
+      document.getElementById('urgentClothesRange').value = '';
+      document.getElementById('urgentTrackDate').value = '';
+      document.getElementById('urgentPickupDate').value = '';
+      document.getElementById('urgentNote').value = '';
+      document.getElementById('urgentCustomerCard').style.display = 'none';
+      loadUrgents(false);
+    } else {
+      showResult('error', '❌ 新增失敗：' + (data.error || '未知錯誤'));
+    }
+  } catch (e) {
+    showResult('error', '❌ 連線失敗：' + e.message);
+  }
+}
+
+// 載入急件追蹤列表
+async function loadUrgents(showAlert) {
+  var wrap = document.getElementById('urgentList');
+  if (!wrap) return;
+  
+  wrap.innerHTML = '<p style="text-align:center; color:#999;">載入中...</p>';
+  
+  try {
+    var res = await fetch('/api/urgent/orders');
+    var data = await res.json();
+    if (!data.success) throw new Error(data.error || '載入失敗');
+    
+    allUrgents = Array.isArray(data.orders) ? data.orders : [];
+    renderUrgentList();
+    
+    if (showAlert) {
+      checkTodayUrgentAlerts();
+    }
+  } catch (e) {
+    allUrgents = [];
+    wrap.innerHTML = '<p style="text-align:center; color:#dc3545;">載入失敗：' + e.message + '</p>';
+  }
+}
+
+// 顯示急件追蹤列表
+function renderUrgentList() {
+  var wrap = document.getElementById('urgentList');
+  if (!wrap) return;
+  
+  if (!allUrgents || allUrgents.length === 0) {
+    wrap.innerHTML = '<p style="text-align:center; color:#999;">目前沒有急件追蹤</p>';
+    return;
+  }
+  
+  var html = '';
+  var today = new Date().toISOString().substring(0, 10);
+  
+  allUrgents.forEach(function(o) {
+    var id = o.id || o.recordId || '';
+    var completed = !!(o.completed || o.isCompleted);
+    var trackDate = o.trackDate ? o.trackDate.substring(0, 10) : '';
+    var pickupDate = o.pickupDate ? o.pickupDate.substring(0, 10) : '';
+    
+    // 判斷是否需要提醒
+    var needTrackAlert = trackDate === today && !completed;
+    var needPickupAlert = pickupDate === today && !completed;
+    
+    var alertBadge = '';
+    if (needTrackAlert) {
+      alertBadge = '<span style="background:#ff4d4f;color:#fff;padding:3px 8px;border-radius:5px;font-size:12px;margin-left:5px;">🔥 今天要去工廠追蹤！</span>';
+    }
+    if (needPickupAlert) {
+      alertBadge += '<span style="background:#faad14;color:#fff;padding:3px 8px;border-radius:5px;font-size:12px;margin-left:5px;">📦 今天客戶要取件！</span>';
+    }
+    
+    var badgeCompleted = completed
+      ? '<span style="background:#52c41a;color:#fff;padding:3px 8px;border-radius:5px;font-size:12px;margin-left:5px;">✅ 已完成</span>'
+      : '';
+    
+    html +=
+      '<div class="user-item" style="display:block; margin-bottom:8px; opacity:' +
+      (completed ? '0.6' : '1') +
+      '; border-left: 4px solid ' + (needTrackAlert || needPickupAlert ? '#ff4d4f' : '#667eea') + ';">' +
+      '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">' +
+      '<div>' +
+      '<strong style="font-size:15px; cursor:pointer;" onclick="showUrgentDetail(\'' + id + '\')">#' +
+      (o.customerNumber || '') +
+      ' - ' +
+      (o.customerName || '') +
+      '</strong> ' +
+      alertBadge +
+      badgeCompleted +
+      '</div>' +
+      '</div>' +
+      '<div style="font-size:13px; color:#666; margin-bottom:8px;">' +
+      '<div>📦 衣物編號：' + (o.clothesRange || '-') + '</div>' +
+      '<div>⚡ 急件追蹤日期：' + (trackDate || '-') + '</div>' +
+      '<div>📅 取件提醒日期：' + (pickupDate || '-') + '</div>' +
+      (o.note ? '<div>📝 備註：' + (o.note || '').replace(/\n/g, '<br>') + '</div>' : '') +
+      '</div>' +
+      '<div style="display:flex; gap:5px; flex-wrap:wrap;">';
+    
+    if (!completed) {
+      html +=
+        '<button class="btn btn-small btn-secondary" onclick="markUrgentCompleted(\'' + id + '\')">✅ 標記完成</button>';
+    }
+    
+    html +=
+      '<button class="btn btn-small" style="background:#ff9800;color:#fff;" onclick="editUrgent(\'' + id + '\')">✏️ 編輯</button>' +
+      '<button class="btn btn-small btn-danger" onclick="deleteUrgent(\'' + id + '\')">🗑️ 刪除</button>' +
+      '</div>' +
+      '</div>';
+  });
+  
+  wrap.innerHTML = html;
+}
+
+// 顯示急件詳情
+function showUrgentDetail(id) {
+  var urgent = allUrgents.find(function(o) {
+    return (o.id || o.recordId) === id;
+  });
+  
+  if (!urgent) {
+    alert('找不到此急件');
+    return;
+  }
+  
+  var msg = 
+    '📋 急件詳情\n\n' +
+    '客戶編號：#' + (urgent.customerNumber || '-') + '\n' +
+    '客戶姓名：' + (urgent.customerName || '-') + '\n' +
+    '衣物編號：' + (urgent.clothesRange || '-') + '\n' +
+    '急件追蹤：' + (urgent.trackDate ? urgent.trackDate.substring(0, 10) : '-') + '\n' +
+    '取件提醒：' + (urgent.pickupDate ? urgent.pickupDate.substring(0, 10) : '-') + '\n' +
+    (urgent.note ? '備註：' + urgent.note : '');
+  
+  alert(msg);
+}
+
+// 標記完成
+async function markUrgentCompleted(id) {
+  if (!confirm('確認標記為已完成？')) return;
+  
+  try {
+    var res = await fetch('/api/urgent/complete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: id })
+    });
+    
+    var data = await res.json();
+    if (data.success) {
+      showResult('success', '✅ 已標記為完成');
+      loadUrgents(false);
+    } else {
+      showResult('error', '❌ 操作失敗：' + (data.error || '未知錯誤'));
+    }
+  } catch (e) {
+    showResult('error', '❌ 連線失敗：' + e.message);
+  }
+}
+
+// 編輯急件
+async function editUrgent(id) {
+  var urgent = allUrgents.find(function(o) {
+    return (o.id || o.recordId) === id;
+  });
+  
+  if (!urgent) {
+    alert('找不到此急件');
+    return;
+  }
+  
+  var clothesRange = prompt('修改衣物編號範圍：', urgent.clothesRange || '');
+  if (clothesRange === null) return;
+  
+  var trackDate = prompt(
+    '修改急件追蹤日期（格式：YYYY-MM-DD）：',
+    urgent.trackDate ? urgent.trackDate.substring(0, 10) : ''
+  );
+  if (trackDate === null) return;
+  
+  var pickupDate = prompt(
+    '修改取件提醒日期（格式：YYYY-MM-DD）：',
+    urgent.pickupDate ? urgent.pickupDate.substring(0, 10) : ''
+  );
+  if (pickupDate === null) return;
+  
+  var note = prompt('修改備註：', urgent.note || '');
+  if (note === null) note = urgent.note || '';
+  
+  try {
+    var res = await fetch('/api/urgent/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: id,
+        clothesRange: clothesRange,
+        trackDate: trackDate,
+        pickupDate: pickupDate,
+        note: note
+      })
+    });
+    
+    var data = await res.json();
+    if (data.success) {
+      showResult('success', '✅ 急件已更新');
+      loadUrgents(false);
+    } else {
+      showResult('error', '❌ 更新失敗：' + (data.error || '未知錯誤'));
+    }
+  } catch (e) {
+    showResult('error', '❌ 連線失敗：' + e.message);
+  }
+}
+
+// 刪除急件
+async function deleteUrgent(id) {
+  if (!confirm('確定要刪除此急件追蹤？')) return;
+  
+  try {
+    var res = await fetch('/api/urgent/order/' + encodeURIComponent(id), {
+      method: 'DELETE'
+    });
+    
+    var data = await res.json();
+    if (data.success) {
+      showResult('success', '✅ 已刪除急件追蹤');
+      loadUrgents(false);
+    } else {
+      showResult('error', '❌ 刪除失敗：' + (data.error || '未知錯誤'));
+    }
+  } catch (e) {
+    showResult('error', '❌ 連線失敗：' + e.message);
+  }
+}
+
+// 檢查今天的急件提醒
+function checkTodayUrgentAlerts() {
+  if (!allUrgents || allUrgents.length === 0) return;
+  
+  var today = new Date().toISOString().substring(0, 10);
+  var trackAlerts = [];
+  var pickupAlerts = [];
+  
+  allUrgents.forEach(function(o) {
+    if (o.completed || o.isCompleted) return;
+    
+    var trackDate = o.trackDate ? o.trackDate.substring(0, 10) : '';
+    var pickupDate = o.pickupDate ? o.pickupDate.substring(0, 10) : '';
+    
+    if (trackDate === today) {
+      trackAlerts.push(o);
+    }
+    if (pickupDate === today) {
+      pickupAlerts.push(o);
+    }
+  });
+  
+  var msg = '';
+  
+  if (trackAlerts.length > 0) {
+    msg += '🔥 今天需要去工廠追蹤的急件（共 ' + trackAlerts.length + ' 筆）：\n\n';
+    trackAlerts.forEach(function(o) {
+      msg += '#' + (o.customerNumber || '') + ' ' + (o.customerName || '') + 
+             ' - 衣物：' + (o.clothesRange || '') + '\n';
+    });
+    msg += '\n';
+  }
+  
+  if (pickupAlerts.length > 0) {
+    msg += '📦 今天客戶要取件的急件（共 ' + pickupAlerts.length + ' 筆）：\n\n';
+    pickupAlerts.forEach(function(o) {
+      msg += '#' + (o.customerNumber || '') + ' ' + (o.customerName || '') + 
+             ' - 衣物：' + (o.clothesRange || '') + '\n';
+    });
+  }
+  
+  if (msg) {
+    alert(msg);
+  }
+}
+    
+  // ========================================
+// 👤 客人紀錄 - 新增客戶編號功能
+// ========================================
+
+// 新增客戶編號（從客人紀錄）
+function addCustomerNumber(userId, displayName) {
+  if (!userId) return;
+  
+  var number = prompt('請輸入客戶編號（例如：001、625）：', '');
+  
+  if (!number || !number.trim()) {
+    return;
+  }
+  
+  number = number.trim();
+  
+  // 檢查編號是否已存在
+  if (savedCustomers[number]) {
+    if (!confirm('此編號已存在：#' + number + ' (' + savedCustomers[number].name + ')\n\n是否要覆蓋？')) {
+      return;
+    }
+  }
+  
+  // 儲存客戶編號
+  saveCustomerNumberDirect(number, displayName, userId);
+}
+
+// 從詳情視窗新增客戶編號
+function addCustomerNumberFromDetail(userId, displayName) {
+  // 先關閉詳情視窗
+  var modals = document.querySelectorAll('[data-modal]');
+  modals.forEach(function(m) { m.remove(); });
+  
+  // 呼叫新增編號
+  addCustomerNumber(userId, displayName);
+}
+
+// 直接儲存客戶編號（不需填表單）
+async function saveCustomerNumberDirect(number, name, userId) {
+  try {
+    var res = await fetch('/api/customer-numbers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        number: number, 
+        name: name, 
+        userId: userId 
+      })
+    });
+    
+    var data = await res.json();
+    
+    if (data.success) {
+      showResult('success', '✅ 客戶編號已儲存：#' + number);
+      await loadCustomerNumbers();
+      loadRecords(); // 重新載入客人紀錄
+    } else {
+      showResult('error', '❌ 儲存失敗: ' + (data.error || '未知錯誤'));
+    }
+  } catch (error) {
+    showResult('error', '❌ 連線失敗: ' + error.message);
+  }
+}
+    // 直接儲存客戶編號（不需填表單）
+async function saveCustomerNumberDirect(number, name, userId) {
+  try {
+    var res = await fetch('/api/customer-numbers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        number: number, 
+        name: name, 
+        userId: userId 
+      })
+    });
+    
+    var data = await res.json();
+    
+    if (data.success) {
+      showResult('success', '✅ 客戶編號已儲存：#' + number);
+      await loadCustomerNumbers();
+      loadRecords(); // 重新載入客人紀錄
+    } else {
+      showResult('error', '❌ 儲存失敗: ' + (data.error || '未知錯誤'));
+    }
+  } catch (error) {
+    showResult('error', '❌ 連線失敗: ' + error.message);
+  }
+}
+
+// 🔥🔥🔥 新增：收件排程功能（開始）🔥🔥🔥
+// ========================================
+// 🏠 收件排程功能
+// ========================================
+
+var allPickupSchedules = [];
+
+// 載入收件排程
+async function loadPickupSchedules() {
+  var wrap = document.getElementById('pickupScheduleList');
+  wrap.innerHTML = '<p style="text-align:center; color:#999;">載入中...</p>';
+  
+  try {
+    var res = await fetch('/api/pickup-schedule/orders');
+    var data = await res.json();
+    
+    if (!data.success) throw new Error(data.error || '載入失敗');
+    
+    allPickupSchedules = data.schedules || [];
+    renderPickupSchedules(data.grouped || {});
+    
+    // 自動顯示今日提醒
+    checkTodayPickupAlert();
+    
+  } catch (e) {
+    wrap.innerHTML = '<p style="text-align:center; color:#dc3545;">載入失敗：' + e.message + '</p>';
+  }
+}
+
+// ========================================
+// 🏠 收件排程多選刪除功能
+// ========================================
+var selectedPickups = [];
+
+// 渲染收件排程列表
+function renderPickupSchedules(grouped) {
+  var wrap = document.getElementById('pickupScheduleList');
+  
+  if (Object.keys(grouped).length === 0) {
+    wrap.innerHTML = '<p style="text-align:center; color:#999;">目前沒有收件排程</p>';
+    return;
+  }
+  
+  var today = new Date().toISOString().split('T')[0];
+  var dates = Object.keys(grouped).sort().reverse();
+  
+  var html = '';
+  
+  dates.forEach(function(date) {
+    var schedules = grouped[date];
+    var isToday = date === today;
+    var tag = isToday ? '（今天）' : '';
+    
+    // 分類：AI 承諾 vs 客人要求
+    var aiSchedules = schedules.filter(s => s.source === 'ai' && s.status === 'pending');
+    var customerSchedules = schedules.filter(s => s.source === 'customer' && s.status === 'pending');
+    
+    html += '<h4 style="margin-top:20px; margin-bottom:10px; color:#667eea;">📅 ' + date + ' ' + tag + '</h4>';
+    
+    // AI 承諾收件
+    if (aiSchedules.length > 0) {
+      html += '<div style="background:#e7f0ff; padding:15px; border-radius:10px; margin-bottom:15px;">';
+      html += '<h5 style="color:#1890ff; margin-bottom:10px;">🤖 AI 承諾收件（' + aiSchedules.length + ' 筆）</h5>';
+      
+      aiSchedules.forEach(function(s) {
+        html += renderScheduleItemWithCheckbox(s);
+      });
+      
+      html += '</div>';
+    }
+    
+    // 客人要求收件
+    if (customerSchedules.length > 0) {
+      html += '<div style="background:#f0f4ff; padding:15px; border-radius:10px; margin-bottom:15px;">';
+      html += '<h5 style="color:#667eea; margin-bottom:10px;">👤 客人要求收件（' + customerSchedules.length + ' 筆）</h5>';
+      
+      customerSchedules.forEach(function(s) {
+        html += renderScheduleItemWithCheckbox(s);
+      });
+      
+      html += '</div>';
+    }
+  });
+  
+  wrap.innerHTML = html;
+  updateSelectedCount();
+}
+
+// ⭐ 新增：帶勾選框的收件項目
+function renderScheduleItemWithCheckbox(s) {
+  var time = s.createdAt ? new Date(s.createdAt).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }) : '';
+  var sourceLabel = s.source === 'ai' ? 'AI 回覆' : '客人說';
+  var isChecked = selectedPickups.includes(s.id) ? 'checked' : '';
+  
+  return '<div class="user-item" style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">' +
+    // ⭐ 勾選框
+    '<input type="checkbox" ' + isChecked + ' onchange="togglePickupSelection(\'' + s.id + '\')" style="width:20px; height:20px; cursor:pointer; flex-shrink:0;">' +
+    
+    '<div style="flex:1;">' +
+    '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">' +
+    '<div>' +
+    '<strong style="font-size:15px;">#' + (s.customerNumber || '?') + ' - ' + (s.customerName || '未知') + '</strong>' +
+    '</div>' +
+    '<div style="font-size:12px; color:#999;">⏰ ' + time + '</div>' +
+    '</div>' +
+    '<div style="font-size:13px; color:#666; margin-bottom:8px;">' +
+    '<div>📝 ' + sourceLabel + '：「' + (s.originalMessage || '-') + '」</div>' +
+    (s.note ? '<div>💡 備註：' + s.note + '</div>' : '') +
+    '</div>' +
+    '<div style="display:flex; gap:5px; flex-wrap:wrap;">' +
+    '<button class="btn btn-small btn-secondary" onclick="completePickup(\'' + s.id + '\', true)">✅ 已收件（通知客人）</button>' +
+    '<button class="btn btn-small" style="background:#ff9800;color:#fff;" onclick="editPickupNote(\'' + s.id + '\')">✏️ 加備註</button>' +
+    '</div>' +
+    '</div>' +
+    '</div>';
+}
+
+// ⭐ 切換選取狀態
+function togglePickupSelection(id) {
+  var index = selectedPickups.indexOf(id);
+  if (index > -1) {
+    selectedPickups.splice(index, 1);
+  } else {
+    selectedPickups.push(id);
+  }
+  updateSelectedCount();
+}
+
+// ⭐ 更新已選數量
+function updateSelectedCount() {
+  var count = selectedPickups.length;
+  document.getElementById('selectedCount').textContent = count;
+  document.getElementById('batchDeleteBtn').style.display = count > 0 ? 'inline-block' : 'none';
+}
+
+// ⭐ 批次刪除
+async function deleteSelectedPickups() {
+  if (selectedPickups.length === 0) return;
+  
+  if (!confirm('確定要刪除已選的 ' + selectedPickups.length + ' 筆收件排程？\n\n（不會通知客人）')) return;
+  
+  try {
+    var successCount = 0;
+    for (var i = 0; i < selectedPickups.length; i++) {
+      var res = await fetch('/api/pickup-schedule/order/' + encodeURIComponent(selectedPickups[i]), {
+        method: 'DELETE'
+      });
+      var data = await res.json();
+      if (data.success) successCount++;
+    }
+    
+    showResult('success', '✅ 已刪除 ' + successCount + ' 筆收件排程');
+    selectedPickups = [];
+    loadPickupSchedules();
+    
+  } catch (e) {
+    showResult('error', '❌ 刪除失敗：' + e.message);
+  }
+}
+
+
+// ✅ 標記已收件（並通知客人）
+async function completePickup(id, notifyCustomer) {
+  if (!confirm('確認已收到此客人的衣物？\n' + (notifyCustomer ? '將自動通知客人' : ''))) return;
+  
+  try {
+    var res = await fetch('/api/pickup-schedule/complete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: id, notifyCustomer: notifyCustomer })
+    });
+    
+    var data = await res.json();
+    
+    if (data.success) {
+      showResult('success', data.message || '✅ 已標記完成');
+      loadPickupSchedules();
+    } else {
+      showResult('error', '❌ 操作失敗：' + (data.error || '未知錯誤'));
+    }
+  } catch (e) {
+    showResult('error', '❌ 連線失敗：' + e.message);
+  }
+}
+
+// 🗑️ 刪除收件排程（不通知客人）
+async function deletePickup(id) {
+  if (!confirm('確定要刪除此收件排程？\n（不會通知客人）')) return;
+  
+  try {
+    var res = await fetch('/api/pickup-schedule/order/' + encodeURIComponent(id), {
+      method: 'DELETE'
+    });
+    
+    var data = await res.json();
+    
+    if (data.success) {
+      showResult('success', '✅ 已刪除收件排程');
+      loadPickupSchedules();
+    } else {
+      showResult('error', '❌ 刪除失敗：' + (data.error || '未知錯誤'));
+    }
+  } catch (e) {
+    showResult('error', '❌ 連線失敗：' + e.message);
+  }
+}
+
+// ✏️ 編輯備註
+async function editPickupNote(id) {
+  var schedule = allPickupSchedules.find(s => s.id === id);
+  if (!schedule) return;
+  
+  var note = prompt('輸入備註（例如：客人說有污漬、下午3點後在家等）', schedule.note || '');
+  if (note === null) return;
+  
+  try {
+    var res = await fetch('/api/pickup-schedule/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: id, note: note })
+    });
+    
+    var data = await res.json();
+    
+    if (data.success) {
+      showResult('success', '✅ 已更新備註');
+      loadPickupSchedules();
+    } else {
+      showResult('error', '❌ 更新失敗：' + (data.error || '未知錯誤'));
+    }
+  } catch (e) {
+    showResult('error', '❌ 連線失敗：' + e.message);
+  }
+}
+
+// 🔔 檢查今日收件提醒
+async function checkTodayPickupAlert() {
+  try {
+    var res = await fetch('/api/pickup-schedule/today-alert');
+    var data = await res.json();
+    
+    if (data.success && data.total > 0) {
+      var msg = '您今天有 ' + data.total + ' 筆收件排程：\n';
+      if (data.aiCount > 0) msg += '- ' + data.aiCount + ' 筆是 AI 承諾要去收的\n';
+      if (data.customerCount > 0) msg += '- ' + data.customerCount + ' 筆是客人主動要求的';
+      
+      document.getElementById('alertMessage').textContent = msg;
+      document.getElementById('todayAlert').style.display = 'block';
+    }
+  } catch (e) {
+    console.error('載入今日提醒失敗:', e);
+  }
+}
+
+// 手動顯示今日提醒
+function showTodayAlert() {
+  checkTodayPickupAlert();
+}
+// 🔥🔥🔥 新增：收件排程功能（結束）🔥🔥🔥
+
+   // ========================================
+// 📊 營業報表功能
+// ========================================
+
+var currentRevenueData = null;
+
+// 載入營業報表
+async function loadRevenueReport() {
+  var monthInput = document.getElementById('revenueMonth').value;
+  if (!monthInput) {
+    alert('請選擇月份');
+    return;
+  }
+  
+  var wrap = document.getElementById('dailyRevenueList');
+  wrap.innerHTML = '<p style="text-align:center; color:#999;">載入中...</p>';
+  
+  try {
+    var res = await fetch('/api/revenue/report?month=' + encodeURIComponent(monthInput));
+    var data = await res.json();
+    
+    if (!data.success) {
+      throw new Error(data.error || '載入失敗');
+    }
+    
+    currentRevenueData = data;
+    displayRevenueReport(data);
+    loadPaymentRecords();
+    
+  } catch (e) {
+    wrap.innerHTML = '<p style="text-align:center; color:#dc3545;">載入失敗：' + e.message + '</p>';
+  }
+}
+
+// 顯示營業報表
+function displayRevenueReport(data) {
+  // 更新統計卡片
+  document.getElementById('monthlyTotal').textContent = 'NT$ ' + (data.monthlyTotal || 0).toLocaleString();
+  document.getElementById('dailyAverage').textContent = 'NT$ ' + (data.dailyAverage || 0).toLocaleString();
+  document.getElementById('totalOrders').textContent = (data.totalOrders || 0) + ' 筆';
+  
+  // 顯示每日營業額
+  var wrap = document.getElementById('dailyRevenueList');
+  var dailyData = data.dailyRevenue || [];
+  
+  if (dailyData.length === 0) {
+    wrap.innerHTML = '<p style="text-align:center; color:#999;">本月尚無營業資料</p>';
+    return;
+  }
+  
+  var html = '<div style="overflow-x:auto;">';
+  html += '<table style="width:100%; border-collapse:collapse; background:#fff; border-radius:10px; overflow:hidden;">';
+  html += '<thead><tr style="background:#667eea; color:#fff;">';
+  html += '<th style="padding:12px; text-align:left;">日期</th>';
+  html += '<th style="padding:12px; text-align:right;">營業額</th>';
+  html += '<th style="padding:12px; text-align:right;">訂單數</th>';
+  html += '<th style="padding:12px; text-align:right;">日均單價</th>';
+  html += '<th style="padding:12px; text-align:center;">AI 分析</th>';
+  html += '</tr></thead><tbody>';
+
+  // 🌟 定義星期幾
+  var weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+  
+  dailyData.forEach(function(day, index) {
+    var bgColor = index % 2 === 0 ? '#f8f9fa' : '#fff';
+     var dateStr = day.date || '-';
+    
+    // 🌟 計算星期幾
+    var weekday = '';
+    if (day.date) {
+      var date = new Date(day.date);
+      weekday = ' (' + weekdays[date.getDay()] + ')';
+    }
+    var amount = day.amount || 0;
+    var orders = day.orders || 0;
+    var avgPrice = orders > 0 ? Math.round(amount / orders) : 0;
+    
+    html += '<tr style="background:' + bgColor + '; border-bottom:1px solid #e0e0e0;">';
+    html += '<td style="padding:12px;">' + dateStr + weekday + '</td>';
+    html += '<td style="padding:12px; text-align:right; font-weight:600; color:#667eea;">NT$ ' + amount.toLocaleString() + '</td>';
+    html += '<td style="padding:12px; text-align:right;">' + orders + ' 筆</td>';
+    html += '<td style="padding:12px; text-align:right; color:#999;">NT$ ' + avgPrice.toLocaleString() + '</td>';
+    html += '<td style="padding:12px; text-align:center;"><button onclick="showDailyInsight(\'' + day.date + '\',' + day.amount + ',' + day.orders + ')" style="padding:6px 12px; background:#667eea; color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:13px;">🤖 分析</button></td>';
+    html += '</tr>';
+  });
+  
+  html += '</tbody></table></div>';
+  wrap.innerHTML = html;
+}
+
+// 匯出 Excel
+function exportRevenue() {
+  if (!currentRevenueData || !currentRevenueData.dailyRevenue) {
+    alert('請先查詢營業報表');
+    return;
+  }
+  
+  var csv = '日期,營業額,訂單數,日均單價\n';
+  
+  currentRevenueData.dailyRevenue.forEach(function(day) {
+    var amount = day.amount || 0;
+    var orders = day.orders || 0;
+    var avgPrice = orders > 0 ? Math.round(amount / orders) : 0;
+    
+    csv += day.date + ',' + amount + ',' + orders + ',' + avgPrice + '\n';
+  });
+  
+  csv += '\n總計,' + currentRevenueData.monthlyTotal + ',' + currentRevenueData.totalOrders + '\n';
+  
+  var blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  var link = document.createElement('a');
+  var url = URL.createObjectURL(blob);
+  var monthStr = document.getElementById('revenueMonth').value || 'revenue';
+  
+  link.setAttribute('href', url);
+  link.setAttribute('download', 'revenue_' + monthStr + '.csv');
+  link.style.visibility = 'hidden';
+  
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  
+  showResult('success', '✅ 營業報表已匯出');
+}
+
+    // ========================================
+// 📸 污漬拍照功能
+// ========================================
+
+var currentPhotoData = null;
+var currentPhotoId = null;
+var allStainPhotos = [];
+
+// 開啟相機拍照
+function takeStainPhoto() {
+  document.getElementById('stainPhotoInput').click();
+}
+
+// 監聽檔案選擇
+document.addEventListener('DOMContentLoaded', function() {
+  var input = document.getElementById('stainPhotoInput');
+  if (input) {
+    input.addEventListener('change', function(e) {
+      var file = e.target.files[0];
+      if (!file) return;
+      
+      var reader = new FileReader();
+      reader.onload = function(event) {
+        var img = new Image();
+        img.onload = function() {
+          // 壓縮照片
+          var canvas = document.createElement('canvas');
+          var maxWidth = 1200;
+          var maxHeight = 1200;
+          var width = img.width;
+          var height = img.height;
+          
+          if (width > height) {
+            if (width > maxWidth) {
+              height *= maxWidth / width;
+              width = maxWidth;
+            }
+          } else {
+            if (height > maxHeight) {
+              width *= maxHeight / height;
+              height = maxHeight;
+            }
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          var ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          // 原圖 Base64
+          var photoBase64 = canvas.toDataURL('image/jpeg', 0.8);
+          
+          // 縮圖 Base64
+          var thumbCanvas = document.createElement('canvas');
+          thumbCanvas.width = 200;
+          thumbCanvas.height = 200 * (height / width);
+          var thumbCtx = thumbCanvas.getContext('2d');
+          thumbCtx.drawImage(img, 0, 0, thumbCanvas.width, thumbCanvas.height);
+          var thumbnailBase64 = thumbCanvas.toDataURL('image/jpeg', 0.6);
+          
+          // 顯示預覽
+          document.getElementById('previewImage').src = photoBase64;
+          document.getElementById('photoPreview').style.display = 'block';
+          
+          currentPhotoData = {
+            photoBase64: photoBase64,
+            thumbnailBase64: thumbnailBase64
+          };
+        };
+        img.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+});
+
+// 取消拍照
+function cancelPhoto() {
+  document.getElementById('photoPreview').style.display = 'none';
+  document.getElementById('photoNote').value = '';
+  document.getElementById('stainPhotoInput').value = '';
+  currentPhotoData = null;
+}
+
+// 🔥🔥🔥 加入這段：壓縮照片函數 🔥🔥🔥
+function compressImage(base64, maxSize = 30000) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = function() {
+      const canvas = document.createElement('canvas');
+      let width = img.width;
+      let height = img.height;
+      
+      let quality = 0.6;
+      const targetSize = maxSize * 0.75;
+      
+      if (width > 800) {
+        height = (800 / width) * height;
+        width = 800;
+      }
+      
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      
+      let compressed = canvas.toDataURL('image/jpeg', quality);
+      while (compressed.length > targetSize && quality > 0.1) {
+        quality -= 0.1;
+        compressed = canvas.toDataURL('image/jpeg', quality);
+      }
+      
+      resolve(compressed);
+    };
+    img.src = base64;
+  });
+}
+
+
+    
+
+    // 儲存照片（帶壓縮功能）
+async function saveStainPhoto() {
+  if (!currentPhotoData) {
+    alert('請先拍照');
+    return;
+  }
+  
+  var note = document.getElementById('photoNote').value.trim();
+  
+  try {
+    // 🔥 壓縮照片
+    const compressedPhoto = await compressImage(currentPhotoData.photoBase64, 30000);
+    console.log('原始大小:', currentPhotoData.photoBase64.length, '壓縮後:', compressedPhoto.length);
+    
+    var res = await fetch('/api/stain-photos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        photoBase64: compressedPhoto,  // 🔥 使用壓縮後的照片
+        thumbnailBase64: currentPhotoData.thumbnailBase64,
+        note: note,
+        orderId: ''
+      })
+    });
+    
+    var data = await res.json();
+    
+    if (data.success) {
+      showResult('success', '✅ 照片已儲存');
+      cancelPhoto();
+      loadStainPhotos();
+    } else {
+      showResult('error', '❌ 儲存失敗:' + (data.error || '未知錯誤'));
+    }
+  } catch (error) {
+    showResult('error', '❌ 連線失敗:' + error.message);
+  }
+}
+
+// 載入所有污漬照片
+async function loadStainPhotos() {
+  var grid = document.getElementById('stainPhotoGrid');
+  grid.innerHTML = '<p style="text-align:center; color:#999; grid-column:1/-1;">載入中...</p>';
+  
+  try {
+    var res = await fetch('/api/stain-photos');
+    var data = await res.json();
+    
+    if (!data.success) {
+      grid.innerHTML = '<p style="text-align:center; color:#dc3545; grid-column:1/-1;">載入失敗:' + (data.error || '未知錯誤') + '</p>';
+      return;
+    }
+    
+    allStainPhotos = data.photos || [];
+    document.getElementById('photoCount').textContent = '總共 ' + allStainPhotos.length + ' 張照片';
+    
+    if (allStainPhotos.length === 0) {
+      grid.innerHTML = '<p style="text-align:center; color:#999; grid-column:1/-1;">尚無照片</p>';
+      return;
+    }
+    
+    var html = '';
+    allStainPhotos.forEach(function(photo) {
+      var imgSrc = photo.imageUrl || '';
+      var note = photo.note || '無備註';
+      var time = photo.timestamp || '';
+      
+      html += '<div onclick="showPhotoDetail(\'' + photo.photoId + '\')" style="cursor:pointer; background:#fff; border-radius:10px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,.1); transition:all .3s;">' +
+        '<img src="' + imgSrc + '" style="width:100%; height:200px; object-fit:cover;">' +
+        '<div style="padding:10px;">' +
+        '<div style="font-size:13px; color:#333; margin-bottom:5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + note + '</div>' +
+        '<div style="font-size:11px; color:#999;">' + time + '</div>' +
+        '</div>' +
+        '</div>';
+    });
+    
+    grid.innerHTML = html;
+    
+  } catch (error) {
+    grid.innerHTML = '<p style="text-align:center; color:#dc3545; grid-column:1/-1;">載入失敗:' + error.message + '</p>';
+  }
+}
+
+// 顯示照片詳情 (修改版)
+function showPhotoDetail(photoId) {
+  var photo = allStainPhotos.find(function(p) { return p.photoId === photoId; });
+  if (!photo) return;
+  
+  currentPhotoId = photoId;
+  
+  document.getElementById('detailImage').src = photo.imageUrl || '';
+  document.getElementById('detailNote').value = photo.note || '';
+  document.getElementById('detailTime').textContent = photo.timestamp || '';
+  document.getElementById('detailId').textContent = photo.photoId || '';
+  
+  document.getElementById('photoDetailModal').style.display = 'block';
+}
+
+// 關閉照片詳情
+function closePhotoDetail() {
+  document.getElementById('photoDetailModal').style.display = 'none';
+  currentPhotoId = null;
+}
+
+// 更新照片備註
+async function updatePhotoNote() {
+  if (!currentPhotoId) return;
+  
+  var note = document.getElementById('detailNote').value.trim();
+  
+  try {
+    var res = await fetch('/api/stain-photos/' + encodeURIComponent(currentPhotoId), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ note: note })
+    });
+    
+    var data = await res.json();
+    
+    if (data.success) {
+      showResult('success', '✅ 備註已更新');
+      closePhotoDetail();
+      loadStainPhotos();
+    } else {
+      showResult('error', '❌ 更新失敗:' + (data.error || '未知錯誤'));
+    }
+  } catch (error) {
+    showResult('error', '❌ 連線失敗:' + error.message);
+  }
+}
+
+// 刪除污漬照片 (修復版)
+async function deleteStainPhoto() {
+  if (!currentPhotoId) return;
+  if (!confirm('確定要刪除此照片？')) return;
+  
+  try {
+    var res = await fetch('/api/stain-photos/' + encodeURIComponent(currentPhotoId), {
+      method: 'DELETE'
+    });
+    
+    var data = await res.json();
+    
+    if (data.success) {
+      showResult('success', '✅ 照片已刪除');
+      closePhotoDetail();
+      // 🔥🔥🔥 刪除後自動重新載入照片列表
+      loadStainPhotos();
+    } else {
+      showResult('error', '❌ 刪除失敗:' + (data.error || '未知錯誤'));
+    }
+  } catch (error) {
+    showResult('error', '❌ 連線失敗:' + error.message);
+  }
+}
+
+    async function loadPaymentRecords() {
+  var monthInput = document.getElementById('revenueMonth').value;
+  try {
+    var url = '/api/pos/payment-summary' + (monthInput ? '?month=' + encodeURIComponent(monthInput) : '');
+    var res = await fetch(url);
+    var data = await res.json();
+    if (!data.success) return;
+    var summary = data.summary || {};
+    var el = document.getElementById('actualCollected');
+    if (el) el.textContent = 'NT$ ' + (summary.totalCollected || 0).toLocaleString();
+  } catch(e) { console.error(e); }
+}
+
+
+   async function loadPaymentRecordsList() {
+  var month = document.getElementById('paymentRecordsMonth').value;
+  if (!month) { alert('請選擇月份'); return; }
+  try {
+    var res = await fetch('/api/pos/payment-summary?month=' + month);
+    var data = await res.json();
+    if (!data.success) return;
+    var summary = data.summary || {};
+    var records = data.records || [];
+
+    // 統計卡片
+    var methodColors = { '現金':'#28a745', '儲值卡':'#667eea', '信用卡':'#1890ff', '其他':'#999' };
+    var summaryHtml = '<div style="background:#fff3cd;padding:15px;border-radius:10px;text-align:center;"><div style="font-size:24px;font-weight:bold;color:#fd7e14;">NT$ ' + (summary.totalCollected||0).toLocaleString() + '</div><div style="color:#666;">本月總收款</div></div>';
+    for (var m in (summary.methodTotals||{})) {
+      var color = methodColors[m] || '#999';
+      summaryHtml += '<div style="background:#f8f9fa;padding:15px;border-radius:10px;text-align:center;"><div style="font-size:20px;font-weight:bold;color:'+color+';">NT$ '+summary.methodTotals[m].toLocaleString()+'</div><div style="color:#666;">'+m+'</div></div>';
+    }
+    document.getElementById('paymentRecordsSummary').innerHTML = summaryHtml;
+
+    // 顯示圖表區
+    document.getElementById('paymentChartsArea').style.display = 'block';
+
+    // 圓餅圖（收款方式比例）
+    var pieCtx = document.getElementById('pieChart').getContext('2d');
+    if (window._pieChart) window._pieChart.destroy();
+    var methodLabels = Object.keys(summary.methodTotals || {});
+    var methodValues = methodLabels.map(function(k) { return summary.methodTotals[k]; });
+    var pieColors = methodLabels.map(function(k) { return methodColors[k] || '#ccc'; });
+    var total = methodValues.reduce(function(a, b) { return a + b; }, 0);
+    window._pieChart = new Chart(pieCtx, {
+      type: 'pie',
+      data: { labels: methodLabels, datasets: [{ data: methodValues, backgroundColor: pieColors }] },
+     options: {
+        responsive: false,
+        plugins: {
+          datalabels: {
+            color: '#fff',
+            font: { size: 12, weight: 'bold' },
+            formatter: function(value, ctx) {
+              var total = ctx.dataset.data.reduce(function(a,b){return a+b;},0);
+              var pct = Math.round(value / total * 100);
+              return pct > 5 ? pct + '%' : '';
+            }
+          },
+          legend: {
+            position: 'bottom',
+            labels: {
+              generateLabels: function(chart) {
+                var data = chart.data;
+                var total = data.datasets[0].data.reduce(function(a,b){return a+b;},0);
+                return data.labels.map(function(label, i) {
+                  var val = data.datasets[0].data[i];
+                  var pct = total > 0 ? Math.round(val/total*100) : 0;
+                  return { text: label+' '+pct+'%', fillStyle: data.datasets[0].backgroundColor[i], index: i };
+                });
+              }
+            }
+          },
+          tooltip: {
+            callbacks: {
+              label: function(ctx) {
+                var val = ctx.parsed;
+                var total = ctx.dataset.data.reduce(function(a,b){return a+b;},0);
+                var pct = total > 0 ? Math.round(val / total * 100) : 0;
+                return ctx.label + ': NT$ ' + val.toLocaleString() + ' (' + pct + '%)';
+              }
+            }
+          }
+        }
+      },
+     
+    });
+
+    // 長條圖（每日收款）
+    var dailyMap = {};
+    records.forEach(function(r) { dailyMap[r.date] = (dailyMap[r.date]||0) + r.amount; });
+    var dailyDates = Object.keys(dailyMap).sort();
+    var dailyAmounts = dailyDates.map(function(d) { return dailyMap[d]; });
+    var barCtx = document.getElementById('barChart').getContext('2d');
+    if (window._barChart) window._barChart.destroy();
+    window._barChart = new Chart(barCtx, {
+      type: 'bar',
+      data: {
+        labels: dailyDates.map(function(d) { return d.substring(5); }),
+        datasets: [{ label: '收款金額', data: dailyAmounts, backgroundColor: '#667eea' }]
+      },
+      options: { responsive: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+    });
+
+    // 明細列表
+    if (records.length === 0) { document.getElementById('paymentRecordsList').innerHTML = '<p style="text-align:center;color:#999;">此月份沒有收款紀錄</p>'; return; }
+    var html = '<table style="width:100%;border-collapse:collapse;">';
+    html = '<style>table td, table th { font-family: Arial, "Microsoft JhengHei", sans-serif; }</style>' + html;
+    html += '<tr style="background:#667eea;color:white;"><th style="padding:10px;">日期</th><th>時間</th><th>客戶</th><th>金額</th><th>方式</th><th>操作</th></tr>';
+    records.forEach(function(r, i) {
+      var bg = i%2===0 ? '#fff' : '#f8f9fa';
+      var rowId = (r.orderId && r.orderId.trim()) ? r.orderId : (r.date + '_' + r.time + '_' + r.amount);
+      html += '<tr style="background:'+bg+';"><td style="padding:8px;text-align:center;">'+r.date+'</td><td style="text-align:center;">'+r.time+'</td><td style="text-align:center;">'+(r.customerName||'-')+'</td><td style="text-align:center;font-weight:bold;">NT$ '+r.amount.toLocaleString()+'</td><td style="text-align:center;">'+r.paymentMethod+'</td><td style="text-align:center;"><button onclick="deletePaymentRecord(\''+rowId+'\', \''+r.date+'\', \''+r.time+'\')" style="padding:4px 10px;background:#dc3545;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:12px;">🗑️</button></td></tr>';
+    });
+    html += '</table>';
+    document.getElementById('paymentRecordsList').innerHTML = html;
+  } catch(e) { console.error(e); }
+}
+async function deletePaymentRecord(rowId, date, time) {
+  if (!confirm('確定刪除此筆收款紀錄？\n日期：' + date + '\n時間：' + time)) return;
+  try {
+    var res = await fetch('/api/pos/payment-record/' + encodeURIComponent(rowId), { method: 'DELETE' });
+    var data = await res.json();
+    if (data.success) {
+      showResult('success', '✅ 已刪除');
+      loadPaymentRecordsList();
+    } else {
+      showResult('error', '❌ 刪除失敗：' + (data.error || '未知'));
+    }
+  } catch(e) {
+    showResult('error', '❌ 連線失敗：' + e.message);
+  }
+}
+    
+ </script>
+  <!-- 🤖 AI 每日分析 Modal -->
+<div id="aiInsightModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:9999; padding:20px; overflow:auto;">
+  <div style="background:#fff; max-width:600px; margin:50px auto; border-radius:20px; padding:30px; position:relative;">
+    <button onclick="document.getElementById('aiInsightModal').style.display='none'" style="position:absolute; top:15px; right:15px; background:#dc3545; color:#fff; border:none; padding:8px 15px; border-radius:5px; cursor:pointer;">✕</button>
+    <h3 style="color:#667eea; margin-bottom:5px;">🤖 AI 市場分析報告</h3>
+    <div id="aiInsightDate" style="color:#999; font-size:14px; margin-bottom:20px;"></div>
+    <div id="aiInsightStats" style="display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:20px;"></div>
+    <div id="aiInsightContent" style="background:#f8f9fa; padding:20px; border-radius:10px; line-height:1.8; white-space:pre-wrap; font-size:14px; color:#333;">載入中...</div>
+  </div>
+</div>
+
+<script>
+// ========================================
+// 🧺 品項分析功能
+// ========================================
+var currentItemRange = 'daily';
+var currentItemData = null;
+
+function setItemRange(range) {
+  currentItemRange = range;
+  document.getElementById('rangeDaily').style.background = range === 'daily' ? '#667eea' : '#fff';
+  document.getElementById('rangeDaily').style.color = range === 'daily' ? '#fff' : '#667eea';
+  document.getElementById('rangeWeekly').style.background = range === 'weekly' ? '#667eea' : '#fff';
+  document.getElementById('rangeWeekly').style.color = range === 'weekly' ? '#fff' : '#667eea';
+  document.getElementById('rangeMonthly').style.background = range === 'monthly' ? '#667eea' : '#fff';
+  document.getElementById('rangeMonthly').style.color = range === 'monthly' ? '#fff' : '#667eea';
+}
+
+async function loadItemAnalysis() {
+  const dateInput = document.getElementById('itemBaseDate').value || new Date().toISOString().substring(0, 10);
+  
+  document.getElementById('itemChartsArea').style.display = 'none';
+  document.getElementById('itemTableArea').style.display = 'none';
+  document.getElementById('itemAiArea').style.display = 'none';
+  document.getElementById('itemSummaryBar').style.display = 'none';
+  document.getElementById('itemAiContent').textContent = '點擊「開始 AI 分析」取得深度洞察';
+
+  try {
+    const res = await fetch(`/api/item-analysis?range=${currentItemRange}&date=${dateInput}`);
+    const data = await res.json();
+    if (!data.success) { alert('載入失敗: ' + data.error); return; }
+
+    currentItemData = data;
+
+    // 更新摘要列
+    const rangeLabel = { daily: '每日', weekly: '每週', monthly: '每月' }[currentItemRange];
+    document.getElementById('itemRangeLabel').textContent = `📅 ${rangeLabel}分析：${data.startDate}${data.startDate !== data.endDate ? ' ~ ' + data.endDate : ''}`;
+    document.getElementById('itemTotalCount').textContent = `總計 ${data.totalCount} 件`;
+    document.getElementById('itemSummaryBar').style.display = 'block';
+
+    if (data.items.length === 0) {
+      alert('此時間範圍沒有品項資料');
+      return;
+    }
+
+    // 渲染圓餅圖
+    const top8 = data.items.slice(0, 8);
+    const otherCount = data.items.slice(8).reduce((s, i) => s + i.count, 0);
+    const pieLabels = top8.map(i => i.name);
+    const pieData = top8.map(i => i.count);
+    if (otherCount > 0) { pieLabels.push('其他'); pieData.push(otherCount); }
+
+    const pieColors = ['#667eea','#764ba2','#f093fb','#f5576c','#4facfe','#00f2fe','#43e97b','#38f9d7','#fa709a','#fee140'];
+
+    if (window._itemPieChart) window._itemPieChart.destroy();
+    const pieCtx = document.getElementById('itemPieChart').getContext('2d');
+    window._itemPieChart = new Chart(pieCtx, {
+      type: 'pie',
+      data: { labels: pieLabels, datasets: [{ data: pieData, backgroundColor: pieColors }] },
+     options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          datalabels: {
+            color: '#fff',
+            font: { size: 12, weight: 'bold' },
+            formatter: function(value, ctx) {
+              var total = ctx.dataset.data.reduce(function(a,b){return a+b;},0);
+              var pct = Math.round(value / total * 100);
+              return pct > 5 ? pct + '%' : '';
+            }
+          },
+          legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 8 } },
+          tooltip: {
+            callbacks: {
+              label: function(ctx) {
+                var total = ctx.dataset.data.reduce(function(a,b){return a+b;},0);
+                var pct = total > 0 ? Math.round(ctx.parsed / total * 100) : 0;
+                return ctx.label + ': ' + ctx.parsed + ' 件 (' + pct + '%)';
+              }
+            }
+          }
+        }
+      }
+    });
+
+    // 渲染長條圖
+    const top10 = data.items.slice(0, 10);
+    if (window._itemBarChart) window._itemBarChart.destroy();
+    const barCtx = document.getElementById('itemBarChart').getContext('2d');
+    window._itemBarChart = new Chart(barCtx, {
+      type: 'bar',
+      data: {
+        labels: top10.map(i => i.name.length > 8 ? i.name.substring(0, 8) + '...' : i.name),
+        datasets: [{
+          label: '件數',
+          data: top10.map(i => i.count),
+          backgroundColor: '#667eea'
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        indexAxis: 'y',
+        plugins: { legend: { display: false } },
+        scales: { x: { beginAtZero: true, ticks: { stepSize: 1 } } }
+      }
+    });
+
+    // 渲染明細表
+    var tableHtml = '<table style="width:100%; border-collapse:collapse;">';
+    tableHtml += '<tr style="background:#667eea; color:#fff;"><th style="padding:10px; text-align:left;">品項</th><th style="padding:10px; text-align:center;">件數</th><th style="padding:10px; text-align:center;">占比</th><th style="padding:10px; text-align:right;">營收</th></tr>';
+    data.items.forEach(function(item, i) {
+      var bg = i % 2 === 0 ? '#fff' : '#f8f9fa';
+      tableHtml += '<tr style="background:' + bg + '; border-bottom:1px solid #e0e0e0;">' +
+        '<td style="padding:10px;">' + item.name + '</td>' +
+        '<td style="padding:10px; text-align:center; font-weight:600;">' + item.count + '</td>' +
+        '<td style="padding:10px; text-align:center;">' +
+          '<div style="background:#e0e0e0; border-radius:10px; height:8px; width:100%; margin-bottom:3px;"><div style="background:#667eea; border-radius:10px; height:8px; width:' + item.percent + '%;"></div></div>' +
+          item.percent + '%' +
+        '</td>' +
+        '<td style="padding:10px; text-align:right;">NT$ ' + item.revenue.toLocaleString() + '</td>' +
+        '</tr>';
+    });
+    tableHtml += '</table>';
+    document.getElementById('itemTable').innerHTML = tableHtml;
+
+    document.getElementById('itemChartsArea').style.display = 'block';
+    document.getElementById('itemTableArea').style.display = 'block';
+    document.getElementById('itemAiArea').style.display = 'block';
+
+  } catch (e) {
+    alert('載入失敗: ' + e.message);
+  }
+}
+
+async function loadItemAiAnalysis() {
+  if (!currentItemData || !currentItemData.items) { alert('請先查詢品項資料'); return; }
+  
+  var btn = document.getElementById('itemAiBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ 分析中...';
+  document.getElementById('itemAiContent').textContent = '🤖 AI 正在深度分析品項數據，請稍候...';
+
+  try {
+    var res = await fetch('/api/item-ai-analysis', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        range: currentItemData.range,
+        startDate: currentItemData.startDate,
+        endDate: currentItemData.endDate,
+        items: currentItemData.items,
+        totalCount: currentItemData.totalCount
+      })
+    });
+    var data = await res.json();
+    if (data.success) {
+      document.getElementById('itemAiContent').textContent = data.analysis;
+    } else {
+      document.getElementById('itemAiContent').textContent = '❌ 分析失敗: ' + (data.error || '未知錯誤');
+    }
+  } catch (e) {
+    document.getElementById('itemAiContent').textContent = '❌ 連線失敗: ' + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '✨ 重新分析';
+  }
+}
+async function showDailyInsight(date, revenue, orders) {
+  document.getElementById('aiInsightModal').style.display = 'block';
+  document.getElementById('aiInsightDate').textContent = date;
+  document.getElementById('aiInsightContent').textContent = '⏳ 分析師正在分析中，請稍候...';
+  
+  var avg = orders > 0 ? Math.round(revenue / orders) : 0;
+  document.getElementById('aiInsightStats').innerHTML =
+    '<div style="background:#f0f4ff;padding:12px;border-radius:8px;text-align:center;"><div style="font-size:20px;font-weight:bold;color:#667eea;">NT$'+revenue.toLocaleString()+'</div><div style="font-size:12px;color:#666;">當日營收</div></div>' +
+    '<div style="background:#e7f0ff;padding:12px;border-radius:8px;text-align:center;"><div style="font-size:20px;font-weight:bold;color:#1890ff;">'+orders+'筆</div><div style="font-size:12px;color:#666;">訂單數</div></div>' +
+    '<div style="background:#d4edda;padding:12px;border-radius:8px;text-align:center;"><div style="font-size:20px;font-weight:bold;color:#28a745;">NT$'+avg.toLocaleString()+'</div><div style="font-size:12px;color:#666;">客單價</div></div>';
+
+  try {
+    var res = await fetch('/api/daily-ai-insight?date=' + encodeURIComponent(date));
+    var data = await res.json();
+    if (data.success) {
+      document.getElementById('aiInsightContent').textContent = data.insight;
+    } else {
+      document.getElementById('aiInsightContent').textContent = '❌ 分析失敗：' + (data.error || '未知錯誤');
+    }
+  } catch(e) {
+    document.getElementById('aiInsightContent').textContent = '❌ 連線失敗：' + e.message;
+  }
+}
+</script>
 </body>
 </html>

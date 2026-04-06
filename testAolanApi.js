@@ -1,44 +1,42 @@
-// testAolanApi.js — 超精簡測試
+// testAolanApi.js
 require('dotenv').config();
-
-const BASE   = (process.env.AOLAN_BASE || '').replace(/\/+$/, '');
-const PATH   = process.env.AOLAN_TEST_PATH || '/SysConfig/GetVersion';
-const METHOD = (process.env.AOLAN_TEST_METHOD || 'GET').toUpperCase();
-const BODY   = process.env.AOLAN_TEST_BODY && process.env.AOLAN_TEST_BODY.trim() !== '' ? process.env.AOLAN_TEST_BODY : null;
-const TOKEN  = (process.env.AOLAN_BEARER_TOKEN || process.env.Authorization || '').replace(/^Bearer\s+/i,'');
-
-if (!BASE) { console.error('❌ AOLAN_BASE 未設定'); process.exit(1); }
-
-const url = `${BASE}${PATH.startsWith('/') ? PATH : '/' + PATH}`;
-const headers = {
-  'Content-Type': 'application/json',
-  ...(TOKEN ? { Authorization: `Bearer ${TOKEN}` } : {})
-};
+const fetch = require('node-fetch');
 
 (async () => {
-  const fetchFn = typeof fetch === 'function' ? fetch : (await import('node-fetch')).default;
+  const base = process.env.AOLAN_BASE;
+  const tenant = process.env.AOLAN_TENANT;
+  const token = process.env.AOLAN_BEARER_TOKEN;
 
-  console.log('BASE   =', BASE);
-  console.log('PATH   =', PATH);
-  console.log('METHOD =', METHOD);
-  console.log('TOKEN  =', TOKEN ? 'YES' : 'NO');
-  console.log('URL    =', url);
+  if (!base || !tenant || !token) {
+    console.error('❌ 缺少必要的環境變數：請確認 AOLAN_BASE, AOLAN_TENANT, AOLAN_BEARER_TOKEN 已設定');
+    process.exit(1);
+  }
 
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 12000);
+  const url = `${base}${tenant}/api/Order/GetOrders`; // 常見的訂單查詢端點
+  console.log(`🧩 嘗試連線：${url}`);
+
   try {
-    const res = await fetchFn(url, {
-      method: METHOD,
-      headers,
-      body: METHOD === 'GET' ? undefined : (BODY || '{}'),
-      signal: ctrl.signal
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/json'
+      },
+      timeout: 10000
     });
+
+    console.log(`🔗 狀態碼：${res.status}`);
+
     const text = await res.text();
-    console.log('↳ 狀態碼：', res.status);
-    console.log('↳ 回應前 500 字：\n', (text || '').slice(0, 500));
-  } catch (e) {
-    console.error('❌ 錯誤：', e.name, e.message);
-  } finally {
-    clearTimeout(timer);
+    if (res.ok) {
+      console.log('✅ API 回應成功');
+      console.log('--- 回傳內容 (前 500 字) ---');
+      console.log(text.slice(0, 500));
+    } else {
+      console.log('⚠️ API 回應非 200：');
+      console.log(text.slice(0, 300));
+    }
+  } catch (err) {
+    console.error('❌ 發送失敗：', err.message);
   }
 })();

@@ -1,0 +1,670 @@
+const { google } = require('googleapis');
+const { OpenAI } = require('openai');
+
+// ==================== 設定區 ====================
+const CONFIG = {
+  SPREADSHEET_ID: process.env.GOOGLE_SHEETS_ID_CUSTOMER,
+  SHEET_NAME: null,
+  EMAIL_TO: 'todayeasy2002@gmail.com',
+  FORECAST_DAYS: 14,
+  // 🌤️ 天氣 API 設定
+  WEATHER: {
+    apiKey: process.env.OPENWEATHER_API_KEY,
+    city: 'Banqiao,TW', // 板橋,台灣
+    enabled: !!process.env.OPENWEATHER_API_KEY // 有 API Key 才啟用
+  },
+  // 🔥 改用 SendGrid
+ SENDGRID: {
+  apiKey: process.env.SENDGRID_API_KEY,
+  fromEmail: 'todayeasy2002@gmail.com', // 🔥 改成已驗證的 Email
+  fromName: 'C.H洗衣預測系統'
+ }
+};
+
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+// ==================== Google Sheets 連接 ====================
+async function getGoogleSheetsClient() {
+  const googleAuth = require('./services/googleAuth');
+  
+  if (!googleAuth.isAuthorized()) {
+    throw new Error('Google Sheets 尚未授權,請先完成 OAuth 授權');
+  }
+  
+  const auth = googleAuth.getOAuth2Client();
+  return google.sheets({ version: 'v4', auth });
+}
+
+// ==================== 讀取訂單數據 ====================
+async function fetchOrderData() {
+  try {
+    const sheets = await getGoogleSheetsClient();
+    
+    console.log('📥 正在讀取營業紀錄...');
+    console.log(`試算表 ID: ${CONFIG.SPREADSHEET_ID}`);
+    
+    const spreadsheet = await sheets.spreadsheets.get({
+      spreadsheetId: CONFIG.SPREADSHEET_ID
+    });
+    
+    let targetSheet = spreadsheet.data.sheets.find(
+      sheet => sheet.properties.sheetId === 756780563
+    );
+    
+    if (!targetSheet) {
+      console.log('⚠️ 找不到 gid=756780563,使用第一個工作表');
+      targetSheet = spreadsheet.data.sheets[0];
+    }
+    
+    const sheetTitle = targetSheet.properties.title;
+    console.log(`✅ 找到工作表: ${sheetTitle}`);
+    
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: CONFIG.SPREADSHEET_ID,
+      range: `'${sheetTitle}'!A:I`,
+    });
+
+    const rows = response.data.values;
+    if (!rows || rows.length === 0) {
+      throw new Error('找不到數據');
+    }
+
+    console.log(`✅ 讀取到 ${rows.length - 1} 筆紀錄`);
+
+    const orders = rows.slice(1)
+      .filter(row => row[0] && row[8])
+      .map(row => {
+        const dateStr = row[0] || '';
+        const totalAmount = parseInt(String(row[8]).replace(/[^0-9]/g, '')) || 0;
+        
+        return {
+          date: dateStr,
+          time: dateStr.includes(' ') ? dateStr.split(' ')[1] : '12:00:00',
+          orderId: `ORDER${Date.now()}${Math.random().toString(36).substr(2, 5)}`,
+          customerName: row[1] || '未知',
+          phone: row[2] || '',
+          itemName: row[5] || '洗衣服務',
+          quantity: parseInt(row[6]) || 1,
+          unitPrice: parseInt(row[7]) || 0,
+          subtotal: totalAmount,
+          orderTotal: totalAmount,
+          paymentMethod: 'Cash',
+          deliveryMethod: 'TakeMyself'
+        };
+      });
+
+    console.log(`✅ 成功解析 ${orders.length} 筆有效訂單`);
+    
+    if (orders.length === 0) {
+      throw new Error('沒有找到有效的訂單數據');
+    }
+
+    return orders;
+  } catch (error) {
+    console.error('讀取訂單數據失敗:', error);
+    throw error;
+  }
+}
+
+// ==================== 數據分析引擎 ====================
+function analyzeHistoricalData(orders) {
+  const dailyStats = {};
+  const weekdayStats = Array(7).fill(0).map(() => ({ count: 0, revenue: 0, orders: [] }));
+  
+  orders.forEach(order => {
+    const date = order.date;
+    const orderDate = new Date(date);
+    const weekday = orderDate.getDay();
+    
+    if (!dailyStats[date]) {
+      dailyStats[date] = {
+        orderCount: 0,
+        revenue: 0,
+        takeMyself: 0,
+        deliveryToDoor: 0,
+        items: {}
+      };
+    }
+    
+    dailyStats[date].orderCount++;
+    dailyStats[date].revenue += order.orderTotal;
+    
+    if (order.deliveryMethod === 'TakeMyself') {
+      dailyStats[date].takeMyself++;
+    } else if (order.deliveryMethod === 'DeliveryToDoor') {
+      dailyStats[date].deliveryToDoor++;
+    }
+    
+    if (!dailyStats[date].items[order.itemName]) {
+      dailyStats[date].items[order.itemName] = 0;
+    }
+    dailyStats[date].items[order.itemName]++;
+    
+    weekdayStats[weekday].count++;
+    weekdayStats[weekday].revenue += order.orderTotal;
+    weekdayStats[weekday].orders.push(order);
+  });
+  
+  return { dailyStats, weekdayStats };
+}
+
+// ==================== 預測演算法 ====================
+function generateForecast(dailyStats, weekdayStats, forecastDays = 14) {
+  const dates = Object.keys(dailyStats).sort();
+  const historicalDays = dates.length;
+  
+  const avgDailyOrders = dates.reduce((sum, date) => sum + dailyStats[date].orderCount, 0) / historicalDays;
+  const avgDailyRevenue = dates.reduce((sum, date) => sum + dailyStats[date].revenue, 0) / historicalDays;
+  
+  const weekdayMultipliers = weekdayStats.map((stat, idx) => {
+    const weekdayAvg = stat.count / Math.max(1, Math.floor(historicalDays / 7));
+    return weekdayAvg > 0 ? weekdayAvg / avgDailyOrders : 1;
+  });
+  
+  const forecasts = [];
+  const today = new Date();
+  
+ // 🔥 2026 年過年連休日期 (一次性設定)
+const LUNAR_NEW_YEAR_2026 = [
+  '2026-02-14', '2026-02-15', '2026-02-16', '2026-02-17',
+  '2026-02-18', '2026-02-19', '2026-02-20', '2026-02-21'
+];
+
+for (let i = 1; i <= forecastDays; i++) {
+  const forecastDate = new Date(today);
+  forecastDate.setDate(today.getDate() + i);
+  const weekday = forecastDate.getDay();
+  const dateStr = forecastDate.toISOString().split('T')[0]; // 格式: 2026-02-14
+  
+  let predictedOrders = 0;
+  let predictedRevenue = 0;
+  
+  // 🔥 判斷是否為公休日
+  const isSaturday = weekday === 6; // 星期六
+  const isLunarNewYear = LUNAR_NEW_YEAR_2026.includes(dateStr); // 2026 過年
+  
+  if (isSaturday || isLunarNewYear) {
+    // 公休日: 訂單和營收都是 0
+    predictedOrders = 0;
+    predictedRevenue = 0;
+  } else {
+    // 正常營業日: 使用預測模型
+    predictedOrders = Math.round(avgDailyOrders * weekdayMultipliers[weekday]);
+    predictedRevenue = Math.round(avgDailyRevenue * weekdayMultipliers[weekday]);
+  }
+    
+    // 🔥 公休日的信心區間也是 0
+const orderRange = {
+  min: (isSaturday || isLunarNewYear) ? 0 : Math.round(predictedOrders * 0.8),
+  max: (isSaturday || isLunarNewYear) ? 0 : Math.round(predictedOrders * 1.2)
+};
+    
+    forecasts.push({
+      date: forecastDate.toISOString().split('T')[0],
+      weekday: ['週日', '週一', '週二', '週三', '週四', '週五', '週六'][weekday],
+      predictedOrders,
+      orderRange,
+      predictedRevenue,
+      confidence: historicalDays >= 7 ? 'medium' : 'low'
+    });
+  }
+  
+  return forecasts;
+}
+
+// ==================== 建議生成 ====================
+function generateRecommendations(forecasts, dailyStats, weekdayStats) {
+  const recommendations = [];
+  
+  const busiestDay = forecasts.reduce((max, day) => 
+    day.predictedOrders > max.predictedOrders ? day : max
+  , forecasts[0]);
+  
+  if (busiestDay.predictedOrders > forecasts[0].predictedOrders * 1.3) {
+    recommendations.push({
+      type: 'staffing',
+      priority: 'high',
+      message: `${busiestDay.date} (${busiestDay.weekday}) 預計特別忙碌 (${busiestDay.predictedOrders}單),建議增加人手或提前準備`
+    });
+  }
+  
+  const weeklyOrders = forecasts.slice(0, 7).reduce((sum, day) => sum + day.predictedOrders, 0);
+  const estimatedDetergent = Math.ceil(weeklyOrders * 0.8);
+  
+  recommendations.push({
+    type: 'supplies',
+    priority: 'medium',
+    message: `未來一週預計 ${weeklyOrders} 單,建議備貨洗劑約 ${estimatedDetergent}L`
+  });
+  
+  const weekdayAvg = weekdayStats.map((stat, idx) => ({
+    day: ['週日', '週一', '週二', '週三', '週四', '週五', '週六'][idx],
+    avg: stat.count
+  }));
+  
+  const busiestWeekday = weekdayAvg.reduce((max, day) => day.avg > max.avg ? day : max);
+  
+  recommendations.push({
+    type: 'pattern',
+    priority: 'info',
+    message: `歷史數據顯示 ${busiestWeekday.day} 通常是最忙的一天`
+  });
+  
+  return recommendations;
+}
+
+// ==================== 取得天氣預報 (WeatherAPI) ====================
+async function getWeatherForecast() {
+  if (!CONFIG.WEATHER.enabled) {
+    console.log('⚠️ 天氣 API 未啟用');
+    return null;
+  }
+  
+  try {
+    const fetch = require('node-fetch');
+    // 🌤️ 改用 WeatherAPI.com (支援 7 天預報)
+    const url = `https://api.weatherapi.com/v1/forecast.json?key=${CONFIG.WEATHER.apiKey}&q=${CONFIG.WEATHER.city}&days=7&lang=zh_tw`;
+    
+    const response = await fetch(url);
+    const data = await response.json();
+    
+    if (data.error) {
+      console.error('天氣 API 錯誤:', data.error.message);
+      return null;
+    }
+    
+    // 整理未來 7 天的天氣
+    const forecastDays = data.forecast.forecastday;
+    
+    return forecastDays.map(day => ({
+      date: day.date,
+      avgTemp: Math.round(day.day.avgtemp_c),
+      maxTemp: Math.round(day.day.maxtemp_c),
+      minTemp: Math.round(day.day.mintemp_c),
+      totalRain: Math.round(day.day.totalprecip_mm * 10) / 10,
+      isRainy: day.day.totalprecip_mm > 0.1,
+      weather: day.day.condition.text,
+      humidity: day.day.avghumidity
+    }));
+    
+  } catch (error) {
+    console.error('取得天氣預報失敗:', error.message);
+    return null;
+  }
+}
+
+// ==================== 使用 AI 深度分析 (含天氣) ====================
+async function getAIInsights(dailyStats, forecasts, weekdayStats, weatherData) {
+  const historicalSummary = Object.entries(dailyStats).map(([date, stats]) => 
+    `${date}: ${stats.orderCount}單, $${stats.revenue}`
+  ).join('\n');
+  
+  const forecastSummary = forecasts.slice(0, 7).map((f, idx) => {
+    const weather = weatherData && weatherData[idx] 
+      ? ` (${weatherData[idx].weather}, ${weatherData[idx].isRainy ? '有雨' : '無雨'})`
+      : '';
+    return `${f.date} (${f.weekday}): 預測${f.predictedOrders}單${weather}`;
+  }).join('\n');
+  
+  const weatherNote = weatherData 
+    ? '\n【天氣預報】\n' + weatherData.map(w => 
+        `${w.date}: ${w.weather}, ${w.avgTemp}°C, 降雨${w.totalRain}mm`
+      ).join('\n')
+    : '';
+  
+  const prompt = `你是 C.H 精緻洗衣的營運分析顧問。以下是歷史訂單數據和未來預測:
+
+【歷史數據】
+${historicalSummary}
+
+【未來7天預測】
+${forecastSummary}
+${weatherNote}
+
+請用繁體中文提供:
+1. 數據趨勢分析 (考慮天氣影響,2-3句話)
+2. 潛在商機或風險提醒 (特別注意雨天對洗衣需求的影響,1-2句話)
+3. 具體行動建議 (1-2句話)
+
+請簡潔專業,直接給出洞察,不要客套話。`;
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.7,
+      max_tokens: 500
+    });
+    
+    return response.choices[0].message.content;
+  } catch (error) {
+    console.error('AI分析失敗:', error);
+    return '(AI分析暫時無法使用)';
+  }
+}
+
+// ==================== 計算預測準確度 ====================
+function calculateAccuracy(dailyStats) {
+  return {
+    last7Days: 'N/A',
+    last30Days: 'N/A',
+    message: '累積更多數據後將顯示準確度'
+  };
+}
+
+// ==================== 生成 LINE 格式報表 ====================
+function generateLINEReport(forecasts, recommendations, aiInsights, accuracy, weatherData) {
+  const today = new Date().toLocaleDateString('zh-TW');
+  const todayForecast = forecasts[0];
+  
+  const busyLevel = todayForecast.predictedOrders < 30 ? '⭐⭐' :
+                    todayForecast.predictedOrders < 45 ? '⭐⭐⭐' :
+                    todayForecast.predictedOrders < 60 ? '⭐⭐⭐⭐' : '⭐⭐⭐⭐⭐';
+  
+  let report = `📊 C.H洗衣 每日需求預測 ${today}\n\n`;
+  report += `【今日預測】\n`;
+  report += `預計訂單: ${todayForecast.orderRange.min}-${todayForecast.orderRange.max} 單\n`;
+  report += `預計營收: $${(todayForecast.predictedRevenue * 0.8).toLocaleString()}-${(todayForecast.predictedRevenue * 1.2).toLocaleString()}\n`;
+  report += `忙碌指數: ${busyLevel}\n\n`;
+  
+  report += `【未來7天趨勢】\n`;
+forecasts.slice(0, 7).forEach((f, idx) => {
+  // 🔥 公休日特殊顯示
+  if (f.isHoliday) {
+    report += `${f.weekday} ${f.date.slice(5)}: 公休 🔒\n`;
+    return;
+  }
+  
+  const trend = idx > 0 && !forecasts[idx-1].isHoliday ? 
+    (f.predictedOrders > forecasts[idx-1].predictedOrders ? '⬆️' : 
+     f.predictedOrders < forecasts[idx-1].predictedOrders ? '⬇️' : '→') : '';
+  
+  const weather = weatherData && weatherData[idx] 
+    ? ` (${weatherData[idx].weather} ${weatherData[idx].avgTemp}°C${weatherData[idx].isRainy ? ' 🌧️' : ''})`
+    : '';
+  
+  report += `${f.weekday} ${f.date.slice(5)}: ${f.predictedOrders}單 ${trend}${weather}\n`;
+});
+  
+  report += `\n【AI 洞察分析】\n${aiInsights}\n\n`;
+  
+  report += `【本週建議】\n`;
+  recommendations.forEach(rec => {
+    const icon = rec.priority === 'high' ? '🔴' : rec.priority === 'medium' ? '🟡' : '💡';
+    report += `${icon} ${rec.message}\n`;
+  });
+  
+  report += `\n📈 預測準確度: ${accuracy.message}`;
+  
+  return report;
+}
+
+// ==================== 生成 Email HTML 報表 ====================
+function generateEmailHTML(forecasts, recommendations, aiInsights, dailyStats, weekdayStats, accuracy, weatherData) {
+  const today = new Date().toLocaleDateString('zh-TW');
+  
+  const forecastTableRows = forecasts.slice(0, 7).map((f, idx) => {
+  // 🔥 公休日特殊顯示
+  if (f.isHoliday) {
+    return `
+    <tr style="background: #f8f9fa;">
+      <td>${f.date}</td>
+      <td>${f.weekday}</td>
+      <td colspan="4" style="text-align: center; color: #6c757d;">
+        <strong>🔒 公休日</strong>
+      </td>
+    </tr>
+    `;
+  }
+  
+  const weather = weatherData && weatherData[idx] 
+    ? `${weatherData[idx].weather} ${weatherData[idx].avgTemp}°C${weatherData[idx].isRainy ? ' 🌧️' : ''}` 
+    : '-';
+  return `
+  <tr>
+    <td>${f.date}</td>
+    <td>${f.weekday}</td>
+    <td><strong>${f.predictedOrders}</strong></td>
+    <td>${f.orderRange.min} - ${f.orderRange.max}</td>
+    <td>$${f.predictedRevenue.toLocaleString()}</td>
+    <td>${weather}</td>
+  </tr>
+`;
+}).join('');
+  
+  const forecast14TableRows = forecasts.map(f => `
+    <tr>
+      <td>${f.date}</td>
+      <td>${f.weekday}</td>
+      <td>${f.predictedOrders}</td>
+      <td>$${f.predictedRevenue.toLocaleString()}</td>
+    </tr>
+  `).join('');
+  
+  const dates = Object.keys(dailyStats).sort();
+  const totalOrders = dates.reduce((sum, date) => sum + dailyStats[date].orderCount, 0);
+  const totalRevenue = dates.reduce((sum, date) => sum + dailyStats[date].revenue, 0);
+  const avgDaily = Math.round(totalOrders / dates.length);
+  
+  const weekdayAnalysis = weekdayStats.map((stat, idx) => {
+    const dayName = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'][idx];
+    return `<li>${dayName}: 平均 ${Math.round(stat.count / Math.max(1, Math.floor(dates.length / 7)))} 單/天</li>`;
+  }).join('');
+  
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: Arial, 'Microsoft JhengHei', sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; }
+    h1 { color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 10px; }
+    h2 { color: #34495e; margin-top: 30px; border-left: 4px solid #3498db; padding-left: 10px; }
+    table { width: 100%; border-collapse: collapse; margin: 20px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    th { background: #3498db; color: white; padding: 12px; text-align: left; }
+    td { padding: 10px; border-bottom: 1px solid #ddd; }
+    tr:hover { background: #f5f5f5; }
+    .summary { background: #ecf0f1; padding: 15px; border-radius: 5px; margin: 20px 0; }
+    .recommendation { background: #fff3cd; border-left: 4px solid #ffc107; padding: 10px; margin: 10px 0; }
+    .recommendation.high { background: #f8d7da; border-left-color: #dc3545; }
+    .ai-insights { background: #d1ecf1; border-left: 4px solid #17a2b8; padding: 15px; margin: 20px 0; white-space: pre-line; }
+    .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; color: #7f8c8d; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <h1>📊 C.H 精緻洗衣 - 需求預測報表</h1>
+  <p><strong>報表日期:</strong> ${today}</p>
+  
+  <div class="summary">
+    <h3>📈 歷史數據摘要 (累積 ${dates.length} 天)</h3>
+    <ul>
+      <li><strong>總訂單數:</strong> ${totalOrders} 單</li>
+      <li><strong>總營收:</strong> $${totalRevenue.toLocaleString()}</li>
+      <li><strong>日均訂單:</strong> ${avgDaily} 單</li>
+      <li><strong>日均營收:</strong> $${Math.round(totalRevenue / dates.length).toLocaleString()}</li>
+    </ul>
+  </div>
+  
+  <h2>🔮 未來 7 天詳細預測</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>日期</th>
+        <th>星期</th>
+        <th>預測訂單</th>
+        <th>信心區間</th>
+        <th>預測營收</th>
+        <th>天氣</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${forecastTableRows}
+    </tbody>
+  </table>
+  
+  <h2>📅 未來 14 天趨勢</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>日期</th>
+        <th>星期</th>
+        <th>預測訂單</th>
+        <th>預測營收</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${forecast14TableRows}
+    </tbody>
+  </table>
+  
+  <div class="ai-insights">
+    <h3>🤖 AI 深度分析</h3>
+    ${aiInsights}
+  </div>
+  
+  <h2>💡 營運建議</h2>
+  ${recommendations.map(rec => `
+    <div class="recommendation ${rec.priority}">
+      <strong>${rec.type === 'staffing' ? '👥 人力配置' : rec.type === 'supplies' ? '📦 物料備貨' : '📊 營運模式'}:</strong>
+      ${rec.message}
+    </div>
+  `).join('')}
+  
+  <h2>📊 星期效應分析</h2>
+  <ul>
+    ${weekdayAnalysis}
+  </ul>
+  
+  <div class="summary">
+    <h3>🎯 預測準確度追蹤</h3>
+    <p>${accuracy.message}</p>
+  </div>
+  
+  <div class="footer">
+    <p>本報表由 C.H 洗衣智能預測系統自動生成</p>
+    <p>預測模型會隨著數據累積持續優化,建議每日參考以調整營運策略</p>
+  </div>
+</body>
+</html>
+  `;
+  
+  return html;
+}
+
+// ==================== 發送 Email (使用 SendGrid) ====================
+async function sendEmailReport(htmlContent, textContent) {
+  try {
+    console.log('📧 準備發送 Email (SendGrid)...');
+    console.log(`收件人: ${CONFIG.EMAIL_TO}`);
+    
+    const sgMail = require('@sendgrid/mail');
+    sgMail.setApiKey(CONFIG.SENDGRID.apiKey);
+    
+    const msg = {
+      to: CONFIG.EMAIL_TO,
+      from: {
+        email: CONFIG.SENDGRID.fromEmail,
+        name: CONFIG.SENDGRID.fromName
+      },
+      subject: `📊 C.H洗衣需求預測報表 - ${new Date().toLocaleDateString('zh-TW')}`,
+      text: textContent,
+      html: htmlContent
+    };
+    
+    await sgMail.send(msg);
+    console.log('✅ Email 報表已發送 (SendGrid)');
+    
+    return { success: true };
+  } catch (error) {
+    console.error('❌ Email 發送失敗:', error.message);
+    if (error.response) {
+      console.error('SendGrid Error:', error.response.body);
+    }
+    
+    return {
+      success: false,
+      error: error.message,
+      textContent: textContent,
+      htmlContent: htmlContent
+    };
+  }
+}
+
+// ==================== 主程式 ====================
+async function main() {
+  try {
+    console.log('🚀 開始生成需求預測報表...');
+    
+    const orders = await fetchOrderData();
+    console.log(`✅ 讀取了 ${orders.length} 筆訂單記錄`);
+    
+    console.log('📊 分析歷史數據...');
+    const { dailyStats, weekdayStats } = analyzeHistoricalData(orders);
+    
+    console.log('🔮 生成未來預測...');
+    const forecasts = generateForecast(dailyStats, weekdayStats, CONFIG.FORECAST_DAYS);
+    
+   console.log('💡 生成營運建議...');
+   const recommendations = generateRecommendations(forecasts, dailyStats, weekdayStats);
+
+   // 🌤️ 取得天氣預報
+   console.log('🌤️ 取得天氣預報...');
+   const weatherData = await getWeatherForecast();
+
+   console.log('🤖 進行 AI 深度分析...');
+   const aiInsights = await getAIInsights(dailyStats, forecasts, weekdayStats, weatherData);
+
+   const accuracy = calculateAccuracy(dailyStats);
+    
+    console.log('📝 生成報表...');
+   const lineReport = generateLINEReport(forecasts, recommendations, aiInsights, accuracy, weatherData);
+    const emailHTML = generateEmailHTML(forecasts, recommendations, aiInsights, dailyStats, weekdayStats, accuracy, weatherData);
+    
+    console.log('📧 發送 Email 報表...');
+    const emailResult = await sendEmailReport(emailHTML, lineReport);
+    
+    if (!emailResult.success) {
+      console.warn('⚠️ Email 發送失敗,但報表已生成');
+      console.warn(`錯誤原因: ${emailResult.error}`);
+    }
+    
+    console.log('\n' + '='.repeat(50));
+    console.log('📱 LINE 報表內容:');
+    console.log('='.repeat(50));
+    console.log(lineReport);
+    console.log('='.repeat(50));
+    
+    console.log('\n✅ 需求預測報表生成完成!');
+    
+    return {
+      success: true,
+      lineReport,
+      emailHTML,
+      forecasts,
+      recommendations,
+      emailSent: emailResult.success
+    };
+    
+  } catch (error) {
+    console.error('❌ 生成報表失敗:', error);
+    throw error;
+  }
+}
+
+if (require.main === module) {
+  main()
+    .then(() => process.exit(0))
+    .catch((error) => {
+      console.error(error);
+      process.exit(1);
+    });
+}
+
+module.exports = {
+  main,
+  fetchOrderData,
+  analyzeHistoricalData,
+  generateForecast,
+  generateRecommendations,
+  getAIInsights
+};

@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>取件追蹤管理 - C.H 精緻洗衣</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+      overflow: hidden;
+    }
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 24px;
+      text-align: center;
+    }
+    .header h1 { font-size: 24px; margin-bottom: 8px; }
+    .header p { opacity: 0.9; font-size: 14px; }
+    
+    .section {
+      padding: 24px;
+      border-bottom: 1px solid #eee;
+    }
+    .section:last-child { border-bottom: none; }
+    .section-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: #333;
+    }
+    
+    .form-group {
+      margin-bottom: 16px;
+    }
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 500;
+      color: #555;
+    }
+    .form-group input {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 15px;
+      transition: border-color 0.3s;
+    }
+    .form-group input:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+    
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      width: 100%;
+    }
+    .btn-success {
+      background: #10b981;
+      color: white;
+      margin-right: 8px;
+    }
+    .btn-danger {
+      background: #ef4444;
+      color: white;
+    }
+    
+    .order-card {
+      background: #f9fafb;
+      border: 2px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+    .order-card.picked {
+      background: #d1fae5;
+      border-color: #10b981;
+    }
+    .order-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .order-number {
+      font-size: 18px;
+      font-weight: 600;
+      color: #1f2937;
+    }
+    .order-badge {
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .badge-pending {
+      background: #fef3c7;
+      color: #92400e;
+    }
+    .badge-reminded {
+      background: #fecaca;
+      color: #991b1b;
+    }
+    .badge-picked {
+      background: #10b981;
+      color: white;
+    }
+    .order-info {
+      color: #6b7280;
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+    .order-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    
+    .alert {
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      font-size: 14px;
+    }
+    .alert-success {
+      background: #d1fae5;
+      color: #065f46;
+      border: 1px solid #10b981;
+    }
+    .alert-error {
+      background: #fee2e2;
+      color: #991b1b;
+      border: 1px solid #ef4444;
+    }
+    
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: #9ca3af;
+    }
+    .empty-state svg {
+      width: 64px;
+      height: 64px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🧼 取件追蹤管理</h1>
+      <p>C.H 精緻洗衣 - 自動提醒系統</p>
+    </div>
+    
+    <!-- 新增追蹤 -->
+    <div class="section">
+      <div class="section-title">📝 新增追蹤訂單</div>
+      <div id="alert-container"></div>
+      
+      <div class="form-group">
+        <label>客戶編號</label>
+        <input type="text" id="customerNumber" placeholder="例如：K0000625">
+      </div>
+      
+      <div class="form-group">
+        <label>客戶姓名</label>
+        <input type="text" id="customerName" placeholder="例如：小林王子大大">
+      </div>
+      
+      <div class="form-group">
+        <label>LINE User ID</label>
+        <input type="text" id="userID" placeholder="例如：U5099169723d6e83588c5f23dfaf6f9cf">
+      </div>
+      
+      <button class="btn btn-primary" onclick="startTracking()">
+        🚀 開始追蹤 (10 分鐘後提醒)
+      </button>
+    </div>
+    
+    <!-- 追蹤中的訂單 -->
+    <div class="section">
+      <div class="section-title">📋 追蹤中的訂單</div>
+      <div id="orders-container">
+        <div class="empty-state">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+          </svg>
+          <p>目前沒有追蹤中的訂單</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    // 顯示提示訊息
+    function showAlert(message, type = 'success') {
+      const container = document.getElementById('alert-container');
+      container.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
+      setTimeout(() => { container.innerHTML = ''; }, 5000);
+    }
+    
+    // 開始追蹤
+    async function startTracking() {
+      const customerNumber = document.getElementById('customerNumber').value.trim();
+      const customerName = document.getElementById('customerName').value.trim();
+      const userID = document.getElementById('userID').value.trim();
+      
+      if (!customerNumber || !customerName || !userID) {
+        showAlert('請填寫所有欄位', 'error');
+        return;
+      }
+      
+      try {
+        const response = await fetch('/api/track-pickup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ customerNumber, customerName, userID })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          showAlert('✅ 已加入追蹤清單！10 分鐘後自動發送提醒');
+          document.getElementById('customerNumber').value = '';
+          document.getElementById('customerName').value = '';
+          document.getElementById('userID').value = '';
+          loadOrders();
+        } else {
+          showAlert(data.message || data.error, 'error');
+        }
+      } catch (error) {
+        showAlert('操作失敗：' + error.message, 'error');
+      }
+    }
+    
+    // 標記已取件
+    async function markComplete(customerNumber, customerName) {
+      if (!confirm(`確定要標記「${customerName}」已取件嗎？`)) return;
+      
+      try {
+        const response = await fetch('/api/pickup-complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ customerNumber })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          showAlert('✅ 已標記為已取件');
+          loadOrders();
+        } else {
+          showAlert(data.error, 'error');
+        }
+      } catch (error) {
+        showAlert('操作失敗：' + error.message, 'error');
+      }
+    }
+    
+    // 移除追蹤
+    async function removeTracking(customerNumber, customerName) {
+      if (!confirm(`確定要移除「${customerName}」的追蹤嗎？`)) return;
+      
+      try {
+        const response = await fetch(`/api/tracked-order/${customerNumber}`, {
+          method: 'DELETE'
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          showAlert('✅ 已移除追蹤');
+          loadOrders();
+        } else {
+          showAlert(data.error, 'error');
+        }
+      } catch (error) {
+        showAlert('操作失敗：' + error.message, 'error');
+      }
+    }
+    
+    // 載入訂單清單
+    async function loadOrders() {
+      try {
+        const response = await fetch('/api/tracked-orders');
+        const data = await response.json();
+        
+        const container = document.getElementById('orders-container');
+        
+        if (!data.success || data.orders.length === 0) {
+          container.innerHTML = `
+            <div class="empty-state">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+              </svg>
+              <p>目前沒有追蹤中的訂單</p>
+            </div>
+          `;
+          return;
+        }
+        
+        container.innerHTML = data.orders.map(order => {
+          const badgeClass = order.pickedUp ? 'badge-picked' : (order.reminderSent ? 'badge-reminded' : 'badge-pending');
+          const badgeText = order.pickedUp ? '已取件' : (order.reminderSent ? '已提醒' : '追蹤中');
+          
+          return `
+            <div class="order-card ${order.pickedUp ? 'picked' : ''}">
+              <div class="order-header">
+                <div class="order-number">${order.customerNumber}</div>
+                <span class="order-badge ${badgeClass}">${badgeText}</span>
+              </div>
+              <div class="order-info">👤 ${order.customerName}</div>
+              <div class="order-info">⏰ 已通知：${order.minutesSince} 分鐘前</div>
+              <div class="order-info">📱 ${order.userID}</div>
+              ${order.reminderSent ? `<div class="order-info">🔔 提醒時間：${new Date(order.reminderSentAt).toLocaleString('zh-TW')}</div>` : ''}
+              ${!order.pickedUp ? `
+                <div class="order-actions">
+                  <button class="btn btn-success" onclick="markComplete('${order.customerNumber}', '${order.customerName}')">✅ 已取件</button>
+                  <button class="btn btn-danger" onclick="removeTracking('${order.customerNumber}', '${order.customerName}')">🗑️ 移除</button>
+                </div>
+              ` : ''}
+            </div>
+          `;
+        }).join('');
+        
+      } catch (error) {
+        console.error('載入訂單失敗：', error);
+      }
+    }
+    
+    // 頁面載入時執行
+    loadOrders();
+    
+    // 每 30 秒自動重新整理
+    setInterval(loadOrders, 30000);
+  </script>
+</body>
+</html>

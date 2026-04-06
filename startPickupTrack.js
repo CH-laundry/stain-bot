@@ -1,99 +1,199 @@
 /**
  * startPickupTrack.js
- * 功能：在「衣物全部上掛完成」後觸發通知，並開始 7 天追蹤計時
+ * 功能：發送「可取件通知」，並把訂單加入追蹤清單（10 分鐘/7 天等由 .env 控制）
+ * ✅ 不修改現有任何檔案；資料存到 /data/pickup-tracker.json（或本機 ./data/）
  */
 
+require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
 const fetch = require('node-fetch');
-require('dotenv').config();
 
-const trackerFile = path.join(__dirname, 'data/pickup-tracker.json');
-if (!fs.existsSync(path.dirname(trackerFile))) fs.mkdirSync(path.dirname(trackerFile), { recursive: true });
+// ---------- 路徑設定：優先寫 Railway Volume ----------
+const VOL_ROOT = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
+const FALLBACK_ROOT = path.join(__dirname, 'data');
+const STORE_DIR = fs.existsSync(VOL_ROOT) ? VOL_ROOT : FALLBACK_ROOT;
+const TRACK_FILE = path.join(STORE_DIR, 'pickup-tracker.json');
 
-// === 主程式 ===
-(async () => {
-  const [,, receivingOrderId, customerId, orderNo, isDeliveryFlag] = process.argv;
-  const isDelivery = String(isDeliveryFlag) === '1';
-  if (!receivingOrderId || !customerId || !orderNo) {
-    console.error('❌ 缺少參數：node startPickupTrack.js <ReceivingOrderID> <CustomerID> <OrderNo> <IsDelivery(0或1)>');
+// ---------- 參數與環境 ----------// ======= startPickupTrack.js =======
+// 用程式方式把一筆訂單加入追蹤（供內部呼叫；也保留 CLI 相容）
+
+const { addTrack } = require('./pickupWatcher');
+const fetch = require('node-fetch');
+
+try { require('dotenv').config(); } catch (e) {}
+
+const AOLAN_BASE  = process.env.AOLAN_API_BASE || process.env.AOLAN_BASE || 'https://hk2.ao-lan.cn/xiyi-yidianyuan1';
+const AOLAN_TOKEN = process.env.AOLAN_AUTH_TOKEN || process.env.AOLAN_BEARER_TOKEN || '';
+const LINE_TOKEN  = process.env.LINE_CHANNEL_ACCESS_TOKEN || '';
+const TEST_USER   = process.env.LINE_TEST_USER_ID || process.env.LINE_USER_ID || '';
+
+async function sendInitialLine(orderNo, roid) {
+  if (!LINE_TOKEN || !TEST_USER) return;
+  const res = await fetch('https://api.line.me/v2/bot/message/push', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${LINE_TOKEN}` },
+    body: JSON.stringify({
+      to: TEST_USER,
+      messages: [{ type: 'text', text: `📣 已開始追蹤：${orderNo}（${roid}）` }]
+    })
+  }).catch(()=>null);
+  if (res && !res.ok) {
+    const t = await res.text().catch(()=> '');
+    console.error('❌ 首次 LINE 通知失敗：', res.status, t);
+  }
+}
+
+async function mainCli() {
+  const [ReceivingOrderID, CustomerID, OrderNo, isDelStr = '0'] = process.argv.slice(2);
+  if (!ReceivingOrderID || !CustomerID || !OrderNo) {
+    console.log('用法：node startPickupTrack.js <ReceivingOrderID> <CustomerID> <OrderNo> <isDelivery(0|1)>');
     process.exit(1);
   }
+  const ok = addTrack({
+    receivingOrderId: ReceivingOrderID,
+    customerId: CustomerID,
+    orderNo: OrderNo,
+    isDelivery: isDelStr === '1',
+    hungAt: Date.now()
+  });
+  if (ok) {
+    console.log(`🚀 開始追蹤：OrderNo=${OrderNo} | ReceivingOrderID=${ReceivingOrderID} | 店取/外送=${isDelStr==='1'?'外送':'店取'}`);
+    await sendInitialLine(OrderNo, ReceivingOrderID);
+  } else {
+    console.log('⚠️ 已存在相同 ReceivingOrderID，略過。');
+  }
+}
 
-  console.log(`🚀 開始追蹤：OrderNo=${orderNo} | ReceivingOrderID=${receivingOrderId} | 店取/外送=${isDelivery ? '外送' : '店取'}`);
+if (require.main === module) {
+  mainCli().catch(e => {
+    console.error('startPickupTrack 例外：', e);
+    process.exit(1);
+  });
+}
 
-  // === 1️⃣ 先抓「上掛完成時間」 ===
-  const base = process.env.AOLAN_BASE?.replace(/\/+$/, '') || '';
-  const token = process.env.AOLAN_BEARER_TOKEN || '';
-  const detailUrl = `${base}/ReceivingOrder/SearchItemDetail`;
+// 也導出方法，供日後在你的 index.js 或任一路由直接呼叫：
+// const { startTrack } = require('./startPickupTrack');
+// startTrack({ receivingOrderId, customerId, orderNo, isDelivery: false, hungAt: Date.now() });
+async function startTrack(payload) {
+  const ok = addTrack(payload);
+  if (ok) await sendInitialLine(payload.orderNo, payload.receivingOrderId);
+  return ok;
+}
 
-  let startedAt = Date.now();
+module.exports = { startTrack };
+
+const BASE = process.env.AOLAN_BASE || '';
+const TOKEN = process.env.AOLAN_BEARER_TOKEN || '';
+const GRACE_MIN = toInt(process.env.PICKUP_GRACE_MINUTES, null);
+const GRACE_DAYS = toInt(process.env.PICKUP_GRACE_DAYS, 7); // 正式預設 7 天
+const NOW = Date.now();
+
+const args = process.argv.slice(2);
+const [receivingOrderId, customerId, orderNo, isDeliveryFlag] = args;
+
+if (!receivingOrderId || !customerId || !orderNo || typeof isDeliveryFlag === 'undefined') {
+  console.error('❌ 用法：npm run pickup:track -- <ReceivingOrderID> <CustomerID> <OrderNo> <isDelivery(0/1)>');
+  process.exit(1);
+}
+
+const isDelivery = String(isDeliveryFlag) === '1';
+const graceMs = GRACE_MIN != null
+  ? (GRACE_MIN * 60 * 1000)
+  : (GRACE_DAYS * 24 * 60 * 60 * 1000);
+const deadline = NOW + graceMs;
+
+ensureDir(STORE_DIR);
+
+// ---------- 發送首次可取件通知（Aolan 模板） ----------
+async function sendFirstMessage() {
+  const url = joinUrl(BASE, '/SendMessage/SendDeliverRemindTemplateMessage');
+  const body = {
+    ReceivingOrderID: receivingOrderId,
+    CustomerID: customerId,
+    OrderNo: orderNo,
+    IsDelivery: !!isDelivery
+  };
+
   try {
-    const res = await fetch(detailUrl, {
+    const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ReceivingOrderID: String(receivingOrderId) })
+      headers: {
+        'Authorization': `Bearer ${TOKEN}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
     });
-    const data = await res.json().catch(() => ({}));
-
-    // 優先找出時間欄位（可能不同伺服器命名）
-    const timeField = data.DoneAt || data.AllHungAt || data.OnHangerAt || data.FinishDate || data.CleanFinishAt;
-    if (timeField) {
-      const parsed = Date.parse(timeField);
-      if (Number.isFinite(parsed)) {
-        startedAt = parsed;
-        console.log(`📅 已抓到上掛完成時間：${new Date(parsed).toLocaleString()}`);
-      } else {
-        console.log('⚠️ Aolan 回傳的時間格式無法解析，改用現在時間。');
-      }
-    } else {
-      console.log('⚠️ Aolan 未提供上掛完成時間，改用現在時間。');
-    }
+    const ok = res.ok;
+    const text = await safeText(res);
+    console.log(`📨 首次通知 ${ok ? '成功' : '失敗'}：${res.status} ${res.statusText} ${text ? '- ' + trunc(text) : ''}`);
   } catch (err) {
-    console.log('⚠️ 無法取得上掛完成時間，改用現在時間：', err.message);
+    console.error('⚠️ 首次通知呼叫異常：', err.message);
   }
+}
 
-  // === 2️⃣ 計算 7 天門檻 ===
-  const graceDays = Number(process.env.PICKUP_GRACE_DAYS || 7);
-  const deadlineAt = startedAt + graceDays * 24 * 60 * 60 * 1000;
-
-  // === 3️⃣ 呼叫 Aolan 的發送通知 ===
-  const remindUrl = `${base}/SendMessage/SendDeliverRemindTemplateMessage`;
-  try {
-    const res = await fetch(remindUrl, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ReceivingOrderID: receivingOrderId,
-        CustomerID: customerId,
-        OrderNo: orderNo,
-        IsDelivery: isDelivery
-      })
-    });
-    const text = await res.text();
-    console.log(`📨 首次通知 成功：${res.status} ${res.statusText} - ${text}`);
-  } catch (err) {
-    console.error('❌ 首次通知發送失敗：', err.message);
-  }
-
-  // === 4️⃣ 寫入追蹤檔 ===
-  let tracker = { items: [] };
-  if (fs.existsSync(trackerFile)) {
-    tracker = JSON.parse(fs.readFileSync(trackerFile, 'utf8'));
-  }
-  if (!Array.isArray(tracker.items)) tracker.items = [];
-
-  tracker.items.push({
+// ---------- 寫入追蹤檔 ----------
+function addToTracker() {
+  const state = loadJson(TRACK_FILE, { items: [] });
+  const exists = state.items.find(x => String(x.receivingOrderId) === String(receivingOrderId));
+  const rec = {
     receivingOrderId,
     customerId,
     orderNo,
     isDelivery,
-    startedAt,
-    deadlineAt,
+    startedAt: NOW,
+    deadlineAt: deadline,
     completed: false,
-    notifiedTimes: 0
-  });
+    notifiedTimes: 0,
+    lastNotifiedAt: null
+  };
 
-  fs.writeFileSync(trackerFile, JSON.stringify(tracker, null, 2));
-  console.log(`💾 已加入追蹤：#${receivingOrderId}（門檻 ${graceDays} 天；存檔：${trackerFile}）`);
+  if (exists) {
+    // 若已存在就更新門檻時間與基本欄位（避免重複）
+    Object.assign(exists, rec);
+  } else {
+    state.items.push(rec);
+  }
+
+  saveJson(TRACK_FILE, state);
+  const mins = (graceMs / 60000).toFixed(2);
+  console.log(`💾 已加入追蹤：#${receivingOrderId}（門檻 ${mins} 分鐘；存檔：${TRACK_FILE}）`);
+}
+
+// ---------- Main ----------
+(async () => {
+  console.log(`🚀 開始追蹤：OrderNo=${orderNo} | ReceivingOrderID=${receivingOrderId} | 店取/外送=${isDelivery ? '外送' : '店取'}`);
+  await sendFirstMessage();
+  addToTracker();
+  process.exit(0);
 })();
+
+// ---------- 小工具 ----------
+function ensureDir(p) {
+  try { fs.mkdirSync(p, { recursive: true }); } catch {}
+}
+function loadJson(file, def) {
+  try {
+    if (!fs.existsSync(file)) return def;
+    const s = fs.readFileSync(file, 'utf8').trim();
+    return s ? JSON.parse(s) : def;
+  } catch { return def; }
+}
+function saveJson(file, obj) {
+  try { fs.writeFileSync(file, JSON.stringify(obj, null, 2)); } catch {}
+}
+function toInt(val, def) {
+  if (val == null) return def;
+  const n = parseInt(val, 10);
+  return Number.isFinite(n) ? n : def;
+}
+function joinUrl(base, p) {
+  if (!base) return p;
+  return base.replace(/\/+$/, '') + '/' + p.replace(/^\/+/, '');
+}
+async function safeText(res) {
+  try { return await res.text(); } catch { return ''; }
+}
+function trunc(s, n = 200) {
+  return String(s).length > n ? String(s).slice(0, n) + '…' : s;
+}

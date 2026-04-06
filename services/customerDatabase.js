@@ -1,56 +1,55 @@
-const { google } = require('googleapis');
-const googleAuth = require('./googleAuth');
 const logger = require('./logger');
+const fs = require('fs');
+const path = require('path');
 
 class CustomerDatabase {
     constructor() {
-        this.SHEET_NAME = '客戶列表';
+        this.DATA_FILE = '/data/customers.json';
         this.cache = new Map();
+        this.ensureDataFile();
     }
 
-    async getSheets() {
-        const auth = googleAuth.getOAuth2Client();
-        return google.sheets({ version: 'v4', auth });
+    ensureDataFile() {
+        const dir = path.dirname(this.DATA_FILE);
+        
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+        
+        if (!fs.existsSync(this.DATA_FILE)) {
+            fs.writeFileSync(this.DATA_FILE, JSON.stringify([]), 'utf8');
+        }
     }
 
     async loadAllCustomers() {
         try {
-            if (!googleAuth.isAuthorized()) {
-                logger.logToFile('⚠️ Google 未授權,跳過載入客戶資料');
+            if (!fs.existsSync(this.DATA_FILE)) {
+                logger.logToFile('⚠️ 客戶資料檔案不存在，建立新檔案');
+                this.ensureDataFile();
                 return;
             }
 
-            const sheets = await this.getSheets();
-            const spreadsheetId = process.env.GOOGLE_SHEETS_ID_CUSTOMER;
-
-            if (!spreadsheetId) {
-                logger.logToFile('⚠️ 未設定 GOOGLE_SHEETS_ID_CUSTOMER');
-                return;
-            }
-
-            const response = await sheets.spreadsheets.values.get({
-                spreadsheetId: spreadsheetId,
-                range: `${this.SHEET_NAME}!A2:F`
-            });
-
-            const rows = response.data.values || [];
+            const data = fs.readFileSync(this.DATA_FILE, 'utf8');
+            const customers = JSON.parse(data);
             
-            rows.forEach(row => {
-                if (row[1]) {
-                    this.cache.set(row[1], {
-                        userId: row[1],
-                        displayName: row[2] || '',
-                        realName: row[3] || '',
-                        lastSeen: row[4] || new Date().toISOString(),
-                        interactionCount: parseInt(row[5]) || 0,
-                        customName: !!row[3]
-                    });
+            customers.forEach(customer => {
+                if (customer.userId) {
+                    this.cache.set(customer.userId, customer);
                 }
             });
 
-            logger.logToFile(`✅ 已從 Google Sheets 載入 ${rows.length} 位客戶`);
+            logger.logToFile(`✅ 已從檔案載入 ${customers.length} 位客戶`);
         } catch (error) {
             logger.logError('載入客戶資料失敗', error);
+        }
+    }
+
+    saveToFile() {
+        try {
+            const customers = Array.from(this.cache.values());
+            fs.writeFileSync(this.DATA_FILE, JSON.stringify(customers, null, 2), 'utf8');
+        } catch (error) {
+            logger.logError('儲存客戶資料到檔案失敗', error);
         }
     }
 
@@ -65,76 +64,45 @@ class CustomerDatabase {
                 realName: realName || existing?.realName || '',
                 lastSeen: now,
                 interactionCount: (existing?.interactionCount || 0) + 1,
-                customName: !!(realName || existing?.realName)
+                customName: !!(realName || existing?.realName),
+                firstContact: existing?.firstContact || now,
+                lastContact: now,
+                messageCount: existing?.messageCount || 0
             };
 
             this.cache.set(userId, customerData);
+            this.saveToFile();
 
-            if (!googleAuth.isAuthorized()) {
-                return customerData;
-            }
-
-            const sheets = await this.getSheets();
-            const spreadsheetId = process.env.GOOGLE_SHEETS_ID_CUSTOMER;
-
-            if (!spreadsheetId) {
-                return customerData;
-            }
-
-            const timestamp = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
-
-            if (existing) {
-                const response = await sheets.spreadsheets.values.get({
-                    spreadsheetId: spreadsheetId,
-                    range: `${this.SHEET_NAME}!B:B`
-                });
-
-                const rows = response.data.values || [];
-                const rowIndex = rows.findIndex(row => row[0] === userId);
-
-                if (rowIndex !== -1) {
-                    await sheets.spreadsheets.values.update({
-                        spreadsheetId: spreadsheetId,
-                        range: `${this.SHEET_NAME}!A${rowIndex + 2}:F${rowIndex + 2}`,
-                        valueInputOption: 'USER_ENTERED',
-                        resource: {
-                            values: [[
-                                timestamp,
-                                userId,
-                                displayName,
-                                customerData.realName,
-                                now,
-                                customerData.interactionCount
-                            ]]
-                        }
-                    });
-                    logger.logToFile(`✅ 已更新客戶: ${displayName} (${userId})`);
-                    return customerData;
-                }
-            }
-
-            await sheets.spreadsheets.values.append({
-                spreadsheetId: spreadsheetId,
-                range: `${this.SHEET_NAME}!A:F`,
-                valueInputOption: 'USER_ENTERED',
-                resource: {
-                    values: [[
-                        timestamp,
-                        userId,
-                        displayName,
-                        customerData.realName,
-                        now,
-                        customerData.interactionCount
-                    ]]
-                }
-            });
-
-            logger.logToFile(`✅ 已新增客戶: ${displayName} (${userId})`);
+            logger.logToFile(`✅ 已儲存客戶: ${displayName} (${userId})`);
             return customerData;
 
         } catch (error) {
             logger.logError('儲存客戶資料失敗', error);
             return null;
+        }
+    }
+
+    async updateCustomerActivity(userId, message) {
+        try {
+            const existing = this.cache.get(userId);
+            
+            if (existing) {
+                const now = new Date().toISOString();
+                
+                existing.lastContact = now;
+                existing.messageCount = (existing.messageCount || 0) + 1;
+                
+                if (message && message.type === 'text') {
+                    existing.lastMessage = message.text;
+                }
+                
+                this.cache.set(userId, existing);
+                this.saveToFile();
+                
+                logger.logToFile(`✅ 客人活動已更新: ${existing.displayName} (訊息數: ${existing.messageCount})`);
+            }
+        } catch (error) {
+            logger.logError('更新客人活動失敗', error, userId);
         }
     }
 
@@ -154,11 +122,21 @@ class CustomerDatabase {
 
     getAllCustomers() {
         return Array.from(this.cache.values()).sort((a, b) => 
-            new Date(b.lastSeen) - new Date(a.lastSeen)
+            new Date(b.lastContact || b.lastSeen) - new Date(a.lastContact || a.lastSeen)
         );
     }
 
     getCustomer(userId) {
+        // 👇👇👇 插入開始：測試用強制通道 👇👇👇
+        if (userId === 'U5099169723d6e83588c5f23dfaf6f9cf') {
+            return {
+                userId: userId,
+                displayName: '小林王子大大',
+                realName: '625',  // 強制讓系統以為你是 625 號客人
+                lastContact: new Date().toISOString()
+            };
+        }
+        // 👆👆👆 插入結束 👆👆👆
         return this.cache.get(userId);
     }
 

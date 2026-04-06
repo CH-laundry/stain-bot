@@ -1,4 +1,3 @@
-// services/message.js
 const { Client } = require('@line/bot-sdk');
 const { analyzeStainWithAI, smartAutoReply, createECPayPaymentLink } = require('./openai');
 const logger = require('./logger');
@@ -7,7 +6,6 @@ const AddressDetector = require('../utils/address');
 const { addCustomerInfo } = require('./google');
 const fetch = require('node-fetch');
 const { isOneKey, isTwoKey } = require('./utils');
-
 
 
 // LINE client
@@ -23,7 +21,6 @@ const ignoredKeywords = [
 ];
 
 
-
 // 文字清理：去 emoji、全形轉半形、壓縮多餘空白
 function cleanText(s = '') {
   const toHalf = x =>
@@ -35,6 +32,55 @@ function cleanText(s = '') {
     .replace(/\s+/g, ' ') // 合併多個空白
     .trim();
 }
+// 通用正規化：NFKC → 清理 → 小寫
+function normalize(text = '') {
+  const src = String(text ?? '');
+  const nfkc = typeof src.normalize === 'function' ? src.normalize('NFKC') : src;
+  return cleanText(nfkc).toLowerCase();
+}
+
+/* ======================= 只允許「關鍵字命中」才回覆 ======================= */
+// 嚴格關鍵字模式：AI 僅在白名單命中時回
+const STRICT_KEYWORD_MODE = true;
+
+// 服務動詞 / 汙漬詞 / 類別
+const SERVICE_VERBS = ['洗','清洗','清潔','去污','去漬','除臭','保養','整燙','燙','修補','修復'];
+const STAIN_TERMS = ['污','汙','污漬','汙漬','發霉','黴','黴斑','發黴','黃斑','泛黃','掉色','染色','退色','變色','異味','油漬','咖啡漬','汗漬','血漬','霉味'];
+const CATEGORIES = [
+  '衣','衣服','外套','襯衫','褲','大衣','羽絨','毛衣','皮衣','針織','拉鍊','鈕扣',
+  '包','包包','名牌包','手提袋','背包','書包','皮革','帆布','麂皮','有洗鞋子','有洗運動',
+  '窗簾','布簾','遮光簾','地毯','地墊','毯子','毛毯','被子','棉被','羽絨被',
+  '帽子','毛帽','棒球帽','鴨舌帽','禮帽',
+  '手推車','嬰兒推車','嬰兒車','汽座','安全座椅'
+];
+const ACTION_WORDS = ['收件','收衣','到府','上門','取件','預約','約收','送回','送件','送來','取回','還衣','送返','送還'];
+const COST_WORDS = ['價錢','多少','費用','價格','報價','價位','收費'];
+const PAYMENT_WORDS = ['付款','支付','line pay','linepay','信用卡','刷卡','連結','收款','支付鏈接','付款連結'];
+const PROGRESS_WORDS = ['進度','洗好','洗好了嗎','可以拿','查進度','完成了嗎','查詢進度','好了嗎'];
+
+// 規則級別（模板/指令）本來就有精準 regex；AI 只在「硬觸發」時放行
+const HARD_TRIGGER_PATTERNS = [
+  // 服務 + 類別
+  new RegExp(`(${SERVICE_VERBS.join('|')}).*(${CATEGORIES.join('|')})`),
+  new RegExp(`(${CATEGORIES.join('|')}).*(${SERVICE_VERBS.join('|')})`),
+  // 汙漬 + 類別
+  new RegExp(`(${STAIN_TERMS.join('|')}).*(${CATEGORIES.join('|')})`),
+  new RegExp(`(${CATEGORIES.join('|')}).*(${STAIN_TERMS.join('|')})`),
+  // 詢價/付款/進度（需和類別或服務詞搭配才觸發，避免亂回）
+  new RegExp(`(${COST_WORDS.join('|')}).*(${CATEGORIES.concat(SERVICE_VERBS).join('|')})`),
+  new RegExp(`(${PAYMENT_WORDS.join('|')}).*(${CATEGORIES.concat(SERVICE_VERBS).join('|')})`),
+  // 動作意圖可單獨觸發（如：今天可以來收嗎）
+  new RegExp(`(${ACTION_WORDS.join('|')})`),
+  // 明確進度詞可單獨觸發（但會走你既有的進度分支）
+  new RegExp(`(${PROGRESS_WORDS.join('|')})`),
+];
+
+function isHardTriggered(text='') {
+  const s = normalize(text);
+  return HARD_TRIGGER_PATTERNS.some(re => re.test(s));
+}
+
+/* ======================================================================== */
 
 // 安全取得使用者資料，若失敗不報錯
 async function safeGetProfile(userId) {
@@ -42,7 +88,7 @@ async function safeGetProfile(userId) {
     return await client.getProfile(userId);
   } catch (err) {
     logger.logError('取得使用者資料失敗', err, userId);
-    return { displayName: '' }; // 傳回空物件避免整段報錯
+    return { displayName: '' };
   }
 }
 
@@ -74,28 +120,26 @@ function isClearlyUnrelatedTopic(t='') {
   const chitchat = /(在幹嘛|在忙嗎|聊聊|聊天|怎麼樣|最近如何|在不在)/;
   return weather.test(s) || chitchat.test(s);
 }
-function maybeLaundryRelated(s='') {
-  const t = normalize(s).toLowerCase();
-  const kw = [
-    '洗','清洗','乾洗','去污','污漬','汙漬','髒','變色','染色','退色','泛黃','發霉',
-    '衣','衣服','外套','襯衫','褲','大衣','羽絨','毛衣','皮衣','針織','拉鍊','鈕扣',
-    '包','包包','名牌包','手提袋','背包','書包','皮革','帆布','麂皮',
-    '鞋','球鞋','運動鞋','皮鞋','靴','涼鞋','鞋墊','除臭',
-    '窗簾','布簾','遮光簾','地毯','地墊','毯子','毛毯','被子','羽絨被','棉被',
-    '帽子','毛帽','棒球帽','鴨舌帽','禮帽',
-    '收衣','收件','到府','上門','取件','配送','預約',
-    '時間','幾天','要多久','進度','洗好了嗎','可以拿了嗎','完成了嗎','查進度',
-    '付款','結帳','信用卡','line pay','支付','匯款',
-    '地址','住址','幾樓','樓層',
-    '手推車','推車','嬰兒車','汽座','安全座椅',
-    '營業','開門','關門','打烊','幾點開','幾點關','今天有開','今日有開',
-    '優惠','活動','折扣','促銷','特價'
-  ];
-  return kw.some(k => t.includes(k));
-}
 
 // 收件/送回/預約等動作意圖（小寫比對）
 const ACTION_INTENT_RE = /(收件|收衣|到府|上門|來收|取件|預約|約收|送回|送件|送來|取回|還衣|送返|送還)/;
+// 寬鬆地址比對：例如「遠雄江翠36號2樓」或「文化路二段182巷1號」
+const LOOSE_ADDR_RE=/(新北市|臺北市|台北市|桃園市|基隆市|新竹市|新竹縣|苗栗縣|台中市|臺中市|彰化縣|南投縣|雲林縣|嘉義市|嘉義縣|台南市|臺南市|高雄市|屏東縣|宜蘭縣|花蓮縣|台東縣|澎湖縣)?\s*([\u4e00-\u9fa5]{1,6}(區|鄉|鎮))?\s*((?:[\u4e00-\u9fa5\d]{1,20})(?:路|街)?(?:段\d?)?(?:\d{1,3}巷)?(?:\d{1,3}弄)?\s*(?:\d{1,5})(?:之\d{1,3})?號?\s*(?:\d{1,2}樓(?:之\d{1,2})?)?|(?:[\u4e00-\u9fa5]{2,20})(?:社區|大樓|園區|街區|華廈)?\s*(?:\d{1,5})(?:之\d{1,3})?號?\s*(?:\d{1,2}樓(?:之\d{1,2})?)?)/;
+
+// 若未帶市區自動補上板橋區
+function autoDetectCityDistrict(input = '') {
+  if (!/(市|縣|區)/.test(input)) {
+    return '新北市板橋區';
+  }
+  return '';
+}
+
+// 從模板陣列隨機挑一句
+function pick(arr = []) {
+  if (!Array.isArray(arr) || arr.length === 0) return '';
+  const i = Math.floor(Math.random() * arr.length);
+  return arr[i];
+}
 
 /* ---------------- 固定模板 ---------------- */
 const TPL_BAG = [
@@ -115,11 +159,7 @@ const TPL_CURTAIN = [
   "可清潔;若有特殊塗層會先做小範圍測試,處理後更清爽 💙",
   "窗簾可以清洗,會注意尺寸穩定與垂墜感,完成後更俐落 ✨",
 ];
-const TPL_RUG = [
-  "地毯可以清潔,我們會分區與深層清潔,兼顧纖維與色澤,整體觀感可望提升 ✨",
-  "地毯可處理;會先做局部測試再進行深層清潔與除味,讓居家更清爽 😊",
-  "可以清潔地毯;針對藏汙位置與邊緣收邊會特別留意,完成後更舒適 👍",
-];
+  
 const TPL_QUILT = [
   "棉被可以清潔;我們會兼顧蓬鬆度與乾爽度,睡感可望更舒適 😊",
   "被子可處理;流程會保護纖維結構並充分烘透,使用上更衛生 💙",
@@ -205,22 +245,27 @@ class MessageHandler {
             logger.logToFile(`⚠️ 短網址生成失敗,使用原網址: ${error.message}`);
           }
 
+         if (paymentType === 'ecpay' || paymentType === 'creditcard') {
+           message = `您好,${customerName} 👋\n\n` +
+            `您的專屬付款連結已生成\n` +
+            `付款方式:信用卡\n` +
+            `金額:NT$ ${parseInt(amount).toLocaleString()}\n\n` +
+            `👉 請點擊下方連結完成付款\n${shortUrl}\n\n` +
+            `✅ 付款後系統會自動通知我們\n` +
+            `感謝您的支持 💙`;
+         } else if (paymentType === 'linepay') {
+           // 用持久網址推給客人
+          const baseURL = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.BASE_URL || process.env.PUBLIC_BASE_URL || 'https://stain-bot-production-2593.up.railway.app';
+          const persistentUrl = `${baseURL.replace(/^http:/, 'https:')}/payment/linepay/pay/${orderId}`;
           message = `您好,${customerName} 👋\n\n` +
-                    `您的專屬付款連結已生成\n` +
-                    `付款方式:信用卡\n` +
-                    `金額:NT$ ${parseInt(amount).toLocaleString()}\n\n` +
-                    `👉 請點擊下方連結完成付款\n${shortUrl}\n\n` +
-                    `✅ 付款後系統會自動通知我們\n` +
-                    `感謝您的支持 💙`;
-        } else if (paymentType === 'linepay') {
-          const LINE_PAY_URL = process.env.LINE_PAY_URL;
-          message = `您好,${customerName} 👋\n\n` +
-                    `您的專屬付款連結已生成\n` +
-                    `付款方式:LINE Pay\n` +
-                    `金額:NT$ ${parseInt(amount).toLocaleString()}\n\n` +
-                    `👉 請點擊下方連結完成付款\n${LINE_PAY_URL}\n\n` +
-                    `✅ 付款後系統會自動通知我們\n` +
-                    `感謝您的支持 💙`;
+            `您的專屬付款連結已生成\n` +
+            `付款方式:LINE Pay\n` +
+            `金額:NT$ ${parseInt(amount).toLocaleString()}\n\n` +
+            `👉 請點擊下方連結完成付款\n${persistentUrl}\n\n` +
+            `✅ 付款後系統會自動通知我們\n` +
+            `感謝您的支持 💙`;
+}
+
         } else {
           await client.pushMessage(userId, { type: 'text', text: '❌ 不支援的付款方式\n請使用 ecpay 或 linepay' });
           return true;
@@ -251,13 +296,13 @@ class MessageHandler {
     const isAdminCommand = await this.handleAdminPaymentCommand(userId, raw);
     if (isAdminCommand) return;
 
-    // 按 1 的指令
+    // 按 1 的指令（智能污漬分析）
     if (isOneKey(raw)) {
       this.recentOneTs.set(userId, Date.now());
       return this.handleNumberOneCommand(userId);
     }
 
-    // 智能污漬分析
+    // 智能污漬分析招呼詞
     if (/智能[污汙]漬分析/.test(raw)) {
       await client.pushMessage(userId, { type: 'text', text: '「想知道污漬的清潔成功率?」\n按 1 並上傳照片,我們提供貼心的智能分析,即時回應 🧼' });
       return;
@@ -272,7 +317,7 @@ class MessageHandler {
       return;
     }
 
-    // 前置過濾
+    // 前置過濾：選單字眼/表情/閒聊/電話/純網址/明顯不相關 → 不回
     if (ignoredKeywords.some(k => lower.includes(k.toLowerCase())) ||
         isEmojiOrPuncOnly(raw) || isSmallTalk(raw) || isPhoneNumberOnly(raw) ||
         isUrlOnly(raw) || isClearlyUnrelatedTopic(raw)) {
@@ -280,22 +325,28 @@ class MessageHandler {
       return;
     }
 
-    // 檢查是否包含收件 / 送件 / 還衣等動作
+    // 僅地址（沒有動作意圖）→ 不回（避免吃掉其他關鍵字）
     const isActionIntent = ACTION_INTENT_RE.test(raw);
-
-    
     const rawClean = cleanText(raw);
-    if (!handledAddress && !isActionIntent && (AddressDetector.isAddress(rawClean) || LOOSE_ADDR_RE.test(rawClean))) {
-      await this.handleAddressMessage(userId, raw);
+    let looksLikeAddress = false;
+    try {
+      looksLikeAddress = (AddressDetector?.isAddress?.(rawClean) === true) || LOOSE_ADDR_RE.test(rawClean);
+    } catch (e) {
+      logger.logToFile(`[AddressDetector] isAddress 檢查失敗：${e.message}`);
+      looksLikeAddress = LOOSE_ADDR_RE.test(rawClean);
+    }
+    if (!isActionIntent && looksLikeAddress) {
+      logger.logToFile(`地址訊息(僅地址，依設定不回覆):「${raw}」(User ${userId})`);
       return;
     }
+    // 有動作意圖則繼續往下跑規則（不在這裡中斷）
 
-    // 進度查詢
+    // 進度查詢（規則命中）
     if (this.isProgressQuery(lower)) {
       return this.handleProgressQuery(userId);
     }
 
-    // 收件／收衣意圖
+    // 收件／收衣意圖（規則命中）
     if (/(收衣|收件|來收|到府|上門|取件)/.test(raw)) {
       const isSaturday = new Date().getDay() === 6;
       if (isSaturday) {
@@ -305,12 +356,12 @@ class MessageHandler {
         return;
       }
 
-      let reply = "可以的 🙏 我們會到您輸入的地址收送，送達後再通知您 💙";
+      let reply = "好的 🙏 我們會到您的地址收送，謝謝您 💙";
 
       try {
         const rawClean2 = cleanText(raw);
         let formatted = "";
-        if (AddressDetector.isAddress(rawClean2)) {
+        if (AddressDetector?.isAddress?.(rawClean2)) {
           const r = AddressDetector.formatResponse(rawClean2) || {};
           formatted = r.formattedAddress || "";
         }
@@ -322,7 +373,7 @@ class MessageHandler {
           }
         }
         if (formatted) {
-          reply = `可以的 🙏 我們會到您輸入的地址收送：\n${formatted}\n送達後會再通知您 💙`;
+          reply = `好的 🙏 我們會到您的地址收送：\n${formatted}\n謝謝您 💙`;
         }
       } catch (err) {
         logger.logError("收件地址處理錯誤", err, userId);
@@ -333,7 +384,7 @@ class MessageHandler {
       return;
     }
 
-    // 汽座／手推車／嬰兒車
+    // 汽座／手推車／嬰兒車（規則命中）
     const strollerKeywords = ['汽座','手推車','嬰兒推車','嬰兒車','安全座椅'];
     if (strollerKeywords.some(k => raw.includes(k))) {
       const reply = '這類寶寶用品我們都有處理 👶 會針對安全性與清潔特別注意。\n要詳細了解請按 2,謝謝您 😊';
@@ -342,7 +393,7 @@ class MessageHandler {
       return;
     }
 
-    // 包包
+    // 包包（規則命中）
     if (/(包包|名牌包|手提袋|背包|書包)/.test(raw)) {
       const msg = pick(TPL_BAG);
       await client.pushMessage(userId, { type: 'text', text: msg });
@@ -350,7 +401,7 @@ class MessageHandler {
       return;
     }
     
-    // 鞋子
+    // 鞋子（規則命中）
     if (/(有.*洗.*鞋|有洗鞋|鞋(子)?可以洗|洗鞋(服務)?)/i.test(raw) || /(鞋|球鞋|運動鞋|皮鞋|靴子|涼鞋)/.test(raw)) {
       const msg = pick(TPL_SHOE);
       await client.pushMessage(userId, { type: 'text', text: msg });
@@ -358,7 +409,7 @@ class MessageHandler {
       return;
     }
     
-    // 窗簾
+    // 窗簾（規則命中）
     if (/(窗簾|布簾|遮光簾)/.test(raw)) {
       const msg = pick(TPL_CURTAIN);
       await client.pushMessage(userId, { type: 'text', text: msg });
@@ -366,15 +417,8 @@ class MessageHandler {
       return;
     }
     
-    // 地毯
-    if (/(地毯|地墊)/.test(raw)) {
-      const msg = pick(TPL_RUG);
-      await client.pushMessage(userId, { type: 'text', text: msg });
-      logger.logBotResponse(userId, originalMessage, msg, 'Bot (Template: rug)');
-      return;
-    }
     
-    // 棉被
+    // 棉被（規則命中）
     if (/(棉被|被子|羽絨被)/.test(raw)) {
       const msg = pick(TPL_QUILT);
       await client.pushMessage(userId, { type: 'text', text: msg });
@@ -382,23 +426,96 @@ class MessageHandler {
       return;
     }
 
-    // AI 回覆（洗衣相關）
-    if (maybeLaundryRelated(raw)) {
-      try {
-        const aiText = await smartAutoReply(raw);
-        if (aiText && aiText.trim()) {
-          if (this.lastReply.get(userId) === aiText.trim()) return;
-          await client.pushMessage(userId, { type: 'text', text: aiText });
-          this.lastReply.set(userId, aiText.trim());
-          logger.logBotResponse(userId, originalMessage, aiText, 'Bot (AI)');
-          return;
-        }
-      } catch (err) {
-        logger.logError('AI 回覆錯誤', err, userId);
-      }
+    // ⬇️⬇️⬇️ 新增:地毯清洗(詳細價目表) ⬇️⬇️⬇️
+if (/(地毯清|地墊清|毯子清|塊毯清|腳踏清|洗地毯|清洗地毯|地毯清洗|地毯洗|洗毯子|地毯可以洗|地毯能洗|有洗地毯|有地毯清洗|地毯多少|地毯價格|地毯費用|洗地毯多少錢|地毯清洗價格|地毯清洗費用|地毯清洗多少|地毯怎麼洗|地毯如何清潔|地毯髒|地毯很髒|地毯有味道|地毯臭|地毯發霉|地毯有霉味|地毯寵物|地毯尿味|地毯除臭|地毯除蟎|小地毯|大地毯|客廳地毯|臥室地毯|玄關地毯)/.test(raw)) {
+  const carpetReply = `💙 有的!我們有專業地毯清洗服務
+
+【🔵 專業清洗流程】
+
+1️⃣ 多重清洗程序
+   • 除塵吸蟎(去除 90% 塵蟎)
+   • 高溫蒸氣深層清潔
+   • 專業環保藥劑
+   • 二次過水確保無殘留
+
+2️⃣ 殺菌除臭
+   • 高溫殺菌(99.9% 細菌)
+   • 寵物異味深度處理
+   • 使用天然柑橘除臭
+
+3️⃣ 專業烘乾
+   • 完全乾燥,不發霉
+   • 防止二次污染
+
+━━━━━━━━━━━━━━━
+
+【💰 清洗價格參考】
+
+🔸 60×90cm - $800
+   (玄關小地墊)
+
+🔸 80×120cm - $1,000
+   (床邊小地毯)
+
+🔸 120×180cm - $1,300
+   (臥室地毯)
+
+🔸 140×200cm - $1,500
+   (標準臥室)
+
+🔸 160×230cm - $1,800
+   (大臥室/小客廳)
+
+🔸 180×270cm - $2,000 ⭐
+   (標準客廳)
+
+🔸 200×290cm - $2,300
+   (大客廳)
+
+🔸 240×300cm - $3,000
+   (豪宅客廳)
+
+🔸 240×340cm - $3,300
+   (超大客廳)
+
+🔸 270×360cm - $4,000
+   (別墅/辦公室)
+
+🔸 300×400cm - $5,000
+   (商業空間)
+
+━━━━━━━━━━━━━━━
+
+✨ 含到府收送服務
+✨ 7-10個工作天完成
+📷 蒸汽殺菌!溫和洗劑不傷材質`;
+  
+  await client.pushMessage(userId, { type: 'text', text: carpetReply });
+  logger.logBotResponse(userId, originalMessage, carpetReply, 'Bot (Rule: carpet-detailed)');
+  return;
+}
+// ⬆️⬆️⬆️ 地毯清洗結束 ⬆️⬆️⬆️
+
+    // ---------------- AI 回覆（只有命中「硬觸發白名單」才放行） ----------------
+    if (STRICT_KEYWORD_MODE && !isHardTriggered(raw)) {
+      logger.logToFile(`AI 未觸發（未命中白名單）:「${raw}」(User ${userId})`);
+      return; // 不回覆
     }
 
-    logger.logToFile(`未回覆(非洗衣相關或 AI 判定無需回):${raw}`);
+    try {
+      const aiText = await smartAutoReply(raw);
+      if (aiText && aiText.trim()) {
+        if (this.lastReply.get(userId) === aiText.trim()) return;
+        await client.pushMessage(userId, { type: 'text', text: aiText });
+        this.lastReply.set(userId, aiText.trim());
+        logger.logBotResponse(userId, originalMessage, aiText, 'Bot (AI)');
+        return;
+      }
+    } catch (err) {
+      logger.logError('AI 回覆錯誤', err, userId);
+    }
+
+    logger.logToFile(`未回覆(未命中任何規則/白名單):${raw}`);
   }
 
   async handleImageMessage(userId, messageId) {
@@ -408,6 +525,15 @@ class MessageHandler {
       for await (const c of stream) chunks.push(c);
       const buffer = Buffer.concat(chunks);
       logger.logToFile(`收到圖片 (User ${userId}) len=${buffer.length}`);
+
+      // 🔽 儲存圖片到永久 Volume
+      const fs = require("fs");
+      const path = require("path");
+      const SAVE_DIR = "/data/uploads";
+      if (!fs.existsSync(SAVE_DIR)) fs.mkdirSync(SAVE_DIR, { recursive: true });
+      const filePath = path.join(SAVE_DIR, `${messageId}.jpg`);
+      fs.writeFileSync(filePath, buffer);
+      console.log(`✅ 圖片已儲存到 ${filePath}`);
 
       const hasWaiting = this.userState[userId]?.waitingForImage === true;
       const lastOneTs = this.recentOneTs.get(userId) || 0;
