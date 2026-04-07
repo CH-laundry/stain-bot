@@ -2156,17 +2156,17 @@ const fullAddress = addressMatch ? addressMatch[1].trim() : '';
       pickupReply = '因為週六固定公休，我們週日會去收回的 💙' + (fullAddress ? `\n地址：${fullAddress}` : '');
     }
   } else if (isOtherArea) {
-    pickupReply = '好的 💙 我們會去收回的，謝謝您' +  + (fullAddress ? `\n地址：${fullAddress}` : '');
+    pickupReply = '好的 💙 我們會去收回的，謝謝您' + (fullAddress ? `\n地址：${fullAddress}` : '');
   } else if (isBanqiao && hasUrgentKeyword) {
     pickupReply = '好的 💙 我們會去收回的，謝謝您' + (fullAddress ? `\n地址：${fullAddress}` : '');
   } else if (isBanqiao) {
-    pickupReply = '好的 💙 我們會去收回的，謝謝您' +  + (fullAddress ? `\n地址：${fullAddress}` : '');
+    pickupReply = '好的 💙 我們會去收回的，謝謝您' + (fullAddress ? `\n地址：${fullAddress}` : '');
   } else {
     // 地區不明時：預設當板橋處理，有時間關鍵字就今天收
     if (hasUrgentKeyword) {
       pickupReply = '好的 💙 我們會去收回的，謝謝您' + (fullAddress ? `\n地址：${fullAddress}` : '');
     } else {
-      pickupReply = '好的 💙 我們會去收回的，謝謝您' +  + (fullAddress ? `\n地址：${fullAddress}` : '');
+      pickupReply = '好的 💙 我們會去收回的，謝謝您' + (fullAddress ? `\n地址：${fullAddress}` : '');
     }
   }
   console.log('📋 收件硬決策直出:', pickupReply);
