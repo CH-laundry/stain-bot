@@ -261,6 +261,8 @@ AI：「好的 💙 我們會去收回的，謝謝您」✅（這個可以！）
    - 絕對不要問「請問是單人或雙人尺寸呢？」
    - 絕對不要主動列出價格表
    - 客人自己問價格時才回答價格
+   - 毛毯、棉被報價時直接列出所有價格，絕對不要問「請問是單人還是雙人」
+   - 報完價格就結束，不要反問任何問題
    2. 如果客戶問的問題完全無關（例如：天氣、美食、數學題、閒聊、招呼語「你好」「在嗎」等），回覆：UNRELATED
 9. **禮貌用語規則**：
    - 如果客人「只有」禮貌用語（例如：單獨說「謝謝」「您好」「好」「了解」「OK」），回覆：UNRELATED
@@ -1534,6 +1536,14 @@ A: 有的 💙
    - 棉被可以清潔；我們會兼顧蓬鬆度與乾爽度，睡感可望更舒適 😊
    - 被子可處理；流程會保護纖維結構並充分烘透，使用上更衛生 💙
    - 可以清洗棉被；完成後會更乾淨清新，收納也更安心 ✨
+   Q: 棉被多少錢？棉被價格？被子多少錢？被子價格？棉被費用？洗棉被多少錢？
+A: 棉被清洗價格如下：
+- 單人被：NT$ 250 元
+- 單人被(厚)：NT$ 360 元
+- 單人羽毛/羊毛/蠶絲被：NT$ 550 元
+- 雙人被：NT$ 420 元
+- 雙人被(厚)：NT$ 550 元
+- 雙人羽毛/羊毛/蠶絲被：NT$ 650 元 💙
 
    Q: 娃娃可以洗嗎？有洗娃娃嗎？娃娃清洗？玩偶可以洗嗎？布偶可以洗嗎？絨毛娃娃可以洗嗎？
 A: 有的 💙 娃娃清洗我們有專業流程，會依材質和結構細心處理
@@ -2146,17 +2156,17 @@ const fullAddress = addressMatch ? addressMatch[1].trim() : '';
       pickupReply = '因為週六固定公休，我們週日會去收回的 💙' + (fullAddress ? `\n地址：${fullAddress}` : '');
     }
   } else if (isOtherArea) {
-    pickupReply = '好的 💙 明天我們會去收回的，謝謝您' + (fullAddress ? `\n地址：${fullAddress}` : '');
+    pickupReply = '好的 💙 我們會去收回的，謝謝您' +  + (fullAddress ? `\n地址：${fullAddress}` : '');
   } else if (isBanqiao && hasUrgentKeyword) {
     pickupReply = '好的 💙 我們會去收回的，謝謝您' + (fullAddress ? `\n地址：${fullAddress}` : '');
   } else if (isBanqiao) {
-    pickupReply = '好的 💙 明天我們會去收回的，謝謝您' + (fullAddress ? `\n地址：${fullAddress}` : '');
+    pickupReply = '好的 💙 我們會去收回的，謝謝您' +  + (fullAddress ? `\n地址：${fullAddress}` : '');
   } else {
     // 地區不明時：預設當板橋處理，有時間關鍵字就今天收
     if (hasUrgentKeyword) {
       pickupReply = '好的 💙 我們會去收回的，謝謝您' + (fullAddress ? `\n地址：${fullAddress}` : '');
     } else {
-      pickupReply = '好的 💙 明天我們會去收回的，謝謝您' + (fullAddress ? `\n地址：${fullAddress}` : '');
+      pickupReply = '好的 💙 我們會去收回的，謝謝您' +  + (fullAddress ? `\n地址：${fullAddress}` : '');
     }
   }
   console.log('📋 收件硬決策直出:', pickupReply);
@@ -2234,9 +2244,9 @@ if (isSaturday) {
   const isBanqiao = /板橋/.test(userMessage);
   const hasUrgentKeyword = /等會|等一下|今天|現在|馬上|立刻/.test(userMessage);
 
-  if (isOtherArea) scheduleNote = '\nSCHED: 非板橋地區，一律回覆明天去收';
+  if (isOtherArea) scheduleNote = '\nSCHED: 非板橋地區，一律回覆我們會去收回的';
   else if (isBanqiao && hasUrgentKeyword) scheduleNote = '\nSCHED: 板橋有急件關鍵字，今天去收';
-  else if (isBanqiao) scheduleNote = '\nSCHED: 板橋無急件關鍵字，明天去收';
+  else if (isBanqiao) scheduleNote = '\nSCHED: 板橋，今天去收';
 }
 
 // ✅ 後面你原本的「history / messages / 呼叫 Claude」照舊往下接
