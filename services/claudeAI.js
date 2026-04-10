@@ -2164,12 +2164,13 @@ const fullAddress = addressMatch ? addressMatch[1].trim() : '';
 // ====================================
 // 🔴 第三步：進度查詢（你原本的邏輯保留）
 // ====================================
-const isProgressQuery = /(好了嗎|好了沒|洗好了|進度查詢|可以拿了嗎|完工了嗎|幾件好了|衣服好了|洗完了嗎)/.test(userMessage);
+const isProgressQuery = /(好了嗎|好了沒|洗好了|進度查詢|可以拿了嗎|完工了嗎|幾件好了|衣服好了|洗完了嗎)/.test(userMessage) &&
+  !/(幾點|幾點前|什麼時候送|什麼時候來收|可以來收|幾點到|幾點開|營業|送回來|收件|最快|多久送|時間)/.test(userMessage);
 
 // 排除：客人是在描述衣物狀況，不是在查進度
 const isDescribingClothes = /(比較髒|有污漬|汙漬|很髒|要洗|要送洗|需要洗|髒掉|沾到)/.test(userMessage);
     
-if (isProgressQuery && userId) {
+if (isProgressQuery && !isDescribingClothes && userId) {
   console.log('🔍 偵測到進度詢問，正在查詢即時資料庫...');
   const progressData = await checkLaundryProgress(userId);
 
