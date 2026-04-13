@@ -3022,10 +3022,17 @@ app.post('/api/news/image', async (req, res) => {
     const { date, alert, indices, asia, rates, commodities, fx, outlook, advice } = req.body;
     const urls = [];
     const browser = await puppeteer.launch({
-  args: chromium.args,
-  defaultViewport: chromium.defaultViewport,
+  args: [
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-dev-shm-usage',
+    '--disable-gpu',
+    '--no-first-run',
+    '--no-zygote',
+    '--single-process'
+  ],
   executablePath: await chromium.executablePath(),
-  headless: chromium.headless,
+  headless: true,
 });
 
     const htmls = [
