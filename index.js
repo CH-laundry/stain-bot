@@ -3007,8 +3007,7 @@ app.post('/api/start-services', (req, res) => {
     });
   }
 });// ===== 財經新聞圖片產生路由 =====
-const puppeteer = require('puppeteer-core');
-const chromium = require('@sparticuz/chromium');
+const puppeteer = require('puppeteer');
 const cloudinary = require('cloudinary').v2;
 
 cloudinary.config({
@@ -3031,7 +3030,6 @@ app.post('/api/news/image', async (req, res) => {
     '--no-zygote',
     '--single-process'
   ],
-  executablePath: await chromium.executablePath(),
   headless: true,
 });
 
