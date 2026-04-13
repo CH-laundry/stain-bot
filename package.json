@@ -11,8 +11,7 @@
     "pickup:track": "node startPickupTrack.js",
     "pickup:watch": "node pickupWatcher.js",
     "pickup:auto": "node pickupWatcher.js",
-    "mcp:start": "node src/index.js",
-    "forecast": "node demand-forecast-system.js"
+    "mcp:start": "node src/index.js"
   },
   "engines": {
     "node": "18.x"
@@ -22,7 +21,7 @@
     "@google-cloud/local-auth": "^3.0.1",
     "@line/bot-sdk": "^7.7.0",
     "@modelcontextprotocol/sdk": "^0.5.0",
-    "@sendgrid/mail": "^7.7.0",
+    "@sparticuz/chromium": "^119.0.2",
     "axios": "^1.12.2",
     "cloudinary": "^1.41.0",
     "cors": "^2.8.5",
@@ -31,14 +30,11 @@
     "exceljs": "^4.3.0",
     "express": "^4.21.2",
     "googleapis": "^148.0.0",
-    "jsonwebtoken": "^9.0.2",
     "multer": "1.4.5-lts.1",
     "node-cron": "^3.0.3",
     "node-fetch": "^2.6.7",
-    "nodemailer": "^6.9.8",
     "openai": "^4.104.0",
-    "puppeteer-core": "^21.0.0",
-    "@sparticuz/chromium": "^119.0.2"
+    "puppeteer-core": "^21.0.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
