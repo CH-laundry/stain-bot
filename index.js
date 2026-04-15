@@ -288,7 +288,7 @@ app.post('/api/delivery/transfer-to-pickup', async (req, res) => {
    const exists = pickupData.orders.find(o =>
       String(o.customerNumber).replace(/^0+/, '') === cleanNo
     );
-    if (!exists) {
+   if (!exists) {
       const now = new Date();
       const reminderAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
       reminderAt.setHours(11, 0, 0, 0);
@@ -297,12 +297,14 @@ app.post('/api/delivery/transfer-to-pickup', async (req, res) => {
         customerNumber: cleanNo,
         customerName: customerName,
         userId: userId,
-        addedAt: now.toISOString(),
+        phone: '',
         createdAt: now.toISOString(),
+        notifiedAt: now.toISOString(),
         nextReminderAt: reminderAt.toISOString(),
         reminderCount: 0,
-        daysPassed: 0,
+        reminderHistory: [],
         pickedUp: false,
+        note: '',
         source: 'delivery-convert'
       });
       fs.writeFileSync(PICKUP_FILE, JSON.stringify(pickupData, null, 2), 'utf8');
