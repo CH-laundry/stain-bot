@@ -285,19 +285,25 @@ app.post('/api/delivery/transfer-to-pickup', async (req, res) => {
       pickupData = JSON.parse(fs.readFileSync(PICKUP_FILE, 'utf8'));
     }
 
-    const exists = pickupData.orders.find(o =>
+   const exists = pickupData.orders.find(o =>
       String(o.customerNumber).replace(/^0+/, '') === cleanNo
     );
     if (!exists) {
+      const now = new Date();
+      const reminderAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+      reminderAt.setHours(11, 0, 0, 0);
+
       pickupData.orders.push({
         customerNumber: cleanNo,
         customerName: customerName,
         userId: userId,
-        addedAt: new Date().toISOString(),
-        nextReminderAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        addedAt: now.toISOString(),
+        createdAt: now.toISOString(),
+        nextReminderAt: reminderAt.toISOString(),
         reminderCount: 0,
+        daysPassed: 0,
         pickedUp: false,
-        daysPassed: 0
+        source: 'delivery-convert'
       });
       fs.writeFileSync(PICKUP_FILE, JSON.stringify(pickupData, null, 2), 'utf8');
     }
