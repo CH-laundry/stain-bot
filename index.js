@@ -784,7 +784,7 @@ if (userMessage.startsWith('產生廣告') || userMessage.startsWith('生成廣�
                               console.log(`✅ 匹配成功: ${dbName}`);
                               if (Array.isArray(data.details)) {
                                   foundItems = data.details.map(d => {
-                                      const isFin = d.includes('掛衣號');
+                                      const isFin = d.includes('掛衣號') || d.includes('完成');
                                       return { txt: d, isFin };
                                   });
                               }
