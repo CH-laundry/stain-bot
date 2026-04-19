@@ -519,7 +519,7 @@ async function autoLookupAndBind(userId, displayName) {
 
     if (results.length === 1) {
       console.log(`[AutoBind] 方法1命中`);
-      return extractCustomerNo(results[0].CustomerNo);
+     return extractCustomerNo(results[0].CustomerNumber);
     }
 
     // 方法2：用顯示名稱搜尋
@@ -535,7 +535,7 @@ async function autoLookupAndBind(userId, displayName) {
 
     if (results.length === 1) {
       console.log(`[AutoBind] 方法2命中`);
-      return extractCustomerNo(results[0].CustomerNo);
+      return extractCustomerNo(results[0].CustomerNumber);
     }
 
     console.log(`[AutoBind] 兩種方法都找不到或多筆結果`);
