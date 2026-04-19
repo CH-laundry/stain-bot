@@ -3384,62 +3384,6 @@ ${advice.map(a => `<div class="adv-row"><div class="adv-dot" style="background:$
 // ===== 財經新聞圖片路由結束 =====
 
 
-// 生成每日廣告影片
-async function generateDailyAdVideo(topic = null) {
-  try {
-    // Step 1: Claude 生成提示詞
-    const today = new Date().toLocaleDateString('zh-TW', { month: 'long', day: 'numeric', weekday: 'long' });
-    const userPrompt = topic
-      ? `今天是${today}，請為「C.H 精緻洗衣」生成一段20秒廣告影片的英文提示詞，主題：${topic}。`
-      : `今天是${today}，請為「C.H 精緻洗衣」自動發想一個適合的廣告主題，並生成20秒廣告影片的英文提示詞。`;
-
-    const msg = await anthropic.messages.create({
-      model: 'claude-opus-4-5',
-      max_tokens: 300,
-      messages: [{
-        role: 'user',
-       content: `${userPrompt}
-content: `${userPrompt}
-你是專業廣告導演，請生成一段有完整敘事的10秒廣告影片提示詞。
-
-必須包含以下結構：
-1. 開場（0-3秒）：問題或情境帶入，例如「衣服髒了、有污漬」
-2. 過程（3-7秒）：C.H精緻洗衣專業處理的畫面，例如「工作人員仔細清潔、機器運作」
-3. 結果（7-10秒）：衣物煥然一新，客人滿意微笑取件
-
-風格要求：
-- cinematic commercial style, 4K quality
-- warm and trustworthy tone
-- smooth camera transitions between scenes
-- soft natural lighting, Taiwan local neighborhood feel
-- show before and after contrast
-
-只回傳英文提示詞，150字以內，不要其他說明`
-      }]
-    });
-
-    const prompt = msg.content[0].text.trim();
-    console.log('生成提示詞：', prompt);
-
-    // Step 2: Kling 生成影片
-    const taskId = await createVideo(prompt);
-    console.log('影片任務ID：', taskId);
-
-    // Step 3: 等待完成
-    const videoUrl = await waitForVideo(taskId);
-    console.log('影片URL：', videoUrl);
-
-   // Step 4: LINE 推播
-    await client.pushMessage(process.env.OWNER_LINE_USER_ID, {
-      type: 'text',
-      text: `🎬 廣告影片已生成！\n\n點擊下載：${videoUrl}\n\n下載後可直接上傳 FB 🚀`
-    });
-
-    console.log('推播完成');
-  } catch (err) {
-    console.error('廣告影片生成失敗：', err.message);
-  }
-}
 
 
 
