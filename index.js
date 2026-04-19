@@ -384,7 +384,6 @@ async function autoLookupAndBind(userId, displayName) {
     const token = await getPosToken();
     if (!token) return null;
 
-    // 方法1：用 LINE User ID 搜尋
     let res = await fetch('http://yidianyuan.ao-lan.cn/wepapi/Customer/SearchCustomer', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -398,7 +397,6 @@ async function autoLookupAndBind(userId, displayName) {
       return extractCustomerNo(results[0].CustomerNo);
     }
 
-    // 方法2：用顯示名稱搜尋
     res = await fetch('http://yidianyuan.ao-lan.cn/wepapi/Customer/SearchCustomer', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -419,9 +417,6 @@ async function autoLookupAndBind(userId, displayName) {
   }
 }
 
-// ====== LINE Client ======
-const client = new Client({
-  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
 
 // ====== LINE Client ======
 const client = new Client({
