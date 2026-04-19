@@ -164,7 +164,7 @@ console.log(`[Progress] ${customerName} userId: ${userId || '未找到'}`);
     finished: finishedItems,
     details: details,
     customerName: customerName,
-    userId: progressUserId,   // ← 這裡改成 progressUserId
+    userId: userId,
     updateTime: lastUpdate || new Date().toISOString()
 };
 
