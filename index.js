@@ -2692,6 +2692,67 @@ app.get('/payment/status/:orderId', async (req, res) => {
   res.json({ message: '付款狀態查詢功能(待實作)', orderId: req.params.orderId });
 });
 
+// ====== 手動觸發批次綁定 ======
+app.get('/api/batch-bind', async (req, res) => {
+  res.json({ success: true, message: '批次綁定已開始，請查看 Railway Logs' });
+
+  setImmediate(async () => {
+    console.log('[BatchBind] 手動觸發批次掃描...');
+    try {
+      const token = await getPosToken();
+      if (!token) {
+        console.log('[BatchBind] 登入失敗，跳過');
+        return;
+      }
+
+      const allCustomers = orderManager.getAllCustomerNumbers();
+      const boundUserIds = new Set(allCustomers.map(c => c.userId));
+
+      const allUsers = customerDB.getAllCustomers();
+      const unbound = allUsers.filter(u => !boundUserIds.has(u.userId));
+
+      console.log(`[BatchBind] 共 ${unbound.length} 位客人未綁定，開始查詢...`);
+
+      let successCount = 0;
+      for (const user of unbound) {
+        const name = user.displayName || user.name;
+        if (!name) continue;
+
+        try {
+          const res = await fetch('http://yidianyuan.ao-lan.cn/wepapi/Customer/SearchCustomer', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json; charset=utf-8',
+              'Host': 'yidianyuan.ao-lan.cn',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify([{ Key: 'KeyWord', Value: name }])
+          });
+          const data = await res.json();
+          const results = data?.Data ?? [];
+
+          if (results.length === 1) {
+            const no = extractCustomerNo(results[0].CustomerNumber);
+            if (no) {
+              orderManager.saveCustomerNumber(no, name, user.userId);
+              console.log(`[BatchBind] ✅ ${name} → #${no}`);
+              successCount++;
+            }
+          }
+
+          await new Promise(r => setTimeout(r, 500));
+        } catch (e) {
+          console.error(`[BatchBind] ${name} 查詢失敗:`, e.message);
+        }
+      }
+
+      console.log(`[BatchBind] 完成！本次新綁定 ${successCount} 位客戶`);
+    } catch (e) {
+      console.error('[BatchBind] 批次掃描錯誤:', e.message);
+    }
+  });
+});
+
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
@@ -3534,6 +3595,65 @@ app.listen(PORT, async () => {
   setInterval(() => {
     orderManager.cleanExpiredOrders();
   }, 24 * 60 * 60 * 1000);
+
+  // ====== 每天早上6點批次綁定 POS 編號 ======
+cron.schedule('0 6 * * *', async () => {
+  console.log('[BatchBind] 開始批次掃描未綁定客戶...');
+  try {
+    const token = await getPosToken();
+    if (!token) {
+      console.log('[BatchBind] 登入失敗，跳過');
+      return;
+    }
+
+    const allCustomers = orderManager.getAllCustomerNumbers();
+    const boundUserIds = new Set(allCustomers.map(c => c.userId));
+
+    const allUsers = customerDB.getAllCustomers();
+    const unbound = allUsers.filter(u => !boundUserIds.has(u.userId));
+
+    console.log(`[BatchBind] 共 ${unbound.length} 位客人未綁定，開始查詢...`);
+
+    let successCount = 0;
+    for (const user of unbound) {
+      const name = user.displayName || user.name;
+      if (!name) continue;
+
+      try {
+        const res = await fetch('http://yidianyuan.ao-lan.cn/wepapi/Customer/SearchCustomer', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Host': 'yidianyuan.ao-lan.cn',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify([{ Key: 'KeyWord', Value: name }])
+        });
+        const data = await res.json();
+        const results = data?.Data ?? [];
+
+        if (results.length === 1) {
+          const no = extractCustomerNo(results[0].CustomerNumber);
+          if (no) {
+            orderManager.saveCustomerNumber(no, name, user.userId);
+            console.log(`[BatchBind] ✅ ${name} → #${no}`);
+            successCount++;
+          }
+        }
+
+        await new Promise(r => setTimeout(r, 500));
+      } catch (e) {
+        console.error(`[BatchBind] ${name} 查詢失敗:`, e.message);
+      }
+    }
+
+    console.log(`[BatchBind] 完成！本次新綁定 ${successCount} 位客戶`);
+  } catch (e) {
+    console.error('[BatchBind] 批次掃描錯誤:', e.message);
+  }
+}, { timezone: 'Asia/Taipei' });
+
+console.log('⏰ 批次綁定排程已啟動（每天 06:00）');
 
   setInterval(async () => {
     const ordersNeedingReminder = orderManager.getOrdersNeedingReminder();
