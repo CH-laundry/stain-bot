@@ -462,6 +462,64 @@ if (rowYear !== y || rowMonth !== m.padStart(2, '0')) return;
   }
 });
 
+// ====== POS 自動綁定客戶編號 ======
+function extractCustomerNo(raw) {
+  if (!raw) return null;
+  const match = String(raw).match(/(\d+)$/);
+  return match ? String(parseInt(match[1], 10)) : null;
+}
+
+async function getPosToken() {
+  const res = await fetch('http://yidianyuan.ao-lan.cn/wepapi/User/Login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ LoginName: 'ch', LoginPwd: 'admin' })
+  });
+  const data = await res.json();
+  return data?.data?.token ?? null;
+}
+
+async function autoLookupAndBind(userId, displayName) {
+  try {
+    const token = await getPosToken();
+    if (!token) return null;
+
+    // 方法1：用 LINE User ID 搜尋
+    let res = await fetch('http://yidianyuan.ao-lan.cn/wepapi/Customer/SearchCustomer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ KeyWord: userId })
+    });
+    let data = await res.json();
+    let results = data?.data ?? [];
+
+    if (results.length === 1) {
+      console.log(`[AutoBind] 方法1(userId)命中`);
+      return extractCustomerNo(results[0].CustomerNo);
+    }
+
+    // 方法2：用顯示名稱搜尋
+    res = await fetch('http://yidianyuan.ao-lan.cn/wepapi/Customer/SearchCustomer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ KeyWord: displayName })
+    });
+    data = await res.json();
+    results = data?.data ?? [];
+
+    if (results.length === 1) {
+      console.log(`[AutoBind] 方法2(displayName)命中`);
+      return extractCustomerNo(results[0].CustomerNo);
+    }
+
+    return null;
+  } catch (e) {
+    console.error('[AutoBind] 錯誤:', e.message);
+    return null;
+  }
+}
+
+
 // ====== LINE Client ======
 const client = new Client({
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
@@ -726,6 +784,23 @@ app.post('/webhook', async (req, res) => {
         try {
           await customerDB.updateCustomerActivity(userId, event.message);
         } catch (err) {}
+
+        // ====== 自動綁定 POS 客戶編號 ======
+const existingCustomer = orderManager.getAllCustomerNumbers()
+  .find(c => c.userId === userId);
+
+if (!existingCustomer) {
+  // 這個用戶還沒有綁定編號，嘗試自動查詢
+  try {
+    const foundNo = await autoLookupAndBind(userId, realName);
+    if (foundNo) {
+      orderManager.saveCustomerNumber(foundNo, realName, userId);
+      console.log(`[AutoBind] ✅ ${realName} 自動綁定編號: ${foundNo}`);
+    }
+  } catch (e) {
+    console.error('[AutoBind] 錯誤:', e.message);
+  }
+}
         
         // ========== 處理文字訊息 ==========
         if (event.message.type === 'text') {
