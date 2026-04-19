@@ -786,6 +786,25 @@ app.post('/webhook', async (req, res) => {
         } catch (err) {}
 
         // ====== 自動綁定 POS 客戶編號 ======
+console.log(`[AutoBind] 開始檢查 ${realName} (${userId})`);
+const existingCustomer = orderManager.getAllCustomerNumbers()
+  .find(c => c.userId === userId);
+
+console.log(`[AutoBind] existingCustomer: ${JSON.stringify(existingCustomer)}`);
+
+if (!existingCustomer) {
+  try {
+    const foundNo = await autoLookupAndBind(userId, realName);
+    if (foundNo) {
+      orderManager.saveCustomerNumber(foundNo, realName, userId);
+      console.log(`[AutoBind] ✅ ${realName} 自動綁定編號: ${foundNo}`);
+    }
+  } catch (e) {
+    console.error('[AutoBind] 錯誤:', e.message);
+  }
+}
+
+        // ====== 自動綁定 POS 客戶編號 ======
 const existingCustomer = orderManager.getAllCustomerNumbers()
   .find(c => c.userId === userId);
 
