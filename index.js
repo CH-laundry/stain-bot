@@ -857,6 +857,40 @@ for (const key in progressData) {
               continue; // 成功攔截查詢，跳過後面的 AI，不讓 AI 插嘴
           }
 
+
+          // (B2) 💳 付款方式攔截
+if (userMessage === '付款方式') {
+  const allCustomers = orderManager.getAllCustomerNumbers();
+  const found = allCustomers.find(c => c.userId === userId);
+
+  let paymentMsg = '';
+
+  if (found) {
+    // 有對應客人 → 記錄點擊，回個人化中繼連結
+    const rawBase = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.BASE_URL || '';
+    const baseURL = ensureHttpsBase(rawBase) || 'https://stain-bot-production-2593.up.railway.app';
+    const ref = encodeURIComponent(found.number + '_' + (found.name || ''));
+    
+    console.log(`[付款方式] ${realName} (編號:${found.number}) 點擊付款方式`);
+    
+    paymentMsg =
+      `以下提供兩種付款方式，您可以依方便選擇：\n` +
+      `1️⃣ LINE Pay 付款連結\n${baseURL}/pay/linepay?ref=${ref}\n` +
+      `2️⃣ 信用卡付款（綠界 ECPay）\n${baseURL}/pay/ecpay?ref=${ref}\n` +
+      `感謝您的支持與配合 💙`;
+  } else {
+    // 沒有對應 → 原本固定連結
+    paymentMsg =
+      `以下提供兩種付款方式，您可以依方便選擇：\n` +
+      `1️⃣ LINE Pay 付款連結\nhttps://qrcodepay.line.me/qr/payment/ad2fs7S%252BDxiUCtHDInEXe9tnWx7SgIlVX6Ip6PbtXOkp4tXjgCI28920qGq%252B4eIt\n` +
+      `2️⃣ 信用卡付款（綠界 ECPay）\nhttps://p.ecpay.com.tw/55FFE71\n` +
+      `感謝您的支持與配合 💙\n\n付款完成後，麻煩再通知我們一聲，方便我們為您確認，謝謝您💙`;
+  }
+
+  await client.pushMessage(userId, { type: 'text', text: paymentMsg });
+  continue;
+}
+
           // (C) 🤖 Claude AI 優先處理 (非查詢類問題)
           let claudeReplied = false;
           let aiResponse = '';
@@ -2537,6 +2571,23 @@ app.post('/send-payment', async (req, res) => {
     logger.logError('發送付款連結失敗', err);
     res.status(500).json({ error: '發送失敗', details: err.message });
   }
+});
+
+// 💳 付款方式中繼路由（記錄是誰點的）
+app.get('/pay/linepay', (req, res) => {
+  const ref = req.query.ref || '未知';
+  console.log(`[付款點擊] LINE Pay - ${ref} - ${new Date().toLocaleString('zh-TW')}`);
+  res.redirect('https://qrcodepay.line.me/qr/payment/ad2fs7S%252BDxiUCtHDInEXe9tnWx7SgIlVX6Ip6PbtXOkp4tXjgCI28920qGq%252B4eIt');
+});
+
+app.get('/pay/ecpay', (req, res) => {
+  const ref = req.query.ref || '未知';
+  console.log(`[付款點擊] ECPay - ${ref} - ${new Date().toLocaleString('zh-TW')}`);
+  res.redirect('https://p.ecpay.com.tw/55FFE71');
+});
+
+app.get('/payment', (req, res) => {
+  res.sendFile('payment.html', { root: './public' });
 });
 
 app.get('/payment', (req, res) => {
