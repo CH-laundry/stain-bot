@@ -471,14 +471,23 @@ function extractCustomerNo(raw) {
 
 async function getPosToken() {
   try {
+    const loginPayload = [
+      { Key: 'userNumber', Value: 'ch' },
+      { Key: 'password', Value: 'admin' },
+      { Key: 'ClientType', Value: '桌面端' },
+      { Key: 'ClientSecretKey', Value: 'PC_Client_1QWER5V6HJ576UYVB544HJB8HE3J67UIO0' }
+    ];
     const res = await fetch('http://yidianyuan.ao-lan.cn/wepapi/User/Login', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ LoginName: 'ch', LoginPwd: 'admin' })
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Host': 'yidianyuan.ao-lan.cn'
+      },
+      body: JSON.stringify(loginPayload)
     });
     const data = await res.json();
-    console.log(`[AutoBind] Login 回傳: ${JSON.stringify(data).substring(0, 300)}`);
-    return data?.Data?.token ?? data?.data?.token ?? null;
+    console.log(`[AutoBind] Login 回傳: ${JSON.stringify(data).substring(0, 200)}`);
+    return data?.Data?.Token ?? null;
   } catch (e) {
     console.error(`[AutoBind] Login 失敗:`, e.message);
     return null;
