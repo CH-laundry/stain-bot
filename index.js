@@ -148,15 +148,7 @@ app.post('/api/pos-sync/update-progress', async (req, res) => {
         // 用客戶編號當 key（去掉 K, 去掉前導 0）
         const cleanNo = String(customerNo).replace(/\D/g, '').replace(/^0+/, '') || customerNo;
 
-      let userId = null;
-const customers = orderManager.getAllCustomerNumbers();
-const found = customers.find(c => {
-    const dbNo = String(c.number).replace(/\D/g, '').replace(/^0+/, '');
-    return dbNo === cleanNo;
-});
-if (found) userId = found.userId;
-console.log(`[Progress] ${customerName} userId: ${userId || '未找到'}`);
-
+      
       // 查詢 userId
 let userId = null;
 const customers = orderManager.getAllCustomerNumbers();
@@ -167,12 +159,12 @@ const found = customers.find(c => {
 if (found) userId = found.userId;
 console.log(`[Progress] ${customerName} userId: ${userId || '未找到'}`);
         
-        progressData[cleanNo] = {
+       progressData[cleanNo] = {
     total: totalItems,
     finished: finishedItems,
     details: details,
     customerName: customerName,
-    userId: userId,
+    userId: progressUserId,   // ← 這裡改成 progressUserId
     updateTime: lastUpdate || new Date().toISOString()
 };
 
