@@ -20,7 +20,7 @@ const messageHandler = require('./services/message');
 console.log('🔧 正在載入 AI 客服模組...');
 const claudeAI = require('./services/claudeAI');
 console.log('✅ AI 客服模組已載入');
-const { createVideo, waitForVideo } = require('./kling-video');
+// const { createVideo, waitForVideo } = require('./kling-video');
 const Anthropic = require('@anthropic-ai/sdk');
 const anthropic = new Anthropic({ apiKey: process.env.CLAUDE_API_KEY });
 const { Client } = require('@line/bot-sdk');
@@ -147,26 +147,14 @@ app.post('/api/pos-sync/update-progress', async (req, res) => {
         // 更新這位客人的資料
         // 用客戶編號當 key（去掉 K, 去掉前導 0）
         const cleanNo = String(customerNo).replace(/\D/g, '').replace(/^0+/, '') || customerNo;
-
-      
-      // 查詢 userId
-let userId = null;
-const customers = orderManager.getAllCustomerNumbers();
-const found = customers.find(c => {
-    const dbNo = String(c.number).replace(/\D/g, '').replace(/^0+/, '');
-    return dbNo === cleanNo;
-});
-if (found) userId = found.userId;
-console.log(`[Progress] ${customerName} userId: ${userId || '未找到'}`);
         
-       progressData[cleanNo] = {
-    total: totalItems,
-    finished: finishedItems,
-    details: details,
-    customerName: customerName,
-    userId: progressUserId,   // ← 這裡改成 progressUserId
-    updateTime: lastUpdate || new Date().toISOString()
-};
+        progressData[cleanNo] = {
+            total: totalItems,
+            finished: finishedItems,
+            details: details,  // ["襯衫 (掛衣號:1029)", "POLO衫 (清潔中)"]
+            customerName: customerName,  // ⭐ 新增：儲存客戶名稱，用於 LINE 名稱比對
+            updateTime: lastUpdate || new Date().toISOString()
+        };
 
         // 寫入檔案
         fs.writeFileSync(PROGRESS_FILE, JSON.stringify(progressData, null, 2), 'utf8');
@@ -249,94 +237,6 @@ app.post('/api/pickup/auto-complete', async (req, res) => {
   }
 });
 // ========== 🆕 結束 ==========
-
-// 🧺 外送排程轉取件追蹤
-app.post('/api/delivery/transfer-to-pickup', async (req, res) => {
-  try {
-    const { id, customerNumber, customerName } = req.body;
-    if (!id || !customerNumber || !customerName) {
-      return res.json({ success: false, error: '缺少必要參數' });
-    }
-
-    const cleanNo = String(customerNumber).replace(/^K0+/, '') || customerNumber;
-
-    let userId = null;
-    try {
-      const usersFile = path.join('/data', 'users.json');
-      if (fs.existsSync(usersFile)) {
-        const users = JSON.parse(fs.readFileSync(usersFile, 'utf8'));
-        const found = users.find(u => u.name && u.name.includes(customerName));
-        if (found) userId = found.userId;
-      }
-    } catch (e) {
-      console.log('users.json 讀取失敗:', e.message);
-    }
-
-    if (!userId) {
-      try {
-        const customers = orderManager.getAllCustomerNumbers();
-        const found = customers.find(c =>
-          c.name && c.name.includes(customerName)
-        );
-        if (found) userId = found.userId;
-      } catch (e) {}
-    }
-
-    if (!userId) {
-      return res.json({
-        success: false,
-        error: '找不到此客戶的 LINE ID，請至取件追蹤頁面手動新增'
-      });
-    }
-
-    const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
-    const PICKUP_FILE = path.join(baseDir, 'pickup-tracking.json');
-
-    let pickupData = { orders: [] };
-    if (fs.existsSync(PICKUP_FILE)) {
-      pickupData = JSON.parse(fs.readFileSync(PICKUP_FILE, 'utf8'));
-    }
-
-   const exists = pickupData.orders.find(o =>
-      String(o.customerNumber).replace(/^0+/, '') === cleanNo
-    );
-   if (!exists) {
-      const now = new Date();
-      const reminderAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-      reminderAt.setHours(11, 0, 0, 0);
-
-      pickupData.orders.push({
-        customerNumber: cleanNo,
-        customerName: customerName,
-        userId: userId,
-        phone: '',
-        createdAt: now.toISOString(),
-        notifiedAt: now.toISOString(),
-        nextReminderAt: reminderAt.toISOString(),
-        reminderCount: 0,
-        reminderHistory: [],
-        pickedUp: false,
-        note: '',
-        source: 'delivery-convert'
-      });
-      fs.writeFileSync(PICKUP_FILE, JSON.stringify(pickupData, null, 2), 'utf8');
-    }
-
-    const DELIVERY_FILE = path.join(__dirname, 'data', 'delivery.json');
-    if (fs.existsSync(DELIVERY_FILE)) {
-      const deliveryData = JSON.parse(fs.readFileSync(DELIVERY_FILE, 'utf8'));
-      deliveryData.orders = deliveryData.orders.filter(o => o.id !== id);
-      fs.writeFileSync(DELIVERY_FILE, JSON.stringify(deliveryData, null, 2), 'utf8');
-    }
-
-    console.log(`✅ 已將 #${cleanNo} ${customerName} 從外送排程轉入取件追蹤`);
-    res.json({ success: true });
-
-  } catch (error) {
-    console.error('轉取件追蹤失敗:', error);
-    res.json({ success: false, error: error.message });
-  }
-});
 
 // ⭐ 新增:載入洗衣軟體同步路由
 const posSyncRouter = require('./pos-sync');
@@ -461,6 +361,67 @@ if (rowYear !== y || rowMonth !== m.padStart(2, '0')) return;
     res.json({ success: false, error: error.message, records: [], summary: {} });
   }
 });
+
+// ====== POS 自動綁定客戶編號 ======
+function extractCustomerNo(raw) {
+  if (!raw) return null;
+  const match = String(raw).match(/(\d+)$/);
+  return match ? String(parseInt(match[1], 10)) : null;
+}
+
+async function getPosToken() {
+  const res = await fetch('http://yidianyuan.ao-lan.cn/wepapi/User/Login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ LoginName: 'ch', LoginPwd: 'admin' })
+  });
+  const data = await res.json();
+  return data?.data?.token ?? null;
+}
+
+async function autoLookupAndBind(userId, displayName) {
+  try {
+    const token = await getPosToken();
+    if (!token) return null;
+
+    // 方法1：用 LINE User ID 搜尋
+    let res = await fetch('http://yidianyuan.ao-lan.cn/wepapi/Customer/SearchCustomer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ KeyWord: userId })
+    });
+    let data = await res.json();
+    let results = data?.data ?? [];
+
+    if (results.length === 1) {
+      console.log(`[AutoBind] 方法1(userId)命中`);
+      return extractCustomerNo(results[0].CustomerNo);
+    }
+
+    // 方法2：用顯示名稱搜尋
+    res = await fetch('http://yidianyuan.ao-lan.cn/wepapi/Customer/SearchCustomer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ KeyWord: displayName })
+    });
+    data = await res.json();
+    results = data?.data ?? [];
+
+    if (results.length === 1) {
+      console.log(`[AutoBind] 方法2(displayName)命中`);
+      return extractCustomerNo(results[0].CustomerNo);
+    }
+
+    return null;
+  } catch (e) {
+    console.error('[AutoBind] 錯誤:', e.message);
+    return null;
+  }
+}
+
+// ====== LINE Client ======
+const client = new Client({
+  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
 
 // ====== LINE Client ======
 const client = new Client({
@@ -726,6 +687,23 @@ app.post('/webhook', async (req, res) => {
         try {
           await customerDB.updateCustomerActivity(userId, event.message);
         } catch (err) {}
+
+        // ====== 自動綁定 POS 客戶編號 ======
+const existingCustomer = orderManager.getAllCustomerNumbers()
+  .find(c => c.userId === userId);
+
+if (!existingCustomer) {
+  // 這個用戶還沒有綁定編號，嘗試自動查詢
+  try {
+    const foundNo = await autoLookupAndBind(userId, realName);
+    if (foundNo) {
+      orderManager.saveCustomerNumber(foundNo, realName, userId);
+      console.log(`[AutoBind] ✅ ${realName} 自動綁定編號: ${foundNo}`);
+    }
+  } catch (e) {
+    console.error('[AutoBind] 錯誤:', e.message);
+  }
+}
         
         // ========== 處理文字訊息 ==========
         if (event.message.type === 'text') {
@@ -754,26 +732,21 @@ if (userMessage.startsWith('產生廣告') || userMessage.startsWith('生成廣�
           // (B) 🔎 進度查詢功能 (超完整關鍵字版)
           // 只要客人說出這些詞，機器人就會去查進度，不會讓 AI 亂回覆
           const queryKeywords = [
-              // 核心動作
-              '進度', '查詢', '查單', '狀況', '好了沒', '好了嗎', '好沒', '好嗎',
-              '洗好', '洗完', '完成', 'ok了', 'OK了', 'ok沒', 'OK沒',
-              
-              // 請求協助
-              '幫我看', '幫我查', '幫查', '請查', '可以看', '可以查', '能看', '能查', 
-              '幫確認', '確認一下',
-              
-              // 時間詢問
-              '還要多久', '要多久', '什麼時候', '何時', '幾點', '哪時候', '多久',
-              
-              // 抱怨或催促
-              '還沒好', '還沒洗', '太久', '怎麼這麼久', '等好久', '還在洗',
-              
-              // 其他口語
-              '我的衣服', '衣服呢', '好了没'
-          ];
-          
-          const isQueryIntent = queryKeywords.some(k => userMessage.toLowerCase().includes(k.toLowerCase()));
+    '進度', '查詢', '查單', '好了沒', '好了嗎',
+    '洗好了', '洗完了', '完成了', 'ok了', 'OK了',
+    '幫我查', '幫我看', '幫查',
+    '還沒好', '還沒洗', '還在洗',
+    '我的衣服', '衣服呢', '好了没'
+];
 
+const queryExcludeKeywords = [
+    '營業', '幾點開', '幾點到幾點', '幾點前要', '幾點前拿',
+    '送回來', '什麼時候送', '什麼時候來收', '可以來收',
+    '最快', '多久送', '收件', '收衣服', '幾點前'
+];
+
+const isQueryIntent = queryKeywords.some(k => userMessage.includes(k)) &&
+    !queryExcludeKeywords.some(k => userMessage.includes(k));
           if (isQueryIntent) {
               console.log(`🔍 [查詢] ${realName} 正在查詢...`);
               const fs = require('fs');
@@ -786,36 +759,23 @@ if (userMessage.startsWith('產生廣告') || userMessage.startsWith('生成廣�
                   try {
                       const progressData = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8'));
                       // 移除空白後比對名字
-                     const cleanRealName = realName.replace(/\s/g, '');
-
-// 用 userId 查會員編號
-let customerNoFromDB = null;
-const allCustomers = orderManager.getAllCustomerNumbers();
-const matchedCustomer = allCustomers.find(c => c.userId === userId);
-if (matchedCustomer) {
-    customerNoFromDB = String(matchedCustomer.number).replace(/\D/g, '').replace(/^0+/, '');
-    console.log(`[查詢] ${realName} 對應會員編號: ${customerNoFromDB}`);
-}
-
-for (const key in progressData) {
-    const data = progressData[key];
-    
-    const matchByNo     = customerNoFromDB && key === customerNoFromDB;
-    const matchByUserId = data.userId && data.userId === userId;
-    const matchByName   = data.customerName && 
-                          data.customerName.replace(/\s/g, '') === cleanRealName;
-    
-    if (matchByNo || matchByUserId || matchByName) {
-        console.log(`✅ 匹配成功 (${matchByNo ? '會員編號' : matchByUserId ? 'userId' : '姓名'}): ${data.customerName}`);
-        if (Array.isArray(data.details)) {
-            foundItems = data.details.map(d => ({
-                txt: d,
-                isFin: d.includes('掛衣號') || d.includes('完成')
-            }));
-        }
-        break;
-    }
-}
+                      const cleanRealName = realName.replace(/\s/g, ''); 
+                      for (const key in progressData) {
+                          const data = progressData[key];
+                          const dbName = data.customerName || "";
+                          const cleanDbName = dbName.replace(/\s/g, ''); 
+                          // 名字比對邏輯
+                          if (cleanDbName && cleanRealName && (cleanDbName.includes(cleanRealName) || cleanRealName.includes(cleanDbName))) {
+                              console.log(`✅ 匹配成功: ${dbName}`);
+                              if (Array.isArray(data.details)) {
+                                  foundItems = data.details.map(d => {
+                                      const isFin = d.includes('掛衣號');
+                                      return { txt: d, isFin };
+                                  });
+                              }
+                              break;
+                          }
+                      }
                   } catch (e) { console.error('讀檔失敗', e); }
               }
 
@@ -848,40 +808,6 @@ for (const key in progressData) {
               }
               continue; // 成功攔截查詢，跳過後面的 AI，不讓 AI 插嘴
           }
-
-
-          // (B2) 💳 付款方式攔截
-if (userMessage === '付款方式') {
-  const allCustomers = orderManager.getAllCustomerNumbers();
-  const found = allCustomers.find(c => c.userId === userId);
-
-  let paymentMsg = '';
-
-  if (found) {
-    // 有對應客人 → 記錄點擊，回個人化中繼連結
-    const rawBase = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.BASE_URL || '';
-    const baseURL = ensureHttpsBase(rawBase) || 'https://stain-bot-production-2593.up.railway.app';
-    const ref = encodeURIComponent(found.number + '_' + (found.name || ''));
-    
-    console.log(`[付款方式] ${realName} (編號:${found.number}) 點擊付款方式`);
-    
-    paymentMsg =
-      `以下提供兩種付款方式，您可以依方便選擇：\n` +
-      `1️⃣ LINE Pay 付款連結\n${baseURL}/pay/linepay?ref=${ref}\n` +
-      `2️⃣ 信用卡付款（綠界 ECPay）\n${baseURL}/pay/ecpay?ref=${ref}\n` +
-      `感謝您的支持與配合 💙`;
-  } else {
-    // 沒有對應 → 原本固定連結
-    paymentMsg =
-      `以下提供兩種付款方式，您可以依方便選擇：\n` +
-      `1️⃣ LINE Pay 付款連結\nhttps://qrcodepay.line.me/qr/payment/ad2fs7S%252BDxiUCtHDInEXe9tnWx7SgIlVX6Ip6PbtXOkp4tXjgCI28920qGq%252B4eIt\n` +
-      `2️⃣ 信用卡付款（綠界 ECPay）\nhttps://p.ecpay.com.tw/55FFE71\n` +
-      `感謝您的支持與配合 💙\n\n付款完成後，麻煩再通知我們一聲，方便我們為您確認，謝謝您💙`;
-  }
-
-  await client.pushMessage(userId, { type: 'text', text: paymentMsg });
-  continue;
-}
 
           // (C) 🤖 Claude AI 優先處理 (非查詢類問題)
           let claudeReplied = false;
@@ -1359,8 +1285,10 @@ async function handleLinePayConfirm(transactionId, orderId, parentOrderId) {
       // 寫入收款紀錄
 try {
   const { google } = require('googleapis');
-  const googleAuth = require('./services/googleAuth');
-  const auth = googleAuth.getOAuth2Client();
+  const auth = new google.auth.GoogleAuth({
+    credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT),
+    scopes: ['https://www.googleapis.com/auth/spreadsheets']
+  });
   const sheets = google.sheets({ version: 'v4', auth });
   const now = new Date();
   const dateStr = now.toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei' }).replace(/\//g, '/');
@@ -1459,13 +1387,19 @@ app.all('/payment/ecpay/callback', async (req, res) => {
       return;
     }
 
-    // ✅【更新訂單狀態】
+    // 5) 記錄日誌與通知
+    const merchantTradeNo = data.MerchantTradeNo;
+    const amount = Number(data.TradeAmt || data.Amount || 0);
+    const payType = data.PaymentType || 'ECPay';
+    const userId = data.CustomField1 || '';
+    const userName = data.CustomField2 || '';
+
+    // ✅【更新訂單狀態】Bug Fix: 改用 orderId 精準比對，userName 移至前面宣告
     const allOrders = orderManager.getAllOrders();
     for (const order of allOrders) {
       const oid = order.orderId;
       if (
-        order.userId === data.CustomField1 &&
-        Number(order.amount) === Number(data.TradeAmt || data.Amount || 0) &&
+        oid === merchantTradeNo &&
         order.status !== 'paid'
       ) {
         orderManager.updateOrderStatus(oid, 'paid', 'ECPay');
@@ -1474,8 +1408,10 @@ app.all('/payment/ecpay/callback', async (req, res) => {
         // 寫入收款紀錄
 try {
   const { google } = require('googleapis');
-  const googleAuth = require('./services/googleAuth');
-  const auth = googleAuth.getOAuth2Client();
+  const auth = new google.auth.GoogleAuth({
+    credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT),
+    scopes: ['https://www.googleapis.com/auth/spreadsheets']
+  });
   const sheets = google.sheets({ version: 'v4', auth });
   const now = new Date();
   const dateStr = now.toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei' }).replace(/\//g, '/');
@@ -1484,7 +1420,7 @@ try {
     spreadsheetId: process.env.GOOGLE_SHEETS_ID_CUSTOMER,
     range: `'收款紀錄'!A:G`,
     valueInputOption: 'USER_ENTERED',
-    resource: { values: [[dateStr, timeStr, userName || '未知', '', parseFloat(Number(data.TradeAmt || data.Amount || 0)), '信用卡', oid]] }
+    resource: { values: [[dateStr, timeStr, userName || '未知', '', parseFloat(amount), '信用卡', oid]] }
   });
   console.log(`✅ ECPay 收款紀錄已寫入`);
 } catch(e) { console.error('寫入收款紀錄失敗:', e.message); }
@@ -1494,20 +1430,13 @@ try {
             global.pendingSyncOrders.push({
                 orderId: oid,
                 amount: Number(order.amount),
-                payType: 'CREDIT' 
+                payType: 'CREDIT'
             });
             console.log(`[Payment] 綠界訂單 ${oid} 已加入同步佇列`);
         }
-        break; 
+        break;
       }
     }
-
-    // 5) 記錄日誌與通知
-    const merchantTradeNo = data.MerchantTradeNo;
-    const amount = Number(data.TradeAmt || data.Amount || 0);
-    const payType = data.PaymentType || 'ECPay';
-    const userId = data.CustomField1 || '';   
-    const userName = data.CustomField2 || ''; 
 
     logger.logToFile(`[ECPAY][SUCCESS] ${merchantTradeNo} 成功 NT$${amount}`);
 
@@ -2090,6 +2019,129 @@ app.delete('/api/notify-templates/:index', (req, res) => {
 const deliveryService = require('./services/deliveryService');
 deliveryService.setLineClient(client);
 
+// ========== 📦 外送排程 → 轉取件追蹤 ==========
+app.post('/api/delivery/convert-to-pickup', async (req, res) => {
+  try {
+    const { id, customerNumber, customerName } = req.body;
+    if (!id || !customerNumber || !customerName) {
+      return res.json({ success: false, error: '缺少必要參數' });
+    }
+
+    // 1. 客戶編號轉換：K0000625 → 625
+    const cleanNo = String(customerNumber).replace(/\D/g, '').replace(/^0+/, '') || customerNumber;
+    console.log(`[轉取件] 編號轉換: ${customerNumber} → ${cleanNo}`);
+
+    // 2. 用客戶姓名比對找 userId
+    let userId = null;
+
+    // 方法 A: 從 customerDB 找
+    try {
+      const allCustomers = customerDB.getAllCustomers();
+      const found = allCustomers.find(c => {
+        const cName = (c.displayName || c.name || '').replace(/\s/g, '');
+        const inputName = customerName.replace(/\s/g, '');
+        return cName && inputName && (cName.includes(inputName) || inputName.includes(cName));
+      });
+      if (found) userId = found.userId;
+    } catch (e) { console.log('customerDB 比對失敗:', e.message); }
+
+    // 方法 B: 從 orderManager 的客戶編號找
+    if (!userId) {
+      try {
+        const allCustNums = orderManager.getAllCustomerNumbers();
+        const found2 = allCustNums.find(c => {
+          const cNo = String(c.number).replace(/\D/g, '').replace(/^0+/, '');
+          return cNo === cleanNo;
+        });
+        if (found2) userId = found2.userId;
+      } catch (e) { console.log('orderManager 比對失敗:', e.message); }
+    }
+
+    // 方法 C: 從 /data/users.json 找
+    if (!userId) {
+      try {
+        const USERS_FILE = path.join('/data', 'users.json');
+        if (fs.existsSync(USERS_FILE)) {
+          const userList = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
+          const found3 = userList.find(u => {
+            const uName = (u.name || '').replace(/\s/g, '');
+            const inputName = customerName.replace(/\s/g, '');
+            return uName && inputName && (uName.includes(inputName) || inputName.includes(uName));
+          });
+          if (found3) userId = found3.userId;
+        }
+      } catch (e) { console.log('users.json 比對失敗:', e.message); }
+    }
+
+    if (!userId) {
+      return res.json({
+        success: false,
+        error: `找不到客戶「${customerName}」(編號:${cleanNo}) 的 LINE User ID，請至取件追蹤頁面手動新增`
+      });
+    }
+
+    console.log(`[轉取件] 找到 userId: ${userId}`);
+
+    // 3. 寫入 pickup-tracking.json（靜默加入，不發 LINE 通知）
+    const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
+    const PICKUP_FILE = path.join(baseDir, 'pickup-tracking.json');
+
+    let pickupData = { orders: [] };
+    if (fs.existsSync(PICKUP_FILE)) {
+      pickupData = JSON.parse(fs.readFileSync(PICKUP_FILE, 'utf8'));
+    }
+
+    // 檢查是否已存在
+    const alreadyExists = pickupData.orders.some(o => {
+      const oNo = String(o.customerNumber).replace(/\D/g, '').replace(/^0+/, '');
+      return oNo === cleanNo;
+    });
+
+    if (alreadyExists) {
+      console.log(`[轉取件] 編號 ${cleanNo} 已在取件追蹤中`);
+    } else {
+      const now = new Date();
+      const reminderAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+      reminderAt.setHours(11, 0, 0, 0);
+
+      pickupData.orders.push({
+        customerNumber: cleanNo,
+        customerName: customerName,
+        userId: userId,
+        createdAt: now.toISOString(),
+        nextReminderAt: reminderAt.toISOString(),
+        reminderCount: 0,
+        pickedUp: false
+      });
+
+      fs.writeFileSync(PICKUP_FILE, JSON.stringify(pickupData, null, 2), 'utf8');
+      console.log(`✅ [轉取件] 已將 ${customerName}(${cleanNo}) 加入取件追蹤`);
+    }
+
+    // 4. 從 delivery.json 刪除這筆
+    const DELIVERY_FILE = path.join(__dirname, 'data', 'delivery.json');
+    if (fs.existsSync(DELIVERY_FILE)) {
+      const deliveryData = JSON.parse(fs.readFileSync(DELIVERY_FILE, 'utf8'));
+      const originalLen = deliveryData.orders.length;
+      deliveryData.orders = deliveryData.orders.filter(o => o.id !== id);
+      fs.writeFileSync(DELIVERY_FILE, JSON.stringify(deliveryData, null, 2), 'utf8');
+      const deleted = originalLen - deliveryData.orders.length;
+      console.log(`✅ [轉取件] 已從外送排程刪除 ${deleted} 筆`);
+    }
+
+    res.json({
+      success: true,
+      message: `✅ 已將 ${customerName}(#${cleanNo}) 轉入取件追蹤，7天後開始提醒`,
+      userId: userId
+    });
+
+  } catch (error) {
+    console.error('❌ 轉取件追蹤失敗:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+// ========== 📦 轉取件追蹤結束 ==========
+
 // ========================================
 // ========================================
 // API 1: 金額=0的簡單通知
@@ -2565,23 +2617,6 @@ app.post('/send-payment', async (req, res) => {
   }
 });
 
-// 💳 付款方式中繼路由（記錄是誰點的）
-app.get('/pay/linepay', (req, res) => {
-  const ref = req.query.ref || '未知';
-  console.log(`[付款點擊] LINE Pay - ${ref} - ${new Date().toLocaleString('zh-TW')}`);
-  res.redirect('https://qrcodepay.line.me/qr/payment/ad2fs7S%252BDxiUCtHDInEXe9tnWx7SgIlVX6Ip6PbtXOkp4tXjgCI28920qGq%252B4eIt');
-});
-
-app.get('/pay/ecpay', (req, res) => {
-  const ref = req.query.ref || '未知';
-  console.log(`[付款點擊] ECPay - ${ref} - ${new Date().toLocaleString('zh-TW')}`);
-  res.redirect('https://p.ecpay.com.tw/55FFE71');
-});
-
-app.get('/payment', (req, res) => {
-  res.sendFile('payment.html', { root: './public' });
-});
-
 app.get('/payment', (req, res) => {
   res.sendFile('payment.html', { root: './public' });
 });
@@ -3054,44 +3089,33 @@ app.get('/api/pickup-schedule/today-alert', async (req, res) => {
 // ========================================
 // 🚀 一鍵啟動服務 API
 // ========================================
-app.post('/api/start-services', (req, res) => {
+app.post('/api/start-services', async (req, res) => {
   try {
-    const { exec } = require('child_process');
-    const os = require('os');
+    const axios = require('axios');
+    const ngrokUrl = 'https://fbe0-61-219-57-189.ngrok-free.app';
     
-    // Windows 桌面路徑
-    const desktopPath = require('path').join(os.homedir(), 'Desktop');
-    const batPath = require('path').join(desktopPath, '啟動洗衣系統.bat');
+    console.log('🔗 正在連線到電腦:', ngrokUrl);
     
-    console.log('正在執行:', batPath);
-    
-    exec(`"${batPath}"`, (error, stdout, stderr) => {
-      if (error) {
-        console.error('啟動失敗:', error);
-        return res.json({ 
-          success: false, 
-          error: '批次檔執行失敗,請確認檔案是否存在於桌面' 
-        });
-      }
-      
-      console.log('✅ 服務已啟動');
+    const response = await axios.post(`${ngrokUrl}/start`, {}, { 
+      timeout: 10000 
     });
     
-    // 立即回傳成功(不等執行完)
     res.json({ 
       success: true, 
-      message: '所有服務正在啟動中,請稍候...' 
+      message: '✅ 電腦已收到指令,正在啟動 4 個服務...' 
     });
     
   } catch (error) {
-    console.error('API 錯誤:', error);
-    res.status(500).json({ 
+    console.error('❌ 連線失敗:', error.message);
+    res.json({ 
       success: false, 
-      error: error.message 
+      error: '❌ 無法連線到電腦\n\n請確認:\n1. 電腦是否開機\n2. 桌面的「啟動.bat」是否執行中' 
     });
   }
-});// ===== 財經新聞圖片產生路由 =====
-const puppeteer = require('puppeteer');
+});
+// ===== 財經新聞圖片產生路由 =====
+const puppeteer = require('puppeteer-core');
+const chromium = require('@sparticuz/chromium');
 const cloudinary = require('cloudinary').v2;
 
 cloudinary.config({
@@ -3114,6 +3138,7 @@ app.post('/api/news/image', async (req, res) => {
     '--no-zygote',
     '--single-process'
   ],
+  executablePath: await chromium.executablePath(),
   headless: true,
 });
 
@@ -3378,13 +3403,22 @@ async function generateDailyAdVideo(topic = null) {
       max_tokens: 300,
       messages: [{
         role: 'user',
-        content: `${userPrompt}
-要求：
-- 畫面要有洗衣、衣物蓬鬆乾淨的意象
-- 風格：清新、專業、台灣本地感
-- 只回傳英文提示詞，不要其他說明`
-      }]
-    });
+       content: `${userPrompt}
+你是專業廣告導演，請生成一段有完整敘事的10秒廣告影片提示詞。
+
+必須包含以下結構：
+1. 開場（0-3秒）：問題或情境帶入，例如「衣服髒了、有污漬」
+2. 過程（3-7秒）：C.H精緻洗衣專業處理的畫面，例如「工作人員仔細清潔、機器運作」
+3. 結果（7-10秒）：衣物煥然一新，客人滿意微笑取件
+
+風格要求：
+- cinematic commercial style, 4K quality
+- warm and trustworthy tone
+- smooth camera transitions between scenes
+- soft natural lighting, Taiwan local neighborhood feel
+- show before and after contrast
+
+只回傳英文提示詞，150字以內，不要其他說明`
 
     const prompt = msg.content[0].text.trim();
     console.log('生成提示詞：', prompt);
@@ -4205,4 +4239,3 @@ app.put('/api/stain-photos/:photoId', async (req, res) => {
   }
 });
 
-    
