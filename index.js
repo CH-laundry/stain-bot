@@ -470,13 +470,19 @@ function extractCustomerNo(raw) {
 }
 
 async function getPosToken() {
-  const res = await fetch('http://yidianyuan.ao-lan.cn/wepapi/User/Login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ LoginName: 'ch', LoginPwd: 'admin' })
-  });
-  const data = await res.json();
-  return data?.data?.token ?? null;
+  try {
+    const res = await fetch('http://yidianyuan.ao-lan.cn/wepapi/User/Login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ LoginName: 'ch', LoginPwd: 'admin' })
+    });
+    const data = await res.json();
+    console.log(`[AutoBind] Login 回傳: ${JSON.stringify(data).substring(0, 300)}`);
+    return data?.data?.token ?? null;
+  } catch (e) {
+    console.error(`[AutoBind] Login 失敗:`, e.message);
+    return null;
+  }
 }
 
 async function autoLookupAndBind(userId, displayName) {
