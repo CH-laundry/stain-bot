@@ -3399,6 +3399,7 @@ async function generateDailyAdVideo(topic = null) {
       messages: [{
         role: 'user',
        content: `${userPrompt}
+content: `${userPrompt}
 你是專業廣告導演，請生成一段有完整敘事的10秒廣告影片提示詞。
 
 必須包含以下結構：
@@ -3414,6 +3415,8 @@ async function generateDailyAdVideo(topic = null) {
 - show before and after contrast
 
 只回傳英文提示詞，150字以內，不要其他說明`
+      }]
+    });
 
     const prompt = msg.content[0].text.trim();
     console.log('生成提示詞：', prompt);
