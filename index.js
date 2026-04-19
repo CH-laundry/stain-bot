@@ -481,37 +481,44 @@ async function getPosToken() {
 
 async function autoLookupAndBind(userId, displayName) {
   try {
+    console.log(`[AutoBind] 開始查詢 POS token...`);
     const token = await getPosToken();
+    console.log(`[AutoBind] token: ${token ? '取得成功' : '失敗'}`);
     if (!token) return null;
 
     // 方法1：用 LINE User ID 搜尋
+    console.log(`[AutoBind] 方法1 搜尋 userId: ${userId}`);
     let res = await fetch('http://yidianyuan.ao-lan.cn/wepapi/Customer/SearchCustomer', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body: JSON.stringify({ KeyWord: userId })
     });
     let data = await res.json();
+    console.log(`[AutoBind] 方法1 結果: ${JSON.stringify(data).substring(0, 200)}`);
     let results = data?.data ?? [];
 
     if (results.length === 1) {
-      console.log(`[AutoBind] 方法1(userId)命中`);
+      console.log(`[AutoBind] 方法1命中`);
       return extractCustomerNo(results[0].CustomerNo);
     }
 
     // 方法2：用顯示名稱搜尋
+    console.log(`[AutoBind] 方法2 搜尋 displayName: ${displayName}`);
     res = await fetch('http://yidianyuan.ao-lan.cn/wepapi/Customer/SearchCustomer', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body: JSON.stringify({ KeyWord: displayName })
     });
     data = await res.json();
+    console.log(`[AutoBind] 方法2 結果: ${JSON.stringify(data).substring(0, 200)}`);
     results = data?.data ?? [];
 
     if (results.length === 1) {
-      console.log(`[AutoBind] 方法2(displayName)命中`);
+      console.log(`[AutoBind] 方法2命中`);
       return extractCustomerNo(results[0].CustomerNo);
     }
 
+    console.log(`[AutoBind] 兩種方法都找不到或多筆結果`);
     return null;
   } catch (e) {
     console.error('[AutoBind] 錯誤:', e.message);
