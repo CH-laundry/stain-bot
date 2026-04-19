@@ -478,7 +478,7 @@ async function getPosToken() {
     });
     const data = await res.json();
     console.log(`[AutoBind] Login 回傳: ${JSON.stringify(data).substring(0, 300)}`);
-    return data?.data?.token ?? null;
+    return data?.Data?.token ?? data?.data?.token ?? null;
   } catch (e) {
     console.error(`[AutoBind] Login 失敗:`, e.message);
     return null;
