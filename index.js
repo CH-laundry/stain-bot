@@ -2692,6 +2692,100 @@ app.get('/payment/status/:orderId', async (req, res) => {
   res.json({ message: '付款狀態查詢功能(待實作)', orderId: req.params.orderId });
 });
 
+// ====== 手動觸發 POS 進度同步 ======
+app.get('/api/sync-progress', async (req, res) => {
+  res.json({ success: true, message: '進度同步已開始，請查看 Railway Logs' });
+
+  setImmediate(async () => {
+    console.log('[AutoProgress] 手動觸發進度同步...');
+    try {
+      const token = await getPosToken();
+      if (!token) { console.log('[AutoProgress] 登入失敗'); return; }
+
+      const headers = {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Host': 'yidianyuan.ao-lan.cn',
+        'Authorization': `Bearer ${token}`
+      };
+
+      const searchRes = await fetch('http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/SearchPage', {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify([
+          { Key: 'BranchID', Value: 'b0aee8e3-6a6e-4863-b74a-08da8958f7f9' },
+          { Key: 'PageSize', Value: '100' },
+          { Key: 'PageIndex', Value: '1' }
+        ])
+      });
+      const searchData = await searchRes.json();
+      const orders = searchData?.Data?.Data ?? [];
+
+      console.log(`[AutoProgress] 共找到 ${orders.length} 筆訂單`);
+
+      const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
+      const PROGRESS_FILE = path.join(baseDir, 'laundry_progress.json');
+      let progressData = {};
+      if (fs.existsSync(PROGRESS_FILE)) {
+        progressData = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8'));
+      }
+
+      let updateCount = 0;
+      for (const order of orders) {
+        const customerNo = order.CustomerNumber || '';
+        const customerName = order.CustomerName || '';
+        if (!customerNo) continue;
+
+        const cleanNo = String(customerNo).replace(/\D/g, '').replace(/^0+/, '');
+
+        try {
+          const detailRes = await fetch(`http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/GetData/${order.Id}`, {
+            method: 'GET',
+            headers: headers
+          });
+          const detailData = await detailRes.json();
+          const detail = detailData?.Data;
+          if (!detail) continue;
+
+          const items = detail.ReceivingItemList || [];
+          const itemDetails = items.map(item => {
+            const goodsName = item?.Goods?.GoodsName || '未知品項';
+            if (item.LocationDate || item.LocationName) {
+              return `${goodsName} (掛衣號:完成)`;
+            }
+            return `${goodsName} (清潔中)`;
+          });
+
+          const allCustomers = orderManager.getAllCustomerNumbers();
+          const matched = allCustomers.find(c => {
+            const dbNo = String(c.number).replace(/\D/g, '').replace(/^0+/, '');
+            return dbNo === cleanNo;
+          });
+          const userId = matched ? matched.userId : null;
+
+          progressData[cleanNo] = {
+            total: items.length,
+            finished: itemDetails.filter(d => d.includes('完成')).length,
+            details: itemDetails,
+            customerName: customerName,
+            userId: userId,
+            updateTime: new Date().toISOString()
+          };
+
+          updateCount++;
+          await new Promise(r => setTimeout(r, 300));
+        } catch (e) {
+          console.error(`[AutoProgress] ${customerNo} 失敗:`, e.message);
+        }
+      }
+
+      fs.writeFileSync(PROGRESS_FILE, JSON.stringify(progressData, null, 2), 'utf8');
+      console.log(`[AutoProgress] 完成！共更新 ${updateCount} 筆進度`);
+    } catch (e) {
+      console.error('[AutoProgress] 錯誤:', e.message);
+    }
+  });
+});
+
 // ====== 手動觸發批次綁定 ======
 app.get('/api/batch-bind', async (req, res) => {
   res.json({ success: true, message: '批次綁定已開始，請查看 Railway Logs' });
@@ -3595,6 +3689,107 @@ app.listen(PORT, async () => {
   setInterval(() => {
     orderManager.cleanExpiredOrders();
   }, 24 * 60 * 60 * 1000);
+
+  // ====== 每30分鐘自動同步 POS 進度 ======
+setInterval(async () => {
+  console.log('[AutoProgress] 開始自動同步 POS 進度...');
+  try {
+    const token = await getPosToken();
+    if (!token) {
+      console.log('[AutoProgress] 登入失敗，跳過');
+      return;
+    }
+
+    const headers = {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Host': 'yidianyuan.ao-lan.cn',
+      'Authorization': `Bearer ${token}`
+    };
+
+    // 查詢所有進行中的訂單
+    const searchRes = await fetch('http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/SearchPage', {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify([
+        { Key: 'BranchID', Value: 'b0aee8e3-6a6e-4863-b74a-08da8958f7f9' },
+        { Key: 'PageSize', Value: '100' },
+        { Key: 'PageIndex', Value: '1' }
+      ])
+    });
+    const searchData = await searchRes.json();
+    const orders = searchData?.Data?.Data ?? [];
+
+    console.log(`[AutoProgress] 共找到 ${orders.length} 筆訂單`);
+
+    const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
+    const PROGRESS_FILE = path.join(baseDir, 'laundry_progress.json');
+    let progressData = {};
+    if (fs.existsSync(PROGRESS_FILE)) {
+      progressData = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8'));
+    }
+
+    let updateCount = 0;
+    for (const order of orders) {
+      const customerNo = order.CustomerNumber || '';
+      const customerName = order.CustomerName || '';
+      if (!customerNo) continue;
+
+      const cleanNo = String(customerNo).replace(/\D/g, '').replace(/^0+/, '');
+
+      // 查詢訂單詳情
+      try {
+        const detailRes = await fetch(`http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/GetData/${order.Id}`, {
+          method: 'GET',
+          headers: headers
+        });
+        const detailData = await detailRes.json();
+        const detail = detailData?.Data;
+        if (!detail) continue;
+
+        const items = detail.ReceivingItemList || [];
+        const itemDetails = items.map(item => {
+          const goodsName = item?.Goods?.GoodsName || '未知品項';
+          if (item.LocationDate || item.LocationName) {
+            return `${goodsName} (掛衣號:完成)`;
+          }
+          return `${goodsName} (清潔中)`;
+        });
+
+        // 查詢對應的 userId
+        const allCustomers = orderManager.getAllCustomerNumbers();
+        const matched = allCustomers.find(c => {
+          const dbNo = String(c.number).replace(/\D/g, '').replace(/^0+/, '');
+          return dbNo === cleanNo;
+        });
+        const userId = matched ? matched.userId : null;
+
+        progressData[cleanNo] = {
+          total: items.length,
+          finished: itemDetails.filter(d => d.includes('完成')).length,
+          details: itemDetails,
+          customerName: customerName,
+          userId: userId,
+          updateTime: new Date().toISOString()
+        };
+
+        updateCount++;
+        await new Promise(r => setTimeout(r, 300)); // 避免太快
+      } catch (e) {
+        console.error(`[AutoProgress] 訂單 ${customerNo} 詳情失敗:`, e.message);
+      }
+    }
+
+    fs.writeFileSync(PROGRESS_FILE, JSON.stringify(progressData, null, 2), 'utf8');
+    console.log(`[AutoProgress] 完成！共更新 ${updateCount} 筆進度`);
+
+  } catch (e) {
+    console.error('[AutoProgress] 自動同步錯誤:', e.message);
+  }
+}, 30 * 60 * 1000); // 每30分鐘
+
+console.log('⏰ POS 進度自動同步已啟動（每30分鐘）');
+
+  
 
   // ====== 每天早上6點批次綁定 POS 編號 ======
 cron.schedule('0 6 * * *', async () => {
