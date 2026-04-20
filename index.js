@@ -2733,54 +2733,57 @@ console.log(`[AutoProgress] 共找到 ${orders.length} 筆訂單`);
 
       let updateCount = 0;
       for (const order of orders) {
-        console.log(`[AutoProgress] 訂單欄位: ${JSON.stringify(order).substring(0, 200)}`);
-        const customerNo = order.CustomerNumber || '';
-        const customerName = order.CustomerName || '';
-        if (!customerNo) continue;
+  const customerName = order.CustomerName || '';
+  if (!customerName) continue;
 
-        const cleanNo = String(customerNo).replace(/\D/g, '').replace(/^0+/, '');
+  // 用名字比對我們自己的客戶資料庫，找到編號和userId
+  const allCustomers = orderManager.getAllCustomerNumbers();
+  const matched = allCustomers.find(c => {
+    const cName = (c.name || '').replace(/\s/g, '');
+    const inputName = customerName.replace(/\s/g, '');
+    return cName && inputName && cName === inputName;
+  });
 
-        try {
-          const detailRes = await fetch(`http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/GetData/${order.Id}`, {
-  method: 'POST',
-  headers: headers,
-  body: JSON.stringify([])
-});
-          const detailData = await detailRes.json();
-          const detail = detailData?.Data;
-          if (!detail) continue;
+  if (!matched) continue; // 找不到對應客戶就跳過
 
-          const items = detail.ReceivingItemList || [];
-          const itemDetails = items.map(item => {
-            const goodsName = item?.Goods?.GoodsName || '未知品項';
-            if (item.LocationDate || item.LocationName) {
-              return `${goodsName} (掛衣號:完成)`;
-            }
-            return `${goodsName} (清潔中)`;
-          });
+  const cleanNo = String(matched.number).replace(/\D/g, '').replace(/^0+/, '');
+  const userId = matched.userId || null;
 
-          const allCustomers = orderManager.getAllCustomerNumbers();
-          const matched = allCustomers.find(c => {
-            const dbNo = String(c.number).replace(/\D/g, '').replace(/^0+/, '');
-            return dbNo === cleanNo;
-          });
-          const userId = matched ? matched.userId : null;
+  try {
+    const detailRes = await fetch(`http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/GetData/${order.Id}`, {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify([])
+    });
+    const detailData = await detailRes.json();
+    const detail = detailData?.Data;
+    if (!detail) continue;
 
-          progressData[cleanNo] = {
-            total: items.length,
-            finished: itemDetails.filter(d => d.includes('完成')).length,
-            details: itemDetails,
-            customerName: customerName,
-            userId: userId,
-            updateTime: new Date().toISOString()
-          };
-
-          updateCount++;
-          await new Promise(r => setTimeout(r, 300));
-        } catch (e) {
-          console.error(`[AutoProgress] ${customerNo} 失敗:`, e.message);
-        }
+    const items = detail.ReceivingItemList || [];
+    const itemDetails = items.map(item => {
+      const goodsName = item?.Goods?.GoodsName || '未知品項';
+      if (item.LocationDate || item.LocationName) {
+        return `${goodsName} (掛衣號:完成)`;
       }
+      return `${goodsName} (清潔中)`;
+    });
+
+    progressData[cleanNo] = {
+      total: items.length,
+      finished: itemDetails.filter(d => d.includes('完成')).length,
+      details: itemDetails,
+      customerName: customerName,
+      userId: userId,
+      updateTime: new Date().toISOString()
+    };
+
+    console.log(`[AutoProgress] ✅ 已更新 ${customerName} (#${cleanNo})`);
+    updateCount++;
+    await new Promise(r => setTimeout(r, 300));
+  } catch (e) {
+    console.error(`[AutoProgress] ${customerName} 失敗:`, e.message);
+  }
+}
 
       fs.writeFileSync(PROGRESS_FILE, JSON.stringify(progressData, null, 2), 'utf8');
       console.log(`[AutoProgress] 完成！共更新 ${updateCount} 筆進度`);
@@ -3735,54 +3738,57 @@ setInterval(async () => {
 
     let updateCount = 0;
     for (const order of orders) {
-      const customerNo = order.CustomerNumber || '';
-      const customerName = order.CustomerName || '';
-      if (!customerNo) continue;
+  const customerName = order.CustomerName || '';
+  if (!customerName) continue;
 
-      const cleanNo = String(customerNo).replace(/\D/g, '').replace(/^0+/, '');
+  // 用名字比對我們自己的客戶資料庫，找到編號和userId
+  const allCustomers = orderManager.getAllCustomerNumbers();
+  const matched = allCustomers.find(c => {
+    const cName = (c.name || '').replace(/\s/g, '');
+    const inputName = customerName.replace(/\s/g, '');
+    return cName && inputName && cName === inputName;
+  });
 
-      // 查詢訂單詳情
-      try {
-        const detailRes = await fetch(`http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/GetData/${order.Id}`, {
-          method: 'GET',
-          headers: headers
-        });
-        const detailData = await detailRes.json();
-        const detail = detailData?.Data;
-        if (!detail) continue;
+  if (!matched) continue; // 找不到對應客戶就跳過
 
-        const items = detail.ReceivingItemList || [];
-        const itemDetails = items.map(item => {
-          const goodsName = item?.Goods?.GoodsName || '未知品項';
-          if (item.LocationDate || item.LocationName) {
-            return `${goodsName} (掛衣號:完成)`;
-          }
-          return `${goodsName} (清潔中)`;
-        });
+  const cleanNo = String(matched.number).replace(/\D/g, '').replace(/^0+/, '');
+  const userId = matched.userId || null;
 
-        // 查詢對應的 userId
-        const allCustomers = orderManager.getAllCustomerNumbers();
-        const matched = allCustomers.find(c => {
-          const dbNo = String(c.number).replace(/\D/g, '').replace(/^0+/, '');
-          return dbNo === cleanNo;
-        });
-        const userId = matched ? matched.userId : null;
+  try {
+    const detailRes = await fetch(`http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/GetData/${order.Id}`, {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify([])
+    });
+    const detailData = await detailRes.json();
+    const detail = detailData?.Data;
+    if (!detail) continue;
 
-        progressData[cleanNo] = {
-          total: items.length,
-          finished: itemDetails.filter(d => d.includes('完成')).length,
-          details: itemDetails,
-          customerName: customerName,
-          userId: userId,
-          updateTime: new Date().toISOString()
-        };
-
-        updateCount++;
-        await new Promise(r => setTimeout(r, 300)); // 避免太快
-      } catch (e) {
-        console.error(`[AutoProgress] 訂單 ${customerNo} 詳情失敗:`, e.message);
+    const items = detail.ReceivingItemList || [];
+    const itemDetails = items.map(item => {
+      const goodsName = item?.Goods?.GoodsName || '未知品項';
+      if (item.LocationDate || item.LocationName) {
+        return `${goodsName} (掛衣號:完成)`;
       }
-    }
+      return `${goodsName} (清潔中)`;
+    });
+
+    progressData[cleanNo] = {
+      total: items.length,
+      finished: itemDetails.filter(d => d.includes('完成')).length,
+      details: itemDetails,
+      customerName: customerName,
+      userId: userId,
+      updateTime: new Date().toISOString()
+    };
+
+    console.log(`[AutoProgress] ✅ 已更新 ${customerName} (#${cleanNo})`);
+    updateCount++;
+    await new Promise(r => setTimeout(r, 300));
+  } catch (e) {
+    console.error(`[AutoProgress] ${customerName} 失敗:`, e.message);
+  }
+}
 
     fs.writeFileSync(PROGRESS_FILE, JSON.stringify(progressData, null, 2), 'utf8');
     console.log(`[AutoProgress] 完成！共更新 ${updateCount} 筆進度`);
