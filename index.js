@@ -2751,10 +2751,9 @@ console.log(`[AutoProgress] 共找到 ${orders.length} 筆訂單`);
 
   try {
     const detailRes = await fetch(`http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/GetData/${order.Id}`, {
-      method: 'POST',
-      headers: headers,
-      body: JSON.stringify([])
-    });
+  method: 'GET',
+  headers: headers
+});
     const detailData = await detailRes.json();
     const detail = detailData?.Data;
     if (!detail) continue;
@@ -3756,10 +3755,9 @@ setInterval(async () => {
 
   try {
     const detailRes = await fetch(`http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/GetData/${order.Id}`, {
-      method: 'POST',
-      headers: headers,
-      body: JSON.stringify([])
-    });
+  method: 'GET',
+  headers: headers
+});
     const detailData = await detailRes.json();
     const detail = detailData?.Data;
     if (!detail) continue;
