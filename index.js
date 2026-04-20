@@ -2739,9 +2739,10 @@ app.get('/api/sync-progress', async (req, res) => {
 
         try {
           const detailRes = await fetch(`http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/GetData/${order.Id}`, {
-            method: 'GET',
-            headers: headers
-          });
+  method: 'POST',
+  headers: headers,
+  body: JSON.stringify([])
+});
           const detailData = await detailRes.json();
           const detail = detailData?.Data;
           if (!detail) continue;
@@ -3718,6 +3719,7 @@ setInterval(async () => {
     });
     const searchData = await searchRes.json();
     const orders = searchData?.Data?.Data ?? [];
+    console.log(`[AutoProgress] 第一筆訂單範例: ${JSON.stringify(orders[0]).substring(0, 300)}`);
 
     console.log(`[AutoProgress] 共找到 ${orders.length} 筆訂單`);
 
