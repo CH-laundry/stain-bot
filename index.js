@@ -4232,10 +4232,21 @@ setInterval(async () => {
         const orders = searchData?.Data?.Data ?? [];
 
         // 找金額符合且未付款的訂單
-        const candidates = orders.filter(o => {
-          const unpaid = parseFloat(o.UnPaidAmount || 0);
-          return unpaid === amount;
-        });
+        // 先嘗試用訂單號精準比對
+let candidates = orders.filter(o => {
+  return o.ReceivingOrderNumber === orderId;
+});
+
+// 如果找不到（orderId 是亂碼單號），才用金額比對
+if (candidates.length === 0) {
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  candidates = orders.filter(o => {
+    const unpaid = parseFloat(o.UnPaidAmount || 0);
+    const receivedDate = new Date(o.ReceivedDate || 0);
+    return unpaid === amount && receivedDate >= thirtyDaysAgo;
+  });
+}
 
         if (candidates.length === 0) {
           // 檢查是否已付款
