@@ -2792,6 +2792,68 @@ console.log(`[AutoProgress] 共找到 ${orders.length} 筆訂單`);
   });
 });
 
+// ====== 手動觸發簽收偵測 ======
+app.get('/api/sync-pickup', async (req, res) => {
+  res.json({ success: true, message: '簽收偵測已開始，請查看 Railway Logs' });
+  setImmediate(async () => {
+    console.log('[AutoPickup] 手動觸發簽收偵測...');
+    try {
+      const token = await getPosToken();
+      if (!token) { console.log('[AutoPickup] 登入失敗'); return; }
+
+      const headers = {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Host': 'yidianyuan.ao-lan.cn',
+        'Authorization': `Bearer ${token}`
+      };
+
+      const searchRes = await fetch('http://yidianyuan.ao-lan.cn/wepapi/DeliverOrder/SearchPage', {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify([
+          { Key: 'BranchID', Value: 'b0aee8e3-6a6e-4863-b74a-08da8958f7f9' },
+          { Key: 'DeliverState', Value: '已簽收' },
+          { Key: 'PageSize', Value: '100' },
+          { Key: 'PageIndex', Value: '1' }
+        ])
+      });
+      const searchData = await searchRes.json();
+      const orders = searchData?.Data?.Data ?? [];
+      console.log(`[AutoPickup] 共找到 ${orders.length} 筆已簽收訂單`);
+
+      const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
+      const PICKUP_FILE = path.join(baseDir, 'pickup-tracking.json');
+      if (!fs.existsSync(PICKUP_FILE)) { console.log('[AutoPickup] 找不到取件追蹤檔案'); return; }
+
+      let pickupData = JSON.parse(fs.readFileSync(PICKUP_FILE, 'utf8'));
+      let deletedCount = 0;
+
+      for (const order of orders) {
+        const customerNo = order.CustomerNumber;
+        if (!customerNo) continue;
+        const cleanNo = String(customerNo).replace(/\D/g, '').replace(/^0+/, '');
+
+        const before = pickupData.orders.length;
+        pickupData.orders = pickupData.orders.filter(o => {
+          const dbNo = String(o.customerNumber).replace(/\D/g, '').replace(/^0+/, '');
+          return dbNo !== cleanNo;
+        });
+        if (pickupData.orders.length < before) {
+          console.log(`[AutoPickup] ✅ 已刪除取件追蹤: ${order.CustomerName} (#${cleanNo})`);
+          deletedCount++;
+        }
+      }
+
+      if (deletedCount > 0) {
+        fs.writeFileSync(PICKUP_FILE, JSON.stringify(pickupData, null, 2), 'utf8');
+      }
+      console.log(`[AutoPickup] 完成！共刪除 ${deletedCount} 筆取件追蹤`);
+    } catch (e) {
+      console.error('[AutoPickup] 錯誤:', e.message);
+    }
+  });
+});
+
 // ====== 手動觸發批次綁定 ======
 app.get('/api/batch-bind', async (req, res) => {
   res.json({ success: true, message: '批次綁定已開始，請查看 Railway Logs' });
@@ -3797,6 +3859,69 @@ setInterval(async () => {
 }, 30 * 60 * 1000); // 每30分鐘
 
 console.log('⏰ POS 進度自動同步已啟動（每30分鐘）');
+
+  // ====== 每30分鐘自動偵測已簽收訂單，刪除取件追蹤 ======
+setInterval(async () => {
+  console.log('[AutoPickup] 開始掃描已簽收訂單...');
+  try {
+    const token = await getPosToken();
+    if (!token) { console.log('[AutoPickup] 登入失敗，跳過'); return; }
+
+    const headers = {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Host': 'yidianyuan.ao-lan.cn',
+      'Authorization': `Bearer ${token}`
+    };
+
+    const searchRes = await fetch('http://yidianyuan.ao-lan.cn/wepapi/DeliverOrder/SearchPage', {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify([
+        { Key: 'BranchID', Value: 'b0aee8e3-6a6e-4863-b74a-08da8958f7f9' },
+        { Key: 'DeliverState', Value: '已簽收' },
+        { Key: 'PageSize', Value: '100' },
+        { Key: 'PageIndex', Value: '1' }
+      ])
+    });
+    const searchData = await searchRes.json();
+    const orders = searchData?.Data?.Data ?? [];
+    console.log(`[AutoPickup] 共找到 ${orders.length} 筆已簽收訂單`);
+
+    const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
+    const PICKUP_FILE = path.join(baseDir, 'pickup-tracking.json');
+    if (!fs.existsSync(PICKUP_FILE)) return;
+
+    let pickupData = JSON.parse(fs.readFileSync(PICKUP_FILE, 'utf8'));
+    const originalCount = pickupData.orders.length;
+    let deletedCount = 0;
+
+    for (const order of orders) {
+      const customerNo = order.CustomerNumber;
+      if (!customerNo) continue;
+      const cleanNo = String(customerNo).replace(/\D/g, '').replace(/^0+/, '');
+
+      const before = pickupData.orders.length;
+      pickupData.orders = pickupData.orders.filter(o => {
+        const dbNo = String(o.customerNumber).replace(/\D/g, '').replace(/^0+/, '');
+        return dbNo !== cleanNo;
+      });
+      if (pickupData.orders.length < before) {
+        console.log(`[AutoPickup] ✅ 已刪除取件追蹤: ${order.CustomerName} (#${cleanNo})`);
+        deletedCount++;
+      }
+    }
+
+    if (deletedCount > 0) {
+      fs.writeFileSync(PICKUP_FILE, JSON.stringify(pickupData, null, 2), 'utf8');
+    }
+    console.log(`[AutoPickup] 完成！共刪除 ${deletedCount} 筆取件追蹤`);
+
+  } catch (e) {
+    console.error('[AutoPickup] 錯誤:', e.message);
+  }
+}, 30 * 60 * 1000);
+
+console.log('⏰ 自動簽收偵測已啟動（每30分鐘）');
 
   
 
