@@ -2722,7 +2722,7 @@ app.get('/api/sync-progress', async (req, res) => {
 const orders = searchData?.Data?.Data ?? [];
 console.log(`[AutoProgress] SearchPage 完整回傳: ${JSON.stringify(searchData).substring(0, 500)}`);
 console.log(`[AutoProgress] 共找到 ${orders.length} 筆訂單`);
-      console.log(`[AutoProgress] 共找到 ${orders.length} 筆訂單`);
+     
 
       const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
       const PROGRESS_FILE = path.join(baseDir, 'laundry_progress.json');
