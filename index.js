@@ -2733,6 +2733,7 @@ console.log(`[AutoProgress] 共找到 ${orders.length} 筆訂單`);
 
       let updateCount = 0;
       for (const order of orders) {
+        console.log(`[AutoProgress] 訂單欄位: ${JSON.stringify(order).substring(0, 200)}`);
         const customerNo = order.CustomerNumber || '';
         const customerName = order.CustomerName || '';
         if (!customerNo) continue;
