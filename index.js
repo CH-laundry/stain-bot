@@ -4182,7 +4182,128 @@ cron.schedule('0 2 * * *', async () => {
 
 console.log('⏰ Google Sheets 同步已啟動（每天凌晨 02:00）');
 
-  
+  // ====== 每3秒輪詢付款任務，自動同步到 POS ======
+const retryCounter = {};
+const MAX_RETRY = 5;
+
+setInterval(async () => {
+  try {
+    if (!global.pendingSyncOrders || global.pendingSyncOrders.length === 0) return;
+
+    console.log(`[PaySync] 有 ${global.pendingSyncOrders.length} 筆待處理付款...`);
+
+    const token = await getPosToken();
+    if (!token) { console.log('[PaySync] 登入失敗'); return; }
+
+    const headers = {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Host': 'yidianyuan.ao-lan.cn',
+      'Authorization': `Bearer ${token}`
+    };
+
+    for (const task of [...global.pendingSyncOrders]) {
+      const orderId = task.orderId;
+      const amount = parseFloat(task.amount);
+
+      const failCount = retryCounter[orderId] || 0;
+      if (failCount >= MAX_RETRY) {
+        console.log(`[PaySync] ⛔ 任務 ${orderId} 已失敗 ${MAX_RETRY} 次，強制清除`);
+        global.pendingSyncOrders = global.pendingSyncOrders.filter(o => o.orderId !== orderId);
+        delete retryCounter[orderId];
+        continue;
+      }
+
+      if (amount <= 0) {
+        global.pendingSyncOrders = global.pendingSyncOrders.filter(o => o.orderId !== orderId);
+        continue;
+      }
+
+      try {
+        const searchRes = await fetch('http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/SearchPage', {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify([
+            { Key: 'BranchID', Value: 'b0aee8e3-6a6e-4863-b74a-08da8958f7f9' },
+            { Key: 'PageSize', Value: '200' },
+            { Key: 'PageIndex', Value: '1' }
+          ])
+        });
+        const searchData = await searchRes.json();
+        const orders = searchData?.Data?.Data ?? [];
+
+        // 找金額符合且未付款的訂單
+        const candidates = orders.filter(o => {
+          const unpaid = parseFloat(o.UnPaidAmount || 0);
+          return unpaid === amount;
+        });
+
+        if (candidates.length === 0) {
+          // 檢查是否已付款
+          const paid = orders.filter(o => {
+            const subtotal = parseFloat(o.SubTotal || 0);
+            const unpaid = parseFloat(o.UnPaidAmount || 0);
+            return subtotal === amount && unpaid === 0;
+          });
+          if (paid.length > 0) {
+            console.log(`[PaySync] ✅ 訂單 ${orderId} 金額 $${amount} 已付款，清除任務`);
+            global.pendingSyncOrders = global.pendingSyncOrders.filter(o => o.orderId !== orderId);
+            delete retryCounter[orderId];
+          } else {
+            console.log(`[PaySync] ⏳ 找不到金額 $${amount} 的未付款訂單，等待重試`);
+            retryCounter[orderId] = failCount + 1;
+          }
+          continue;
+        }
+
+        // 取第一筆執行付款
+        const target = candidates[0];
+        const guid = target.Id;
+        const customerId = target.CustomerID;
+        const now = new Date().toISOString().replace('Z', '');
+        const newPaymentId = require('crypto').randomUUID();
+
+        const payData = [{
+          Id: newPaymentId,
+          OrderID: guid,
+          OrderType: 'ReceivingOrder',
+          BranchID: 'b0aee8e3-6a6e-4863-b74a-08da8958f7f9',
+          CustomerID: customerId,
+          PaymentDate: now,
+          CreatedDate: now,
+          IsFlag: 1,
+          Amount: amount,
+          Amount_OtherPay1: amount,
+          Amount_Cash: 0,
+          TrackingState: 1,
+          Delete: false
+        }];
+
+        const payRes = await fetch('http://yidianyuan.ao-lan.cn/wepapi/Payment/Update', {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify(payData)
+        });
+
+        if (payRes.ok) {
+          console.log(`[PaySync] ✅ 入帳成功！訂單 ${target.ReceivingOrderNumber} 金額 $${amount}`);
+          global.pendingSyncOrders = global.pendingSyncOrders.filter(o => o.orderId !== orderId);
+          delete retryCounter[orderId];
+        } else {
+          console.log(`[PaySync] ❌ 入帳失敗: ${payRes.status}`);
+          retryCounter[orderId] = failCount + 1;
+        }
+
+      } catch (e) {
+        console.error(`[PaySync] 錯誤:`, e.message);
+        retryCounter[orderId] = failCount + 1;
+      }
+    }
+  } catch (e) {
+    console.error('[PaySync] 主迴圈錯誤:', e.message);
+  }
+}, 3000); // 每3秒
+
+console.log('⏰ 付款自動同步已啟動（每3秒輪詢）');
 
   // ====== 每天早上6點批次綁定 POS 編號 ======
 cron.schedule('0 6 * * *', async () => {
