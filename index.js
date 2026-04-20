@@ -2792,6 +2792,133 @@ console.log(`[AutoProgress] 共找到 ${orders.length} 筆訂單`);
   });
 });
 
+// ====== 手動觸發 Sheets 同步 ======
+app.get('/api/sync-sheets', async (req, res) => {
+  res.json({ success: true, message: 'Sheets 同步已開始，請查看 Railway Logs' });
+  setImmediate(async () => {
+    console.log('[SheetsSync] 手動觸發...');
+    try {
+      const token = await getPosToken();
+      if (!token) { console.log('[SheetsSync] 登入失敗'); return; }
+
+      const headers = {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Host': 'yidianyuan.ao-lan.cn',
+        'Authorization': `Bearer ${token}`
+      };
+
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      const dd = String(today.getDate()).padStart(2, '0');
+      const todayStr = `${yyyy}-${mm}-${dd}`;
+
+      const searchRes = await fetch('http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/SearchPage', {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify([
+          { Key: 'BranchID', Value: 'b0aee8e3-6a6e-4863-b74a-08da8958f7f9' },
+          { Key: 'StartDate', Value: todayStr },
+          { Key: 'EndDate', Value: todayStr },
+          { Key: 'PageSize', Value: '200' },
+          { Key: 'PageIndex', Value: '1' }
+        ])
+      });
+      const searchData = await searchRes.json();
+      const orders = searchData?.Data?.Data ?? [];
+      console.log(`[SheetsSync] 找到 ${orders.length} 筆今日訂單`);
+
+      const { google } = require('googleapis');
+      const auth = new google.auth.GoogleAuth({
+        credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT),
+        scopes: ['https://www.googleapis.com/auth/spreadsheets']
+      });
+      const sheets = google.sheets({ version: 'v4', auth });
+      const spreadsheetId = '14e1uaQ_4by1W7ELflSIyxo-a48f9LelG4KdkBovyY7s';
+      const sheetName = '營業紀錄';
+
+      const existing = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `'${sheetName}'!C:C`
+      });
+      const existingOrders = new Set((existing.data.values || []).flat());
+
+      let addCount = 0;
+      for (const order of orders) {
+        const orderNo = order.ReceivingOrderNumber || '';
+        if (!orderNo) continue;
+
+        try {
+          const detailRes = await fetch(`http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/GetData/${order.Id}`, {
+            method: 'GET',
+            headers: headers
+          });
+          const detailData = await detailRes.json();
+          const detail = detailData?.Data;
+          if (!detail) continue;
+
+          const customerName = detail.Customer?.CustomerName || order.CustomerName || '';
+          const customerMobile = detail.Customer?.Mobile || order.Mobile || '';
+          const receivedDate = detail.ReceivedDate || '';
+          const paymentType = detail.PaymentType || '';
+          const deliveryType = detail.DeliveryType || '';
+          const items = detail.ReceivingItemList || [];
+
+          if (items.length === 0) continue;
+
+          const totalAmount = items.reduce((sum, item) => {
+            return sum + (parseFloat(item.UnitPrice || 0) * parseInt(item.Qty || 1));
+          }, 0);
+
+          if (existingOrders.has(orderNo)) continue;
+
+          let dateStr = '';
+          let timeStr = '';
+          if (receivedDate) {
+            try {
+              const dt = new Date(receivedDate);
+              dateStr = `${dt.getFullYear()}/${String(dt.getMonth()+1).padStart(2,'0')}/${String(dt.getDate()).padStart(2,'0')}`;
+              timeStr = `${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}:${String(dt.getSeconds()).padStart(2,'0')}`;
+            } catch(e) {}
+          }
+
+          const rows = items.map((item, idx) => {
+            const goodsName = item?.Goods?.GoodsName || '';
+            const qty = parseInt(item.Qty || 1);
+            const unitPrice = parseFloat(item.UnitPrice || 0);
+            const subtotal = unitPrice * qty;
+            return [
+              dateStr, timeStr, orderNo,
+              customerName, customerMobile,
+              goodsName, qty, unitPrice, subtotal,
+              idx === 0 ? totalAmount : '',
+              paymentType, deliveryType
+            ];
+          });
+
+          await sheets.spreadsheets.values.append({
+            spreadsheetId,
+            range: `'${sheetName}'!A:L`,
+            valueInputOption: 'RAW',
+            resource: { values: rows }
+          });
+
+          existingOrders.add(orderNo);
+          addCount++;
+          console.log(`[SheetsSync] ✅ 已寫入: ${orderNo} ${customerName}`);
+          await new Promise(r => setTimeout(r, 500));
+        } catch (e) {
+          console.error(`[SheetsSync] 訂單 ${orderNo} 失敗:`, e.message);
+        }
+      }
+
+      console.log(`[SheetsSync] 完成！共寫入 ${addCount} 筆訂單`);
+    } catch (e) {
+      console.error('[SheetsSync] 錯誤:', e.message);
+    }
+  });
+});
+
 // ====== 手動觸發簽收偵測 ======
 app.get('/api/sync-pickup', async (req, res) => {
   res.json({ success: true, message: '簽收偵測已開始，請查看 Railway Logs' });
@@ -3922,6 +4049,138 @@ setInterval(async () => {
 }, 30 * 60 * 1000);
 
 console.log('⏰ 自動簽收偵測已啟動（每30分鐘）');
+
+  // ====== 每天凌晨2點同步 POS 訂單到 Google Sheets ======
+cron.schedule('0 2 * * *', async () => {
+  console.log('[SheetsSync] 開始同步 POS 訂單到 Google Sheets...');
+  try {
+    const token = await getPosToken();
+    if (!token) { console.log('[SheetsSync] 登入失敗'); return; }
+
+    const headers = {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Host': 'yidianyuan.ao-lan.cn',
+      'Authorization': `Bearer ${token}`
+    };
+
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    const todayStr = `${yyyy}-${mm}-${dd}`;
+
+    const searchRes = await fetch('http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/SearchPage', {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify([
+        { Key: 'BranchID', Value: 'b0aee8e3-6a6e-4863-b74a-08da8958f7f9' },
+        { Key: 'StartDate', Value: todayStr },
+        { Key: 'EndDate', Value: todayStr },
+        { Key: 'PageSize', Value: '200' },
+        { Key: 'PageIndex', Value: '1' }
+      ])
+    });
+    const searchData = await searchRes.json();
+    const orders = searchData?.Data?.Data ?? [];
+    console.log(`[SheetsSync] 找到 ${orders.length} 筆今日訂單`);
+
+    const { google } = require('googleapis');
+    const auth = new google.auth.GoogleAuth({
+      credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT),
+      scopes: ['https://www.googleapis.com/auth/spreadsheets']
+    });
+    const sheets = google.sheets({ version: 'v4', auth });
+    const spreadsheetId = '14e1uaQ_4by1W7ELflSIyxo-a48f9LelG4KdkBovyY7s';
+    const sheetName = '營業紀錄';
+
+    // 讀取已存在的訂單號，防止重複
+    const existing = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `'${sheetName}'!C:C`
+    });
+    const existingOrders = new Set((existing.data.values || []).flat());
+
+    let addCount = 0;
+    for (const order of orders) {
+      const orderNo = order.ReceivingOrderNumber || '';
+      if (!orderNo) continue;
+
+      // 查詢訂單詳情
+      try {
+        const detailRes = await fetch(`http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/GetData/${order.Id}`, {
+          method: 'GET',
+          headers: headers
+        });
+        const detailData = await detailRes.json();
+        const detail = detailData?.Data;
+        if (!detail) continue;
+
+        const customerName = detail.Customer?.CustomerName || order.CustomerName || '';
+        const customerMobile = detail.Customer?.Mobile || order.Mobile || '';
+        const receivedDate = detail.ReceivedDate || '';
+        const paymentType = detail.PaymentType || '';
+        const deliveryType = detail.DeliveryType || '';
+        const items = detail.ReceivingItemList || [];
+
+        if (items.length === 0) continue;
+
+        const totalAmount = items.reduce((sum, item) => {
+          return sum + (parseFloat(item.UnitPrice || 0) * parseInt(item.Qty || 1));
+        }, 0);
+
+        // 已存在就跳過
+        const orderKey = `${orderNo}:${Math.round(totalAmount)}`;
+        if (existingOrders.has(orderNo)) {
+          continue;
+        }
+
+        let dateStr = '';
+        let timeStr = '';
+        if (receivedDate) {
+          try {
+            const dt = new Date(receivedDate);
+            dateStr = `${dt.getFullYear()}/${String(dt.getMonth()+1).padStart(2,'0')}/${String(dt.getDate()).padStart(2,'0')}`;
+            timeStr = `${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}:${String(dt.getSeconds()).padStart(2,'0')}`;
+          } catch(e) {}
+        }
+
+        const rows = items.map((item, idx) => {
+          const goodsName = item?.Goods?.GoodsName || '';
+          const qty = parseInt(item.Qty || 1);
+          const unitPrice = parseFloat(item.UnitPrice || 0);
+          const subtotal = unitPrice * qty;
+          return [
+            dateStr, timeStr, orderNo,
+            customerName, customerMobile,
+            goodsName, qty, unitPrice, subtotal,
+            idx === 0 ? totalAmount : '',
+            paymentType, deliveryType
+          ];
+        });
+
+        await sheets.spreadsheets.values.append({
+          spreadsheetId,
+          range: `'${sheetName}'!A:L`,
+          valueInputOption: 'RAW',
+          resource: { values: rows }
+        });
+
+        existingOrders.add(orderNo);
+        addCount++;
+        console.log(`[SheetsSync] ✅ 已寫入: ${orderNo} ${customerName}`);
+        await new Promise(r => setTimeout(r, 500));
+      } catch (e) {
+        console.error(`[SheetsSync] 訂單 ${orderNo} 失敗:`, e.message);
+      }
+    }
+
+    console.log(`[SheetsSync] 完成！共寫入 ${addCount} 筆訂單`);
+  } catch (e) {
+    console.error('[SheetsSync] 錯誤:', e.message);
+  }
+}, { timezone: 'Asia/Taipei' });
+
+console.log('⏰ Google Sheets 同步已啟動（每天凌晨 02:00）');
 
   
 
