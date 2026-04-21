@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>C.H 精緻洗衣 付款</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: sans-serif; background: linear-gradient(135deg, #667eea, #764ba2); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .card { background: white; border-radius: 20px; padding: 36px 28px; max-width: 400px; width: 100%; box-shadow: 0 8px 32px rgba(0,0,0,0.2); }
+    .logo { text-align: center; margin-bottom: 24px; }
+    .logo h2 { font-size: 20px; color: #1f2937; margin-top: 8px; }
+    .logo p { font-size: 13px; color: #9ca3af; margin-top: 4px; }
+    .name-box { background: #f3f4f6; border-radius: 10px; padding: 14px 16px; margin-bottom: 20px; font-size: 15px; color: #374151; }
+    .name-box span { font-weight: 700; color: #667eea; }
+    label { font-size: 13px; font-weight: 700; color: #6b7280; display: block; margin-bottom: 8px; }
+    input[type=number] { width: 100%; border: 2px solid #e5e7eb; border-radius: 10px; padding: 14px 16px; font-size: 22px; font-weight: 700; color: #1f2937; outline: none; }
+    input[type=number]:focus { border-color: #667eea; }
+    .btn-group { display: flex; flex-direction: column; gap: 12px; margin-top: 24px; }
+    .btn { width: 100%; padding: 16px; border-radius: 12px; font-size: 16px; font-weight: 700; border: none; cursor: pointer; }
+    .btn-linepay { background: #06C755; color: white; }
+    .btn-ecpay { background: #1a56db; color: white; }
+    .btn:active { opacity: 0.85; transform: scale(0.98); }
+    .note { font-size: 12px; color: #9ca3af; text-align: center; margin-top: 16px; line-height: 1.6; }
+    .loading { display: none; text-align: center; padding: 20px; color: #667eea; font-weight: 700; }
+  </style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">
+    <h2>💙 C.H 精緻洗衣</h2>
+    <p>請填寫付款金額</p>
+  </div>
+  <div class="name-box">付款人：<span id="customerName">載入中...</span></div>
+  <label>付款金額（NT$）</label>
+  <input type="number" id="amountInput" placeholder="請輸入金額" min="1">
+  <div class="btn-group">
+    <button class="btn btn-linepay" onclick="pay('linepay')">LINE Pay 付款</button>
+    <button class="btn btn-ecpay" onclick="pay('ecpay')">信用卡付款（綠界）</button>
+  </div>
+  <div class="loading" id="loading">⏳ 建立付款連結中，請稍候...</div>
+  <p class="note">付款完成後系統會自動通知店家<br>無需另外告知 💙</p>
+</div>
+
+<script>
+  const params = new URLSearchParams(window.location.search);
+  const ref = params.get('ref') || '';
+  const parts = decodeURIComponent(ref).split('_');
+  const customerNo = parts[0] || '';
+  const customerName = parts.slice(1).join('_') || '訪客';
+  const userId = params.get('uid') || '';
+
+  document.getElementById('customerName').textContent = customerName;
+
+  async function pay(type) {
+    const amount = parseInt(document.getElementById('amountInput').value);
+    if (!amount || amount < 1) {
+      alert('請輸入有效金額');
+      return;
+    }
+
+    document.querySelector('.btn-group').style.display = 'none';
+    document.getElementById('loading').style.display = 'block';
+
+    try {
+      const res = await fetch('/pay/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, customerNo, customerName, amount, type })
+      });
+      const data = await res.json();
+
+      if (data.success && data.url) {
+        window.location.href = data.url;
+      } else {
+        alert('建立失敗，請重試');
+        document.querySelector('.btn-group').style.display = 'flex';
+        document.getElementById('loading').style.display = 'none';
+      }
+    } catch (e) {
+      alert('系統錯誤，請重試');
+      document.querySelector('.btn-group').style.display = 'flex';
+      document.getElementById('loading').style.display = 'none';
+    }
+  }
+</script>
+</body>
+</html>
