@@ -2042,6 +2042,128 @@ const dailyAverage = workDays > 0 ? Math.round(monthlyTotal / workDays) : 0;
   }
 });
 
+// 📋 每日訂單明細 API
+app.get('/api/revenue/day-detail', async (req, res) => {
+  try {
+    const { date } = req.query; // 格式: 2026-04-20
+    if (!date) return res.json({ success: false, error: '請提供日期' });
+
+    const { google } = require('googleapis');
+    const googleAuth = require('./services/googleAuth');
+    const auth = googleAuth.getOAuth2Client();
+    const sheets = google.sheets({ version: 'v4', auth });
+    const spreadsheetId = process.env.GOOGLE_SHEETS_ID_CUSTOMER;
+
+    const sheetInfo = await sheets.spreadsheets.get({ spreadsheetId, fields: 'sheets.properties' });
+    const targetSheet = sheetInfo.data.sheets.find(s => s.properties.sheetId === 756780563);
+    if (!targetSheet) return res.json({ success: false, error: '找不到工作表' });
+
+    const sheetName = targetSheet.properties.title;
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `'${sheetName}'!A:L`
+    });
+
+    const rows = response.data.values || [];
+    const [y, m, d] = date.split('-');
+
+    // 找出當天所有行（含行號，從1開始，第1行是表頭=row 1）
+    const dayRows = [];
+    rows.forEach((row, idx) => {
+      if (idx === 0) return; // 跳過表頭
+      if (!row[0]) return;
+      const rowDate = row[0].toString().replace(/\//g, '-').substring(0, 10);
+      if (rowDate === date) {
+        dayRows.push({
+          rowIndex: idx + 1, // Sheets 行號（1-based，含表頭）
+          date: row[0] || '',
+          time: row[1] || '',
+          orderNo: row[2] || '',
+          customerName: row[3] || '',
+          phone: row[4] || '',
+          item: row[5] || '',
+          qty: row[6] || '',
+          unitPrice: row[7] || '',
+          subtotal: parseFloat(String(row[8] || '0').replace(/[^0-9.]/g, '')) || 0,
+          orderTotal: row[9] || '',
+          paymentType: row[10] || '',
+          deliveryType: row[11] || ''
+        });
+      }
+    });
+
+    res.json({ success: true, date, rows: dayRows, total: dayRows.length });
+  } catch (error) {
+    console.error('每日明細錯誤:', error);
+    res.json({ success: false, error: error.message });
+  }
+});
+
+// ✏️ 更新/刪除 Sheets 某一行
+app.put('/api/revenue/update-row', async (req, res) => {
+  try {
+    const { rowIndex, subtotal } = req.body;
+    if (!rowIndex) return res.json({ success: false, error: '缺少 rowIndex' });
+
+    const { google } = require('googleapis');
+    const googleAuth = require('./services/googleAuth');
+    const auth = googleAuth.getOAuth2Client();
+    const sheets = google.sheets({ version: 'v4', auth });
+    const spreadsheetId = process.env.GOOGLE_SHEETS_ID_CUSTOMER;
+
+    const sheetInfo = await sheets.spreadsheets.get({ spreadsheetId, fields: 'sheets.properties' });
+    const targetSheet = sheetInfo.data.sheets.find(s => s.properties.sheetId === 756780563);
+    if (!targetSheet) return res.json({ success: false, error: '找不到工作表' });
+
+    const sheetName = targetSheet.properties.title;
+
+    // 只更新 I 欄（小計，第9欄）
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `'${sheetName}'!I${rowIndex}`,
+      valueInputOption: 'USER_ENTERED',
+      resource: { values: [[subtotal]] }
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    res.json({ success: false, error: error.message });
+  }
+});
+
+app.delete('/api/revenue/delete-row', async (req, res) => {
+  try {
+    const { rowIndex } = req.body;
+    if (!rowIndex) return res.json({ success: false, error: '缺少 rowIndex' });
+
+    const { google } = require('googleapis');
+    const googleAuth = require('./services/googleAuth');
+    const auth = googleAuth.getOAuth2Client();
+    const sheets = google.sheets({ version: 'v4', auth });
+    const spreadsheetId = process.env.GOOGLE_SHEETS_ID_CUSTOMER;
+
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [{
+          deleteDimension: {
+            range: {
+              sheetId: 756780563,
+              dimension: 'ROWS',
+              startIndex: rowIndex - 1, // 0-based
+              endIndex: rowIndex
+            }
+          }
+        }]
+      }
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    res.json({ success: false, error: error.message });
+  }
+});
+
 app.post('/api/templates', (req, res) => {
   try {
     const { content } = req.body;
