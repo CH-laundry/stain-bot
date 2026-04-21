@@ -970,23 +970,16 @@ if (userMessage === '付款方式') {
     const rawBase = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.BASE_URL || '';
     const baseURL = ensureHttpsBase(rawBase) || 'https://stain-bot-production-2593.up.railway.app';
     const ref = encodeURIComponent(found.number + '_' + (found.name || ''));
+    const uid = encodeURIComponent(userId);
     
     console.log(`[付款方式] ${realName} (編號:${found.number}) 點擊付款方式`);
     
     paymentMsg =
       `以下提供兩種付款方式，您可以依方便選擇：\n` +
-      `1️⃣ LINE Pay 付款連結\n${baseURL}/pay/linepay?ref=${ref}\n` +
-      `2️⃣ 信用卡付款（綠界 ECPay）\n${baseURL}/pay/ecpay?ref=${ref}\n` +
-      `感謝您的支持與配合 💙`;
-  } else {
-    // 沒有對應 → 原本固定連結
-    paymentMsg =
-      `以下提供兩種付款方式，您可以依方便選擇：\n` +
-      `1️⃣ LINE Pay 付款連結\nhttps://qrcodepay.line.me/qr/payment/ad2fs7S%252BDxiUCtHDInEXe9tnWx7SgIlVX6Ip6PbtXOkp4tXjgCI28920qGq%252B4eIt\n` +
-      `2️⃣ 信用卡付款（綠界 ECPay）\nhttps://p.ecpay.com.tw/55FFE71\n` +
-      `感謝您的支持與配合 💙\n\n付款完成後，麻煩再通知我們一聲，方便我們為您確認，謝謝您💙`;
-  }
-
+      `1️⃣ LINE Pay 付款連結\n${baseURL}/pay/linepay?ref=${ref}&uid=${uid}\n` +
+      `2️⃣ 信用卡付款（綠界 ECPay）\n${baseURL}/pay/ecpay?ref=${ref}&uid=${uid}\n` +
+      `感謝您的支持與配合 💙\n\n付款完成後系統會自動通知我們，無需另外告知 💙`;
+}
   await client.pushMessage(userId, { type: 'text', text: paymentMsg });
   continue;
 }
@@ -2673,17 +2666,46 @@ app.post('/send-payment', async (req, res) => {
   }
 });
 
-// 💳 付款方式中繼路由（記錄是誰點的）
+// 💳 付款方式中繼路由（導向自填金額頁面）
 app.get('/pay/linepay', (req, res) => {
-  const ref = req.query.ref || '未知';
-  console.log(`[付款點擊] LINE Pay - ${ref} - ${new Date().toLocaleString('zh-TW')}`);
-  res.redirect('https://qrcodepay.line.me/qr/payment/ad2fs7S%252BDxiUCtHDInEXe9tnWx7SgIlVX6Ip6PbtXOkp4tXjgCI28920qGq%252B4eIt');
+  const ref = req.query.ref || '';
+  const uid = req.query.uid || '';
+  res.redirect(`/pay-form.html?ref=${ref}&uid=${uid}`);
 });
 
 app.get('/pay/ecpay', (req, res) => {
-  const ref = req.query.ref || '未知';
-  console.log(`[付款點擊] ECPay - ${ref} - ${new Date().toLocaleString('zh-TW')}`);
-  res.redirect('https://p.ecpay.com.tw/55FFE71');
+  const ref = req.query.ref || '';
+  const uid = req.query.uid || '';
+  res.redirect(`/pay-form.html?ref=${ref}&uid=${uid}`);
+});
+
+app.post('/pay/create-order', async (req, res) => {
+  try {
+    const { userId, customerNo, customerName, amount, type } = req.body;
+    if (!amount || amount < 1) return res.json({ success: false, error: '金額無效' });
+
+    const rawBase = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.BASE_URL || '';
+    const baseURL = ensureHttpsBase(rawBase) || 'https://stain-bot-production-2593.up.railway.app';
+
+    if (type === 'linepay') {
+      const orderId = `LP${Date.now()}${Math.random().toString(36).substr(2,4).toUpperCase()}`;
+      orderManager.createOrder(orderId, { userId, userName: customerName, amount });
+      const url = `${baseURL}/payment/linepay/pay/${orderId}`;
+      return res.json({ success: true, url });
+    }
+
+    if (type === 'ecpay') {
+      const orderId = `EC${Date.now()}${Math.random().toString(36).substr(2,4).toUpperCase()}`;
+      orderManager.createOrder(orderId, { userId, userName: customerName, amount });
+      const url = `${baseURL}/payment/ecpay/pay/${orderId}`;
+      return res.json({ success: true, url });
+    }
+
+    res.json({ success: false, error: '未知付款方式' });
+  } catch (err) {
+    console.error('建立訂單失敗:', err);
+    res.json({ success: false, error: err.message });
+  }
 });
 
 app.get('/payment', (req, res) => {
