@@ -1606,17 +1606,19 @@ try {
 
     logger.logToFile(`[ECPAY][SUCCESS] ${merchantTradeNo} 成功 NT$${amount}`);
 
+    // 通知客人
+    if (userId && userId !== 'undefined') {
+      client.pushMessage(userId, {
+        type: 'text',
+        text: `✅ 綠界付款成功\n客戶：${userName}\n金額：NT$ ${amount}\n\n非常謝謝您\n感謝您的支持 💙`
+      }).catch(() => {});
+    }
+
+    // 通知店家
     if (process.env.ADMIN_USER_ID) {
       client.pushMessage(process.env.ADMIN_USER_ID, {
         type: 'text',
         text: `✅ 綠界付款成功\n客戶：${userName}\n金額：NT$ ${amount}`
-      }).catch(() => {});
-    }
-
-    if (userId && userId !== 'undefined') {
-      client.pushMessage(userId, {
-        type: 'text',
-        text: `✅ 付款成功（綠界）\n感謝您的支持 💙`
       }).catch(() => {});
     }
   } catch (err) {
