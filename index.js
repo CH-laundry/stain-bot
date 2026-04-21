@@ -1486,12 +1486,6 @@ try {
       }
       // 🔥🔥🔥 【結束】 🔥🔥🔥
       
-      if (process.env.ADMIN_USER_ID) {
-        client.pushMessage(process.env.ADMIN_USER_ID, {
-          type: 'text',
-          text: `收到 LINE Pay 付款通知\n\n客戶姓名:${order.userName}\n付款金額:NT$ ${order.amount.toLocaleString()}\n付款方式:LINE Pay\n訂單編號:${order.orderId}\n交易編號:${transactionId}\n\n狀態:付款成功`
-        }).catch(() => {});
-      }
 
       if (order.userId && order.userId !== 'undefined') {
         client.pushMessage(order.userId, {
