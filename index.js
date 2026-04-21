@@ -272,15 +272,21 @@ app.post('/api/delivery/transfer-to-pickup', async (req, res) => {
       console.log('users.json 讀取失敗:', e.message);
     }
 
-    if (!userId) {
-      try {
-        const customers = orderManager.getAllCustomerNumbers();
-        const found = customers.find(c =>
-          c.name && c.name.includes(customerName)
-        );
-        if (found) userId = found.userId;
-      } catch (e) {}
+   if (!userId) {
+  try {
+    const customers = orderManager.getAllCustomerNumbers();
+    // 優先用編號比對（cleanNo 已經是純數字）
+    const found = customers.find(c => {
+      const dbNo = String(c.number).replace(/\D/g, '').replace(/^0+/, '');
+      return dbNo === cleanNo;
+    });
+    if (found) {
+      userId = found.userId;
+      // 同時用 LINE 真實名字覆蓋 customerName，讓存進追蹤的名字正確
+      if (found.name) customerName = found.name;
     }
+  } catch (e) {}
+}
 
     if (!userId) {
       return res.json({
