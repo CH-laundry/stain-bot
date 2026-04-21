@@ -4467,8 +4467,11 @@ function renderDayDetail(date) {
     html += '<span style="margin-left:10px; color:#666; font-size:13px;">' + (firstRow.customerName || '-') + '</span>';
     if (firstRow.phone) html += '<span style="margin-left:8px; color:#999; font-size:12px;">' + firstRow.phone + '</span>';
     html += '</div>';
-    html += '<strong style="color:#667eea;">NT$ ' + orderTotal.toLocaleString() + '</strong>';
-    html += '</div>';
+   html += '<div style="display:flex; align-items:center; gap:10px;">';
+html += '<strong style="color:#667eea;">NT$ ' + orderTotal.toLocaleString() + '</strong>';
+html += '<button onclick="deleteOrderRows(\'' + orderNo + '\')" style="padding:4px 12px; background:#dc3545; color:#fff; border:none; border-radius:5px; cursor:pointer; font-size:12px;">🗑️ 刪除整筆訂單</button>';
+html += '</div>';
+html += '</div>';
 
     // 品項列表
     html += '<table style="width:100%; border-collapse:collapse;">';
@@ -4555,6 +4558,43 @@ async function deleteRow(rowIndex) {
 function closeDayDetail() {
   document.getElementById('dayDetailModal').style.display = 'none';
   currentDayRows = [];
+}
+
+  async function deleteOrderRows(orderNo) {
+  var rows = currentDayRows.filter(function(r) { return r.orderNo === orderNo; });
+  if (rows.length === 0) return;
+  
+  if (!confirm('確定要刪除整筆訂單「' + orderNo + '」的所有品項？\n共 ' + rows.length + ' 筆\n\n此操作無法復原。')) return;
+
+  try {
+    // 從最大 rowIndex 開始刪（避免行號位移）
+    var sortedRows = rows.slice().sort(function(a, b) { return b.rowIndex - a.rowIndex; });
+    
+    for (var i = 0; i < sortedRows.length; i++) {
+      var res = await fetch('/api/revenue/delete-row', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rowIndex: sortedRows[i].rowIndex })
+      });
+      var data = await res.json();
+      if (!data.success) {
+        alert('❌ 刪除第 ' + (i+1) + ' 筆時失敗：' + (data.error || '未知錯誤'));
+        break;
+      }
+    }
+
+    // 重新從後端拉資料（行號已位移）
+    var date = document.getElementById('dayDetailDate').textContent;
+    var res2 = await fetch('/api/revenue/day-detail?date=' + encodeURIComponent(date));
+    var data2 = await res2.json();
+    if (data2.success) currentDayRows = data2.rows || [];
+    renderDayDetail(date);
+    loadRevenueReport();
+    showResult('success', '✅ 已刪除整筆訂單，數據已同步更新');
+    
+  } catch (e) {
+    alert('❌ 連線失敗：' + e.message);
+  }
 }
 </script>
 </body>
