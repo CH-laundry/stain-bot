@@ -3735,7 +3735,10 @@ function displayRevenueReport(data) {
     html += '<td style="padding:12px; text-align:right; font-weight:600; color:#667eea;">NT$ ' + amount.toLocaleString() + '</td>';
     html += '<td style="padding:12px; text-align:right;">' + orders + ' 筆</td>';
     html += '<td style="padding:12px; text-align:right; color:#999;">NT$ ' + avgPrice.toLocaleString() + '</td>';
-    html += '<td style="padding:12px; text-align:center;"><button onclick="showDailyInsight(\'' + day.date + '\',' + day.amount + ',' + day.orders + ')" style="padding:6px 12px; background:#667eea; color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:13px;">🤖 分析</button></td>';
+   html += '<td style="padding:12px; text-align:center;">' +
+  '<button onclick="showDailyInsight(\'' + day.date + '\',' + day.amount + ',' + day.orders + ')" style="padding:6px 12px; background:#667eea; color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:13px; margin-bottom:4px;">🤖 分析</button>' +
+  '<br><button onclick="showDayDetail(\'' + day.date + '\')" style="padding:6px 12px; background:#52c41a; color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:13px;">📋 明細</button>' +
+  '</td>';
     html += '</tr>';
   });
   
@@ -4390,6 +4393,168 @@ async function showDailyInsight(date, revenue, orders) {
   } catch(e) {
     document.getElementById('aiInsightContent').textContent = '❌ 連線失敗：' + e.message;
   }
+}
+</script>
+<!-- 📋 每日明細 Modal -->
+<div id="dayDetailModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:9999; padding:20px; overflow:auto;">
+  <div style="background:#fff; max-width:900px; margin:30px auto; border-radius:20px; padding:30px; position:relative;">
+    <button onclick="closeDayDetail()" style="position:absolute; top:15px; right:15px; background:#dc3545; color:#fff; border:none; padding:8px 15px; border-radius:5px; cursor:pointer; font-size:16px;">✕</button>
+    <h3 style="color:#667eea; margin-bottom:5px;">📋 每日訂單明細</h3>
+    <div id="dayDetailDate" style="color:#999; font-size:14px; margin-bottom:15px;"></div>
+    <div id="dayDetailStats" style="display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:20px;"></div>
+    <div id="dayDetailContent">載入中...</div>
+  </div>
+</div>
+
+<script>
+// ========================================
+// 📋 每日明細功能
+// ========================================
+
+var currentDayRows = [];
+
+async function showDayDetail(date) {
+  document.getElementById('dayDetailModal').style.display = 'block';
+  document.getElementById('dayDetailDate').textContent = date;
+  document.getElementById('dayDetailContent').innerHTML = '<p style="text-align:center; color:#999;">載入中...</p>';
+  document.getElementById('dayDetailStats').innerHTML = '';
+
+  try {
+    var res = await fetch('/api/revenue/day-detail?date=' + encodeURIComponent(date));
+    var data = await res.json();
+    if (!data.success) throw new Error(data.error || '載入失敗');
+
+    currentDayRows = data.rows || [];
+    renderDayDetail(date);
+  } catch (e) {
+    document.getElementById('dayDetailContent').innerHTML = '<p style="color:#dc3545; text-align:center;">載入失敗：' + e.message + '</p>';
+  }
+}
+
+function renderDayDetail(date) {
+  // 統計
+  var totalAmount = currentDayRows.reduce(function(s, r) { return s + (r.subtotal || 0); }, 0);
+  var orderNos = [...new Set(currentDayRows.map(function(r) { return r.orderNo; }).filter(Boolean))];
+
+  document.getElementById('dayDetailStats').innerHTML =
+    '<div style="background:#f0f4ff; padding:12px; border-radius:8px; text-align:center;"><div style="font-size:20px; font-weight:bold; color:#667eea;">NT$ ' + totalAmount.toLocaleString() + '</div><div style="font-size:12px; color:#666;">當日總額</div></div>' +
+    '<div style="background:#e7f0ff; padding:12px; border-radius:8px; text-align:center;"><div style="font-size:20px; font-weight:bold; color:#1890ff;">' + currentDayRows.length + '</div><div style="font-size:12px; color:#666;">品項筆數</div></div>' +
+    '<div style="background:#d4edda; padding:12px; border-radius:8px; text-align:center;"><div style="font-size:20px; font-weight:bold; color:#28a745;">' + orderNos.length + '</div><div style="font-size:12px; color:#666;">訂單數</div></div>';
+
+  if (currentDayRows.length === 0) {
+    document.getElementById('dayDetailContent').innerHTML = '<p style="text-align:center; color:#999;">當日無資料</p>';
+    return;
+  }
+
+  // 依訂單號分組
+  var groups = {};
+  currentDayRows.forEach(function(row) {
+    var key = row.orderNo || '未知訂單';
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(row);
+  });
+
+  var html = '';
+  Object.keys(groups).forEach(function(orderNo) {
+    var rows = groups[orderNo];
+    var firstRow = rows[0];
+    var orderTotal = rows.reduce(function(s, r) { return s + (r.subtotal || 0); }, 0);
+
+    html += '<div style="border:1px solid #e0e0e0; border-radius:10px; margin-bottom:15px; overflow:hidden;">';
+    // 訂單標頭
+    html += '<div style="background:#f0f4ff; padding:12px 15px; display:flex; justify-content:space-between; align-items:center;">';
+    html += '<div><strong style="color:#667eea;">📦 ' + orderNo + '</strong>';
+    html += '<span style="margin-left:10px; color:#666; font-size:13px;">' + (firstRow.customerName || '-') + '</span>';
+    if (firstRow.phone) html += '<span style="margin-left:8px; color:#999; font-size:12px;">' + firstRow.phone + '</span>';
+    html += '</div>';
+    html += '<strong style="color:#667eea;">NT$ ' + orderTotal.toLocaleString() + '</strong>';
+    html += '</div>';
+
+    // 品項列表
+    html += '<table style="width:100%; border-collapse:collapse;">';
+    html += '<tr style="background:#f8f9fa; font-size:13px; color:#666;"><th style="padding:8px 12px; text-align:left;">品項</th><th style="padding:8px; text-align:center;">數量</th><th style="padding:8px; text-align:right;">單價</th><th style="padding:8px; text-align:right;">小計</th><th style="padding:8px; text-align:center;">操作</th></tr>';
+
+    rows.forEach(function(row) {
+      html += '<tr style="border-top:1px solid #f0f0f0;" id="row-' + row.rowIndex + '">';
+      html += '<td style="padding:10px 12px; font-size:14px;">' + (row.item || '-') + '</td>';
+      html += '<td style="padding:10px; text-align:center; color:#666;">' + (row.qty || '-') + '</td>';
+      html += '<td style="padding:10px; text-align:right; color:#666;">NT$ ' + (parseFloat(row.unitPrice) || 0).toLocaleString() + '</td>';
+      html += '<td style="padding:10px; text-align:right; font-weight:600;" id="subtotal-' + row.rowIndex + '">NT$ ' + (row.subtotal || 0).toLocaleString() + '</td>';
+      html += '<td style="padding:10px; text-align:center;">';
+      html += '<button onclick="editRow(' + row.rowIndex + ',' + (row.subtotal || 0) + ')" style="padding:4px 10px; background:#1890ff; color:#fff; border:none; border-radius:5px; cursor:pointer; font-size:12px; margin-right:4px;">✏️ 編輯</button>';
+      html += '<button onclick="deleteRow(' + row.rowIndex + ')" style="padding:4px 10px; background:#dc3545; color:#fff; border:none; border-radius:5px; cursor:pointer; font-size:12px;">🗑️ 刪除</button>';
+      html += '</td></tr>';
+    });
+
+    html += '</table></div>';
+  });
+
+  document.getElementById('dayDetailContent').innerHTML = html;
+}
+
+async function editRow(rowIndex, currentSubtotal) {
+  var newAmount = prompt('修改小計金額（目前：NT$ ' + currentSubtotal + '）', currentSubtotal);
+  if (newAmount === null) return;
+  var amount = parseFloat(newAmount);
+  if (isNaN(amount) || amount < 0) { alert('金額格式不正確'); return; }
+
+  try {
+    var res = await fetch('/api/revenue/update-row', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rowIndex: rowIndex, subtotal: amount })
+    });
+    var data = await res.json();
+    if (data.success) {
+      // 更新本地資料
+      currentDayRows.forEach(function(r) {
+        if (r.rowIndex === rowIndex) r.subtotal = amount;
+      });
+      var date = document.getElementById('dayDetailDate').textContent;
+      renderDayDetail(date);
+      // 同步更新外層報表
+      loadRevenueReport();
+      showResult('success', '✅ 已更新金額');
+    } else {
+      alert('❌ 更新失敗：' + (data.error || '未知錯誤'));
+    }
+  } catch (e) {
+    alert('❌ 連線失敗：' + e.message);
+  }
+}
+
+async function deleteRow(rowIndex) {
+  if (!confirm('確定要刪除這筆品項？\n\n刪除後營業數據會同步更新，此操作無法復原。')) return;
+
+  try {
+    var res = await fetch('/api/revenue/delete-row', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rowIndex: rowIndex })
+    });
+    var data = await res.json();
+    if (data.success) {
+      // 從本地移除
+      currentDayRows = currentDayRows.filter(function(r) { return r.rowIndex !== rowIndex; });
+      // 刪除後 rowIndex 會位移，重新從後端拉
+      var date = document.getElementById('dayDetailDate').textContent;
+      var res2 = await fetch('/api/revenue/day-detail?date=' + encodeURIComponent(date));
+      var data2 = await res2.json();
+      if (data2.success) currentDayRows = data2.rows || [];
+      renderDayDetail(date);
+      loadRevenueReport();
+      showResult('success', '✅ 已刪除，數據已同步更新');
+    } else {
+      alert('❌ 刪除失敗：' + (data.error || '未知錯誤'));
+    }
+  } catch (e) {
+    alert('❌ 連線失敗：' + e.message);
+  }
+}
+
+function closeDayDetail() {
+  document.getElementById('dayDetailModal').style.display = 'none';
+  currentDayRows = [];
 }
 </script>
 </body>
