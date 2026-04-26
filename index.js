@@ -5463,4 +5463,92 @@ app.put('/api/stain-photos/:photoId', async (req, res) => {
   }
 });
 
-    
+    // ==================== 洗前洗後照片建檔 ====================
+app.post('/api/upload-photo', upload.single('photo'), async (req, res) => {
+  try {
+    const { customerNumber, phase, itemType } = req.body;
+    const serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
+    const { google } = require('googleapis');
+    const auth = new google.auth.GoogleAuth({
+      credentials: serviceAccount,
+      scopes: ['https://www.googleapis.com/auth/drive']
+    });
+    const drive = google.drive({ version: 'v3', auth });
+    const folderId = process.env.PHOTO_FOLDER_ID;
+
+    let customerFolderId;
+    const existing = await drive.files.list({
+      q: `'${folderId}' in parents and name='${customerNumber}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+      fields: 'files(id)'
+    });
+    if (existing.data.files.length > 0) {
+      customerFolderId = existing.data.files[0].id;
+    } else {
+      const created = await drive.files.create({
+        requestBody: { name: customerNumber, mimeType: 'application/vnd.google-apps.folder', parents: [folderId] },
+        fields: 'id'
+      });
+      customerFolderId = created.data.id;
+    }
+
+    const date = new Date().toISOString().slice(0,10).replace(/-/g,'');
+    const phaseLabel = phase === 'before' ? '洗前' : '洗後';
+    const fileName = `${date}_${itemType}_${phaseLabel}.jpg`;
+    const { Readable } = require('stream');
+    const uploaded = await drive.files.create({
+      requestBody: { name: fileName, parents: [customerFolderId] },
+      media: { mimeType: 'image/jpeg', body: Readable.from(req.file.buffer) },
+      fields: 'id, webViewLink'
+    });
+
+    await drive.permissions.create({
+      fileId: uploaded.data.id,
+      requestBody: { role: 'reader', type: 'anyone' }
+    });
+
+    res.json({ success: true, fileId: uploaded.data.id, link: uploaded.data.webViewLink });
+  } catch (e) {
+    console.error('upload-photo error:', e);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.get('/api/photos/:customerNumber', async (req, res) => {
+  try {
+    const serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
+    const { google } = require('googleapis');
+    const auth = new google.auth.GoogleAuth({
+      credentials: serviceAccount,
+      scopes: ['https://www.googleapis.com/auth/drive.readonly']
+    });
+    const drive = google.drive({ version: 'v3', auth });
+    const folderId = process.env.PHOTO_FOLDER_ID;
+    const customerNumber = req.params.customerNumber;
+
+    const folderRes = await drive.files.list({
+      q: `'${folderId}' in parents and name='${customerNumber}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+      fields: 'files(id)'
+    });
+    if (folderRes.data.files.length === 0) return res.json({ photos: [] });
+
+    const customerFolderId = folderRes.data.files[0].id;
+    const files = await drive.files.list({
+      q: `'${customerFolderId}' in parents and trashed=false`,
+      fields: 'files(id, name, createdTime)',
+      orderBy: 'createdTime'
+    });
+
+    const photos = files.data.files.map(f => ({
+      name: f.name,
+      date: f.createdTime,
+      url: `https://drive.google.com/thumbnail?id=${f.id}&sz=w800`,
+      phase: f.name.includes('洗前') ? 'before' : 'after',
+      itemType: f.name.split('_')[1]
+    }));
+
+    res.json({ photos });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+// ==================== 照片建檔結束 ====================
