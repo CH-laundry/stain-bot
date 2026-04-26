@@ -908,6 +908,7 @@
 
   <div style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
     <button class="btn btn-small btn-secondary" onclick="loadOverdueAlerts()">🔄 重新整理</button>
+    <button class="btn btn-small" style="background:#ff9800;color:#fff;" onclick="runBackfill()">🔧 補填歷史上掛時間（只需跑一次）</button>
   </div>
 
   <div id="overdueList">
@@ -2554,6 +2555,7 @@ document.addEventListener('DOMContentLoaded', function() {
   loadNotifyTemplates();
   loadDeliveries(true);
   checkTodayDeliveryAlerts();
+  setTimeout(checkOverdueOnLoad, 3000); // 頁面載入3秒後自動掃描逾期
 });
 
 // ========================================
@@ -5104,18 +5106,31 @@ async function markOverdueReminded(orderNo) {
   }
 }
 
-async function deleteOverdueAlert(orderNo) {
-  if (!confirm('確定要刪除此逾期紀錄？')) return;
+// 頁面載入自動掃描（不需要點 Tab）
+async function checkOverdueOnLoad() {
   try {
-    await fetch('/api/overdue-alerts/delete', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ orderNo })
-    });
-    showResult('success', '✅ 已刪除');
-    loadOverdueAlerts();
+    const [overdueRes, remindedRes] = await Promise.all([
+      fetch('/api/overdue-alerts'),
+      fetch('/api/overdue-alerts/reminded')
+    ]);
+    const overdueData = await overdueRes.json();
+    const remindedData = await remindedRes.json();
+
+    overdueReminded = remindedData.reminded || {};
+
+    const list = overdueData.overdue || [];
+    const unreminded = list.filter(o => !overdueReminded[o.orderNo]);
+
+    if (unreminded.length > 0) {
+      let msg = `⚠️ 注意！共有 ${unreminded.length} 筆訂單超過 15 天未上掛：\n\n`;
+      unreminded.forEach(o => {
+        msg += `• ${o.customerName}｜${o.orderNo}｜已逾 ${o.diffDays} 天\n`;
+      });
+      msg += '\n請至「逾期提醒」Tab 查看詳情並標記已提醒。';
+      alert(msg);
+    }
   } catch(e) {
-    showResult('error', '❌ ' + e.message);
+    console.error('逾期自動掃描失敗:', e.message);
   }
 }
   
