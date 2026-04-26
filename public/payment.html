@@ -909,7 +909,9 @@
   <div style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
     <button class="btn btn-small btn-secondary" onclick="loadOverdueAlerts()">🔄 重新整理</button>
     <button class="btn btn-small" style="background:#ff9800;color:#fff;" onclick="runBackfill()">🔧 補填歷史上掛時間（只需跑一次）</button>
-  </div>
+    <button class="btn btn-small btn-danger" id="overdueDeleteBtn" style="display:none;" onclick="batchDeleteOverdue()">🗑️ 刪除已選（<span id="overdueDeleteCount">0</span>）</button>
+    <button class="btn btn-small" style="background:#555;color:#fff;" onclick="toggleSelectAllOverdue()">☑️ 全選／取消</button>
+</div>
 
   <div id="overdueList">
     <p style="text-align:center; color:#999;">載入中...</p>
@@ -5065,6 +5067,12 @@ async function loadOverdueAlerts() {
       const remindedTime = reminded ? new Date(overdueReminded[o.orderNo].remindedAt).toLocaleDateString('zh-TW') : '';
 
       html += '<div class="user-item" style="display:block; margin-bottom:10px; border-left: 4px solid ' + (reminded ? '#999' : '#dc3545') + '; opacity:' + (reminded ? '0.7' : '1') + ';">' +
+              '<label style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">' +
+              '<input type="checkbox" class="overdue-checkbox" value="' + o.orderNo + '" onchange="updateOverdueDeleteBtn()" style="width:18px;height:18px;cursor:pointer;">' +
+              '<span style="font-size:12px; color:#999;">選取</span></label>' +
+        '<label style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">' +
+        '<input type="checkbox" class="overdue-checkbox" value="' + o.orderNo + '" onchange="updateOverdueDeleteBtn()" style="width:18px;height:18px;cursor:pointer;">' +
+        '<span style="font-size:12px; color:#999;">選取</span></label>' +
         '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">' +
         '<div>' +
         '<strong style="font-size:16px;">' + o.customerName + '</strong>' +
@@ -5131,6 +5139,40 @@ async function runBackfill() {
   }
 }
 
+var overdueSelected = [];
+
+function updateOverdueDeleteBtn() {
+  overdueSelected = Array.from(document.querySelectorAll('.overdue-checkbox:checked')).map(el => el.value);
+  document.getElementById('overdueDeleteCount').textContent = overdueSelected.length;
+  document.getElementById('overdueDeleteBtn').style.display = overdueSelected.length > 0 ? 'inline-block' : 'none';
+}
+
+function toggleSelectAllOverdue() {
+  var checkboxes = document.querySelectorAll('.overdue-checkbox');
+  var allChecked = Array.from(checkboxes).every(el => el.checked);
+  checkboxes.forEach(el => { el.checked = !allChecked; });
+  updateOverdueDeleteBtn();
+}
+
+async function batchDeleteOverdue() {
+  if (overdueSelected.length === 0) return;
+  if (!confirm('確定要刪除已選的 ' + overdueSelected.length + ' 筆逾期紀錄？')) return;
+  try {
+    for (const orderNo of overdueSelected) {
+      await fetch('/api/overdue-alerts/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderNo })
+      });
+    }
+    showResult('success', '✅ 已刪除 ' + overdueSelected.length + ' 筆');
+    overdueSelected = [];
+    loadOverdueAlerts();
+  } catch(e) {
+    showResult('error', '❌ ' + e.message);
+  }
+}
+  
 // 頁面載入自動掃描（不需要點 Tab）
 async function checkOverdueOnLoad() {
   try {
