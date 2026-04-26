@@ -95,7 +95,7 @@
       <button class="tab" onclick="switchTab(event,'stain-photo')">📸 污漬拍照</button>
       <button class="tab" onclick="switchTab(event,'payment-records')">💰 收款紀錄</button>
       <button class="tab" onclick="switchTab(event,'member-analysis')">🔍 會員分析</button>
-      
+      <button class="tab" onclick="switchTab(event,'photo-archive')">📷 鞋子污漬比對</button>
     </div>
 
     <div id="payment-tab" class="tab-content active">
@@ -896,6 +896,92 @@
   <!-- 結果區 -->
   <div id="memberAnalysisResult"></div>
 </div>
+
+  <!-- 📷 照片建檔分頁 -->
+<div id="photo-archive-tab" class="tab-content">
+  <h3 style="color:#667eea; margin-bottom:20px;">📷 洗前洗後照片建檔</h3>
+
+  <!-- 店員拍照區 -->
+  <div style="background:#f8f9fa; padding:20px; border-radius:10px; margin-bottom:20px;">
+    <h4 style="color:#667eea; margin-bottom:15px;">📸 拍照建檔</h4>
+
+    <div class="form-group">
+      <label>會員編號</label>
+      <div style="display:flex; gap:10px;">
+        <input type="text" id="photoCustomerNo" placeholder="例：625" inputmode="numeric" style="flex:1;">
+        <button class="btn btn-small" onclick="photoLookupCustomer()">確認</button>
+      </div>
+    </div>
+
+    <div id="photoBanner" style="display:none; background:#e7f0ff; border:2px solid #667eea; border-radius:10px; padding:12px 16px; margin-bottom:15px;">
+      <strong style="color:#667eea; font-size:16px;" id="photoBannerName"></strong>
+      <div style="font-size:13px; color:#666; margin-top:3px;" id="photoBannerNo"></div>
+    </div>
+
+    <div class="form-group">
+      <label>品項</label>
+      <div style="display:flex; flex-wrap:wrap; gap:8px;" id="photoItemSelector">
+        <button type="button" class="photo-item-btn active" onclick="selectPhotoItem(this,'鞋子')">👟 鞋子</button>
+        <button type="button" class="photo-item-btn" onclick="selectPhotoItem(this,'包包')">👜 包包</button>
+        <button type="button" class="photo-item-btn" onclick="selectPhotoItem(this,'西裝')">👔 西裝</button>
+        <button type="button" class="photo-item-btn" onclick="selectPhotoItem(this,'大衣')">🧥 大衣</button>
+        <button type="button" class="photo-item-btn" onclick="selectPhotoItem(this,'棉被')">🛏 棉被</button>
+        <button type="button" class="photo-item-btn" onclick="selectPhotoItem(this,'窗簾')">🪟 窗簾</button>
+        <button type="button" class="photo-item-btn" onclick="selectPhotoItem(this,'其他')">📦 其他</button>
+      </div>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:10px;">
+      <!-- 洗前 -->
+      <div style="position:relative; border:2px dashed #1a6b4a; border-radius:12px; padding:20px; text-align:center; background:#e6f4ee; cursor:pointer;" id="beforeArea">
+        <input type="file" accept="image/*" capture="environment" id="beforeInput" onchange="handlePhotoUpload('before',this)" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;">
+        <div style="font-size:28px; margin-bottom:8px;">📸</div>
+        <div style="font-weight:700; color:#1a6b4a; letter-spacing:1px;">洗  前</div>
+        <div style="font-size:12px; color:#999; margin-top:4px;">收件前拍照</div>
+        <img id="beforePreview" style="display:none; width:100%; border-radius:8px; margin-top:8px; max-height:120px; object-fit:cover;">
+        <div id="beforeStatus" style="font-size:12px; margin-top:6px;"></div>
+      </div>
+      <!-- 洗後 -->
+      <div style="position:relative; border:2px dashed #8a2c2c; border-radius:12px; padding:20px; text-align:center; background:#f7e8e8; cursor:pointer;" id="afterArea">
+        <input type="file" accept="image/*" capture="environment" id="afterInput" onchange="handlePhotoUpload('after',this)" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;">
+        <div style="font-size:28px; margin-bottom:8px;">✨</div>
+        <div style="font-weight:700; color:#8a2c2c; letter-spacing:1px;">洗  後</div>
+        <div style="font-size:12px; color:#999; margin-top:4px;">完工後拍照</div>
+        <img id="afterPreview" style="display:none; width:100%; border-radius:8px; margin-top:8px; max-height:120px; object-fit:cover;">
+        <div id="afterStatus" style="font-size:12px; margin-top:6px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 查詢管理區 -->
+  <div style="margin-top:20px;">
+    <h4 style="color:#667eea; margin-bottom:15px;">🗂 查詢照片</h4>
+    <div style="display:flex; gap:10px; margin-bottom:15px;">
+      <input type="text" id="photoSearchNo" placeholder="輸入會員編號" inputmode="numeric" style="flex:1; padding:10px; border:2px solid #e0e0e0; border-radius:8px;">
+      <button class="btn btn-small btn-secondary" onclick="loadArchivePhotos()">查詢</button>
+    </div>
+    <div id="archiveResults"></div>
+  </div>
+</div>
+
+<style>
+.photo-item-btn {
+  padding: 8px 14px;
+  border: 2px solid #e0e0e0;
+  border-radius: 20px;
+  background: #f5f5f5;
+  color: #666;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.15s;
+}
+.photo-item-btn.active {
+  background: #667eea;
+  border-color: #667eea;
+  color: white;
+  font-weight: 600;
+}
+</style>
   
   </div>  <!-- container 結束 -->
 
@@ -965,6 +1051,7 @@
       if (tabName === 'records') loadRecords();
       if (tabName === 'payment-records') loadPaymentRecordsList();
       if (tabName === 'member-analysis') { /* 切換時不自動查詢，等使用者輸入 */ }
+      if (tabName === 'photo-archive') { /* 切換時不自動查詢 */ }
       if (tabName === 'item-analysis') {
         document.getElementById('itemBaseDate').value = new Date().toISOString().substring(0, 10);
       }
@@ -4772,6 +4859,139 @@ function closeDayDetail() {
     
   } catch (e) {
     alert('❌ 連線失敗：' + e.message);
+  }
+}
+
+  // ========================================
+// 📷 照片建檔功能
+// ========================================
+var photoCurrentCustomerNo = '';
+var photoCurrentItem = '鞋子';
+
+function photoLookupCustomer() {
+  var no = document.getElementById('photoCustomerNo').value.trim();
+  if (!no) { showResult('error', '請輸入會員編號'); return; }
+  var cleanNo = no.replace(/\D/g,'').replace(/^0+/,'');
+  var found = Object.entries(savedCustomers).find(function(e) {
+    return String(e[0]).replace(/\D/g,'').replace(/^0+/,'') === cleanNo;
+  });
+  if (!found) { showResult('error', '找不到此會員編號'); return; }
+  photoCurrentCustomerNo = cleanNo;
+  document.getElementById('photoBannerName').textContent = found[1].name;
+  document.getElementById('photoBannerNo').textContent = '會員編號：' + no;
+  document.getElementById('photoBanner').style.display = 'block';
+  ['before','after'].forEach(function(p) {
+    document.getElementById(p+'Preview').style.display = 'none';
+    document.getElementById(p+'Status').textContent = '';
+    document.getElementById(p+'Input').value = '';
+  });
+}
+
+function selectPhotoItem(el, name) {
+  document.querySelectorAll('.photo-item-btn').forEach(function(b) { b.classList.remove('active'); });
+  el.classList.add('active');
+  photoCurrentItem = name;
+}
+
+async function handlePhotoUpload(phase, input) {
+  if (!input.files || !input.files[0]) return;
+  if (!photoCurrentCustomerNo) { showResult('error', '請先確認客戶'); return; }
+  var file = input.files[0];
+  var preview = document.getElementById(phase + 'Preview');
+  var status = document.getElementById(phase + 'Status');
+  var reader = new FileReader();
+  reader.onload = function(e) { preview.src = e.target.result; preview.style.display = 'block'; };
+  reader.readAsDataURL(file);
+  status.style.color = '#667eea';
+  status.textContent = '上傳中…';
+  try {
+    var formData = new FormData();
+    formData.append('photo', file);
+    formData.append('customerNumber', photoCurrentCustomerNo);
+    formData.append('phase', phase);
+    formData.append('itemType', photoCurrentItem);
+    var res = await fetch('/api/upload-photo', { method: 'POST', body: formData });
+    var data = await res.json();
+    if (data.success) {
+      status.style.color = '#28a745';
+      status.textContent = phase === 'before' ? '✓ 洗前照已上傳' : '✓ 洗後照已上傳';
+      showResult('success', '✅ 照片已儲存至 Google Drive');
+    } else throw new Error(data.error);
+  } catch(e) {
+    status.style.color = '#dc3545';
+    status.textContent = '✕ 上傳失敗';
+    showResult('error', '❌ ' + e.message);
+  }
+}
+
+async function loadArchivePhotos() {
+  var no = document.getElementById('photoSearchNo').value.trim();
+  if (!no) { showResult('error', '請輸入會員編號'); return; }
+  var cleanNo = no.replace(/\D/g,'').replace(/^0+/,'');
+  var container = document.getElementById('archiveResults');
+  container.innerHTML = '<p style="text-align:center; color:#999;">查詢中…</p>';
+  try {
+    var res = await fetch('/api/photos/' + cleanNo);
+    var data = await res.json();
+    if (!data.photos || data.photos.length === 0) {
+      container.innerHTML = '<p style="text-align:center; color:#999;">此客戶尚無照片紀錄</p>';
+      return;
+    }
+    var groups = {};
+    data.photos.forEach(function(p) {
+      var d = new Date(p.date).toLocaleDateString('zh-TW');
+      var key = d + '_' + p.itemType;
+      if (!groups[key]) groups[key] = { date: d, itemType: p.itemType, before: null, after: null };
+      if (p.phase === 'before') groups[key].before = p;
+      else groups[key].after = p;
+    });
+    var html = '';
+    Object.values(groups).sort(function(a,b){ return b.date.localeCompare(a.date); }).forEach(function(g) {
+      html += '<div style="border:1px solid #e0e0e0; border-radius:10px; margin-bottom:15px; overflow:hidden;">';
+      html += '<div style="background:#f0f4ff; padding:10px 15px; display:flex; justify-content:space-between;">';
+      html += '<span style="font-weight:600; color:#667eea;">📅 ' + g.date + '</span>';
+      html += '<span style="background:#667eea; color:#fff; padding:3px 10px; border-radius:10px; font-size:12px;">' + g.itemType + '</span>';
+      html += '</div>';
+      html += '<div style="display:grid; grid-template-columns:1fr 1fr;">';
+      ['before','after'].forEach(function(ph) {
+        var p = g[ph];
+        var label = ph === 'before' ? '洗前' : '洗後';
+        var color = ph === 'before' ? '#1a6b4a' : '#8a2c2c';
+        html += '<div style="padding:12px; border-right:' + (ph==='before'?'1px solid #e0e0e0':'none') + ';">';
+        html += '<div style="font-size:11px; font-weight:700; letter-spacing:1.5px; color:' + color + '; margin-bottom:8px;">' + label + '</div>';
+        if (p) {
+          html += '<img src="' + p.url + '" style="width:100%; border-radius:8px; cursor:pointer;" onclick="window.open(\'' + p.url + '\',\'_blank\')">';
+          html += '<button onclick="deleteArchivePhoto(\'' + p.name + '\',\'' + cleanNo + '\')" style="margin-top:8px; width:100%; padding:5px; background:#fff; border:1px solid #fcc; color:#dc3545; border-radius:6px; cursor:pointer; font-size:12px;">🗑️ 刪除</button>';
+        } else {
+          html += '<div style="background:#f5f5f5; border-radius:8px; aspect-ratio:4/3; display:flex; align-items:center; justify-content:center; font-size:28px; border:1.5px dashed #e0e0e0;">📷</div>';
+        }
+        html += '</div>';
+      });
+      html += '</div></div>';
+    });
+    container.innerHTML = html;
+  } catch(e) {
+    container.innerHTML = '<p style="text-align:center; color:#dc3545;">' + e.message + '</p>';
+  }
+}
+
+async function deleteArchivePhoto(fileName, customerNo) {
+  if (!confirm('確定要刪除這張照片嗎？')) return;
+  try {
+    var res = await fetch('/api/photo-delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ customerNumber: customerNo, fileName: fileName })
+    });
+    var data = await res.json();
+    if (data.success) {
+      showResult('success', '✅ 照片已刪除');
+      loadArchivePhotos();
+    } else {
+      showResult('error', '❌ 刪除失敗：' + data.error);
+    }
+  } catch(e) {
+    showResult('error', '❌ ' + e.message);
   }
 }
 </script>
