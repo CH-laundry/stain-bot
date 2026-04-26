@@ -3205,17 +3205,28 @@ app.get('/api/sync-sheets', async (req, res) => {
             } catch(e) {}
           }
 
-          const rows = items.map((item, idx) => {
+         const rows = items.map((item, idx) => {
             const goodsName = item?.Goods?.GoodsName || '';
             const qty = parseInt(item.Qty || 1);
             const unitPrice = parseFloat(item.UnitPrice || 0);
             const subtotal = unitPrice * qty;
+
+            // M 欄：上掛時間
+            let locationDateStr = '';
+            if (item.LocationDate) {
+              try {
+                const ld = new Date(item.LocationDate);
+                locationDateStr = `${ld.getFullYear()}/${String(ld.getMonth()+1).padStart(2,'0')}/${String(ld.getDate()).padStart(2,'0')} ${String(ld.getHours()).padStart(2,'0')}:${String(ld.getMinutes()).padStart(2,'0')}`;
+              } catch(e) {}
+            }
+
             return [
               dateStr, timeStr, orderNo,
               customerName, customerMobile,
               goodsName, qty, unitPrice, subtotal,
               idx === 0 ? totalAmount : '',
-              paymentType, deliveryType
+              paymentType, deliveryType,
+              locationDateStr  // M 欄：上掛時間
             ];
           });
 
@@ -5559,6 +5570,118 @@ app.get('/api/photos/:customerNumber', async (req, res) => {
   }
 });
 // ==================== 照片建檔結束 ====================
+
+
+// ========================================
+// ⚠️ 逾期提醒 API
+// ========================================
+
+// 取得所有逾期未上掛訂單
+app.get('/api/overdue-alerts', async (req, res) => {
+  try {
+    const { google } = require('googleapis');
+    const googleAuth = require('./services/googleAuth');
+    const auth = googleAuth.getOAuth2Client();
+    const sheets = google.sheets({ version: 'v4', auth });
+    const spreadsheetId = process.env.GOOGLE_SHEETS_ID_CUSTOMER;
+
+    const sheetInfo = await sheets.spreadsheets.get({ spreadsheetId, fields: 'sheets.properties' });
+    const targetSheet = sheetInfo.data.sheets.find(s => s.properties.sheetId === 756780563);
+    if (!targetSheet) return res.json({ success: false, error: '找不到工作表' });
+
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `'${targetSheet.properties.title}'!A:M`
+    });
+
+    const rows = response.data.values || [];
+    const now = new Date();
+    const OVERDUE_DAYS = 15;
+    const seen = new Set();
+    const overdue = [];
+
+    rows.slice(1).forEach((row, idx) => {
+      const dateStr = (row[0] || '').toString().replace(/\//g, '-').substring(0, 10);
+      const orderNo = row[2] || '';
+      const customerName = row[3] || '';
+      const itemType = row[5] || '';
+      const locationDate = row[12] || ''; // M 欄
+
+      if (!dateStr || !orderNo || !customerName) return;
+      if (seen.has(orderNo)) return;
+      if (locationDate) return; // 已上掛，跳過
+
+      const openDate = new Date(dateStr);
+      if (isNaN(openDate)) return;
+
+      const diffDays = Math.floor((now - openDate) / (1000 * 60 * 60 * 24));
+      if (diffDays < OVERDUE_DAYS) return;
+
+      seen.add(orderNo);
+      overdue.push({
+        id: orderNo,
+        orderNo,
+        customerName,
+        itemType,
+        openDate: dateStr,
+        diffDays,
+        rowIndex: idx + 2
+      });
+    });
+
+    res.json({ success: true, overdue });
+  } catch (e) {
+    console.error('逾期提醒錯誤:', e);
+    res.json({ success: false, error: e.message });
+  }
+});
+
+// 逾期提醒 JSON 存檔（記錄已提醒狀態）
+const OVERDUE_FILE = '/data/overdue-alerts.json';
+
+function loadOverdueData() {
+  try {
+    if (fs.existsSync(OVERDUE_FILE)) {
+      return JSON.parse(fs.readFileSync(OVERDUE_FILE, 'utf8'));
+    }
+  } catch(e) {}
+  return {};
+}
+
+function saveOverdueData(data) {
+  fs.writeFileSync(OVERDUE_FILE, JSON.stringify(data, null, 2), 'utf8');
+}
+
+// 標記已提醒
+app.post('/api/overdue-alerts/mark-reminded', (req, res) => {
+  try {
+    const { orderNo } = req.body;
+    const data = loadOverdueData();
+    data[orderNo] = { remindedAt: new Date().toISOString() };
+    saveOverdueData(data);
+    res.json({ success: true });
+  } catch(e) {
+    res.json({ success: false, error: e.message });
+  }
+});
+
+// 取得已提醒清單
+app.get('/api/overdue-alerts/reminded', (req, res) => {
+  res.json({ success: true, reminded: loadOverdueData() });
+});
+
+// 刪除逾期紀錄
+app.post('/api/overdue-alerts/delete', (req, res) => {
+  try {
+    const { orderNo } = req.body;
+    const data = loadOverdueData();
+    delete data[orderNo];
+    saveOverdueData(data);
+    res.json({ success: true });
+  } catch(e) {
+    res.json({ success: false, error: e.message });
+  }
+});
 
 app.post('/api/photo-delete', async (req, res) => {
   try {
