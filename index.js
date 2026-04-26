@@ -3078,10 +3078,16 @@ console.log(`[AutoProgress] 共找到 ${orders.length} 筆訂單`);
     const itemDetails = items.map(item => {
       const goodsName = item?.Goods?.GoodsName || '未知品項';
       if (item.LocationDate || item.LocationName) {
-        return `${goodsName} (掛衣號:完成)`;
+        return `${goodsName} (完成)`;
       }
       return `${goodsName} (清潔中)`;
     });
+
+    // 取第一個有 LocationDate 的品項時間
+    const locationDates = items
+      .filter(item => item.LocationDate)
+      .map(item => item.LocationDate);
+    const firstLocationDate = locationDates.length > 0 ? locationDates[0] : null;
 
     progressData[cleanNo] = {
       total: items.length,
@@ -3089,7 +3095,8 @@ console.log(`[AutoProgress] 共找到 ${orders.length} 筆訂單`);
       details: itemDetails,
       customerName: customerName,
       userId: userId,
-      updateTime: new Date().toISOString()
+      updateTime: new Date().toISOString(),
+      locationDate: firstLocationDate || null
     };
 
     console.log(`[AutoProgress] ✅ 已更新 ${customerName} (#${cleanNo})`);
