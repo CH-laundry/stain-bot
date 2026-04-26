@@ -1913,6 +1913,176 @@ app.get('/api/templates', (req, res) => {
   }
 });
 
+// 👤 會員習慣分析 API
+app.get('/api/member/analysis/:number', async (req, res) => {
+  try {
+    const inputNumber = req.params.number;
+    const cleanNo = String(inputNumber).replace(/^0+/, '') || inputNumber;
+
+    // 從 orderManager 找客名
+    const allCustomers = orderManager.getAllCustomerNumbers();
+    const matched = allCustomers.find(c => {
+      const dbNo = String(c.number).replace(/\D/g, '').replace(/^0+/, '');
+      return dbNo === cleanNo;
+    });
+
+    if (!matched) {
+      return res.json({ success: false, error: '找不到此會員編號，請確認編號是否已在客戶編號管理中登錄' });
+    }
+
+    const customerName = matched.name;
+    const userId = matched.userId || null;
+
+    // 讀取 Google Sheets 營業紀錄
+    const { google } = require('googleapis');
+    const googleAuth = require('./services/googleAuth');
+    const auth = googleAuth.getOAuth2Client();
+    const sheets = google.sheets({ version: 'v4', auth });
+    const spreadsheetId = process.env.GOOGLE_SHEETS_ID_CUSTOMER;
+
+    const sheetInfo = await sheets.spreadsheets.get({ spreadsheetId, fields: 'sheets.properties' });
+    const targetSheet = sheetInfo.data.sheets.find(s => s.properties.sheetId === 756780563);
+    if (!targetSheet) return res.json({ success: false, error: '找不到營業紀錄工作表' });
+
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `'${targetSheet.properties.title}'!A:L`
+    });
+
+    const rows = (response.data.values || []).slice(1);
+
+    // 比對客名（去空白、模糊比對）
+    const cleanTargetName = customerName.replace(/\s/g, '');
+    const matchedRows = rows.filter(row => {
+      const rowName = (row[3] || '').replace(/\s/g, '');
+      return rowName === cleanTargetName;
+    });
+
+    if (matchedRows.length === 0) {
+      return res.json({
+        success: true,
+        customerName,
+        userId,
+        number: inputNumber,
+        totalOrders: 0,
+        totalAmount: 0,
+        avgOrderAmount: 0,
+        firstVisit: null,
+        lastVisit: null,
+        visitCount: 0,
+        avgIntervalDays: null,
+        itemStats: [],
+        paymentMethods: {},
+        deliveryTypes: {},
+        recentOrders: [],
+        message: '此客人在營業紀錄中尚無消費記錄'
+      });
+    }
+
+    // 聚合統計
+    const orderNos = new Set();
+    const itemStats = {};
+    const paymentMethods = {};
+    const deliveryTypes = {};
+    let totalAmount = 0;
+    const visitDates = new Set();
+
+    matchedRows.forEach(row => {
+      const date = (row[0] || '').replace(/\//g, '-').substring(0, 10);
+      const orderNo = row[2] || '';
+      const item = (row[5] || '').trim();
+      const qty = parseInt(row[6] || 1, 10) || 1;
+      const subtotal = parseFloat(String(row[8] || '0').replace(/[^0-9.]/g, '')) || 0;
+      const orderTotal = parseFloat(String(row[9] || '0').replace(/[^0-9.]/g, '')) || 0;
+      const payMethod = (row[10] || '').trim();
+      const delivType = (row[11] || '').trim();
+
+      if (date) visitDates.add(date);
+      if (orderNo) orderNos.add(orderNo);
+      if (item) {
+        if (!itemStats[item]) itemStats[item] = { count: 0, qty: 0, revenue: 0 };
+        itemStats[item].count += 1;
+        itemStats[item].qty += qty;
+        itemStats[item].revenue += subtotal;
+      }
+      if (payMethod) paymentMethods[payMethod] = (paymentMethods[payMethod] || 0) + 1;
+      if (delivType) deliveryTypes[delivType] = (deliveryTypes[delivType] || 0) + 1;
+
+      // 每張訂單只加一次總額
+      if (orderNo && orderTotal > 0 && !orderNos.has('_counted_' + orderNo)) {
+        totalAmount += orderTotal;
+        orderNos.add('_counted_' + orderNo);
+      }
+    });
+
+    const sortedDates = [...visitDates].sort();
+    const firstVisit = sortedDates[0] || null;
+    const lastVisit = sortedDates[sortedDates.length - 1] || null;
+    const visitCount = visitDates.size;
+
+    // 計算平均間隔天數
+    let avgIntervalDays = null;
+    if (sortedDates.length >= 2) {
+      const first = new Date(sortedDates[0]);
+      const last = new Date(sortedDates[sortedDates.length - 1]);
+      const totalDays = (last - first) / (1000 * 60 * 60 * 24);
+      avgIntervalDays = Math.round(totalDays / (visitCount - 1));
+    }
+
+    // 實際訂單總額（用 J 欄訂單總額去重）
+    let realTotal = 0;
+    const countedOrders = new Set();
+    matchedRows.forEach(row => {
+      const orderNo = row[2] || '';
+      const orderTotal = parseFloat(String(row[9] || '0').replace(/[^0-9.]/g, '')) || 0;
+      if (orderNo && orderTotal > 0 && !countedOrders.has(orderNo)) {
+        realTotal += orderTotal;
+        countedOrders.add(orderNo);
+      }
+    });
+
+    const uniqueOrderCount = countedOrders.size;
+    const avgOrderAmount = uniqueOrderCount > 0 ? Math.round(realTotal / uniqueOrderCount) : 0;
+
+    // 品項排序
+    const itemArray = Object.entries(itemStats)
+      .map(([name, stats]) => ({ name, ...stats }))
+      .sort((a, b) => b.count - a.count);
+
+    // 最近5筆訂單
+    const recentOrderNos = [...countedOrders].slice(-5).reverse();
+    const recentOrders = recentOrderNos.map(orderNo => {
+      const orderRows = matchedRows.filter(r => r[2] === orderNo);
+      const date = orderRows[0] ? (orderRows[0][0] || '').substring(0, 10) : '';
+      const items = orderRows.map(r => (r[5] || '').trim()).filter(Boolean);
+      const total = parseFloat(String((orderRows[0] || [])[9] || '0').replace(/[^0-9.]/g, '')) || 0;
+      return { orderNo, date, items, total };
+    });
+
+    res.json({
+      success: true,
+      customerName,
+      userId,
+      number: inputNumber,
+      totalOrders: uniqueOrderCount,
+      totalAmount: realTotal,
+      avgOrderAmount,
+      firstVisit,
+      lastVisit,
+      visitCount,
+      avgIntervalDays,
+      itemStats: itemArray,
+      paymentMethods,
+      deliveryTypes,
+      recentOrders
+    });
+
+  } catch (error) {
+    console.error('會員分析錯誤:', error);
+    res.json({ success: false, error: error.message });
+  }
+});
+
 // 📊 營業報表 API（從 Google Sheets 讀取）
 app.get('/api/revenue/report', async (req, res) => {
   try {
