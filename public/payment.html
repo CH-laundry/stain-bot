@@ -94,6 +94,7 @@
       <button class="tab" onclick="switchTab(event,'startup')">🚀 系統啟動</button>
       <button class="tab" onclick="switchTab(event,'stain-photo')">📸 污漬拍照</button>
       <button class="tab" onclick="switchTab(event,'payment-records')">💰 收款紀錄</button>
+      <button class="tab" onclick="switchTab(event,'member-analysis')">🔍 會員分析</button>
       
     </div>
 
@@ -871,6 +872,31 @@
   </div>
 </div>
 
+<!-- 🔍 會員分析分頁 -->
+<div id="member-analysis-tab" class="tab-content">
+  <h3 style="color:#667eea; margin-bottom:20px;">🔍 會員清洗習慣分析</h3>
+
+  <!-- 查詢區 -->
+  <div style="background:#f8f9fa; padding:20px; border-radius:12px; margin-bottom:25px;">
+    <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+      <div style="flex:1; min-width:150px;">
+        <label style="display:block; margin-bottom:8px; font-weight:600; color:#333;">輸入會員編號</label>
+        <input type="text" id="memberAnalysisInput" placeholder="例如：625、009、018"
+          style="width:100%; padding:12px; border:2px solid #e0e0e0; border-radius:10px; font-size:16px;"
+          onkeydown="if(event.key==='Enter') loadMemberAnalysis()">
+      </div>
+      <button onclick="loadMemberAnalysis()" 
+        style="padding:12px 30px; background:linear-gradient(135deg,#667eea,#764ba2); color:#fff; border:none; border-radius:10px; font-size:16px; font-weight:600; cursor:pointer; white-space:nowrap;">
+        🔍 查詢
+      </button>
+    </div>
+    <p style="margin-top:10px; font-size:13px; color:#999;">未滿三位數請補零：9號 → 009、18號 → 018</p>
+  </div>
+
+  <!-- 結果區 -->
+  <div id="memberAnalysisResult"></div>
+</div>
+  
   </div>  <!-- container 結束 -->
 
     
@@ -938,6 +964,7 @@
       if (tabName === 'manual') loadManuals();
       if (tabName === 'records') loadRecords();
       if (tabName === 'payment-records') loadPaymentRecordsList();
+      if (tabName === 'member-analysis') { /* 切換時不自動查詢，等使用者輸入 */ }
       if (tabName === 'item-analysis') {
         document.getElementById('itemBaseDate').value = new Date().toISOString().substring(0, 10);
       }
@@ -4190,6 +4217,157 @@ async function deletePaymentRecord(rowId, date, time) {
     showResult('error', '❌ 連線失敗：' + e.message);
   }
 }
+
+  // ========================================
+// 🔍 會員習慣分析功能
+// ========================================
+
+async function loadMemberAnalysis() {
+  var input = document.getElementById('memberAnalysisInput').value.trim();
+  if (!input) { alert('請輸入會員編號'); return; }
+
+  // 補零處理
+  var number = input.replace(/\D/g, '');
+  if (number.length === 1) number = '00' + number;
+  else if (number.length === 2) number = '0' + number;
+
+  var wrap = document.getElementById('memberAnalysisResult');
+  wrap.innerHTML = '<p style="text-align:center; color:#667eea; padding:30px;">🔍 查詢中...</p>';
+
+  try {
+    var res = await fetch('/api/member/analysis/' + encodeURIComponent(number));
+    var data = await res.json();
+
+    if (!data.success) {
+      wrap.innerHTML = '<div style="background:#f8d7da; padding:20px; border-radius:10px; color:#721c24;">❌ ' + (data.error || '查詢失敗') + '</div>';
+      return;
+    }
+
+    renderMemberAnalysis(data);
+  } catch (e) {
+    wrap.innerHTML = '<div style="background:#f8d7da; padding:20px; border-radius:10px; color:#721c24;">❌ 連線失敗：' + e.message + '</div>';
+  }
+}
+
+function renderMemberAnalysis(d) {
+  var wrap = document.getElementById('memberAnalysisResult');
+
+  // 預測下次到店
+  var nextVisitHtml = '';
+  if (d.avgIntervalDays && d.lastVisit) {
+    var last = new Date(d.lastVisit);
+    var nextDate = new Date(last.getTime() + d.avgIntervalDays * 24 * 60 * 60 * 1000);
+    var today = new Date();
+    var diffDays = Math.round((nextDate - today) / (1000 * 60 * 60 * 24));
+    var nextStr = nextDate.toLocaleDateString('zh-TW');
+    if (diffDays > 0) {
+      nextVisitHtml = '<span style="color:#52c41a;">📅 預測下次到店：' + nextStr + '（約 ' + diffDays + ' 天後）</span>';
+    } else if (diffDays >= -7) {
+      nextVisitHtml = '<span style="color:#faad14;">⚠️ 預測本週應到店（' + nextStr + '），可考慮主動聯繫</span>';
+    } else {
+      nextVisitHtml = '<span style="color:#dc3545;">🔔 已超過預期到店時間 ' + Math.abs(diffDays) + ' 天，建議主動聯繫！</span>';
+    }
+  }
+
+  // LINE 狀態
+  var lineStatus = d.userId
+    ? '<span style="background:#06C755; color:#fff; padding:3px 10px; border-radius:10px; font-size:12px;">✅ 已綁定 LINE</span>'
+    : '<span style="background:#999; color:#fff; padding:3px 10px; border-radius:10px; font-size:12px;">❌ 未綁定 LINE</span>';
+
+  // 品項排行
+  var itemHtml = '';
+  if (d.itemStats && d.itemStats.length > 0) {
+    var maxCount = d.itemStats[0].count;
+    d.itemStats.forEach(function(item, i) {
+      var pct = maxCount > 0 ? Math.round(item.count / maxCount * 100) : 0;
+      var medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1) + '.';
+      itemHtml +=
+        '<div style="display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid #f0f0f0;">' +
+        '<span style="min-width:30px; font-size:16px;">' + medal + '</span>' +
+        '<div style="flex:1;">' +
+        '<div style="display:flex; justify-content:space-between; margin-bottom:5px;">' +
+        '<span style="font-weight:600; color:#333;">' + item.name + '</span>' +
+        '<span style="color:#667eea; font-weight:600;">' + item.count + ' 次 | NT$ ' + (item.revenue || 0).toLocaleString() + '</span>' +
+        '</div>' +
+        '<div style="background:#e0e0e0; border-radius:10px; height:8px;">' +
+        '<div style="background:linear-gradient(90deg,#667eea,#764ba2); border-radius:10px; height:8px; width:' + pct + '%;"></div>' +
+        '</div>' +
+        '</div>' +
+        '</div>';
+    });
+  } else {
+    itemHtml = '<p style="color:#999; text-align:center;">尚無品項資料</p>';
+  }
+
+  // 最近訂單
+  var recentHtml = '';
+  if (d.recentOrders && d.recentOrders.length > 0) {
+    d.recentOrders.forEach(function(order) {
+      recentHtml +=
+        '<div style="padding:10px 0; border-bottom:1px solid #f0f0f0; display:flex; justify-content:space-between; align-items:center;">' +
+        '<div>' +
+        '<div style="font-size:13px; color:#999;">' + (order.date || '-') + ' | ' + (order.orderNo || '-') + '</div>' +
+        '<div style="font-size:14px; color:#333; margin-top:3px;">' + (order.items || []).join('、') + '</div>' +
+        '</div>' +
+        '<div style="font-weight:600; color:#667eea; white-space:nowrap;">NT$ ' + (order.total || 0).toLocaleString() + '</div>' +
+        '</div>';
+    });
+  } else {
+    recentHtml = '<p style="color:#999; text-align:center;">尚無訂單記錄</p>';
+  }
+
+  // 付款/取件偏好
+  var prefHtml = '';
+  var topPay = Object.entries(d.paymentMethods || {}).sort((a,b) => b[1]-a[1])[0];
+  var topDeliv = Object.entries(d.deliveryTypes || {}).sort((a,b) => b[1]-a[1])[0];
+  if (topPay) prefHtml += '<span style="background:#e7f0ff; color:#667eea; padding:5px 12px; border-radius:20px; font-size:13px; margin-right:8px;">💳 慣用：' + topPay[0] + '</span>';
+  if (topDeliv) prefHtml += '<span style="background:#e7f0ff; color:#667eea; padding:5px 12px; border-radius:20px; font-size:13px;">🚚 慣用：' + topDeliv[0] + '</span>';
+
+  wrap.innerHTML =
+    // 客戶資訊標頭
+    '<div style="background:linear-gradient(135deg,#667eea,#764ba2); color:#fff; padding:20px; border-radius:12px; margin-bottom:20px;">' +
+    '<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">' +
+    '<div>' +
+    '<div style="font-size:22px; font-weight:bold;">#' + d.number + ' - ' + d.customerName + '</div>' +
+    '<div style="margin-top:6px; opacity:0.85; font-size:14px;">' + lineStatus + (d.userId ? '&nbsp;&nbsp;<span style="font-size:12px; opacity:0.7;">' + d.userId + '</span>' : '') + '</div>' +
+    '</div>' +
+    (d.userId ? '<button onclick="fillCustomer(\'' + d.userId + '\',\'' + d.customerName + '\')" style="padding:8px 18px; background:rgba(255,255,255,0.2); color:#fff; border:1px solid rgba(255,255,255,0.4); border-radius:8px; cursor:pointer; font-size:13px;">💳 發送付款</button>' : '') +
+    '</div>' +
+    '</div>' +
+
+    // 統計卡片
+    '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:12px; margin-bottom:20px;">' +
+    '<div style="background:#f0f4ff; padding:15px; border-radius:10px; text-align:center;"><div style="font-size:24px; font-weight:bold; color:#667eea;">' + d.totalOrders + '</div><div style="font-size:13px; color:#666;">總訂單數</div></div>' +
+    '<div style="background:#e7f9ee; padding:15px; border-radius:10px; text-align:center;"><div style="font-size:24px; font-weight:bold; color:#52c41a;">NT$ ' + (d.totalAmount || 0).toLocaleString() + '</div><div style="font-size:13px; color:#666;">累計消費</div></div>' +
+    '<div style="background:#fff7e6; padding:15px; border-radius:10px; text-align:center;"><div style="font-size:24px; font-weight:bold; color:#fa8c16;">NT$ ' + (d.avgOrderAmount || 0).toLocaleString() + '</div><div style="font-size:13px; color:#666;">平均客單價</div></div>' +
+    '<div style="background:#f9f0ff; padding:15px; border-radius:10px; text-align:center;"><div style="font-size:24px; font-weight:bold; color:#722ed1;">' + (d.avgIntervalDays !== null ? d.avgIntervalDays + '天' : '-') + '</div><div style="font-size:13px; color:#666;">平均來店間隔</div></div>' +
+    '</div>' +
+
+    // 到店時間
+    '<div style="background:#f8f9fa; padding:15px; border-radius:10px; margin-bottom:20px; font-size:14px;">' +
+    '<div style="display:flex; gap:20px; flex-wrap:wrap; margin-bottom:10px;">' +
+    '<span>📅 首次到店：<strong>' + (d.firstVisit || '-') + '</strong></span>' +
+    '<span>🕐 最近到店：<strong>' + (d.lastVisit || '-') + '</strong></span>' +
+    '<span>🔢 到店次數：<strong>' + d.visitCount + ' 次</strong></span>' +
+    '</div>' +
+    (nextVisitHtml ? '<div style="margin-top:8px;">' + nextVisitHtml + '</div>' : '') +
+    '</div>' +
+
+    // 偏好
+    (prefHtml ? '<div style="margin-bottom:20px;">' + prefHtml + '</div>' : '') +
+
+    // 品項排行
+    '<div style="background:#fff; border:1px solid #e0e0e0; border-radius:12px; padding:20px; margin-bottom:20px;">' +
+    '<h4 style="color:#667eea; margin-bottom:15px;">🧺 清洗品項統計（共 ' + (d.itemStats ? d.itemStats.reduce(function(s,i){return s+i.count;},0) : 0) + ' 件）</h4>' +
+    itemHtml +
+    '</div>' +
+
+    // 最近訂單
+    '<div style="background:#fff; border:1px solid #e0e0e0; border-radius:12px; padding:20px;">' +
+    '<h4 style="color:#667eea; margin-bottom:15px;">📋 最近訂單記錄</h4>' +
+    recentHtml +
+    '</div>';
+}  
     
  </script>
   <!-- 🤖 AI 每日分析 Modal -->
