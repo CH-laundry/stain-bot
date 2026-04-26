@@ -5576,6 +5576,7 @@ app.get('/api/photos/:customerNumber', async (req, res) => {
 // ⚠️ 逾期提醒 API
 // ========================================
 
+
 // 取得所有逾期未上掛訂單
 app.get('/api/overdue-alerts', async (req, res) => {
   try {
@@ -5681,6 +5682,121 @@ app.post('/api/overdue-alerts/delete', (req, res) => {
   } catch(e) {
     res.json({ success: false, error: e.message });
   }
+});
+
+// 補填 M 欄：重新掃描所有訂單的上掛時間
+app.post('/api/backfill-location-date', async (req, res) => {
+  res.json({ success: true, message: '補填開始，請查看 Railway Logs' });
+
+  setImmediate(async () => {
+    console.log('[Backfill] 開始補填 M 欄上掛時間...');
+    try {
+      const token = await getPosToken();
+      if (!token) { console.log('[Backfill] 登入失敗'); return; }
+
+      const headers = {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Host': 'yidianyuan.ao-lan.cn',
+        'Authorization': `Bearer ${token}`
+      };
+
+      const { google } = require('googleapis');
+      const googleAuth = require('./services/googleAuth');
+      const auth = googleAuth.getOAuth2Client();
+      const sheets = google.sheets({ version: 'v4', auth });
+      const spreadsheetId = process.env.GOOGLE_SHEETS_ID_CUSTOMER;
+
+      const sheetInfo = await sheets.spreadsheets.get({ spreadsheetId, fields: 'sheets.properties' });
+      const targetSheet = sheetInfo.data.sheets.find(s => s.properties.sheetId === 756780563);
+      if (!targetSheet) { console.log('[Backfill] 找不到工作表'); return; }
+      const sheetName = targetSheet.properties.title;
+
+      // 讀取所有訂單
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `'${sheetName}'!A:M`
+      });
+
+      const rows = response.data.values || [];
+      console.log(`[Backfill] 共 ${rows.length - 1} 筆資料`);
+
+      // 找出 M 欄空白的訂單號（去重）
+      const orderNosToFill = new Set();
+      const orderNoRowMap = {}; // orderNo -> [rowIndexes]
+
+      rows.slice(1).forEach((row, idx) => {
+        const orderNo = row[2] || '';
+        const locationDate = row[12] || '';
+        if (orderNo && !locationDate) {
+          orderNosToFill.add(orderNo);
+          if (!orderNoRowMap[orderNo]) orderNoRowMap[orderNo] = [];
+          orderNoRowMap[orderNo].push(idx + 2); // 1-based + header
+        }
+      });
+
+      console.log(`[Backfill] 需要補填的訂單數：${orderNosToFill.size}`);
+
+      let fillCount = 0;
+      for (const orderNo of orderNosToFill) {
+        try {
+          // 用訂單號搜尋 POS
+          const searchRes = await fetch('http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/SearchPage', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify([
+              { Key: 'BranchID', Value: 'b0aee8e3-6a6e-4863-b74a-08da8958f7f9' },
+              { Key: 'KeyWord', Value: orderNo },
+              { Key: 'PageSize', Value: '10' },
+              { Key: 'PageIndex', Value: '1' }
+            ])
+          });
+          const searchData = await searchRes.json();
+          const found = (searchData?.Data?.Data ?? []).find(o => o.ReceivingOrderNumber === orderNo);
+          if (!found) continue;
+
+          // 取詳細資料
+          const detailRes = await fetch(`http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/GetData/${found.Id}`, {
+            method: 'GET',
+            headers
+          });
+          const detailData = await detailRes.json();
+          const items = detailData?.Data?.ReceivingItemList || [];
+
+          // 找第一個有 LocationDate 的品項
+          const locationItem = items.find(item => item.LocationDate);
+          if (!locationItem) continue;
+
+          let locationDateStr = '';
+          try {
+            const ld = new Date(locationItem.LocationDate);
+            locationDateStr = `${ld.getFullYear()}/${String(ld.getMonth()+1).padStart(2,'0')}/${String(ld.getDate()).padStart(2,'0')} ${String(ld.getHours()).padStart(2,'0')}:${String(ld.getMinutes()).padStart(2,'0')}`;
+          } catch(e) { continue; }
+
+          // 把這個訂單所有對應行的 M 欄都填入
+          const rowIndexes = orderNoRowMap[orderNo] || [];
+          for (const rowIdx of rowIndexes) {
+            await sheets.spreadsheets.values.update({
+              spreadsheetId,
+              range: `'${sheetName}'!M${rowIdx}`,
+              valueInputOption: 'USER_ENTERED',
+              resource: { values: [[locationDateStr]] }
+            });
+          }
+
+          fillCount++;
+          console.log(`[Backfill] ✅ 已補填 ${orderNo} → ${locationDateStr}`);
+          await new Promise(r => setTimeout(r, 500));
+
+        } catch(e) {
+          console.error(`[Backfill] ${orderNo} 失敗:`, e.message);
+        }
+      }
+
+      console.log(`[Backfill] 完成！共補填 ${fillCount} 筆訂單`);
+    } catch(e) {
+      console.error('[Backfill] 錯誤:', e.message);
+    }
+  });
 });
 
 app.post('/api/photo-delete', async (req, res) => {
