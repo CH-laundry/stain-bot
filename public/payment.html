@@ -96,6 +96,7 @@
       <button class="tab" onclick="switchTab(event,'payment-records')">💰 收款紀錄</button>
       <button class="tab" onclick="switchTab(event,'member-analysis')">🔍 會員分析</button>
       <button class="tab" onclick="switchTab(event,'photo-archive')">📷 鞋子污漬</button>
+      <button class="tab" onclick="switchTab(event,'overdue')">⚠️ 逾期提醒</button>
     </div>
 
     <div id="payment-tab" class="tab-content active">
@@ -897,6 +898,23 @@
   <div id="memberAnalysisResult"></div>
 </div>
 
+
+<!-- ⚠️ 逾期提醒分頁 -->
+<div id="overdue-tab" class="tab-content">
+  <h3 style="color:#667eea; margin-bottom:20px;">⚠️ 逾期未上掛追蹤</h3>
+  <p style="color:#666; font-size:14px; margin-bottom:20px;">
+    開單超過 15 天且尚未上掛的訂單，點「已提醒」後不再自動跳出，但紀錄保留直到你按刪除。
+  </p>
+
+  <div style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
+    <button class="btn btn-small btn-secondary" onclick="loadOverdueAlerts()">🔄 重新整理</button>
+  </div>
+
+  <div id="overdueList">
+    <p style="text-align:center; color:#999;">載入中...</p>
+  </div>
+</div>
+  
   <!-- 📷 照片建檔分頁 -->
 <div id="photo-archive-tab" class="tab-content">
   <h3 style="color:#667eea; margin-bottom:20px;">📷 洗前洗後照片建檔</h3>
@@ -1051,6 +1069,7 @@
       if (tabName === 'records') loadRecords();
       if (tabName === 'payment-records') loadPaymentRecordsList();
       if (tabName === 'member-analysis') { /* 切換時不自動查詢，等使用者輸入 */ }
+      if (tabName === 'photo-archive') { /* 切換時不自動查詢 */ }
       if (tabName === 'photo-archive') { /* 切換時不自動查詢 */ }
       if (tabName === 'item-analysis') {
         document.getElementById('itemBaseDate').value = new Date().toISOString().substring(0, 10);
@@ -4994,6 +5013,112 @@ async function deleteArchivePhoto(fileName, customerNo) {
     showResult('error', '❌ ' + e.message);
   }
 }
+
+// ========================================
+// ⚠️ 逾期提醒功能
+// ========================================
+
+var overdueReminded = {};
+
+async function loadOverdueAlerts() {
+  const wrap = document.getElementById('overdueList');
+  wrap.innerHTML = '<p style="text-align:center; color:#999;">查詢中...</p>';
+
+  try {
+    // 同時取得逾期清單和已提醒清單
+    const [overdueRes, remindedRes] = await Promise.all([
+      fetch('/api/overdue-alerts'),
+      fetch('/api/overdue-alerts/reminded')
+    ]);
+    const overdueData = await overdueRes.json();
+    const remindedData = await remindedRes.json();
+
+    overdueReminded = remindedData.reminded || {};
+
+    if (!overdueData.success) {
+      wrap.innerHTML = '<p style="color:#dc3545; text-align:center;">載入失敗：' + overdueData.error + '</p>';
+      return;
+    }
+
+    const list = overdueData.overdue || [];
+    if (list.length === 0) {
+      wrap.innerHTML = '<div style="text-align:center; padding:40px;"><div style="font-size:48px; margin-bottom:12px;">✅</div><p style="color:#999;">目前沒有逾期未上掛訂單</p></div>';
+      return;
+    }
+
+    // 自動彈出提醒（只針對未標記「已提醒」的）
+    const unreminded = list.filter(o => !overdueReminded[o.orderNo]);
+    if (unreminded.length > 0) {
+      let msg = `⚠️ 共有 ${unreminded.length} 筆訂單超過 15 天未上掛！\n\n`;
+      unreminded.slice(0, 5).forEach(o => {
+        msg += `${o.customerName} - 訂單 ${o.orderNo}（已逾 ${o.diffDays} 天）\n`;
+      });
+      if (unreminded.length > 5) msg += `...還有 ${unreminded.length - 5} 筆`;
+      alert(msg);
+    }
+
+    let html = '';
+    list.forEach(o => {
+      const reminded = !!overdueReminded[o.orderNo];
+      const remindedTime = reminded ? new Date(overdueReminded[o.orderNo].remindedAt).toLocaleDateString('zh-TW') : '';
+
+      html += '<div class="user-item" style="display:block; margin-bottom:10px; border-left: 4px solid ' + (reminded ? '#999' : '#dc3545') + '; opacity:' + (reminded ? '0.7' : '1') + ';">' +
+        '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">' +
+        '<div>' +
+        '<strong style="font-size:16px;">' + o.customerName + '</strong>' +
+        (reminded
+          ? '<span style="background:#999;color:#fff;padding:3px 8px;border-radius:5px;font-size:12px;margin-left:8px;">✅ 已提醒（' + remindedTime + '）</span>'
+          : '<span style="background:#dc3545;color:#fff;padding:3px 8px;border-radius:5px;font-size:12px;margin-left:8px;">🔴 未提醒</span>') +
+        '</div>' +
+        '<span style="color:#dc3545; font-weight:700; font-size:15px;">逾期 ' + o.diffDays + ' 天</span>' +
+        '</div>' +
+        '<div style="font-size:13px; color:#666; margin-bottom:10px;">' +
+        '<div>📦 訂單編號：' + o.orderNo + '</div>' +
+        '<div>🧺 品項：' + o.itemType + '</div>' +
+        '<div>📅 開單日期：' + o.openDate + '</div>' +
+        '</div>' +
+        '<div style="display:flex; gap:8px; flex-wrap:wrap;">' +
+        (!reminded ? '<button class="btn btn-small btn-secondary" onclick="markOverdueReminded(\'' + o.orderNo + '\')">✅ 已提醒</button>' : '') +
+        '<button class="btn btn-small btn-danger" onclick="deleteOverdueAlert(\'' + o.orderNo + '\')">🗑️ 刪除</button>' +
+        '</div>' +
+        '</div>';
+    });
+
+    wrap.innerHTML = html;
+  } catch(e) {
+    wrap.innerHTML = '<p style="color:#dc3545; text-align:center;">載入失敗：' + e.message + '</p>';
+  }
+}
+
+async function markOverdueReminded(orderNo) {
+  try {
+    await fetch('/api/overdue-alerts/mark-reminded', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderNo })
+    });
+    showResult('success', '✅ 已標記為已提醒');
+    loadOverdueAlerts();
+  } catch(e) {
+    showResult('error', '❌ ' + e.message);
+  }
+}
+
+async function deleteOverdueAlert(orderNo) {
+  if (!confirm('確定要刪除此逾期紀錄？')) return;
+  try {
+    await fetch('/api/overdue-alerts/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderNo })
+    });
+    showResult('success', '✅ 已刪除');
+    loadOverdueAlerts();
+  } catch(e) {
+    showResult('error', '❌ ' + e.message);
+  }
+}
+  
 </script>
 </body>
 </html>
