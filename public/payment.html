@@ -5106,6 +5106,31 @@ async function markOverdueReminded(orderNo) {
   }
 }
 
+async function deleteOverdueAlert(orderNo) {
+  if (!confirm('確定要刪除此逾期紀錄？')) return;
+  try {
+    await fetch('/api/overdue-alerts/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderNo })
+    });
+    showResult('success', '✅ 已刪除');
+    loadOverdueAlerts();
+  } catch(e) {
+    showResult('error', '❌ ' + e.message);
+  }
+}
+
+async function runBackfill() {
+  if (!confirm('確定要補填歷史上掛時間？這可能需要幾分鐘，請勿重複點擊。')) return;
+  try {
+    await fetch('/api/backfill-location-date', { method: 'POST' });
+    showResult('success', '✅ 補填已開始，約需 5-10 分鐘，請查看 Railway Logs 確認進度');
+  } catch(e) {
+    showResult('error', '❌ ' + e.message);
+  }
+}
+
 // 頁面載入自動掃描（不需要點 Tab）
 async function checkOverdueOnLoad() {
   try {
