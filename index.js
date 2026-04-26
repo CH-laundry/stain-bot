@@ -5598,6 +5598,7 @@ app.get('/api/overdue-alerts', async (req, res) => {
     const rows = response.data.values || [];
     const now = new Date();
     const OVERDUE_DAYS = 15;
+    const START_DATE = new Date('2026-04-27');
     const seen = new Set();
     const overdue = [];
 
@@ -5613,10 +5614,11 @@ app.get('/api/overdue-alerts', async (req, res) => {
       if (locationDate) return; // 已上掛，跳過
 
       const openDate = new Date(dateStr);
-      if (isNaN(openDate)) return;
+if (isNaN(openDate)) return;
+if (openDate < START_DATE) return; // 4/27 之前的訂單忽略
 
-      const diffDays = Math.floor((now - openDate) / (1000 * 60 * 60 * 24));
-      if (diffDays < OVERDUE_DAYS) return;
+const diffDays = Math.floor((now - openDate) / (1000 * 60 * 60 * 24));
+if (diffDays < OVERDUE_DAYS) return;
 
       seen.add(orderNo);
       overdue.push({
