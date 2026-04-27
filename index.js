@@ -5623,7 +5623,7 @@ app.post('/api/stain-photo-delete', async (req, res) => {
 });
 
     // ==================== 洗前洗後照片建檔 ====================
-app.post('/api/upload-photo', upload.single('photo'), async (req, res) => {
+app.post('/api/upload-photo', upload.array('photo', 7), async (req, res) => {
   try {
     const { customerNumber, phase, itemType } = req.body;
     const cloudinary = require('cloudinary').v2;
