@@ -4722,6 +4722,48 @@ cron.schedule('0 6 * * *', async () => {
 
 console.log('⏰ 批次綁定排程已啟動（每天 06:00）');
 
+  // ====== 每天凌晨3點清理6個月以上的污漬照片 ======
+cron.schedule('0 3 * * *', async () => {
+  console.log('[StainClean] 開始清理舊污漬照片...');
+  try {
+    const serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
+    const { google } = require('googleapis');
+    const auth = new google.auth.GoogleAuth({
+      credentials: serviceAccount,
+      scopes: ['https://www.googleapis.com/auth/drive']
+    });
+    const drive = google.drive({ version: 'v3', auth });
+    const STAIN_ROOT = process.env.PHOTO_FOLDER_ID;
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    const cutoff = sixMonthsAgo.toISOString();
+
+    // 列出所有 stain_ 開頭的資料夾
+    const folders = await drive.files.list({
+      q: `'${STAIN_ROOT}' in parents and name contains 'stain_' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+      fields: 'files(id, name)'
+    });
+
+    let deleteCount = 0;
+    for (const folder of folders.data.files) {
+      const files = await drive.files.list({
+        q: `'${folder.id}' in parents and trashed=false and createdTime < '${cutoff}'`,
+        fields: 'files(id, name)'
+      });
+      for (const file of files.data.files) {
+        await drive.files.delete({ fileId: file.id });
+        deleteCount++;
+        console.log(`[StainClean] 已刪除：${folder.name}/${file.name}`);
+      }
+    }
+    console.log(`[StainClean] 完成！共刪除 ${deleteCount} 張舊照片`);
+  } catch(e) {
+    console.error('[StainClean] 錯誤:', e.message);
+  }
+}, { timezone: 'Asia/Taipei' });
+
+console.log('⏰ 污漬照片自動清理已啟動（每天 03:00，刪除6個月以上）');
+
   setInterval(async () => {
     const ordersNeedingReminder = orderManager.getOrdersNeedingReminder();
     if (ordersNeedingReminder.length === 0) return;
@@ -5491,6 +5533,132 @@ app.put('/api/stain-photos/:photoId', async (req, res) => {
   } catch (error) {
     console.error('更新備註失敗:', error);
     res.json({ success: false, error: error.message });
+  }
+});
+
+// ==================== 污漬拍照（Drive 版）====================
+
+// 上傳污漬照片
+app.post('/api/stain-upload', upload.single('photo'), async (req, res) => {
+  try {
+    const { customerNumber, note } = req.body;
+    if (!req.file || !customerNumber) {
+      return res.json({ success: false, error: '缺少必要資料' });
+    }
+
+    const serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
+    const { google } = require('googleapis');
+    const auth = new google.auth.GoogleAuth({
+      credentials: serviceAccount,
+      scopes: ['https://www.googleapis.com/auth/drive']
+    });
+    const drive = google.drive({ version: 'v3', auth });
+    const STAIN_ROOT = process.env.PHOTO_FOLDER_ID;
+
+    // 找或建客戶污漬資料夾（格式：stain_625）
+    const folderName = 'stain_' + customerNumber;
+    let folderId;
+    const existing = await drive.files.list({
+      q: `'${STAIN_ROOT}' in parents and name='${folderName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+      fields: 'files(id)'
+    });
+    if (existing.data.files.length > 0) {
+      folderId = existing.data.files[0].id;
+    } else {
+      const created = await drive.files.create({
+        requestBody: { name: folderName, mimeType: 'application/vnd.google-apps.folder', parents: [STAIN_ROOT] },
+        fields: 'id'
+      });
+      folderId = created.data.id;
+    }
+
+    // 建立帶備註和日期的檔名
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0,10).replace(/-/g,'');
+    const timeStr = now.toTimeString().slice(0,8).replace(/:/g,'');
+    const noteStr = note ? '_' + note.replace(/[^a-zA-Z0-9\u4e00-\u9fff]/g,'').slice(0,10) : '';
+    const fileName = `${dateStr}_${timeStr}${noteStr}.jpg`;
+
+    const { Readable } = require('stream');
+    const uploaded = await drive.files.create({
+      requestBody: { name: fileName, parents: [folderId] },
+      media: { mimeType: 'image/jpeg', body: Readable.from(req.file.buffer) },
+      fields: 'id, webViewLink'
+    });
+
+    await drive.permissions.create({
+      fileId: uploaded.data.id,
+      requestBody: { role: 'reader', type: 'anyone' }
+    });
+
+    res.json({ success: true, fileId: uploaded.data.id });
+  } catch(e) {
+    console.error('污漬照片上傳失敗:', e);
+    res.json({ success: false, error: e.message });
+  }
+});
+
+// 查詢污漬照片
+app.get('/api/stain-photos-drive/:customerNumber', async (req, res) => {
+  try {
+    const serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
+    const { google } = require('googleapis');
+    const auth = new google.auth.GoogleAuth({
+      credentials: serviceAccount,
+      scopes: ['https://www.googleapis.com/auth/drive.readonly']
+    });
+    const drive = google.drive({ version: 'v3', auth });
+    const STAIN_ROOT = process.env.PHOTO_FOLDER_ID;
+    const cleanNo = req.params.customerNumber.replace(/\D/g,'').replace(/^0+/,'');
+    const folderName = 'stain_' + cleanNo;
+
+    const folderRes = await drive.files.list({
+      q: `'${STAIN_ROOT}' in parents and name='${folderName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+      fields: 'files(id)'
+    });
+    if (folderRes.data.files.length === 0) return res.json({ photos: [] });
+
+    const folderId = folderRes.data.files[0].id;
+    const files = await drive.files.list({
+      q: `'${folderId}' in parents and trashed=false`,
+      fields: 'files(id, name, createdTime)',
+      orderBy: 'createdTime desc'
+    });
+
+    const photos = files.data.files.map(f => {
+      // 從檔名解析備註（格式：20260427_143000_備註.jpg）
+      const nameParts = f.name.replace('.jpg','').split('_');
+      const note = nameParts.slice(2).join('_') || '';
+      return {
+        fileId: f.id,
+        name: f.name,
+        date: f.createdTime,
+        note: note,
+        url: `https://drive.google.com/thumbnail?id=${f.id}&sz=w800`
+      };
+    });
+
+    res.json({ photos });
+  } catch(e) {
+    res.json({ success: false, error: e.message, photos: [] });
+  }
+});
+
+// 刪除污漬照片
+app.post('/api/stain-photo-delete', async (req, res) => {
+  try {
+    const { fileId } = req.body;
+    const serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
+    const { google } = require('googleapis');
+    const auth = new google.auth.GoogleAuth({
+      credentials: serviceAccount,
+      scopes: ['https://www.googleapis.com/auth/drive']
+    });
+    const drive = google.drive({ version: 'v3', auth });
+    await drive.files.delete({ fileId });
+    res.json({ success: true });
+  } catch(e) {
+    res.json({ success: false, error: e.message });
   }
 });
 
