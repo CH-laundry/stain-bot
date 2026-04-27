@@ -5675,6 +5675,35 @@ app.get('/api/photos/:customerNumber', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+app.get('/api/photos-by-name/:displayName', async (req, res) => {
+  try {
+    const cloudinary = require('cloudinary').v2;
+    const displayName = decodeURIComponent(req.params.displayName);
+    const allCustomers = orderManager.getAllCustomerNumbers();
+    const matched = allCustomers.find(c => {
+      return (c.name || '').replace(/\s/g,'') === displayName.replace(/\s/g,'');
+    });
+    if (!matched) return res.json({ photos: [], customerNo: null });
+    const customerNo = String(matched.number).replace(/\D/g,'').replace(/^0+/,'');
+    const folder = `laundry_photos/${customerNo}`;
+    const result = await cloudinary.search
+      .expression(`folder:${folder}`)
+      .sort_by('created_at', 'asc')
+      .max_results(50)
+      .execute();
+    const photos = result.resources.map(r => ({
+      name: r.filename,
+      date: r.created_at,
+      url: r.secure_url,
+      phase: r.filename.includes('洗前') ? 'before' : 'after',
+      itemType: r.filename.split('_')[1]
+    }));
+    res.json({ photos, customerNo });
+  } catch(e) {
+    res.status(500).json({ error: e.message, photos: [] });
+  }
+});
 // ==================== 照片建檔結束 ====================
 
 
