@@ -136,6 +136,15 @@ async function init() {
     }
 
     if (!customerNo) {
+      // 改用名字查詢
+      try {
+        var nameRes = await fetch('/api/photos-by-name/' + encodeURIComponent(displayName));
+        var nameData = await nameRes.json();
+        if (nameData.photos && nameData.photos.length > 0) {
+          render(customerName, pictureUrl, nameData.photos, nameData.customerNo);
+          return;
+        }
+      } catch(e) {}
       renderError('查無會員資料，請聯繫店家綁定帳號。｜userId=' + userId);
       return;
     }
