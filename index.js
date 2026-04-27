@@ -6131,7 +6131,4 @@ app.post('/api/stain-photo-delete', async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, async () => {
-  console.log(`伺服器正在運行,端口:${PORT}`);
-});
+
