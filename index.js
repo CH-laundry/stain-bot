@@ -523,10 +523,16 @@ async function autoLookupAndBind(userId, displayName) {
     console.log(`[AutoBind] 方法1 結果: ${JSON.stringify(data).substring(0, 200)}`);
     let results = data?.Data ?? [];
 
-    if (results.length === 1) {
-      console.log(`[AutoBind] 方法1命中`);
-     return extractCustomerNo(results[0].CustomerNumber);
-    }
+    if (results.length >= 1) {
+  console.log(`[AutoBind] 方法1命中，共 ${results.length} 筆`);
+  const exact = results.find(r => {
+    const posName = (r.CustomerName || '').replace(/\s/g, '');
+    const lineName = (displayName || '').replace(/\s/g, '');
+    return posName === lineName;
+  });
+  const target = exact || (results.length === 1 ? results[0] : null);
+  if (target) return extractCustomerNo(target.CustomerNumber);
+}
 
     // 方法2：用顯示名稱搜尋
     console.log(`[AutoBind] 方法2 搜尋 displayName: ${displayName}`);
@@ -539,10 +545,17 @@ async function autoLookupAndBind(userId, displayName) {
     console.log(`[AutoBind] 方法2 結果: ${JSON.stringify(data).substring(0, 200)}`);
     results = data?.Data ?? [];
 
-    if (results.length === 1) {
-      console.log(`[AutoBind] 方法2命中`);
-      return extractCustomerNo(results[0].CustomerNumber);
-    }
+    if (results.length >= 1) {
+  console.log(`[AutoBind] 方法2命中，共 ${results.length} 筆`);
+  // 優先找名字完全一致的
+  const exact = results.find(r => {
+    const posName = (r.CustomerName || '').replace(/\s/g, '');
+    const lineName = (displayName || '').replace(/\s/g, '');
+    return posName === lineName;
+  });
+  const target = exact || (results.length === 1 ? results[0] : null);
+  if (target) return extractCustomerNo(target.CustomerNumber);
+}
 
     console.log(`[AutoBind] 兩種方法都找不到或多筆結果`);
     return null;
