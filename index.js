@@ -5613,15 +5613,9 @@ app.get('/api/stain-photos-drive/:customerNumber', async (req, res) => {
 // 刪除污漬照片
 app.post('/api/stain-photo-delete', async (req, res) => {
   try {
-    const { fileId } = req.body;
-    const serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
-    const { google } = require('googleapis');
-    const auth = new google.auth.GoogleAuth({
-      credentials: serviceAccount,
-      scopes: ['https://www.googleapis.com/auth/drive']
-    });
-    const drive = google.drive({ version: 'v3', auth });
-    await drive.files.delete({ fileId });
+   const { fileId } = req.body;
+    const cloudinary = require('cloudinary').v2;
+    await cloudinary.uploader.destroy(fileId, { resource_type: 'image' });
     res.json({ success: true });
   } catch(e) {
     res.json({ success: false, error: e.message });
