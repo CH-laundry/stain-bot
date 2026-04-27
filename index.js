@@ -1645,6 +1645,10 @@ for (const adminId of adminIds) {
     text: `✅ 綠界付款成功\n客戶：${userName}\n金額：NT$ ${amount}`
   }).catch(() => {});
 }
+    } catch(e) {
+    console.error('[ECPAY] callback error:', e);
+  }
+});
 
 // ====== Line Pay Confirm (付款確認頁面) [已修復] ======
 app.all('/payment/linepay/confirm', async (req, res) => {
