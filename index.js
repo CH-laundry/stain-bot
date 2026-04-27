@@ -5629,21 +5629,33 @@ app.post('/api/upload-photo', upload.array('photo', 7), async (req, res) => {
     const cloudinary = require('cloudinary').v2;
     const { Readable } = require('stream');
 
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ success: false, error: '沒有收到照片' });
+    }
+
     const date = new Date().toISOString().slice(0,10).replace(/-/g,'');
     const phaseLabel = phase === 'before' ? '洗前' : '洗後';
-    const publicId = `${date}_${itemType}_${phaseLabel}`;
     const folder = `laundry_photos/${customerNumber}`;
+    const results = [];
 
-    const streamUpload = () => new Promise((resolve, reject) => {
-      const stream = cloudinary.uploader.upload_stream(
-        { folder, public_id: publicId, resource_type: 'image' },
-        (error, result) => error ? reject(error) : resolve(result)
-      );
-      Readable.from(req.file.buffer).pipe(stream);
-    });
+    for (let i = 0; i < req.files.length; i++) {
+      const file = req.files[i];
+      const timeStr = Date.now() + '_' + i;
+      const publicId = `${date}_${itemType}_${phaseLabel}_${timeStr}`;
 
-    const result = await streamUpload();
-    res.json({ success: true, fileId: result.public_id, link: result.secure_url });
+      const streamUpload = (buffer) => new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          { folder, public_id: publicId, resource_type: 'image' },
+          (error, result) => error ? reject(error) : resolve(result)
+        );
+        Readable.from(buffer).pipe(stream);
+      });
+
+      const result = await streamUpload(file.buffer);
+      results.push({ fileId: result.public_id, link: result.secure_url });
+    }
+
+    res.json({ success: true, results });
   } catch (e) {
     console.error('upload-photo error:', e);
     res.status(500).json({ success: false, error: e.message });
