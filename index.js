@@ -1504,8 +1504,18 @@ try {
         client.pushMessage(order.userId, {
           type: 'text',
           text: `✅ LINE Pay 付款成功\n\n感謝 ${order.userName} 的支付\n金額:NT$ ${order.amount.toLocaleString()}\n訂單編號:${order.orderId}\n\n非常謝謝您\n感謝您的支持 💙`
+       }).catch(() => {});
+      }
+
+      // 通知店家
+      const adminIds = [process.env.ADMIN_USER_ID, process.env.ADMIN_USER_ID_2].filter(Boolean);
+      for (const adminId of adminIds) {
+        client.pushMessage(adminId, {
+          type: 'text',
+          text: `✅ LINE Pay 付款成功\n客戶：${order.userName}\n金額：NT$ ${order.amount.toLocaleString()}\n訂單編號：${order.orderId}`
         }).catch(() => {});
       }
+
     } else {
       logger.logToFile(`[LINEPAY][FAIL] Confirm 失敗: ${result.returnCode} - ${result.returnMessage}`);
     }
@@ -1628,16 +1638,13 @@ try {
     }
 
     // 通知店家
-    if (process.env.ADMIN_USER_ID) {
-      client.pushMessage(process.env.ADMIN_USER_ID, {
-        type: 'text',
-        text: `✅ 綠界付款成功\n客戶：${userName}\n金額：NT$ ${amount}`
-      }).catch(() => {});
-    }
-  } catch (err) {
-    logger.logError('[ECPAY][ERROR] 回調處理失敗', err);
-  }
-});
+   const adminIds = [process.env.ADMIN_USER_ID, process.env.ADMIN_USER_ID_2].filter(Boolean);
+for (const adminId of adminIds) {
+  client.pushMessage(adminId, {
+    type: 'text',
+    text: `✅ 綠界付款成功\n客戶：${userName}\n金額：NT$ ${amount}`
+  }).catch(() => {});
+}
 
 // ====== Line Pay Confirm (付款確認頁面) [已修復] ======
 app.all('/payment/linepay/confirm', async (req, res) => {
