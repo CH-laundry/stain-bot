@@ -5576,7 +5576,8 @@ app.post('/api/stain-upload', upload.single('photo'), async (req, res) => {
     if (existing.data.files.length > 0) {
       folderId = existing.data.files[0].id;
     } else {
-      const created = await drive.files.create({
+     const created = await drive.files.create({
+        supportsAllDrives: true,
         requestBody: { name: folderName, mimeType: 'application/vnd.google-apps.folder', parents: [STAIN_ROOT] },
         fields: 'id'
       });
@@ -5592,11 +5593,11 @@ app.post('/api/stain-upload', upload.single('photo'), async (req, res) => {
 
     const { Readable } = require('stream');
     const uploaded = await drive.files.create({
+      supportsAllDrives: true,
       requestBody: { name: fileName, parents: [folderId] },
       media: { mimeType: 'image/jpeg', body: Readable.from(req.file.buffer) },
-      fields: 'id, webViewLink'
+      fields: 'id'
     });
-
     await drive.permissions.create({
       fileId: uploaded.data.id,
       requestBody: { role: 'reader', type: 'anyone' }
