@@ -5950,33 +5950,23 @@ app.post('/api/backfill-location-date', async (req, res) => {
 
 app.post('/api/photo-delete', async (req, res) => {
   try {
-    const { customerNumber, fileName } = req.body;
-    const serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
-    const { google } = require('googleapis');
-    const auth = new google.auth.GoogleAuth({
-      credentials: serviceAccount,
-      scopes: ['https://www.googleapis.com/auth/drive']
-    });
-    const drive = google.drive({ version: 'v3', auth });
-    const folderId = process.env.PHOTO_FOLDER_ID;
+    const { customerNumber, fileName, photoUrl } = req.body;
+    const cloudinary = require('cloudinary').v2;
 
-    const folderRes = await drive.files.list({
-      q: `'${folderId}' in parents and name='${customerNumber}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-      fields: 'files(id)'
-    });
-    if (folderRes.data.files.length === 0) return res.json({ success: false, error: '找不到客戶資料夾' });
+    // 從 URL 解析 public_id
+    let publicId = fileName;
+    if (photoUrl) {
+      // Cloudinary URL 格式: .../image/upload/v1234/laundry_photos/625/filename
+      const match = photoUrl.match(/\/image\/upload\/(?:v\d+\/)?(.+?)(?:\.\w+)?$/);
+      if (match) publicId = match[1];
+    }
 
-    const customerFolderId = folderRes.data.files[0].id;
-    const fileRes = await drive.files.list({
-      q: `'${customerFolderId}' in parents and name='${fileName}' and trashed=false`,
-      fields: 'files(id)'
-    });
-    if (fileRes.data.files.length === 0) return res.json({ success: false, error: '找不到此照片' });
-
-    await drive.files.delete({ fileId: fileRes.data.files[0].id });
+    await cloudinary.uploader.destroy(publicId, { resource_type: 'image' });
+    console.log('✅ Cloudinary 照片已刪除:', publicId);
     res.json({ success: true });
   } catch(e) {
-    res.status(500).json({ success: false, error: e.message });
+    console.error('刪除失敗:', e.message);
+    res.json({ success: false, error: e.message });
   }
 });
 
