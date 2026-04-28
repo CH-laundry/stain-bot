@@ -5029,7 +5029,7 @@ async function loadArchivePhotos() {
         html += '<div style="font-size:11px; font-weight:700; letter-spacing:1.5px; color:' + color + '; margin-bottom:8px;">' + label + '</div>';
         if (p) {
           html += '<img src="' + p.url + '" style="width:100%; border-radius:8px; cursor:pointer;" onclick="window.open(\'' + p.url + '\',\'_blank\')">';
-          html += '<button onclick="deleteArchivePhoto(\'' + p.name + '\',\'' + cleanNo + '\')" style="margin-top:8px; width:100%; padding:5px; background:#fff; border:1px solid #fcc; color:#dc3545; border-radius:6px; cursor:pointer; font-size:12px;">🗑️ 刪除</button>';
+          html += '<button onclick="deleteArchivePhoto(\'' + p.name + '\',\'' + cleanNo + '\',\'' + p.url + '\',\'' + cleanNo + '\')" style="margin-top:8px; width:100%; padding:5px; background:#fff; border:1px solid #fcc; color:#dc3545; border-radius:6px; cursor:pointer; font-size:12px;">🗑️ 刪除</button>';
         } else {
           html += '<div style="background:#f5f5f5; border-radius:8px; aspect-ratio:4/3; display:flex; align-items:center; justify-content:center; font-size:28px; border:1.5px dashed #e0e0e0;">📷</div>';
         }
@@ -5043,13 +5043,13 @@ async function loadArchivePhotos() {
   }
 }
 
-async function deleteArchivePhoto(fileName, customerNo) {
+async function deleteArchivePhoto(fileName, customerNo, photoUrl) {
   if (!confirm('確定要刪除這張照片嗎？')) return;
   try {
     var res = await fetch('/api/photo-delete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ customerNumber: customerNo, fileName: fileName })
+      body: JSON.stringify({ customerNumber: customerNo, fileName: fileName, photoUrl: photoUrl })
     });
     var data = await res.json();
     if (data.success) {
