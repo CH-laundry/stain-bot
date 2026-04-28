@@ -5957,7 +5957,7 @@ app.post('/api/photo-delete', async (req, res) => {
    let publicId = fileName;
 if (photoUrl) {
   const match = photoUrl.match(/\/image\/upload\/(?:v\d+\/)?(.+?)(?:\.[a-zA-Z0-9]+)?$/);
-  if (match) publicId = match[1];
+  if (match) publicId = decodeURIComponent(match[1]);
   console.log('解析 publicId:', publicId);
 }
 
