@@ -4793,204 +4793,97 @@ html += '</div>';
   document.getElementById('dayDetailContent').innerHTML = html;
 }
 
-async function editRow(rowIndex, currentSubtotal) {
-  var newAmount = prompt('修改小計金額（目前：NT$ ' + currentSubtotal + '）', currentSubtotal);
-  if (newAmount === null) return;
-  var amount = parseFloat(newAmount);
-  if (isNaN(amount) || amount < 0) { alert('金額格式不正確'); return; }
+async function loadArchivePhotos() {
+  var no = document.getElementById('photoSearchNo').value.trim();
 
-  try {
-    var res = await fetch('/api/revenue/update-row', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ rowIndex: rowIndex, subtotal: amount })
-    });
-    var data = await res.json();
-    if (data.success) {
-      // 更新本地資料
-      currentDayRows.forEach(function(r) {
-        if (r.rowIndex === rowIndex) r.subtotal = amount;
-      });
-      var date = document.getElementById('dayDetailDate').textContent;
-      renderDayDetail(date);
-      // 同步更新外層報表
-      loadRevenueReport();
-      showResult('success', '✅ 已更新金額');
-    } else {
-      alert('❌ 更新失敗：' + (data.error || '未知錯誤'));
-    }
-  } catch (e) {
-    alert('❌ 連線失敗：' + e.message);
+  if (!no) {
+    showResult('error', '請輸入會員編號');
+    return;
   }
-}
 
-async function deleteRow(rowIndex) {
-  if (!confirm('確定要刪除這筆品項？\n\n刪除後營業數據會同步更新，此操作無法復原。')) return;
+  var cleanNo = no.replace(/\D/g, '').replace(/^0+/, '');
+  var container = document.getElementById('archiveResults');
 
-  try {
-    var res = await fetch('/api/revenue/delete-row', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ rowIndex: rowIndex })
-    });
-    var data = await res.json();
-    if (data.success) {
-      // 從本地移除
-      currentDayRows = currentDayRows.filter(function(r) { return r.rowIndex !== rowIndex; });
-      // 刪除後 rowIndex 會位移，重新從後端拉
-      var date = document.getElementById('dayDetailDate').textContent;
-      var res2 = await fetch('/api/revenue/day-detail?date=' + encodeURIComponent(date));
-      var data2 = await res2.json();
-      if (data2.success) currentDayRows = data2.rows || [];
-      renderDayDetail(date);
-      loadRevenueReport();
-      showResult('success', '✅ 已刪除，數據已同步更新');
-    } else {
-      alert('❌ 刪除失敗：' + (data.error || '未知錯誤'));
-    }
-  } catch (e) {
-    alert('❌ 連線失敗：' + e.message);
-  }
-}
-
-function closeDayDetail() {
-  document.getElementById('dayDetailModal').style.display = 'none';
-  currentDayRows = [];
-}
-
-  async function deleteOrderRows(orderNo) {
-  var rows = currentDayRows.filter(function(r) { return r.orderNo === orderNo; });
-  if (rows.length === 0) return;
-  
-  if (!confirm('確定要刪除整筆訂單「' + orderNo + '」的所有品項？\n共 ' + rows.length + ' 筆\n\n此操作無法復原。')) return;
+  container.innerHTML = '<p style="text-align:center; color:#999;">查詢中…</p>';
 
   try {
-    // 從最大 rowIndex 開始刪（避免行號位移）
-    var sortedRows = rows.slice().sort(function(a, b) { return b.rowIndex - a.rowIndex; });
-    
-    for (var i = 0; i < sortedRows.length; i++) {
-      var res = await fetch('/api/revenue/delete-row', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rowIndex: sortedRows[i].rowIndex })
-      });
-      var data = await res.json();
-      if (!data.success) {
-        alert('❌ 刪除第 ' + (i+1) + ' 筆時失敗：' + (data.error || '未知錯誤'));
-        break;
-      }
-    }
-
-    // 重新從後端拉資料（行號已位移）
-    var date = document.getElementById('dayDetailDate').textContent;
-    var res2 = await fetch('/api/revenue/day-detail?date=' + encodeURIComponent(date));
-    var data2 = await res2.json();
-    if (data2.success) currentDayRows = data2.rows || [];
-    renderDayDetail(date);
-    loadRevenueReport();
-    showResult('success', '✅ 已刪除整筆訂單，數據已同步更新');
-    
-  } catch (e) {
-    alert('❌ 連線失敗：' + e.message);
-  }
-}
-
-  // ========================================
-// 📷 照片建檔功能
-// ========================================
-var photoCurrentCustomerNo = '';
-var photoCurrentItem = '鞋子';
-
-function photoLookupCustomer() {
-  var no = document.getElementById('photoCustomerNo').value.trim();
-  if (!no) { showResult('error', '請輸入會員編號'); return; }
-  var cleanNo = no.replace(/\D/g,'').replace(/^0+/,'');
-  var found = Object.entries(savedCustomers).find(function(e) {
-    return String(e[0]).replace(/\D/g,'').replace(/^0+/,'') === cleanNo;
-  });
-  if (!found) { showResult('error', '找不到此會員編號'); return; }
-  photoCurrentCustomerNo = cleanNo;
-  document.getElementById('photoBannerName').textContent = found[1].name;
-  document.getElementById('photoBannerNo').textContent = '會員編號：' + no;
-  document.getElementById('photoBanner').style.display = 'block';
-  ['before','after'].forEach(function(p) {
-    document.getElementById(p+'Preview').style.display = 'none';
-    document.getElementById(p+'Status').textContent = '';
-    document.getElementById(p+'Input').value = '';
-  });
-  photoCurrentCount = { before: 0, after: 0 };
-
-}
-
-  
-function selectPhotoItem(el, name) {
-  document.querySelectorAll('.photo-item-btn').forEach(function(b) { b.classList.remove('active'); });
-  el.classList.add('active');
-  photoCurrentItem = name;
-}
-
-var photoCurrentCount = { before: 0, after: 0 };
-
-async function handlePhotoUpload(phase, input) {
-  if (!input.files || input.files.length === 0) return;
-  if (!photoCurrentCustomerNo) { showResult('error', '請先確認客戶'); return; }
-  if (photoCurrentCount[phase] >= 7) { showResult('error', '最多只能上傳 7 張'); return; }
-
-  var file = input.files[0];
-  input.value = '';
-  var status = document.getElementById(phase + 'Status');
-  var area = document.getElementById(phase + 'Area');
-
-  status.style.color = '#667eea';
-  status.textContent = '上傳中…';
-
-  try {
-    var formData = new FormData();
-    formData.append('photo', file);
-    formData.append('customerNumber', photoCurrentCustomerNo);
-    formData.append('phase', phase);
-    formData.append('itemType', photoCurrentItem);
-
-    var res = await fetch('/api/upload-photo', { method: 'POST', body: formData });
+    var res = await fetch('/api/photos/' + cleanNo);
     var data = await res.json();
 
-    if (data.success) {
-      photoCurrentCount[phase]++;
-      status.style.color = '#28a745';
-      status.textContent = '✓ 已上傳 ' + photoCurrentCount[phase] + ' 張（最多7張）';
+    if (!data.photos || data.photos.length === 0) {
+      container.innerHTML = '<p style="text-align:center; color:#999;">此客戶尚無照片紀錄</p>';
+      return;
+    }
 
-      var grid = area.querySelector('.photo-grid');
-      if (!grid) {
-        grid = document.createElement('div');
-        grid.className = 'photo-grid';
-        grid.style.cssText = 'display:grid; grid-template-columns:repeat(3,1fr); gap:4px; margin-top:8px;';
-        area.appendChild(grid);
+    var groups = {};
+
+    data.photos.forEach(function(p) {
+      var d = new Date(p.date).toLocaleDateString('zh-TW');
+      var key = d + '_' + p.itemType;
+
+      if (!groups[key]) {
+        groups[key] = {
+          date: d,
+          itemType: p.itemType,
+          before: [],
+          after: []
+        };
       }
 
-      var reader = new FileReader();
-      reader.onload = function(e) {
-        var img = document.createElement('img');
-        img.src = e.target.result;
-        img.style.cssText = 'width:100%; aspect-ratio:1; object-fit:cover; border-radius:4px;';
-        grid.appendChild(img);
-      };
-      reader.readAsDataURL(file);
-
-      document.getElementById(phase + 'Preview').style.display = 'none';
-
-      if (photoCurrentCount[phase] < 7) {
-        showResult('success', '✅ 第 ' + photoCurrentCount[phase] + ' 張已儲存，再點一次可繼續拍');
+      if (p.phase === 'before') {
+        groups[key].before.push(p);
       } else {
-        showResult('success', '✅ 已達 7 張上限');
+        groups[key].after.push(p);
       }
-    } else throw new Error(data.error);
-  } catch(e) {
-    status.style.color = '#dc3545';
-    status.textContent = '✕ 上傳失敗';
-    showResult('error', '❌ ' + e.message);
-  }
+    });
 
-  
+    var html = '';
+
+    Object.values(groups)
+      .sort(function(a, b) {
+        return b.date.localeCompare(a.date);
+      })
+      .forEach(function(g) {
+        html += '<div style="border:1px solid #e0e0e0; border-radius:10px; margin-bottom:15px; overflow:hidden;">';
+
+        html += '<div style="background:#f0f4ff; padding:10px 15px; display:flex; justify-content:space-between;">';
+        html += '<span style="font-weight:600; color:#667eea;">📅 ' + g.date + '</span>';
+        html += '<span style="background:#667eea; color:#fff; padding:3px 10px; border-radius:10px; font-size:12px;">' + g.itemType + '</span>';
+        html += '</div>';
+
+        html += '<div style="display:grid; grid-template-columns:1fr 1fr;">';
+
+        ['before', 'after'].forEach(function(ph) {
+          var photos = g[ph] || [];
+          var label = ph === 'before' ? '洗前' : '洗後';
+          var color = ph === 'before' ? '#1a6b4a' : '#8a2c2c';
+
+          html += '<div style="padding:12px; border-right:' + (ph === 'before' ? '1px solid #e0e0e0' : 'none') + ';">';
+          html += '<div style="font-size:11px; font-weight:700; letter-spacing:1.5px; color:' + color + '; margin-bottom:8px;">' + label + '</div>';
+
+          if (photos.length > 0) {
+            photos.forEach(function(p) {
+              html += '<div style="margin-bottom:10px;">';
+              html += '<img src="' + p.url + '?t=' + Date.now() + '" style="width:100%; border-radius:8px; cursor:pointer;" onclick="window.open(\'' + p.url + '\',\'_blank\')">';
+              html += '<button onclick="deleteArchivePhoto(\'' + p.name + '\',\'' + cleanNo + '\',\'' + p.url + '\')" style="margin-top:8px; width:100%; padding:5px; background:#fff; border:1px solid #fcc; color:#dc3545; border-radius:6px; cursor:pointer; font-size:12px;">🗑️ 刪除</button>';
+              html += '</div>';
+            });
+          } else {
+            html += '<div style="background:#f5f5f5; border-radius:8px; aspect-ratio:4/3; display:flex; align-items:center; justify-content:center; font-size:28px; border:1.5px dashed #e0e0e0;">📷</div>';
+          }
+
+          html += '</div>';
+        });
+
+        html += '</div>';
+        html += '</div>';
+      });
+
+    container.innerHTML = html;
+
+  } catch (e) {
+    container.innerHTML = '<p style="text-align:center; color:#dc3545;">' + e.message + '</p>';
+  }
 }
 
 async function loadArchivePhotos() {
