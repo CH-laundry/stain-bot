@@ -171,9 +171,9 @@ function render(customerName, pictureUrl, photos, customerNo) {
   photos.forEach(function(p) {
     var dateKey = (p.date || '').substring(0, 10);
     var key = dateKey + '_' + (p.itemType || '');
-    if (!groups[key]) groups[key] = { itemType: p.itemType, before: null, after: null, date: dateKey };
-    if (p.phase === 'before' && !groups[key].before) groups[key].before = p;
-    if (p.phase === 'after' && !groups[key].after) groups[key].after = p;
+    if (!groups[key]) groups[key] = { itemType: p.itemType, before: [], after: [], date: dateKey };
+    if (p.phase === 'before') groups[key].before.push(p);
+    else groups[key].after.push(p);
   });
 
   var groupList = Object.values(groups).sort(function(a,b){ return b.date.localeCompare(a.date); });
@@ -194,10 +194,10 @@ function render(customerName, pictureUrl, photos, customerNo) {
         '</div>' +
         '<div class="photo-compare">' +
         '<div class="photo-col before"><div class="photo-col-label">清洗前</div>' +
-        (g.before ? '<img src="' + g.before.url + '" loading="lazy" onclick="openLightbox(\'' + g.before.url + '\')">' : '<div class="photo-empty"><div class="photo-empty-icon">📷</div><div class="photo-empty-text">待拍照</div></div>') +
+        (g.before.length > 0 ? g.before.map(function(p){ return '<img src="' + p.url + '" loading="lazy" onclick="openLightbox(\'' + p.url + '\')" style="margin-bottom:8px;">'; }).join('') : '<div class="photo-empty"><div class="photo-empty-icon">📷</div><div class="photo-empty-text">待拍照</div></div>') +
         '</div>' +
         '<div class="photo-col after"><div class="photo-col-label">清洗後</div>' +
-        (g.after ? '<img src="' + g.after.url + '" loading="lazy" onclick="openLightbox(\'' + g.after.url + '\')">' : '<div class="photo-empty"><div class="photo-empty-icon">✨</div><div class="photo-empty-text">待拍照</div></div>') +
+        (g.after.length > 0 ? g.after.map(function(p){ return '<img src="' + p.url + '" loading="lazy" onclick="openLightbox(\'' + p.url + '\')" style="margin-bottom:8px;">'; }).join('') : '<div class="photo-empty"><div class="photo-empty-icon">✨</div><div class="photo-empty-text">待拍照</div></div>') +
         '</div>' +
         '</div>' +
         '<div class="record-footer"><span class="timestamp">C.H 精緻洗衣 · ' + dateLabel + '</span></div>' +
