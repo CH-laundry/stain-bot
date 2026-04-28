@@ -5961,9 +5961,15 @@ if (photoUrl) {
   console.log('解析 publicId:', publicId);
 }
 
-    await cloudinary.uploader.destroy(publicId, { resource_type: 'image' });
-    console.log('✅ Cloudinary 照片已刪除:', publicId);
-    res.json({ success: true });
+    const result = await cloudinary.uploader.destroy(publicId, { resource_type: 'image' });
+console.log('Cloudinary 刪除結果:', publicId, result);
+if (result.result === 'ok' || result.result === 'not found') {
+  console.log('✅ 照片已刪除:', publicId);
+  res.json({ success: true });
+} else {
+  console.log('❌ 刪除失敗:', result);
+  res.json({ success: false, error: '刪除失敗: ' + result.result });
+}
   } catch(e) {
     console.error('刪除失敗:', e.message);
     res.json({ success: false, error: e.message });
