@@ -5065,7 +5065,7 @@ async function deleteArchivePhoto(fileName, customerNo, photoUrl) {
     if (data.success) {
       showResult('success', '✅ 照片已刪除');
       document.getElementById('photoSearchNo').value = customerNo;
-      loadArchivePhotos();
+      setTimeout(function() { loadArchivePhotos(); }, 1500);
     } else {
       showResult('error', '❌ 刪除失敗：' + data.error);
     }
