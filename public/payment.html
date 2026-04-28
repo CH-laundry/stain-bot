@@ -965,7 +965,7 @@
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:10px;">
       <!-- 洗前 -->
       <div style="position:relative; border:2px dashed #1a6b4a; border-radius:12px; padding:20px; text-align:center; background:#e6f4ee; cursor:pointer;" id="beforeArea">
-        <input type="file" accept="image/*" capture="environment" id="beforeInput" onchange="handlePhotoUpload('before',this)" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;">
+        <input type="file" accept="image/*" multiple id="beforeInput" onchange="handlePhotoUpload('before',this)" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;">
         <div style="font-size:28px; margin-bottom:8px;">📸</div>
         <div style="font-weight:700; color:#1a6b4a; letter-spacing:1px;">洗  前</div>
         <div style="font-size:12px; color:#999; margin-top:4px;">收件前拍照</div>
@@ -974,7 +974,7 @@
       </div>
       <!-- 洗後 -->
       <div style="position:relative; border:2px dashed #8a2c2c; border-radius:12px; padding:20px; text-align:center; background:#f7e8e8; cursor:pointer;" id="afterArea">
-        <input type="file" accept="image/*" capture="environment" id="afterInput" onchange="handlePhotoUpload('after',this)" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;">
+        <input type="file" accept="image/*" multiple id="afterInput" onchange="handlePhotoUpload('after',this)" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;">
         <div style="font-size:28px; margin-bottom:8px;">✨</div>
         <div style="font-weight:700; color:#8a2c2c; letter-spacing:1px;">洗  後</div>
         <div style="font-size:12px; color:#999; margin-top:4px;">完工後拍照</div>
@@ -4927,28 +4927,37 @@ function selectPhotoItem(el, name) {
 }
 
 async function handlePhotoUpload(phase, input) {
-  if (!input.files || !input.files[0]) return;
+  if (!input.files || input.files.length === 0) return;
   if (!photoCurrentCustomerNo) { showResult('error', '請先確認客戶'); return; }
-  var file = input.files[0];
+
+  var files = Array.from(input.files);
   var preview = document.getElementById(phase + 'Preview');
   var status = document.getElementById(phase + 'Status');
+
+  // 預覽第一張
   var reader = new FileReader();
   reader.onload = function(e) { preview.src = e.target.result; preview.style.display = 'block'; };
-  reader.readAsDataURL(file);
+  reader.readAsDataURL(files[0]);
+
   status.style.color = '#667eea';
-  status.textContent = '上傳中…';
+  status.textContent = '上傳中…（共 ' + files.length + ' 張）';
+
   try {
     var formData = new FormData();
-    formData.append('photo', file);
+    for (var i = 0; i < files.length; i++) {
+      formData.append('photo', files[i]);
+    }
     formData.append('customerNumber', photoCurrentCustomerNo);
     formData.append('phase', phase);
     formData.append('itemType', photoCurrentItem);
+
     var res = await fetch('/api/upload-photo', { method: 'POST', body: formData });
     var data = await res.json();
+
     if (data.success) {
       status.style.color = '#28a745';
-      status.textContent = phase === 'before' ? '✓ 洗前照已上傳' : '✓ 洗後照已上傳';
-      showResult('success', '✅ 照片已儲存至 Google Drive');
+      status.textContent = (phase === 'before' ? '✓ 洗前照' : '✓ 洗後照') + ' 已上傳 ' + (data.results ? data.results.length : files.length) + ' 張';
+      showResult('success', '✅ ' + (data.results ? data.results.length : files.length) + ' 張照片已儲存');
     } else throw new Error(data.error);
   } catch(e) {
     status.style.color = '#dc3545';
