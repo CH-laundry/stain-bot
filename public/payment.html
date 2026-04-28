@@ -5006,14 +5006,17 @@ async function loadArchivePhotos() {
       container.innerHTML = '<p style="text-align:center; color:#999;">此客戶尚無照片紀錄</p>';
       return;
     }
+
+    // 依日期+品項分組，每組保留所有 before 和 after
     var groups = {};
     data.photos.forEach(function(p) {
       var d = new Date(p.date).toLocaleDateString('zh-TW');
       var key = d + '_' + p.itemType;
-      if (!groups[key]) groups[key] = { date: d, itemType: p.itemType, before: null, after: null };
-      if (p.phase === 'before') groups[key].before = p;
-      else groups[key].after = p;
+      if (!groups[key]) groups[key] = { date: d, itemType: p.itemType, before: [], after: [] };
+      if (p.phase === 'before') groups[key].before.push(p);
+      else groups[key].after.push(p);
     });
+
     var html = '';
     Object.values(groups).sort(function(a,b){ return b.date.localeCompare(a.date); }).forEach(function(g) {
       html += '<div style="border:1px solid #e0e0e0; border-radius:10px; margin-bottom:15px; overflow:hidden;">';
@@ -5022,20 +5025,26 @@ async function loadArchivePhotos() {
       html += '<span style="background:#667eea; color:#fff; padding:3px 10px; border-radius:10px; font-size:12px;">' + g.itemType + '</span>';
       html += '</div>';
       html += '<div style="display:grid; grid-template-columns:1fr 1fr;">';
+
       ['before','after'].forEach(function(ph) {
-        var p = g[ph];
+        var photos = g[ph];
         var label = ph === 'before' ? '洗前' : '洗後';
         var color = ph === 'before' ? '#1a6b4a' : '#8a2c2c';
         html += '<div style="padding:12px; border-right:' + (ph==='before'?'1px solid #e0e0e0':'none') + ';">';
-        html += '<div style="font-size:11px; font-weight:700; letter-spacing:1.5px; color:' + color + '; margin-bottom:8px;">' + label + '</div>';
-        if (p) {
-          html += '<img src="' + p.url + '" style="width:100%; border-radius:8px; cursor:pointer;" onclick="window.open(\'' + p.url + '\',\'_blank\')">';
-          html += '<button onclick="deleteArchivePhoto(\'' + p.name + '\',\'' + cleanNo + '\',\'' + p.url + '\')" style="margin-top:8px; width:100%; padding:5px; background:#fff; border:1px solid #fcc; color:#dc3545; border-radius:6px; cursor:pointer; font-size:12px;">🗑️ 刪除</button>';
+        html += '<div style="font-size:11px; font-weight:700; letter-spacing:1.5px; color:' + color + '; margin-bottom:8px;">' + label + '（' + photos.length + '張）</div>';
+        if (photos.length > 0) {
+          photos.forEach(function(p) {
+            html += '<div style="margin-bottom:8px;">';
+            html += '<img src="' + p.url + '" style="width:100%; border-radius:8px; cursor:pointer;" onclick="window.open(\'' + p.url + '\',\'_blank\')">';
+            html += '<button onclick="deleteArchivePhoto(\'' + p.name + '\',\'' + cleanNo + '\',\'' + p.url + '\')" style="margin-top:4px; width:100%; padding:5px; background:#fff; border:1px solid #fcc; color:#dc3545; border-radius:6px; cursor:pointer; font-size:12px;">🗑️ 刪除</button>';
+            html += '</div>';
+          });
         } else {
           html += '<div style="background:#f5f5f5; border-radius:8px; aspect-ratio:4/3; display:flex; align-items:center; justify-content:center; font-size:28px; border:1.5px dashed #e0e0e0;">📷</div>';
         }
         html += '</div>';
       });
+
       html += '</div></div>';
     });
     container.innerHTML = html;
