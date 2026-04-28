@@ -4931,13 +4931,7 @@ async function handlePhotoUpload(phase, input) {
   if (!photoCurrentCustomerNo) { showResult('error', '請先確認客戶'); return; }
 
   var files = Array.from(input.files);
-  var preview = document.getElementById(phase + 'Preview');
   var status = document.getElementById(phase + 'Status');
-
-  // 預覽第一張
-  var reader = new FileReader();
-  reader.onload = function(e) { preview.src = e.target.result; preview.style.display = 'block'; };
-  reader.readAsDataURL(files[0]);
 
   status.style.color = '#667eea';
   status.textContent = '上傳中…（共 ' + files.length + ' 張）';
@@ -4956,8 +4950,40 @@ async function handlePhotoUpload(phase, input) {
 
     if (data.success) {
       status.style.color = '#28a745';
-      status.textContent = (phase === 'before' ? '✓ 洗前照' : '✓ 洗後照') + ' 已上傳 ' + (data.results ? data.results.length : files.length) + ' 張';
-      showResult('success', '✅ ' + (data.results ? data.results.length : files.length) + ' 張照片已儲存');
+      var count = data.results ? data.results.length : files.length;
+      status.textContent = (phase === 'before' ? '✓ 洗前照' : '✓ 洗後照') + ' 已上傳 ' + count + ' 張';
+      showResult('success', '✅ ' + count + ' 張照片已儲存');
+
+      // 顯示多張預覽
+      var area = document.getElementById(phase + 'Area');
+      var existingGrid = area.querySelector('.photo-grid');
+      if (existingGrid) existingGrid.remove();
+
+      var grid = document.createElement('div');
+      grid.className = 'photo-grid';
+      grid.style.cssText = 'display:grid; grid-template-columns:repeat(3,1fr); gap:4px; margin-top:8px;';
+
+      var readPromises = files.slice(0, 7).map(function(file) {
+        return new Promise(function(resolve) {
+          var reader = new FileReader();
+          reader.onload = function(e) { resolve(e.target.result); };
+          reader.readAsDataURL(file);
+        });
+      });
+
+      Promise.all(readPromises).then(function(results) {
+        results.forEach(function(src) {
+          var img = document.createElement('img');
+          img.src = src;
+          img.style.cssText = 'width:100%; aspect-ratio:1; object-fit:cover; border-radius:4px;';
+          grid.appendChild(img);
+        });
+        area.appendChild(grid);
+      });
+
+      // 隱藏舊的單張預覽
+      document.getElementById(phase + 'Preview').style.display = 'none';
+
     } else throw new Error(data.error);
   } catch(e) {
     status.style.color = '#dc3545';
