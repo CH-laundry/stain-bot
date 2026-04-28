@@ -4937,6 +4937,7 @@ async function handlePhotoUpload(phase, input) {
   if (photoCurrentCount[phase] >= 7) { showResult('error', '最多只能上傳 7 張'); return; }
 
   var file = input.files[0];
+  input.value = '';
   var status = document.getElementById(phase + 'Status');
   var area = document.getElementById(phase + 'Area');
 
@@ -4989,7 +4990,7 @@ async function handlePhotoUpload(phase, input) {
     showResult('error', '❌ ' + e.message);
   }
 
-  input.value = '';
+  
 }
 
 async function loadArchivePhotos() {
