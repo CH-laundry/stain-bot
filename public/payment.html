@@ -965,7 +965,7 @@
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:10px;">
       <!-- 洗前 -->
       <div style="position:relative; border:2px dashed #1a6b4a; border-radius:12px; padding:20px; text-align:center; background:#e6f4ee; cursor:pointer;" id="beforeArea">
-        <input type="file" accept="image/*" capture="environment" multiple id="beforeInput" onchange="handlePhotoUpload('before',this)" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;">
+        <input type="file" accept="image/*" capture="environment" id="beforeInput" onchange="handlePhotoUpload('before',this)" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;">
         <div style="font-size:28px; margin-bottom:8px;">📸</div>
         <div style="font-weight:700; color:#1a6b4a; letter-spacing:1px;">洗  前</div>
         <div style="font-size:12px; color:#999; margin-top:4px;">收件前拍照</div>
@@ -974,7 +974,7 @@
       </div>
       <!-- 洗後 -->
       <div style="position:relative; border:2px dashed #8a2c2c; border-radius:12px; padding:20px; text-align:center; background:#f7e8e8; cursor:pointer;" id="afterArea">
-        <input type="file" accept="image/*" capture="environment" multiple id="afterInput" onchange="handlePhotoUpload('after',this)" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;">
+        <input type="file" accept="image/*" capture="environment" id="afterInput" onchange="handlePhotoUpload('after',this)" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;">
         <div style="font-size:28px; margin-bottom:8px;">✨</div>
         <div style="font-weight:700; color:#8a2c2c; letter-spacing:1px;">洗  後</div>
         <div style="font-size:12px; color:#999; margin-top:4px;">完工後拍照</div>
@@ -4918,29 +4918,34 @@ function photoLookupCustomer() {
     document.getElementById(p+'Status').textContent = '';
     document.getElementById(p+'Input').value = '';
   });
+  photoCurrentCount = { before: 0, after: 0 };
+
 }
 
+  
 function selectPhotoItem(el, name) {
   document.querySelectorAll('.photo-item-btn').forEach(function(b) { b.classList.remove('active'); });
   el.classList.add('active');
   photoCurrentItem = name;
 }
 
+var photoCurrentCount = { before: 0, after: 0 };
+
 async function handlePhotoUpload(phase, input) {
   if (!input.files || input.files.length === 0) return;
   if (!photoCurrentCustomerNo) { showResult('error', '請先確認客戶'); return; }
+  if (photoCurrentCount[phase] >= 7) { showResult('error', '最多只能上傳 7 張'); return; }
 
-  var files = Array.from(input.files);
+  var file = input.files[0];
   var status = document.getElementById(phase + 'Status');
+  var area = document.getElementById(phase + 'Area');
 
   status.style.color = '#667eea';
-  status.textContent = '上傳中…（共 ' + files.length + ' 張）';
+  status.textContent = '上傳中…';
 
   try {
     var formData = new FormData();
-    for (var i = 0; i < files.length; i++) {
-      formData.append('photo', files[i]);
-    }
+    formData.append('photo', file);
     formData.append('customerNumber', photoCurrentCustomerNo);
     formData.append('phase', phase);
     formData.append('itemType', photoCurrentItem);
@@ -4949,47 +4954,42 @@ async function handlePhotoUpload(phase, input) {
     var data = await res.json();
 
     if (data.success) {
+      photoCurrentCount[phase]++;
       status.style.color = '#28a745';
-      var count = data.results ? data.results.length : files.length;
-      status.textContent = (phase === 'before' ? '✓ 洗前照' : '✓ 洗後照') + ' 已上傳 ' + count + ' 張';
-      showResult('success', '✅ ' + count + ' 張照片已儲存');
+      status.textContent = '✓ 已上傳 ' + photoCurrentCount[phase] + ' 張（最多7張）';
 
-      // 顯示多張預覽
-      var area = document.getElementById(phase + 'Area');
-      var existingGrid = area.querySelector('.photo-grid');
-      if (existingGrid) existingGrid.remove();
-
-      var grid = document.createElement('div');
-      grid.className = 'photo-grid';
-      grid.style.cssText = 'display:grid; grid-template-columns:repeat(3,1fr); gap:4px; margin-top:8px;';
-
-      var readPromises = files.slice(0, 7).map(function(file) {
-        return new Promise(function(resolve) {
-          var reader = new FileReader();
-          reader.onload = function(e) { resolve(e.target.result); };
-          reader.readAsDataURL(file);
-        });
-      });
-
-      Promise.all(readPromises).then(function(results) {
-        results.forEach(function(src) {
-          var img = document.createElement('img');
-          img.src = src;
-          img.style.cssText = 'width:100%; aspect-ratio:1; object-fit:cover; border-radius:4px;';
-          grid.appendChild(img);
-        });
+      var grid = area.querySelector('.photo-grid');
+      if (!grid) {
+        grid = document.createElement('div');
+        grid.className = 'photo-grid';
+        grid.style.cssText = 'display:grid; grid-template-columns:repeat(3,1fr); gap:4px; margin-top:8px;';
         area.appendChild(grid);
-      });
+      }
 
-      // 隱藏舊的單張預覽
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        var img = document.createElement('img');
+        img.src = e.target.result;
+        img.style.cssText = 'width:100%; aspect-ratio:1; object-fit:cover; border-radius:4px;';
+        grid.appendChild(img);
+      };
+      reader.readAsDataURL(file);
+
       document.getElementById(phase + 'Preview').style.display = 'none';
 
+      if (photoCurrentCount[phase] < 7) {
+        showResult('success', '✅ 第 ' + photoCurrentCount[phase] + ' 張已儲存，再點一次可繼續拍');
+      } else {
+        showResult('success', '✅ 已達 7 張上限');
+      }
     } else throw new Error(data.error);
   } catch(e) {
     status.style.color = '#dc3545';
     status.textContent = '✕ 上傳失敗';
     showResult('error', '❌ ' + e.message);
   }
+
+  input.value = '';
 }
 
 async function loadArchivePhotos() {
@@ -5029,7 +5029,7 @@ async function loadArchivePhotos() {
         html += '<div style="font-size:11px; font-weight:700; letter-spacing:1.5px; color:' + color + '; margin-bottom:8px;">' + label + '</div>';
         if (p) {
           html += '<img src="' + p.url + '" style="width:100%; border-radius:8px; cursor:pointer;" onclick="window.open(\'' + p.url + '\',\'_blank\')">';
-          html += '<button onclick="deleteArchivePhoto(\'' + p.name + '\',\'' + cleanNo + '\',\'' + p.url + '\',\'' + cleanNo + '\')" style="margin-top:8px; width:100%; padding:5px; background:#fff; border:1px solid #fcc; color:#dc3545; border-radius:6px; cursor:pointer; font-size:12px;">🗑️ 刪除</button>';
+          html += '<button onclick="deleteArchivePhoto(\'' + p.name + '\',\'' + cleanNo + '\',\'' + p.url + '\')" style="margin-top:8px; width:100%; padding:5px; background:#fff; border:1px solid #fcc; color:#dc3545; border-radius:6px; cursor:pointer; font-size:12px;">🗑️ 刪除</button>';
         } else {
           html += '<div style="background:#f5f5f5; border-radius:8px; aspect-ratio:4/3; display:flex; align-items:center; justify-content:center; font-size:28px; border:1.5px dashed #e0e0e0;">📷</div>';
         }
