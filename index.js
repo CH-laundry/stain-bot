@@ -5968,49 +5968,6 @@ if (photoUrl) {
     console.error('刪除失敗:', e.message);
     res.json({ success: false, error: e.message });
   }
-});app.post('/api/photo-delete', async (req, res) => {
-  try {
-    const { fileName, photoUrl } = req.body;
-    const cloudinary = require('cloudinary').v2;
-
-    let publicId = fileName;
-
-    if (photoUrl) {
-      const match = photoUrl.match(/\/image\/upload\/(?:v\d+\/)?(.+?)(?:\.[a-zA-Z0-9]+)?$/);
-      if (match) {
-        publicId = decodeURIComponent(match[1]);
-      }
-    }
-
-    console.log('[PhotoDelete] 準備刪除 publicId:', publicId);
-
-    const result = await cloudinary.uploader.destroy(publicId, {
-      resource_type: 'image',
-      invalidate: true
-    });
-
-    console.log('[PhotoDelete] Cloudinary 回傳:', result);
-
-    if (result.result !== 'ok') {
-      return res.json({
-        success: false,
-        error: 'Cloudinary 沒有刪到照片：' + result.result,
-        publicId
-      });
-    }
-
-    res.json({
-      success: true,
-      publicId
-    });
-
-  } catch (e) {
-    console.error('[PhotoDelete] 刪除失敗:', e);
-    res.json({
-      success: false,
-      error: e.message
-    });
-  }
 });
 
    
