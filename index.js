@@ -5954,12 +5954,12 @@ app.post('/api/photo-delete', async (req, res) => {
     const cloudinary = require('cloudinary').v2;
 
     // 從 URL 解析 public_id
-    let publicId = fileName;
-    if (photoUrl) {
-      // Cloudinary URL 格式: .../image/upload/v1234/laundry_photos/625/filename
-      const match = photoUrl.match(/\/image\/upload\/(?:v\d+\/)?(.+?)(?:\.\w+)?$/);
-      if (match) publicId = match[1];
-    }
+   let publicId = fileName;
+if (photoUrl) {
+  const match = photoUrl.match(/\/image\/upload\/(?:v\d+\/)?(.+?)(?:\.[a-zA-Z0-9]+)?$/);
+  if (match) publicId = match[1];
+  console.log('解析 publicId:', publicId);
+}
 
     await cloudinary.uploader.destroy(publicId, { resource_type: 'image' });
     console.log('✅ Cloudinary 照片已刪除:', publicId);
