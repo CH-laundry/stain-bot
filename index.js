@@ -5912,7 +5912,9 @@ app.post('/api/overdue-notify/test-send', async (req, res) => {
 
     const msg = `您好！您的衣物目前清潔進度如下：\n\n${doneText}${pendingText}\n因送洗數量較多，尚在清潔的衣物需要再稍候一些時間，造成不便深感抱歉 🙏 完成後將立即通知您，感謝您的耐心等候！`;
 
-    await lineClient.pushMessage(customer.userId, { type: 'text', text: msg });
+    const lc = lineClient || global.lineClient;
+    if (!lc) return res.json({ success: false, error: 'lineClient 未初始化' });
+    await lc.pushMessage(customer.userId, { type: 'text', text: msg });
     
     // 記錄測試發送（不影響正式紀錄）
     res.json({ success: true, message: `✅ 已發送測試訊息給 ${customer.name}（${customer.userId}）\n訂單：${orderNo}` });
