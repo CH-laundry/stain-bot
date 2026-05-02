@@ -5856,6 +5856,70 @@ app.post('/api/overdue-notify/manual-send', async (req, res) => {
   res.json({ success: true });
 });
 
+// 測試用：強制對指定客戶號碼觸發逾期通知
+app.post('/api/overdue-notify/test-send', async (req, res) => {
+  const { testCustomerNo } = req.body;
+  try {
+    const auth = new google.auth.GoogleAuth({
+      credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT),
+      scopes: ['https://www.googleapis.com/auth/spreadsheets']
+    });
+    const sheets = google.sheets({ version: 'v4', auth });
+    const result = await sheets.spreadsheets.values.get({
+      spreadsheetId: process.env.SPREADSHEET_ID,
+      range: '營業紀錄!A2:M'
+    });
+    const rows = result.data.values || [];
+    const notifyRecord = loadOverdueNotify();
+    
+    // 找到該客戶編號最近一筆未上掛訂單
+    const customers = orderManager.getAllCustomerNumbers();
+    const customer = customers.find(c => 
+      String(c.number).replace(/^0+/,'') === String(testCustomerNo).replace(/^0+/,'')
+    );
+    
+    if (!customer || !customer.userId) {
+      return res.json({ success: false, error: '找不到客戶 ' + testCustomerNo + ' 的 userId' });
+    }
+
+    // 找 Sheets 裡該客戶的訂單（取第一筆未上掛的）
+    let targetRow = null;
+    for (const row of rows) {
+      const orderNo = row[2] || '';
+      const itemsRaw = row[5] || '';
+      const locationDate = row[12] || '';
+      if (!orderNo) continue;
+      if (locationDate) continue; // 已上掛跳過
+      // 用姓名比對
+      const rowName = (row[3] || '').trim();
+      if (rowName === customer.name || rowName.includes(customer.name) || customer.name.includes(rowName)) {
+        targetRow = row;
+        break;
+      }
+    }
+
+    // 若找不到真實訂單，用假資料測試發送
+    const orderNo = targetRow ? (targetRow[2] || 'TEST-001') : 'TEST-001';
+    const itemsRaw = targetRow ? (targetRow[5] || '西裝外套 (掛衣號:完成), 褲子 (清潔中)') : '西裝外套 (掛衣號:完成), 褲子 (清潔中)';
+
+    const items = itemsRaw.split(',').map(s => s.trim()).filter(Boolean);
+    const doneItems = items.filter(i => i.includes('掛衣號:完成')).map(i => i.replace(/\s*\(掛衣號:完成\)/, ''));
+    const pendingItems = items.filter(i => i.includes('清潔中')).map(i => i.replace(/\s*\(清潔中\)/, ''));
+
+    const doneText = doneItems.length > 0 ? `✅ 已完成：${doneItems.join('、')}\n` : '';
+    const pendingText = pendingItems.length > 0 ? `🔄 仍在清潔：${pendingItems.join('、')}\n` : '';
+
+    const msg = `您好！您的衣物目前清潔進度如下：\n\n${doneText}${pendingText}\n因送洗數量較多，尚在清潔的衣物需要再稍候一些時間，造成不便深感抱歉 🙏 完成後將立即通知您，感謝您的耐心等候！`;
+
+    await lineClient.pushMessage(customer.userId, { type: 'text', text: msg });
+    
+    // 記錄測試發送（不影響正式紀錄）
+    res.json({ success: true, message: `✅ 已發送測試訊息給 ${customer.name}（${customer.userId}）\n訂單：${orderNo}` });
+  } catch(e) {
+    res.json({ success: false, error: e.message });
+  }
+});
+
 app.post('/api/overdue-notify/delete', (req, res) => {
   const { orderNos } = req.body;
   if (!orderNos || !Array.isArray(orderNos)) return res.status(400).json({ error: '缺少 orderNos' });
