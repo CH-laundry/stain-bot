@@ -919,6 +919,7 @@
   <div style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
     <button class="btn btn-small btn-secondary" onclick="loadOverdueAlerts()">🔄 重新整理</button>
     <button class="btn btn-small" style="background:#ff9800;color:#fff;" onclick="runBackfill()">🔧 補填歷史上掛時間（只需跑一次）</button>
+    <button class="btn btn-small" style="background:#17a2b8;color:#fff;" onclick="testOverdueNotify()">🧪 測試發送（625）</button>
     <button class="btn btn-small btn-danger" id="overdueDeleteBtn" style="display:none;" onclick="batchDeleteOverdue()">🗑️ 刪除已選（<span id="overdueDeleteCount">0</span>）</button>
     <button class="btn btn-small" style="background:#555;color:#fff;" onclick="toggleSelectAllOverdue()">☑️ 全選／取消</button>
 </div>
@@ -5380,6 +5381,26 @@ async function checkOverdueOnLoad() {
     }
   } catch(e) {
     console.error('逾期自動掃描失敗:', e.message);
+  }
+}
+
+async function testOverdueNotify() {
+  if (!confirm('確定要對客戶編號 625 測試發送逾期通知嗎？\n\n將立即觸發一次掃描並嘗試發送 LINE 通知。')) return;
+  try {
+    const res = await fetch('/api/overdue-notify/test-send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ testCustomerNo: '625' })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showResult('success', '✅ 測試完成！\n\n' + (data.message || '請查看 LINE 是否收到訊息'));
+      loadOverdueAlerts();
+    } else {
+      showResult('error', '❌ 測試失敗：' + (data.error || '未知錯誤'));
+    }
+  } catch(e) {
+    showResult('error', '❌ 連線失敗：' + e.message);
   }
 }
   
