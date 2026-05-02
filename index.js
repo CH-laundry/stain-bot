@@ -5860,6 +5860,7 @@ app.post('/api/overdue-notify/manual-send', async (req, res) => {
 app.post('/api/overdue-notify/test-send', async (req, res) => {
   const { testCustomerNo } = req.body;
   try {
+    const { google } = require('googleapis');
     const auth = new google.auth.GoogleAuth({
       credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT),
       scopes: ['https://www.googleapis.com/auth/spreadsheets']
