@@ -5724,6 +5724,118 @@ app.get('/api/photos-by-name/:displayName', async (req, res) => {
 // ========================================
 
 
+// ========================================
+// 逾期自動通知客人 (第15天/第21天)
+// ========================================
+const OVERDUE_NOTIFY_FILE = path.join(__dirname, 'overdue-notify.json');
+
+function loadOverdueNotify() {
+  try {
+    if (fs.existsSync(OVERDUE_NOTIFY_FILE)) {
+      return JSON.parse(fs.readFileSync(OVERDUE_NOTIFY_FILE, 'utf8'));
+    }
+  } catch(e) {}
+  return {};
+}
+
+function saveOverdueNotify(data) {
+  fs.writeFileSync(OVERDUE_NOTIFY_FILE, JSON.stringify(data, null, 2));
+}
+
+async function runOverdueNotify() {
+  console.log('🔔 開始執行逾期通知掃描...');
+  try {
+    const auth = new google.auth.GoogleAuth({
+      credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT),
+      scopes: ['https://www.googleapis.com/auth/spreadsheets']
+    });
+    const sheets = google.sheets({ version: 'v4', auth });
+    const result = await sheets.spreadsheets.values.get({
+      spreadsheetId: process.env.SPREADSHEET_ID,
+      range: '營業紀錄!A2:M'
+    });
+    const rows = result.data.values || [];
+    const notifyRecord = loadOverdueNotify();
+    const START_DATE = new Date('2026-04-27');
+    const now = new Date();
+
+    for (const row of rows) {
+      const orderDate = row[0] ? new Date(row[0]) : null;
+      const orderNo = row[2] || '';
+      const customerName = row[3] || '';
+      const customerPhone = row[4] || '';
+      const itemsRaw = row[5] || '';
+      const locationDate = row[12] || '';
+
+      if (!orderDate || !orderNo) continue;
+      if (orderDate < START_DATE) continue;
+      if (locationDate) continue; // 已全部上掛，不通知
+
+      const diffDays = Math.floor((now - orderDate) / (1000 * 60 * 60 * 24));
+      if (diffDays < 15) continue;
+
+      // 解析品項完成狀態
+      const items = itemsRaw.split(',').map(s => s.trim()).filter(Boolean);
+      const doneItems = items.filter(i => i.includes('掛衣號:完成')).map(i => i.replace(/\s*\(掛衣號:完成\)/, ''));
+      const pendingItems = items.filter(i => i.includes('清潔中')).map(i => i.replace(/\s*\(清潔中\)/, ''));
+
+      // 若全部都清潔中（沒有任何完成），照樣通知
+      const doneText = doneItems.length > 0 ? `✅ 已完成：${doneItems.join('、')}\n` : '';
+      const pendingText = pendingItems.length > 0 ? `🔄 仍在清潔：${pendingItems.join('、')}\n` : '';
+
+      // 查找 userId
+      const customers = orderManager.getAllCustomerNumbers();
+      const customer = customers.find(c =>
+        c.number === customerNo ||
+        c.phone === customerPhone ||
+        c.name === customerName
+      );
+      const userId = customer?.userId || null;
+
+      const record = notifyRecord[orderNo] || {};
+
+      // 第一次通知（第15天）
+      if (diffDays >= 15 && !record.notify1) {
+        const msg = `您好！您的衣物目前清潔進度如下：\n\n${doneText}${pendingText}\n因送洗數量較多，尚在清潔的衣物需要再稍候一些時間，造成不便深感抱歉 🙏 完成後將立即通知您，感謝您的耐心等候！`;
+        if (userId && lineClient) {
+          try {
+            await lineClient.pushMessage(userId, { type: 'text', text: msg });
+            record.notify1 = { sent: true, time: new Date().toISOString(), userId };
+          } catch(e) {
+            record.notify1 = { sent: false, time: new Date().toISOString(), error: e.message };
+          }
+        } else {
+          record.notify1 = { sent: false, time: new Date().toISOString(), error: 'no_userId' };
+        }
+        record.customerName = customerName;
+        record.orderDate = row[0];
+        notifyRecord[orderNo] = record;
+        saveOverdueNotify(notifyRecord);
+      }
+
+      // 第二次通知（第21天）
+      if (diffDays >= 21 && !record.notify2) {
+        const msg = `【C.H 精緻洗衣 誠摯致歉】\n\n您好，您的衣物目前清潔進度如下：\n\n${doneText}${pendingText}\n讓您久等了，非常抱歉 🙇 剩餘衣物這幾天內即可完成清潔，清潔完成後我們會立即通知您，感謝您的耐心與支持 💙`;
+        if (userId && lineClient) {
+          try {
+            await lineClient.pushMessage(userId, { type: 'text', text: msg });
+            record.notify2 = { sent: true, time: new Date().toISOString(), userId };
+          } catch(e) {
+            record.notify2 = { sent: false, time: new Date().toISOString(), error: e.message };
+          }
+        } else {
+          record.notify2 = { sent: false, time: new Date().toISOString(), error: 'no_userId' };
+        }
+        notifyRecord[orderNo] = record;
+        saveOverdueNotify(notifyRecord);
+      }
+    }
+    console.log('✅ 逾期通知掃描完成');
+  } catch(e) {
+    console.error('❌ 逾期通知掃描失敗:', e.message);
+  }
+}
+
 // 取得所有逾期未上掛訂單
 app.get('/api/overdue-alerts', async (req, res) => {
   try {
