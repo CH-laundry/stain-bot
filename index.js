@@ -5804,9 +5804,9 @@ async function runOverdueNotify() {
       // 第一次通知（第15天）
       if (diffDays >= 15 && !record.notify1) {
         const msg = `您好！您的衣物目前清潔進度如下：\n\n${doneText}${pendingText}\n因送洗數量較多，尚在清潔的衣物需要再稍候一些時間，造成不便深感抱歉 🙏 完成後將立即通知您，感謝您的耐心等候！`;
-        if (userId && lineClient) {
+        if (userId && client) {
           try {
-            await lineClient.pushMessage(userId, { type: 'text', text: msg });
+            await client.pushMessage(userId, { type: 'text', text: msg });
             record.notify1 = { sent: true, time: new Date().toISOString(), userId };
           } catch(e) {
             record.notify1 = { sent: false, time: new Date().toISOString(), error: e.message };
@@ -5823,9 +5823,9 @@ async function runOverdueNotify() {
       // 第二次通知（第21天）
       if (diffDays >= 21 && !record.notify2) {
         const msg = `【C.H 精緻洗衣 誠摯致歉】\n\n您好，您的衣物目前清潔進度如下：\n\n${doneText}${pendingText}\n讓您久等了，非常抱歉 🙇 剩餘衣物這幾天內即可完成清潔，清潔完成後我們會立即通知您，感謝您的耐心與支持 💙`;
-        if (userId && lineClient) {
+        if (userId && client) {
           try {
-            await lineClient.pushMessage(userId, { type: 'text', text: msg });
+            await client.pushMessage(userId, { type: 'text', text: msg });
             record.notify2 = { sent: true, time: new Date().toISOString(), userId };
           } catch(e) {
             record.notify2 = { sent: false, time: new Date().toISOString(), error: e.message };
@@ -5912,9 +5912,7 @@ app.post('/api/overdue-notify/test-send', async (req, res) => {
 
     const msg = `您好！您的衣物目前清潔進度如下：\n\n${doneText}${pendingText}\n因送洗數量較多，尚在清潔的衣物需要再稍候一些時間，造成不便深感抱歉 🙏 完成後將立即通知您，感謝您的耐心等候！`;
 
-    const lc = lineClient || global.lineClient;
-    if (!lc) return res.json({ success: false, error: 'lineClient 未初始化' });
-    await lc.pushMessage(customer.userId, { type: 'text', text: msg });
+   await client.pushMessage(customer.userId, { type: 'text', text: msg });
     
     // 記錄測試發送（不影響正式紀錄）
     res.json({ success: true, message: `✅ 已發送測試訊息給 ${customer.name}（${customer.userId}）\n訂單：${orderNo}` });
