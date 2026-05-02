@@ -4408,6 +4408,13 @@ setInterval(async () => {
 
 console.log('⏰ 自動簽收偵測已啟動（每30分鐘）');
 
+// 每天早上 9 點掃描逾期通知
+cron.schedule('0 9 * * *', async () => {
+  console.log('⏰ 每日逾期通知掃描啟動');
+  await runOverdueNotify();
+});
+
+  
   // ====== 每天凌晨2點同步 POS 訂單到 Google Sheets ======
 cron.schedule('0 2 * * *', async () => {
   console.log('[SheetsSync] 開始同步 POS 訂單到 Google Sheets...');
@@ -5835,6 +5842,28 @@ async function runOverdueNotify() {
     console.error('❌ 逾期通知掃描失敗:', e.message);
   }
 }
+
+// 逾期通知狀態 API
+app.get('/api/overdue-notify', (req, res) => {
+  const data = loadOverdueNotify();
+  res.json({ records: data });
+});
+
+app.post('/api/overdue-notify/manual-send', async (req, res) => {
+  const { orderNo } = req.body;
+  if (!orderNo) return res.status(400).json({ error: '缺少 orderNo' });
+  await runOverdueNotify();
+  res.json({ success: true });
+});
+
+app.post('/api/overdue-notify/delete', (req, res) => {
+  const { orderNos } = req.body;
+  if (!orderNos || !Array.isArray(orderNos)) return res.status(400).json({ error: '缺少 orderNos' });
+  const data = loadOverdueNotify();
+  orderNos.forEach(no => delete data[no]);
+  saveOverdueNotify(data);
+  res.json({ success: true });
+});
 
 // 取得所有逾期未上掛訂單
 app.get('/api/overdue-alerts', async (req, res) => {
