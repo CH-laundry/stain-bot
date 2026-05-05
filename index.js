@@ -5765,7 +5765,17 @@ async function runOverdueNotify() {
     const notifyRecord = loadOverdueNotify();
     const START_DATE = new Date('2026-04-27');
     const now = new Date();
-
+    
+// 自動清除已上掛完成的通知紀錄
+    for (const orderNo of Object.keys(notifyRecord)) {
+      const matchRow = rows.find(row => (row[2] || '') === orderNo);
+      if (matchRow && matchRow[12]) {
+        delete notifyRecord[orderNo];
+        console.log(`[OverdueNotify] ✅ 已自動清除已上掛訂單: ${orderNo}`);
+      }
+    }
+    saveOverdueNotify(notifyRecord);
+    
     for (const row of rows) {
       const orderDate = row[0] ? new Date(row[0]) : null;
       const orderNo = row[2] || '';
