@@ -1488,16 +1488,7 @@ try {
   console.log(`✅ LINE Pay 收款紀錄已寫入`);
 } catch(e) { console.error('寫入收款紀錄失敗:', e.message); }
 
-    // 🔥🔥🔥 【請貼在這裡：LINE Pay 成功後加入同步清單】 🔥🔥🔥
-    if (global.pendingSyncOrders) {
-         global.pendingSyncOrders.push({
-              orderId: order.orderId,  // ⚠️ 請確認這裡的 orderId 是對應到洗衣店的單號 (例如 001005680)
-              amount: order.amount,
-              payType: 'LINE'
-          });
-          console.log(`[Payment] LINE Pay 訂單 ${order.orderId} 已加入同步佇列`);
-      }
-      // 🔥🔥🔥 【結束】 🔥🔥🔥
+    
       
 
       if (order.userId && order.userId !== 'undefined') {
@@ -1607,15 +1598,7 @@ try {
   console.log(`✅ ECPay 收款紀錄已寫入`);
 } catch(e) { console.error('寫入收款紀錄失敗:', e.message); }
 
-        // 🔥 通知店裡電腦 (同步清單)
-        if (global.pendingSyncOrders) {
-            global.pendingSyncOrders.push({
-                orderId: oid,
-                amount: Number(order.amount),
-                payType: 'CREDIT' 
-            });
-            console.log(`[Payment] 綠界訂單 ${oid} 已加入同步佇列`);
-        }
+       
         break; 
       }
     }
