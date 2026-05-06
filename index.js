@@ -357,10 +357,54 @@ if (rowYear !== y || rowMonth !== m.padStart(2, '0')) return;
     const dailyArray = Object.entries(dailyTotals).map(([date, amount]) => ({ date, amount })).sort((a, b) => a.date.localeCompare(b.date));
 
     res.json({ success: true, records: records.reverse(), summary: { totalCollected, methodTotals, dailyTotals: dailyArray, count: records.length } });
+  } catch (error) // ===== 未收款清單 API =====
+app.get('/api/unpaid/list', async (req, res) => {
+  try {
+    const { month } = req.query;
+    const serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
+    const { google } = require('googleapis');
+    const auth = new google.auth.GoogleAuth({
+      credentials: serviceAccount,
+      scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly']
+    });
+    const sheets = google.sheets({ version: 'v4', auth });
+    const spreadsheetId = process.env.GOOGLE_SHEETS_ID_CUSTOMER;
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `'營業紀錄'!A:K`
+    });
+    const rows = (response.data.values || []).slice(1);
+    const orderMap = {};
+    rows.forEach(row => {
+      const date = (row[0] || '').toString().trim();
+      const orderNo = (row[2] || '').toString().trim();
+      const customerName = (row[3] || '').toString().trim();
+      const orderTotal = parseFloat(row[9] || 0);
+      const payMethod = (row[10] || '').toString().trim();
+      if (!orderNo || !date) return;
+      if (payMethod !== '') return;
+      if (month) {
+        const [y, m] = month.split('-');
+        const datePart = date.replace(/\//g, '-').substring(0, 7);
+        if (datePart !== `${y}-${m.padStart(2,'0')}`) return;
+      }
+      if (!orderMap[orderNo] && orderTotal > 0) {
+        orderMap[orderNo] = { date, orderNo, customerName, amount: orderTotal };
+      }
+    });
+    const records = Object.values(orderMap).sort((a, b) => b.date.localeCompare(a.date));
+    res.json({ success: true, records });
   } catch (error) {
+    console.error('[unpaid]', error);
+    res.json({ success: false, error: error.message, records: [] });
+  }
+});{
     res.json({ success: false, error: error.message, records: [], summary: {} });
   }
 });
+
+
+
 
 // ====== POS 自動綁定客戶編號 ======
 function extractCustomerNo(raw) {
