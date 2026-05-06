@@ -522,7 +522,8 @@ app.get('/api/unpaid/list', async (req, res) => {
           date = `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
         } catch(e) {}
         // 取客戶編號純數字
-        const customerNo = (o.CustomerNumber || '').replace(/\D/g,'').replace(/^0+/,'');
+        const rawNo = o.CustomerNumber || o.CustomerNo || o.CustomerNO || o.customerNumber || '';
+        const customerNo = rawNo.replace(/\D/g,'').replace(/^0+/,'');
         return {
           date,
           orderNo: o.ReceivingOrderNumber || '',
