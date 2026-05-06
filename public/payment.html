@@ -807,6 +807,7 @@
         <tr style="background:#f8f9fa;">
           <th style="padding:10px 12px;text-align:left;border-bottom:2px solid #e0e0e0;">日期</th>
           <th style="padding:10px 12px;text-align:left;border-bottom:2px solid #e0e0e0;">訂單號</th>
+          <th style="padding:10px 12px;text-align:left;border-bottom:2px solid #e0e0e0;">客戶編號</th>
           <th style="padding:10px 12px;text-align:left;border-bottom:2px solid #e0e0e0;">客戶姓名</th>
           <th style="padding:10px 12px;text-align:right;border-bottom:2px solid #e0e0e0;">未收金額</th>
         </tr>
@@ -4748,6 +4749,7 @@ async function loadUnpaid() {
       <tr style="border-bottom:1px solid #f0f0f0;">
         <td style="padding:10px 12px;">${r.date}</td>
         <td style="padding:10px 12px;font-family:monospace;">${r.orderNo}</td>
+        <td style="padding:10px 12px;color:#667eea;font-weight:600;">${r.customerNo || '-'}</td>
         <td style="padding:10px 12px;font-weight:600;">${r.customerName}</td>
         <td style="padding:10px 12px;text-align:right;color:#e74c3c;font-weight:700;">NT$ ${r.amount.toLocaleString()}</td>
       </tr>
