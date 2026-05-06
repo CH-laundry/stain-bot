@@ -503,17 +503,30 @@ app.get('/api/unpaid/list', async (req, res) => {
     const searchData = await searchRes.json();
     const orders = searchData?.Data?.Data ?? [];
 
-    const records = orders
-      .filter(o => parseFloat(o.UnPaidAmount || 0) > 0)
+   const records = orders
+      .filter(o => {
+        if (parseFloat(o.UnPaidAmount || 0) <= 0) return false;
+        // 再用日期二次過濾，確保只顯示該月
+        try {
+          const d = new Date(o.ReceivedDate || '');
+          const oYear = d.getFullYear().toString();
+          const oMonth = String(d.getMonth() + 1).padStart(2, '0');
+          if (oYear !== y.toString() || oMonth !== m.padStart(2,'0')) return false;
+        } catch(e) { return false; }
+        return true;
+      })
       .map(o => {
         let date = '';
         try {
           const d = new Date(o.ReceivedDate || '');
           date = `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
         } catch(e) {}
+        // 取客戶編號純數字
+        const customerNo = (o.CustomerNumber || '').replace(/\D/g,'').replace(/^0+/,'');
         return {
           date,
           orderNo: o.ReceivingOrderNumber || '',
+          customerNo,
           customerName: o.CustomerName || '',
           amount: parseFloat(o.UnPaidAmount || 0)
         };
