@@ -94,6 +94,7 @@
       <button class="tab" onclick="switchTab(event,'startup')">🚀 系統啟動</button>
       <button class="tab" onclick="switchTab(event,'stain-photo')">📸 污漬拍照</button>
       <button class="tab" onclick="switchTab(event,'payment-records')">💰 收款紀錄</button>
+      <button class="tab" onclick="switchTab(event,'unpaid')">⚠️ 未收款</button>
       <button class="tab" onclick="switchTab(event,'member-analysis')">🔍 會員分析</button>
       <button class="tab" onclick="switchTab(event,'photo-archive')">📷 鞋子污漬</button>
       <button class="tab" onclick="switchTab(event,'overdue')">⚠️ 逾期提醒</button>
@@ -787,6 +788,36 @@
   <div id="paymentRecordsList"><p style="text-align:center; color:#999;">請選擇月份後點擊查詢</p></div>
 </div>
 
+  <!-- ⚠️ 未收款 tab -->
+<div id="unpaid-tab" class="tab-content">
+  <h2 style="margin-bottom:16px;">⚠️ 未收款清單</h2>
+  <div style="display:flex;gap:12px;align-items:center;margin-bottom:20px;flex-wrap:wrap;">
+    <label style="font-weight:600;">月份：</label>
+    <input type="month" id="unpaidMonth" style="padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:15px;" onchange="loadUnpaid()">
+    <button onclick="loadUnpaid()" style="padding:8px 18px;background:#667eea;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;">🔄 重新載入</button>
+  </div>
+  <div id="unpaidSummary" style="background:linear-gradient(135deg,#ff6b6b,#ee5a24);color:#fff;border-radius:12px;padding:16px 24px;margin-bottom:20px;display:none;">
+    <div style="font-size:13px;opacity:0.9;">當月未收款總額</div>
+    <div id="unpaidTotal" style="font-size:28px;font-weight:700;margin-top:4px;">NT$ 0</div>
+    <div id="unpaidCount" style="font-size:13px;opacity:0.9;margin-top:2px;"></div>
+  </div>
+  <div id="unpaidTableWrap" style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;font-size:14px;">
+      <thead>
+        <tr style="background:#f8f9fa;">
+          <th style="padding:10px 12px;text-align:left;border-bottom:2px solid #e0e0e0;">日期</th>
+          <th style="padding:10px 12px;text-align:left;border-bottom:2px solid #e0e0e0;">訂單號</th>
+          <th style="padding:10px 12px;text-align:left;border-bottom:2px solid #e0e0e0;">客戶姓名</th>
+          <th style="padding:10px 12px;text-align:right;border-bottom:2px solid #e0e0e0;">未收金額</th>
+        </tr>
+      </thead>
+      <tbody id="unpaidTableBody">
+        <tr><td colspan="4" style="text-align:center;padding:30px;color:#999;">請選擇月份</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
   <!-- 📊 營業報表分頁 -->
 <div id="revenue-tab" class="tab-content">
   <h3 style="color:#667eea; margin-bottom:20px;">📊 營業報表</h3>
@@ -1081,6 +1112,7 @@
       if (tabName === 'manual') loadManuals();
       if (tabName === 'records') loadRecords();
       if (tabName === 'payment-records') loadPaymentRecordsList();
+      if (tabName === 'unpaid') initUnpaidTab();
       if (tabName === 'member-analysis') { /* 切換時不自動查詢，等使用者輸入 */ }
       if (tabName === 'photo-archive') { /* 切換時不自動查詢 */ }
       if (tabName === 'photo-archive') { /* 切換時不自動查詢 */ }
@@ -4691,6 +4723,48 @@ async function showDailyInsight(date, revenue, orders) {
   } catch(e) {
     document.getElementById('aiInsightContent').textContent = '❌ 連線失敗：' + e.message;
   }
+}
+
+  // ===== 未收款 =====
+async function loadUnpaid() {
+  const month = document.getElementById('unpaidMonth').value;
+  if (!month) return;
+  document.getElementById('unpaidTableBody').innerHTML =
+    '<tr><td colspan="4" style="text-align:center;padding:30px;color:#999;">載入中...</td></tr>';
+  try {
+    const res = await fetch('/api/unpaid/list?month=' + month);
+    const data = await res.json();
+    if (!data.success || !data.records.length) {
+      document.getElementById('unpaidTableBody').innerHTML =
+        '<tr><td colspan="4" style="text-align:center;padding:30px;color:#4caf50;font-size:16px;">✅ 本月無未收款</td></tr>';
+      document.getElementById('unpaidSummary').style.display = 'none';
+      return;
+    }
+    const total = data.records.reduce((s, r) => s + r.amount, 0);
+    document.getElementById('unpaidTotal').textContent = 'NT$ ' + total.toLocaleString();
+    document.getElementById('unpaidCount').textContent = '共 ' + data.records.length + ' 筆訂單';
+    document.getElementById('unpaidSummary').style.display = 'block';
+    document.getElementById('unpaidTableBody').innerHTML = data.records.map(r => `
+      <tr style="border-bottom:1px solid #f0f0f0;">
+        <td style="padding:10px 12px;">${r.date}</td>
+        <td style="padding:10px 12px;font-family:monospace;">${r.orderNo}</td>
+        <td style="padding:10px 12px;font-weight:600;">${r.customerName}</td>
+        <td style="padding:10px 12px;text-align:right;color:#e74c3c;font-weight:700;">NT$ ${r.amount.toLocaleString()}</td>
+      </tr>
+    `).join('');
+  } catch (e) {
+    document.getElementById('unpaidTableBody').innerHTML =
+      '<tr><td colspan="4" style="text-align:center;padding:30px;color:#e74c3c;">載入失敗：' + e.message + '</td></tr>';
+  }
+}
+
+function initUnpaidTab() {
+  const el = document.getElementById('unpaidMonth');
+  if (!el.value) {
+    const now = new Date();
+    el.value = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+  }
+  loadUnpaid();
 }
 </script>
 <!-- 📋 每日明細 Modal -->
