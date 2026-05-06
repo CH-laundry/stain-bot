@@ -522,8 +522,14 @@ app.get('/api/unpaid/list', async (req, res) => {
           date = `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
         } catch(e) {}
         // 取客戶編號純數字
-        const rawNo = o.CustomerNumber || o.CustomerNo || o.CustomerNO || o.customerNumber || '';
-        const customerNo = rawNo.replace(/\D/g,'').replace(/^0+/,'');
+        // 用姓名比對 orderManager 找客戶編號
+        const allCustomers = orderManager.getAllCustomerNumbers();
+        const matched = allCustomers.find(c => {
+          const cName = (c.name || '').replace(/\s/g,'');
+          const oName = (o.CustomerName || '').replace(/\s/g,'');
+          return cName && oName && cName === oName;
+        });
+        const customerNo = matched ? String(matched.number).replace(/\D/g,'').replace(/^0+/,'') : '';
         return {
           date,
           orderNo: o.ReceivingOrderNumber || '',
