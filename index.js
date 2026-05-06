@@ -481,9 +481,9 @@ app.get('/api/unpaid/list', async (req, res) => {
     const sheets = google.sheets({ version: 'v4', auth });
     const spreadsheetId = process.env.GOOGLE_SHEETS_ID_CUSTOMER;
     const response = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: `'營業紀錄'!A:K`
-    });
+  spreadsheetId,
+  range: `'營業紀錄'!A:N`
+});
     const rows = (response.data.values || []).slice(1);
     const orderMap = {};
     rows.forEach(row => {
@@ -491,9 +491,9 @@ app.get('/api/unpaid/list', async (req, res) => {
       const orderNo = (row[2] || '').toString().trim();
       const customerName = (row[3] || '').toString().trim();
       const orderTotal = parseFloat(row[9] || 0);
-      const payMethod = (row[10] || '').toString().trim();
-      if (!orderNo || !date) return;
-      if (payMethod !== '') return;
+      const unpaid = parseFloat(row[13] || 0);  // N 欄：未付金額
+if (!orderNo || !date) return;
+if (unpaid <= 0) return;  // 未付金額為0 = 已收款
       if (month) {
         const [y, m] = month.split('-');
         const datePart = date.replace(/\//g, '-').substring(0, 7);
@@ -3271,14 +3271,18 @@ app.get('/api/sync-sheets', async (req, res) => {
               } catch(e) {}
             }
 
-            return [
-              dateStr, timeStr, orderNo,
-              customerName, customerMobile,
-              goodsName, qty, unitPrice, subtotal,
-              idx === 0 ? totalAmount : '',
-              paymentType, deliveryType,
-              locationDateStr  // M 欄：上掛時間
-            ];
+           // 計算未付金額（只在第一行品項填入）
+const unpaidAmount = idx === 0 ? parseFloat(detail.UnPaidAmount || 0) : '';
+
+return [
+  dateStr, timeStr, orderNo,
+  customerName, customerMobile,
+  goodsName, qty, unitPrice, subtotal,
+  idx === 0 ? totalAmount : '',
+  paymentType, deliveryType,
+  locationDateStr,   // M 欄：上掛時間
+  unpaidAmount       // N 欄：未付金額
+];
           });
 
           await sheets.spreadsheets.values.append({
