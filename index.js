@@ -491,9 +491,19 @@ app.get('/api/unpaid/list', async (req, res) => {
       const orderNo = (row[2] || '').toString().trim();
       const customerName = (row[3] || '').toString().trim();
       const orderTotal = parseFloat(row[9] || 0);
-      const unpaid = parseFloat(row[13] || 0);  // N 欄：未付金額
+      const payMethod = (row[10] || '').toString().trim();
+const unpaid = parseFloat(row[13] || 0);
 if (!orderNo || !date) return;
-if (unpaid <= 0) return;  // 未付金額為0 = 已收款
+
+// 判斷邏輯：
+// 1. N欄有值 → 用 unpaid > 0 判斷（新資料，最準確）
+// 2. N欄空白 → 用 K欄空白 + J欄有金額判斷（舊資料）
+const hasUnpaidCol = row[13] !== undefined && row[13] !== '';
+if (hasUnpaidCol) {
+  if (unpaid <= 0) return; // N欄有值，用它判斷
+} else {
+  if (payMethod !== '') return; // N欄空白，用K欄判斷
+}
       if (month) {
         const [y, m] = month.split('-');
         const datePart = date.replace(/\//g, '-').substring(0, 7);
