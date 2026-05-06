@@ -472,48 +472,54 @@ if (rowYear !== y || rowMonth !== m.padStart(2, '0')) return;
 app.get('/api/unpaid/list', async (req, res) => {
   try {
     const { month } = req.query;
-    const serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
-    const { google } = require('googleapis');
-    const auth = new google.auth.GoogleAuth({
-      credentials: serviceAccount,
-      scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly']
-    });
-    const sheets = google.sheets({ version: 'v4', auth });
-    const spreadsheetId = process.env.GOOGLE_SHEETS_ID_CUSTOMER;
-    const response = await sheets.spreadsheets.values.get({
-  spreadsheetId,
-  range: `'營業紀錄'!A:N`
-});
-    const rows = (response.data.values || []).slice(1);
-    const orderMap = {};
-    rows.forEach(row => {
-      const date = (row[0] || '').toString().trim();
-      const orderNo = (row[2] || '').toString().trim();
-      const customerName = (row[3] || '').toString().trim();
-      const orderTotal = parseFloat(row[9] || 0);
-      const payMethod = (row[10] || '').toString().trim();
-const unpaid = parseFloat(row[13] || 0);
-if (!orderNo || !date) return;
+    const token = await getPosToken();
+    if (!token) return res.json({ success: false, error: 'POS 登入失敗', records: [] });
 
-// 判斷邏輯：
-// 1. N欄有值 → 用 unpaid > 0 判斷（新資料，最準確）
-// 2. N欄空白 → 用 K欄空白 + J欄有金額判斷（舊資料）
-const hasUnpaidCol = row[13] !== undefined && row[13] !== '';
-if (hasUnpaidCol) {
-  if (unpaid <= 0) return; // N欄有值，用它判斷
-} else {
-  if (payMethod !== '') return; // N欄空白，用K欄判斷
-}
-      if (month) {
-        const [y, m] = month.split('-');
-        const datePart = date.replace(/\//g, '-').substring(0, 7);
-        if (datePart !== `${y}-${m.padStart(2,'0')}`) return;
-      }
-      if (!orderMap[orderNo] && orderTotal > 0) {
-        orderMap[orderNo] = { date, orderNo, customerName, amount: orderTotal };
-      }
+    const headers = {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Host': 'yidianyuan.ao-lan.cn',
+      'Authorization': `Bearer ${token}`
+    };
+
+    const [y, m] = month ? month.split('-') : [
+      new Date().getFullYear(),
+      String(new Date().getMonth() + 1).padStart(2, '0')
+    ];
+    const startDate = `${y}-${m.padStart(2,'0')}-01`;
+    const lastDay = new Date(parseInt(y), parseInt(m), 0).getDate();
+    const endDate = `${y}-${m.padStart(2,'0')}-${lastDay}`;
+
+    const searchRes = await fetch('http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/SearchPage', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify([
+        { Key: 'BranchID', Value: 'b0aee8e3-6a6e-4863-b74a-08da8958f7f9' },
+        { Key: 'StartDate', Value: startDate },
+        { Key: 'EndDate', Value: endDate },
+        { Key: 'PageSize', Value: '200' },
+        { Key: 'PageIndex', Value: '1' }
+      ])
     });
-    const records = Object.values(orderMap).sort((a, b) => b.date.localeCompare(a.date));
+    const searchData = await searchRes.json();
+    const orders = searchData?.Data?.Data ?? [];
+
+    const records = orders
+      .filter(o => parseFloat(o.UnPaidAmount || 0) > 0)
+      .map(o => {
+        let date = '';
+        try {
+          const d = new Date(o.ReceivedDate || '');
+          date = `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+        } catch(e) {}
+        return {
+          date,
+          orderNo: o.ReceivingOrderNumber || '',
+          customerName: o.CustomerName || '',
+          amount: parseFloat(o.UnPaidAmount || 0)
+        };
+      })
+      .sort((a, b) => b.date.localeCompare(a.date));
+
     res.json({ success: true, records });
   } catch (error) {
     console.error('[unpaid]', error);
