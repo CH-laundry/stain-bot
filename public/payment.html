@@ -5027,6 +5027,11 @@ function selectPhotoItem(el, name) {
 
 var photoCurrentCount = { before: 0, after: 0 };
 
+  photoCurrentGroup = 1;
+  document.querySelectorAll('#photoGroupSelector .photo-item-btn').forEach(function(b) { b.classList.remove('active'); });
+  var firstGroupBtn = document.querySelector('#photoGroupSelector .photo-item-btn');
+  if (firstGroupBtn) firstGroupBtn.classList.add('active');
+
 async function handlePhotoUpload(phase, input) {
   if (!input.files || input.files.length === 0) return;
   if (!photoCurrentCustomerNo) { showResult('error', '請先確認客戶'); return; }
@@ -5106,20 +5111,23 @@ async function loadArchivePhotos() {
 
     // 依日期+品項分組，每組保留所有 before 和 after
     var groups = {};
-    data.photos.forEach(function(p) {
-      var d = new Date(p.date).toLocaleDateString('zh-TW');
-      var key = d + '_' + p.itemType;
-      if (!groups[key]) groups[key] = { date: d, itemType: p.itemType, before: [], after: [] };
-      if (p.phase === 'before') groups[key].before.push(p);
-      else groups[key].after.push(p);
-    });
+data.photos.forEach(function(p) {
+  var d = new Date(p.date).toLocaleDateString('zh-TW');
+  var nameParts = (p.name || '').split('_');
+  var gPart = nameParts.find(function(s) { return /^g\d+$/.test(s); });
+  var groupNo = gPart ? gPart.replace('g','') : '1';
+  var key = d + '_' + p.itemType + '_g' + groupNo;
+  if (!groups[key]) groups[key] = { date: d, itemType: p.itemType, groupNo: groupNo, before: [], after: [] };
+  if (p.phase === 'before') groups[key].before.push(p);
+  else groups[key].after.push(p);
+});
 
     var html = '';
     Object.values(groups).sort(function(a,b){ return b.date.localeCompare(a.date); }).forEach(function(g) {
       html += '<div style="border:1px solid #e0e0e0; border-radius:10px; margin-bottom:15px; overflow:hidden;">';
       html += '<div style="background:#f0f4ff; padding:10px 15px; display:flex; justify-content:space-between;">';
       html += '<span style="font-weight:600; color:#667eea;">📅 ' + g.date + '</span>';
-      html += '<span style="background:#667eea; color:#fff; padding:3px 10px; border-radius:10px; font-size:12px;">' + g.itemType + '</span>';
+      html += '<span style="background:#667eea; color:#fff; padding:3px 10px; border-radius:10px; font-size:12px;">' + g.itemType + ' 第' + g.groupNo + '組</span>';
       html += '</div>';
       html += '<div style="display:grid; grid-template-columns:1fr 1fr;">';
 
