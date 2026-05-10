@@ -984,6 +984,19 @@
     <div class="form-group">
       <label>品項</label>
       <div style="display:flex; flex-wrap:wrap; gap:8px;" id="photoItemSelector">
+
+<div class="form-group" style="margin-top:12px;">
+  <label>第幾組（同一雙/件為一組）</label>
+  <div style="display:flex; gap:8px; flex-wrap:wrap;" id="photoGroupSelector">
+    <button type="button" class="photo-item-btn active" onclick="selectPhotoGroup(this,1)">第 1 組</button>
+    <button type="button" class="photo-item-btn" onclick="selectPhotoGroup(this,2)">第 2 組</button>
+    <button type="button" class="photo-item-btn" onclick="selectPhotoGroup(this,3)">第 3 組</button>
+    <button type="button" class="photo-item-btn" onclick="selectPhotoGroup(this,4)">第 4 組</button>
+    <button type="button" class="photo-item-btn" onclick="selectPhotoGroup(this,5)">第 5 組</button>
+  </div>
+  <small style="color:#999; margin-top:4px; display:block;">送洗多雙/件時，每雙/件選不同組別，洗前洗後才能對應</small>
+</div>
+        
         <button type="button" class="photo-item-btn active" onclick="selectPhotoItem(this,'鞋子')">👟 鞋子</button>
         <button type="button" class="photo-item-btn" onclick="selectPhotoItem(this,'包包')">👜 包包</button>
         <button type="button" class="photo-item-btn" onclick="selectPhotoItem(this,'西裝')">👔 西裝</button>
@@ -4976,6 +4989,7 @@ function closeDayDetail() {
 // ========================================
 var photoCurrentCustomerNo = '';
 var photoCurrentItem = '鞋子';
+var photoCurrentGroup = 1;
 
 function photoLookupCustomer() {
   var no = document.getElementById('photoCustomerNo').value.trim();
@@ -5005,6 +5019,12 @@ function selectPhotoItem(el, name) {
   photoCurrentItem = name;
 }
 
+  function selectPhotoGroup(el, groupNo) {
+  document.querySelectorAll('#photoGroupSelector .photo-item-btn').forEach(function(b) { b.classList.remove('active'); });
+  el.classList.add('active');
+  photoCurrentGroup = groupNo;
+}
+
 var photoCurrentCount = { before: 0, after: 0 };
 
 async function handlePhotoUpload(phase, input) {
@@ -5023,9 +5043,10 @@ async function handlePhotoUpload(phase, input) {
   try {
     var formData = new FormData();
     formData.append('photo', file);
-    formData.append('customerNumber', photoCurrentCustomerNo);
-    formData.append('phase', phase);
-    formData.append('itemType', photoCurrentItem);
+formData.append('customerNumber', photoCurrentCustomerNo);
+formData.append('phase', phase);
+formData.append('itemType', photoCurrentItem);
+formData.append('groupNo', photoCurrentGroup);
 
     var res = await fetch('/api/upload-photo', { method: 'POST', body: formData });
     var data = await res.json();
