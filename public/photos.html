@@ -167,11 +167,14 @@ async function init() {
 }
 
 function render(customerName, pictureUrl, photos, customerNo) {
-  var groups = {};
+ var groups = {};
   photos.forEach(function(p) {
     var dateKey = (p.date || '').substring(0, 10);
-    var key = dateKey + '_' + (p.itemType || '');
-    if (!groups[key]) groups[key] = { itemType: p.itemType, before: [], after: [], date: dateKey };
+    var nameParts = (p.name || '').split('_');
+    var gPart = nameParts.find(function(s) { return /^g\d+$/.test(s); });
+    var groupNo = gPart ? gPart.replace('g','') : '1';
+    var key = dateKey + '_' + (p.itemType || '') + '_g' + groupNo;
+    if (!groups[key]) groups[key] = { itemType: p.itemType, groupNo: groupNo, before: [], after: [], date: dateKey };
     if (p.phase === 'before') groups[key].before.push(p);
     else groups[key].after.push(p);
   });
@@ -190,7 +193,7 @@ function render(customerName, pictureUrl, photos, customerNo) {
         '<div class="record-card" style="animation-delay:' + delay + 's">' +
         '<div class="record-header">' +
         '<span class="record-date">📅 ' + dateLabel + '</span>' +
-        '<span class="record-item-badge">' + (g.itemType || '') + '</span>' +
+        '<span class="record-item-badge">' + (g.itemType || '') + ' 第' + g.groupNo + '組</span>' +
         '</div>' +
         '<div class="photo-compare">' +
         '<div class="photo-col before"><div class="photo-col-label">清洗前</div>' +
