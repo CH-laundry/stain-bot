@@ -5707,15 +5707,16 @@ app.post('/api/upload-photo', upload.array('photo', 7), async (req, res) => {
       return res.status(400).json({ success: false, error: '沒有收到照片' });
     }
 
-    const date = new Date().toISOString().slice(0,10).replace(/-/g,'');
-    const phaseLabel = phase === 'before' ? '洗前' : '洗後';
-    const folder = `laundry_photos/${customerNumber}`;
-    const results = [];
+   const date = new Date().toISOString().slice(0,10).replace(/-/g,'');
+const phaseLabel = phase === 'before' ? '洗前' : '洗後';
+const groupNo = req.body.groupNo || '1';
+const folder = `laundry_photos/${customerNumber}`;
+const results = [];
 
-    for (let i = 0; i < req.files.length; i++) {
-      const file = req.files[i];
-      const timeStr = Date.now() + '_' + i;
-      const publicId = `${date}_${itemType}_${phaseLabel}_${timeStr}`;
+for (let i = 0; i < req.files.length; i++) {
+  const file = req.files[i];
+  const timeStr = Date.now() + '_' + i;
+  const publicId = `${date}_${itemType}_g${groupNo}_${phaseLabel}_${timeStr}`;
 
       const streamUpload = (buffer) => new Promise((resolve, reject) => {
         const stream = cloudinary.uploader.upload_stream(
