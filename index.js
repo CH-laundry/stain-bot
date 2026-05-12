@@ -6139,9 +6139,11 @@ app.post('/api/backfill-location-date', async (req, res) => {
       };
 
       const { google } = require('googleapis');
-      const googleAuth = require('./services/googleAuth');
-      const auth = googleAuth.getOAuth2Client();
-      const sheets = google.sheets({ version: 'v4', auth });
+const auth = new google.auth.GoogleAuth({
+  credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT),
+  scopes: ['https://www.googleapis.com/auth/spreadsheets']
+});
+const sheets = google.sheets({ version: 'v4', auth });
       const spreadsheetId = process.env.GOOGLE_SHEETS_ID_CUSTOMER;
 
       const sheetInfo = await sheets.spreadsheets.get({ spreadsheetId, fields: 'sheets.properties' });
