@@ -5881,7 +5881,10 @@ async function runOverdueNotify() {
 
       // 第一次通知（第15天）
       if (diffDays >= 15 && !record.notify1) {
-        const msg = `您好！您的衣物目前清潔進度如下：\n\n${doneText}${pendingText}\n因送洗數量較多，尚在清潔的衣物需要再稍候一些時間，造成不便深感抱歉 🙏 完成後將立即通知您，感謝您的耐心等候！`;
+        const doneList = doneItems.length > 0 ? doneItems.map(i => `  • ${i}`).join('\n') : '  （暫無）';
+        const pendingList = pendingItems.length > 0 ? pendingItems.map(i => `  • ${i}`).join('\n') : '  （暫無）';
+        const totalCount = doneItems.length + pendingItems.length;
+        const msg = `親愛的 ${customerName} 您好 💙\n\n感謝您的耐心等候，為您更新目前洗滌進度：\n\n您這次送洗共 ${totalCount} 件\n✅ 已完成：\n${doneList}\n⏳ 清潔中：\n${pendingList}\n\n非常抱歉讓您久等了，我們正在努力為您的衣物細心清潔，完成後會立即通知您 💙`;
         if (userId && client) {
           try {
             await client.pushMessage(userId, { type: 'text', text: msg });
@@ -5898,9 +5901,11 @@ async function runOverdueNotify() {
         saveOverdueNotify(notifyRecord);
       }
 
-      // 第二次通知（第21天）
-      if (diffDays >= 21 && !record.notify2) {
-        const msg = `【C.H 精緻洗衣 誠摯致歉】\n\n您好，您的衣物目前清潔進度如下：\n\n${doneText}${pendingText}\n讓您久等了，非常抱歉 🙇 剩餘衣物這幾天內即可完成清潔，清潔完成後我們會立即通知您，感謝您的耐心與支持 💙`;
+      // 第二次通知（第25天）
+      if (diffDays >= 25 && !record.notify2) {
+        const doneList2 = doneItems.length > 0 ? doneItems.map(i => `  • ${i}`).join('\n') : '  （暫無）';
+        const pendingList2 = pendingItems.length > 0 ? pendingItems.map(i => `  • ${i}`).join('\n') : '  （暫無）';
+        const msg = `親愛的 ${customerName} 您好 💙\n\n🙏 非常非常抱歉，因近期送洗衣物量較多，處理時間比預期延長，造成您的不便，我們深感抱歉。\n\n目前您的洗滌進度：\n✅ 已完成：\n${doneList2}\n⏳ 清潔中：\n${pendingList2}\n\n我們正在全力趕工，衣物清潔完成後會立即通知您取件。\n再次誠摯道歉，感謝您的諒解 💙`;
         if (userId && client) {
           try {
             await client.pushMessage(userId, { type: 'text', text: msg });
