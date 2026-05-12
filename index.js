@@ -6056,6 +6056,8 @@ app.get('/api/overdue-alerts', async (req, res) => {
       if (!dateStr || !orderNo || !customerName) return;
       if (seen.has(orderNo)) return;
       if (locationDate) return; // 已上掛，跳過
+      const ignoredData = loadOverdueData();
+if (ignoredData[orderNo]) return; // 已刪除/忽略，跳過
 
       const openDate = new Date(dateStr);
 if (isNaN(openDate)) return;
