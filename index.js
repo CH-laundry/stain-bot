@@ -3323,7 +3323,7 @@ return [
 
           await sheets.spreadsheets.values.append({
             spreadsheetId,
-            range: `'${sheetName}'!A:L`,
+            range: `'${sheetName}'!A:M`,
             valueInputOption: 'RAW',
             resource: { values: rows }
           });
@@ -4592,7 +4592,7 @@ cron.schedule('0 2 * * *', async () => {
 
         await sheets.spreadsheets.values.append({
           spreadsheetId,
-          range: `'${sheetName}'!A:L`,
+          range: `'${sheetName}'!A:M`,
           valueInputOption: 'RAW',
           resource: { values: rows }
         });
