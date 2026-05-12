@@ -4576,17 +4576,25 @@ cron.schedule('0 2 * * *', async () => {
           } catch(e) {}
         }
 
-        const rows = items.map((item, idx) => {
+       const rows = items.map((item, idx) => {
           const goodsName = item?.Goods?.GoodsName || '';
           const qty = parseInt(item.Qty || 1);
           const unitPrice = parseFloat(item.UnitPrice || 0);
           const subtotal = unitPrice * qty;
+          let locationDateStr = '';
+          if (item.LocationDate) {
+            try {
+              const ld = new Date(item.LocationDate);
+              locationDateStr = `${ld.getFullYear()}/${String(ld.getMonth()+1).padStart(2,'0')}/${String(ld.getDate()).padStart(2,'0')} ${String(ld.getHours()).padStart(2,'0')}:${String(ld.getMinutes()).padStart(2,'0')}`;
+            } catch(e) {}
+          }
           return [
             dateStr, timeStr, orderNo,
             customerName, customerMobile,
             goodsName, qty, unitPrice, subtotal,
             idx === 0 ? totalAmount : '',
-            paymentType, deliveryType
+            paymentType, deliveryType,
+            locationDateStr
           ];
         });
 
