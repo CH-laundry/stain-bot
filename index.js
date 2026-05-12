@@ -6025,8 +6025,10 @@ app.post('/api/overdue-notify/delete', (req, res) => {
 app.get('/api/overdue-alerts', async (req, res) => {
   try {
     const { google } = require('googleapis');
-    const googleAuth = require('./services/googleAuth');
-    const auth = googleAuth.getOAuth2Client();
+    const auth = new google.auth.GoogleAuth({
+      credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT),
+      scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly']
+    });
     const sheets = google.sheets({ version: 'v4', auth });
     const spreadsheetId = process.env.GOOGLE_SHEETS_ID_CUSTOMER;
 
