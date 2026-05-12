@@ -5826,7 +5826,7 @@ async function runOverdueNotify() {
     });
     const sheets = google.sheets({ version: 'v4', auth });
     const result = await sheets.spreadsheets.values.get({
-      spreadsheetId: process.env.SPREADSHEET_ID,
+      spreadsheetId: process.env.GOOGLE_SHEETS_ID_CUSTOMER,
       range: '營業紀錄!A2:M'
     });
     const rows = result.data.values || [];
@@ -5950,7 +5950,7 @@ app.post('/api/overdue-notify/test-send', async (req, res) => {
     });
     const sheets = google.sheets({ version: 'v4', auth });
     const result = await sheets.spreadsheets.values.get({
-      spreadsheetId: process.env.SPREADSHEET_ID,
+      spreadsheetId: process.env.GOOGLE_SHEETS_ID_CUSTOMER,
       range: '營業紀錄!A2:M'
     });
     const rows = result.data.values || [];
