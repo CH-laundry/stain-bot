@@ -1566,6 +1566,47 @@ try {
     resource: { values: [[dateStr, timeStr, order.userName || '未知', '', parseFloat(order.amount), 'LINE Pay', order.orderId]] }
   });
   console.log(`✅ LINE Pay 收款紀錄已寫入`);
+
+  // 更新營業紀錄 K 欄付款方式
+  try {
+    const auth2 = new google.auth.GoogleAuth({
+      credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT),
+      scopes: ['https://www.googleapis.com/auth/spreadsheets']
+    });
+    const sheets2 = google.sheets({ version: 'v4', auth: auth2 });
+    const salesSheet = await sheets2.spreadsheets.values.get({
+      spreadsheetId: process.env.GOOGLE_SHEETS_ID_CUSTOMER,
+      range: `'營業紀錄'!C:K`
+    });
+    const salesRows = salesSheet.data.values || [];
+    const targetRowIndexes = [];
+    salesRows.forEach((row, idx) => {
+      if (idx === 0) return;
+      const payMethod = (row[8] || '').toString().trim();
+      if (payMethod !== '') return;
+      const rowName = (row[1] || '').toString().trim();
+      const orderName = (order.userName || '').trim();
+      if (rowName && orderName && rowName === orderName) {
+        targetRowIndexes.push(idx + 1);
+      }
+    });
+    if (targetRowIndexes.length > 0) {
+      await sheets2.spreadsheets.values.batchUpdate({
+        spreadsheetId: process.env.GOOGLE_SHEETS_ID_CUSTOMER,
+        requestBody: {
+          valueInputOption: 'USER_ENTERED',
+          data: targetRowIndexes.map(rowIdx => ({
+            range: `'營業紀錄'!K${rowIdx}`,
+            values: [['LINE Pay']]
+          }))
+        }
+      });
+      console.log(`✅ 已更新 K 欄 LINE Pay：${order.userName} 共 ${targetRowIndexes.length} 行`);
+    } else {
+      console.log(`⚠️ 找不到 ${order.userName} 的未付款營業紀錄`);
+    }
+  } catch(e2) { console.error('更新 K 欄失敗:', e2.message); }
+  
 } catch(e) { console.error('寫入收款紀錄失敗:', e.message); }
 
     
@@ -1676,6 +1717,43 @@ try {
     resource: { values: [[dateStr, timeStr, userName || '未知', '', parseFloat(Number(data.TradeAmt || data.Amount || 0)), '信用卡', oid]] }
   });
   console.log(`✅ ECPay 收款紀錄已寫入`);
+  // 更新營業紀錄 K 欄付款方式
+  try {
+    const auth2 = new google.auth.GoogleAuth({
+      credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT),
+      scopes: ['https://www.googleapis.com/auth/spreadsheets']
+    });
+    const sheets2 = google.sheets({ version: 'v4', auth: auth2 });
+    const salesSheet = await sheets2.spreadsheets.values.get({
+      spreadsheetId: process.env.GOOGLE_SHEETS_ID_CUSTOMER,
+      range: `'營業紀錄'!C:K`
+    });
+    const salesRows = salesSheet.data.values || [];
+    const targetRowIndexes = [];
+    salesRows.forEach((row, idx) => {
+      if (idx === 0) return;
+      const payMethod = (row[8] || '').toString().trim();
+      if (payMethod !== '') return;
+      const rowName = (row[1] || '').toString().trim();
+      const orderName = (order.userName || userName || '').trim();
+      if (rowName && orderName && rowName === orderName) {
+        targetRowIndexes.push(idx + 1);
+      }
+    });
+    if (targetRowIndexes.length > 0) {
+      await sheets2.spreadsheets.values.batchUpdate({
+        spreadsheetId: process.env.GOOGLE_SHEETS_ID_CUSTOMER,
+        requestBody: {
+          valueInputOption: 'USER_ENTERED',
+          data: targetRowIndexes.map(rowIdx => ({
+            range: `'營業紀錄'!K${rowIdx}`,
+            values: [['信用卡']]
+          }))
+        }
+      });
+      console.log(`✅ 已更新 K 欄 信用卡：${orderName} 共 ${targetRowIndexes.length} 行`);
+    }
+  } catch(e2) { console.error('更新 K 欄失敗:', e2.message); }
 } catch(e) { console.error('寫入收款紀錄失敗:', e.message); }
 
        
