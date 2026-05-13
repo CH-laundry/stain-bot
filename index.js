@@ -1349,9 +1349,12 @@ try {
    
       
       if (process.env.ADMIN_USER_ID) {
+        const allCust = orderManager.getAllCustomerNumbers();
+        const custData = allCust.find(c => c.userId === order.userId);
+        const custNo = custData ? `#${custData.number} ` : '';
         client.pushMessage(process.env.ADMIN_USER_ID, {
           type: 'text',
-          text: `收到 LINE Pay 付款通知\n\n客戶姓名:${order.userName}\n付款金額:NT$ ${order.amount.toLocaleString()}\n付款方式:LINE Pay\n訂單編號:${order.orderId}\n交易編號:${transactionId}\n\n狀態:付款成功`
+          text: `收到 LINE Pay 付款通知\n\n客戶姓名:${custNo}${order.userName}\n付款金額:NT$ ${order.amount.toLocaleString()}\n付款方式:LINE Pay\n訂單編號:${order.orderId}\n交易編號:${transactionId}\n\n狀態:付款成功`
         }).catch(() => {});
       }
 
@@ -1468,9 +1471,12 @@ try {
     logger.logToFile(`[ECPAY][SUCCESS] ${merchantTradeNo} 成功 NT$${amount}`);
 
     if (process.env.ADMIN_USER_ID) {
+      const allCust2 = orderManager.getAllCustomerNumbers();
+      const custData2 = allCust2.find(c => c.userId === userId);
+      const custNo2 = custData2 ? `#${custData2.number} ` : '';
       client.pushMessage(process.env.ADMIN_USER_ID, {
         type: 'text',
-        text: `✅ 綠界付款成功\n客戶：${userName}\n金額：NT$ ${amount}`
+        text: `✅ 綠界付款成功\n客戶：${custNo2}${userName}\n金額：NT$ ${amount}`
       }).catch(() => {});
     }
 
