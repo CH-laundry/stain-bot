@@ -1538,13 +1538,7 @@ async function handleLinePayConfirm(transactionId, orderId, parentOrderId) {
       headers: {
         'Content-Type': 'application/json',
         'X-LINE-ChannelId': LINE_PAY_CONFIG.channelId,
-        'X-LINE-Auth// 推送到 PaySync 讓 POS 入帳（清零 UnPaidAmount）
-global.pendingSyncOrders.push({
-  orderId: order.orderId,
-  amount: order.amount,
-  userName: order.userName
-});
-console.log(`[PaySync] 已加入同步隊列：${order.orderId} NT$${order.amount}`);orization-Nonce': nonce,
+        'X-LINE-Authorization-Nonce': nonce,
         'X-LINE-Authorization': signature
       },
       body: JSON.stringify(body)
@@ -1555,6 +1549,13 @@ console.log(`[PaySync] 已加入同步隊列：${order.orderId} NT$${order.amoun
     if (result.returnCode === '0000') {
       orderManager.updateOrderStatus(order.orderId, 'paid', 'LINE Pay');
       logger.logToFile(`[LINEPAY][SUCCESS] ${order.orderId} 付款成功`);
+      // 推送到 PaySync 讓 POS 入帳（清零 UnPaidAmount）
+      global.pendingSyncOrders.push({
+        orderId: order.orderId,
+        amount: order.amount,
+        userName: order.userName
+      });
+      console.log(`[PaySync] 已加入同步隊列：${order.orderId} NT$${order.amount}`);
 
       // 寫入收款紀錄
 try {
