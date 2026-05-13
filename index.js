@@ -4475,6 +4475,90 @@ setInterval(async () => {
 
 console.log('⏰ 自動簽收偵測已啟動（每30分鐘）');
 
+// 每天早上 8 點補填 M 欄上掛時間
+cron.schedule('0 8 * * *', async () => {
+  console.log('[MBackfill] 開始每日補填 M 欄...');
+  try {
+    const token = await getPosToken();
+    if (!token) { console.log('[MBackfill] 登入失敗'); return; }
+    const headers = {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Host': 'yidianyuan.ao-lan.cn',
+      'Authorization': `Bearer ${token}`
+    };
+    const { google } = require('googleapis');
+    const auth = new google.auth.GoogleAuth({
+      credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT),
+      scopes: ['https://www.googleapis.com/auth/spreadsheets']
+    });
+    const sheets = google.sheets({ version: 'v4', auth });
+    const spreadsheetId = process.env.GOOGLE_SHEETS_ID_CUSTOMER;
+    const sheetInfo = await sheets.spreadsheets.get({ spreadsheetId, fields: 'sheets.properties' });
+    const targetSheet = sheetInfo.data.sheets.find(s => s.properties.sheetId === 756780563);
+    if (!targetSheet) return;
+    const sheetName = targetSheet.properties.title;
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `'${sheetName}'!A:M`
+    });
+    const rows = response.data.values || [];
+    // 找 M 欄空白的訂單（去重）
+    const orderNosToFill = new Set();
+    const orderNoRowMap = {};
+    rows.slice(1).forEach((row, idx) => {
+      const orderNo = row[2] || '';
+      const locationDate = row[12] || '';
+      if (orderNo && !locationDate) {
+        orderNosToFill.add(orderNo);
+        if (!orderNoRowMap[orderNo]) orderNoRowMap[orderNo] = [];
+        orderNoRowMap[orderNo].push(idx + 2);
+      }
+    });
+    console.log(`[MBackfill] 需補填訂單數：${orderNosToFill.size}`);
+    let fillCount = 0;
+    for (const orderNo of orderNosToFill) {
+      try {
+        const searchRes = await fetch('http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/SearchPage', {
+          method: 'POST', headers,
+          body: JSON.stringify([
+            { Key: 'BranchID', Value: 'b0aee8e3-6a6e-4863-b74a-08da8958f7f9' },
+            { Key: 'KeyWord', Value: orderNo },
+            { Key: 'PageSize', Value: '10' },
+            { Key: 'PageIndex', Value: '1' }
+          ])
+        });
+        const searchData = await searchRes.json();
+        const found = (searchData?.Data?.Data ?? []).find(o => o.ReceivingOrderNumber === orderNo);
+        if (!found) continue;
+        const detailRes = await fetch(`http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/GetData/${found.Id}`, { method: 'GET', headers });
+        const detailData = await detailRes.json();
+        const items = detailData?.Data?.ReceivingItemList || [];
+        const locationItem = items.find(item => item.LocationDate);
+        if (!locationItem) continue;
+        const ld = new Date(locationItem.LocationDate);
+        const locationDateStr = `${ld.getFullYear()}/${String(ld.getMonth()+1).padStart(2,'0')}/${String(ld.getDate()).padStart(2,'0')} ${String(ld.getHours()).padStart(2,'0')}:${String(ld.getMinutes()).padStart(2,'0')}`;
+        for (const rowIdx of (orderNoRowMap[orderNo] || [])) {
+          await sheets.spreadsheets.values.update({
+            spreadsheetId,
+            range: `'${sheetName}'!M${rowIdx}`,
+            valueInputOption: 'USER_ENTERED',
+            resource: { values: [[locationDateStr]] }
+          });
+        }
+        fillCount++;
+        console.log(`[MBackfill] ✅ ${orderNo} → ${locationDateStr}`);
+        await new Promise(r => setTimeout(r, 500));
+      } catch(e) {
+        console.error(`[MBackfill] ${orderNo} 失敗:`, e.message);
+      }
+    }
+    console.log(`[MBackfill] 完成！共補填 ${fillCount} 筆`);
+  } catch(e) {
+    console.error('[MBackfill] 錯誤:', e.message);
+  }
+}, { timezone: 'Asia/Taipei' });
+
+  
 // 每天早上 9 點掃描逾期通知
 cron.schedule('0 9 * * *', async () => {
   console.log('⏰ 每日逾期通知掃描啟動');
