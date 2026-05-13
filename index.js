@@ -1538,7 +1538,13 @@ async function handleLinePayConfirm(transactionId, orderId, parentOrderId) {
       headers: {
         'Content-Type': 'application/json',
         'X-LINE-ChannelId': LINE_PAY_CONFIG.channelId,
-        'X-LINE-Authorization-Nonce': nonce,
+        'X-LINE-Auth// 推送到 PaySync 讓 POS 入帳（清零 UnPaidAmount）
+global.pendingSyncOrders.push({
+  orderId: order.orderId,
+  amount: order.amount,
+  userName: order.userName
+});
+console.log(`[PaySync] 已加入同步隊列：${order.orderId} NT$${order.amount}`);orization-Nonce': nonce,
         'X-LINE-Authorization': signature
       },
       body: JSON.stringify(body)
@@ -1700,6 +1706,14 @@ app.all('/payment/ecpay/callback', async (req, res) => {
       ) {
         orderManager.updateOrderStatus(oid, 'paid', 'ECPay');
         logger.logToFile(`[ECPAY][UPDATE] 訂單 ${oid} 狀態更新為已付款`);
+
+        // 推送到 PaySync 讓 POS 入帳（清零 UnPaidAmount）
+global.pendingSyncOrders.push({
+  orderId: oid,
+  amount: Number(order.amount),
+  userName: order.userName
+});
+console.log(`[PaySync] 已加入同步隊列：${oid} NT$${order.amount}`);
 
         // 寫入收款紀錄
 try {
