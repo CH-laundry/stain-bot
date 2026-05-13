@@ -5308,13 +5308,15 @@ async function markOverdueReminded(orderNo) {
 async function deleteOverdueAlert(orderNo) {
   if (!confirm('確定要刪除此逾期紀錄？')) return;
   try {
-    await fetch('/api/overdue-alerts/delete', {
+    const r = await fetch('/api/overdue-alerts/delete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ orderNo })
     });
-    showResult('success', '✅ 已刪除');
-    loadOverdueAlerts();
+    const d = await r.json();
+    if (d.success) {
+      await loadOverdueAlerts();
+    }
   } catch(e) {
     showResult('error', '❌ ' + e.message);
   }
