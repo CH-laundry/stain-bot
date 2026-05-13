@@ -1628,10 +1628,13 @@ try {
 
       // 通知店家
       const adminIds = [process.env.ADMIN_USER_ID, process.env.ADMIN_USER_ID_2].filter(Boolean);
+      const allCustLP = orderManager.getAllCustomerNumbers();
+      const custDataLP = allCustLP.find(c => c.userId === order.userId);
+      const custNoLP = custDataLP ? `#${custDataLP.number} ` : '';
       for (const adminId of adminIds) {
         client.pushMessage(adminId, {
           type: 'text',
-          text: `✅ LINE Pay 付款成功\n客戶：${order.userName}\n金額：NT$ ${order.amount.toLocaleString()}\n訂單編號：${order.orderId}`
+          text: `✅ LINE Pay 付款成功\n客戶：${custNoLP}${order.userName}\n金額：NT$ ${order.amount.toLocaleString()}\n訂單編號：${order.orderId}`
         }).catch(() => {});
       }
 
@@ -1794,13 +1797,16 @@ try {
     }
 
     // 通知店家
-   const adminIds = [process.env.ADMIN_USER_ID, process.env.ADMIN_USER_ID_2].filter(Boolean);
-for (const adminId of adminIds) {
-  client.pushMessage(adminId, {
-    type: 'text',
-    text: `✅ 綠界付款成功\n客戶：${userName}\n金額：NT$ ${amount}`
-  }).catch(() => {});
-}
+    const adminIds = [process.env.ADMIN_USER_ID, process.env.ADMIN_USER_ID_2].filter(Boolean);
+    const allCustEC = orderManager.getAllCustomerNumbers();
+    const custDataEC = allCustEC.find(c => c.userId === userId);
+    const custNoEC = custDataEC ? `#${custDataEC.number} ` : '';
+    for (const adminId of adminIds) {
+      client.pushMessage(adminId, {
+        type: 'text',
+        text: `✅ 綠界付款成功\n客戶：${custNoEC}${userName}\n金額：NT$ ${amount}`
+      }).catch(() => {});
+    }
     } catch(e) {
     console.error('[ECPAY] callback error:', e);
   }
