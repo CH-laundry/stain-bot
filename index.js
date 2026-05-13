@@ -6126,7 +6126,7 @@ app.post('/api/overdue-alerts/delete', (req, res) => {
   try {
     const { orderNo } = req.body;
     const data = loadOverdueData();
-    delete data[orderNo];
+    data[orderNo] = { deleted: true, deletedAt: new Date().toISOString() };
     saveOverdueData(data);
     res.json({ success: true });
   } catch(e) {
