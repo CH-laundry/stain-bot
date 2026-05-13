@@ -5879,10 +5879,9 @@ async function runOverdueNotify() {
       // 查找 userId
       const customers = orderManager.getAllCustomerNumbers();
       const customer = customers.find(c =>
-        c.number === customerNo ||
-        c.phone === customerPhone ||
-        c.name === customerName
-      );
+  c.phone === customerPhone ||
+  (c.name || '').replace(/\s/g,'') === customerName.replace(/\s/g,'')
+);
       const userId = customer?.userId || null;
 
       const record = notifyRecord[orderNo] || {};
