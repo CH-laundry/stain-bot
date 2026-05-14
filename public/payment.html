@@ -5023,6 +5023,15 @@ function selectPhotoItem(el, name) {
   document.querySelectorAll('#photoGroupSelector .photo-item-btn').forEach(function(b) { b.classList.remove('active'); });
   el.classList.add('active');
   photoCurrentGroup = groupNo;
+
+  // 清除洗前洗後預覽和計數
+  ['before', 'after'].forEach(function(p) {
+    var grid = document.getElementById(p + 'Area').querySelector('.photo-grid');
+    if (grid) grid.remove();
+    document.getElementById(p + 'Status').textContent = '';
+    document.getElementById(p + 'Input').value = '';
+  });
+  photoCurrentCount = { before: 0, after: 0 };
 }
 
 var photoCurrentCount = { before: 0, after: 0 };
@@ -5052,6 +5061,7 @@ formData.append('customerNumber', photoCurrentCustomerNo);
 formData.append('phase', phase);
 formData.append('itemType', photoCurrentItem);
 formData.append('groupNo', photoCurrentGroup);
+console.log('上傳：phase=' + phase + ' group=' + photoCurrentGroup + ' item=' + photoCurrentItem);
 
     var res = await fetch('/api/upload-photo', { method: 'POST', body: formData });
     var data = await res.json();
