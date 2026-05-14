@@ -4883,6 +4883,10 @@ setInterval(async () => {
           candidates = orders.filter(o => o.ReceivingOrderNumber === orderId);
           if (candidates.length > 0) console.log(`[PaySync] 方法2(訂單號)命中`);
         }
+        // 方法3：純金額比對已停用（避免同金額誤判）
+        if (candidates.length === 0) {
+          console.log(`[PaySync] ⚠️ 找不到對應 POS 訂單，跳過自動入帳（需手動）: ${orderId} NT$${amount}`);
+        }
 
         if (candidates.length === 0) {
           // 檢查是否已付款
