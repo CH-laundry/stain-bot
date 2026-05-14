@@ -5126,8 +5126,8 @@ data.photos.forEach(function(p) {
   var nameParts = (p.name || '').split('_');
   var gPart = nameParts.find(function(s) { return /^g\d+$/.test(s); });
   var groupNo = gPart ? gPart.replace('g','') : '1';
-  var key = d + '_' + p.itemType + '_g' + groupNo;
-  if (!groups[key]) groups[key] = { date: d, itemType: p.itemType, groupNo: groupNo, before: [], after: [] };
+  var key = p.itemType + '_g' + groupNo;
+if (!groups[key]) groups[key] = { date: d, itemType: p.itemType, groupNo: groupNo, before: [], after: [] };
   if (p.phase === 'before') groups[key].before.push(p);
   else groups[key].after.push(p);
 });
