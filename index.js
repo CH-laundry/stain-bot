@@ -1550,10 +1550,15 @@ async function handleLinePayConfirm(transactionId, orderId, parentOrderId) {
       orderManager.updateOrderStatus(order.orderId, 'paid', 'LINE Pay');
       logger.logToFile(`[LINEPAY][SUCCESS] ${order.orderId} 付款成功`);
       // 推送到 PaySync 讓 POS 入帳（清零 UnPaidAmount）
+      const allCustSync = orderManager.getAllCustomerNumbers();
+      const custSync = allCustSync.find(c => c.userId === order.userId);
+      const custNoSync = custSync ? String(custSync.number).replace(/\D/g,'').replace(/^0+/,'') : null;
       global.pendingSyncOrders.push({
         orderId: order.orderId,
         amount: order.amount,
-        userName: order.userName
+        userName: order.userName,
+        userId: order.userId,
+        customerNo: custNoSync
       });
       console.log(`[PaySync] 已加入同步隊列：${order.orderId} NT$${order.amount}`);
 
@@ -1712,11 +1717,16 @@ app.all('/payment/ecpay/callback', async (req, res) => {
         logger.logToFile(`[ECPAY][UPDATE] 訂單 ${oid} 狀態更新為已付款`);
 
         // 推送到 PaySync 讓 POS 入帳（清零 UnPaidAmount）
-global.pendingSyncOrders.push({
-  orderId: oid,
-  amount: Number(order.amount),
-  userName: order.userName
-});
+const allCustSyncEC = orderManager.getAllCustomerNumbers();
+        const custSyncEC = allCustSyncEC.find(c => c.userId === order.userId);
+        const custNoSyncEC = custSyncEC ? String(custSyncEC.number).replace(/\D/g,'').replace(/^0+/,'') : null;
+        global.pendingSyncOrders.push({
+          orderId: oid,
+          amount: Number(order.amount),
+          userName: order.userName,
+          userId: order.userId,
+          customerNo: custNoSyncEC
+        });
 console.log(`[PaySync] 已加入同步隊列：${oid} NT$${order.amount}`);
 
         // 寫入收款紀錄
@@ -4854,22 +4864,25 @@ setInterval(async () => {
         const searchData = await searchRes.json();
         const orders = searchData?.Data?.Data ?? [];
 
-        // 找金額符合且未付款的訂單
-        // 先嘗試用訂單號精準比對
-let candidates = orders.filter(o => {
-  return o.ReceivingOrderNumber === orderId;
-});
+        // 比對優先順序：客戶編號+金額 > 訂單號 > 純金額
+        const taskCustomerNo = task.customerNo || null;
+        let candidates = [];
 
-// 如果找不到（orderId 是亂碼單號），才用金額比對
-if (candidates.length === 0) {
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  candidates = orders.filter(o => {
-    const unpaid = parseFloat(o.UnPaidAmount || 0);
-    const receivedDate = new Date(o.ReceivedDate || 0);
-    return unpaid === amount && receivedDate >= thirtyDaysAgo;
-  });
-}
+        // 方法1：客戶編號 + 未付金額（最精準）
+        if (taskCustomerNo) {
+          candidates = orders.filter(o => {
+            const posNo = String(o.CustomerNumber || '').replace(/\D/g,'').replace(/^0+/,'');
+            const unpaid = parseFloat(o.UnPaidAmount || 0);
+            return posNo === taskCustomerNo && Math.abs(unpaid - amount) < 1;
+          });
+          if (candidates.length > 0) console.log(`[PaySync] 方法1(客戶編號+金額)命中: ${taskCustomerNo}`);
+        }
+
+        // 方法2：訂單號精準比對
+        if (candidates.length === 0) {
+          candidates = orders.filter(o => o.ReceivingOrderNumber === orderId);
+          if (candidates.length > 0) console.log(`[PaySync] 方法2(訂單號)命中`);
+        }
 
         if (candidates.length === 0) {
           // 檢查是否已付款
