@@ -6028,6 +6028,7 @@ function saveOverdueNotify(data) {
 async function runOverdueNotify() {
   console.log('🔔 開始執行逾期通知掃描...');
   try {
+    const { google } = require('googleapis');
     const auth = new google.auth.GoogleAuth({
       credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT),
       scopes: ['https://www.googleapis.com/auth/spreadsheets']
