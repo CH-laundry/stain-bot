@@ -6312,7 +6312,26 @@ if (diffDays < OVERDUE_DAYS) return;
         diffDays,
         rowIndex: idx + 2
       });
-    });
+    });// 查客戶編號
+const allCust = orderManager.getAllCustomerNumbers();
+const matchedCust = allCust.find(c =>
+  (c.name || '').replace(/\s/g,'') === customerName.replace(/\s/g,'')
+);
+const customerNo = matchedCust
+  ? String(matchedCust.number).padStart(3, '0')
+  : '---';
+
+seen.add(orderNo);
+overdue.push({
+  id: orderNo,
+  orderNo,
+  customerNo,
+  customerName,
+  itemType,
+  openDate: dateStr,
+  diffDays,
+  rowIndex: idx + 2
+});
 
     res.json({ success: true, overdue });
   } catch (e) {
