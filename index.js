@@ -6028,7 +6028,7 @@ function saveOverdueNotify(data) {
 async function runOverdueNotify() {
   console.log('🔔 開始執行逾期通知掃描...');
   try {
-    const { google } = require('googleapis');
+    const { google } = require('googleapis');  // ← 修正：加上 require
     const auth = new google.auth.GoogleAuth({
       credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT),
       scopes: ['https://www.googleapis.com/auth/spreadsheets']
@@ -6042,8 +6042,8 @@ async function runOverdueNotify() {
     const notifyRecord = loadOverdueNotify();
     const START_DATE = new Date('2026-04-27');
     const now = new Date();
-    
-// 自動清除已上掛完成的通知紀錄
+
+    // 自動清除已上掛完成的通知紀錄
     for (const orderNo of Object.keys(notifyRecord)) {
       const matchRow = rows.find(row => (row[2] || '') === orderNo);
       if (matchRow && matchRow[12]) {
@@ -6052,56 +6052,89 @@ async function runOverdueNotify() {
       }
     }
     saveOverdueNotify(notifyRecord);
-    
+
+    // 讀取 laundry_progress.json
+    const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
+    const PROGRESS_FILE = path.join(baseDir, 'laundry_progress.json');
+    let progressData = {};
+    if (fs.existsSync(PROGRESS_FILE)) {
+      try {
+        progressData = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8'));
+      } catch(e) {
+        console.log('[OverdueNotify] 讀取 progress 失敗:', e.message);
+      }
+    }
+
+    const customers = orderManager.getAllCustomerNumbers();
+
     for (const row of rows) {
       const orderDate = row[0] ? new Date(row[0]) : null;
       const orderNo = row[2] || '';
       const customerName = row[3] || '';
-      const customerPhone = row[4] || '';
-      const itemsRaw = row[5] || '';
       const locationDate = row[12] || '';
 
       if (!orderDate || !orderNo) continue;
       if (orderDate < START_DATE) continue;
-      if (locationDate) continue; // 已全部上掛，不通知
+      if (locationDate) continue; // 已上掛，不通知
 
-      const diffDays = Math.floor((now - orderDate) / (1000 * 60 * 60 * 24));
+      const ignoredData = loadOverdueData();
+      if (ignoredData[orderNo]) continue;
+
+      const openDate = new Date(orderDate);
+      if (isNaN(openDate)) continue;
+
+      const diffDays = Math.floor((now - openDate) / (1000 * 60 * 60 * 24));
       if (diffDays < 15) continue;
 
-      // 解析品項完成狀態
-      const items = itemsRaw.split(',').map(s => s.trim()).filter(Boolean);
-      const doneItems = items.filter(i => i.includes('掛衣號:完成')).map(i => i.replace(/\s*\(掛衣號:完成\)/, ''));
-      const pendingItems = items.filter(i => i.includes('清潔中')).map(i => i.replace(/\s*\(清潔中\)/, ''));
+      // 找 userId
+      const matched = customers.find(c =>
+        (c.name || '').replace(/\s/g, '') === customerName.replace(/\s/g, '')
+      );
+      const userId = matched?.userId || null;
 
-      // 若全部都清潔中（沒有任何完成），照樣通知
-      const doneText = doneItems.length > 0 ? `✅ 已完成：${doneItems.join('、')}\n` : '';
-      const pendingText = pendingItems.length > 0 ? `🔄 仍在清潔：${pendingItems.join('、')}\n` : '';
+      // 從 laundry_progress.json 讀取清潔狀態
+      const cleanKey = matched
+        ? String(matched.number).replace(/\D/g, '').replace(/^0+/, '')
+        : null;
+      const prog = cleanKey ? progressData[cleanKey] : null;
 
-      // 查找 userId
-      const customers = orderManager.getAllCustomerNumbers();
-      const customer = customers.find(c =>
-  c.phone === customerPhone ||
-  (c.name || '').replace(/\s/g,'') === customerName.replace(/\s/g,'')
-);
-      const userId = customer?.userId || null;
+      // 組訊息內容
+      let progressMsg = '';
+      if (prog && prog.details && prog.details.length > 0) {
+        const total = prog.total || prog.details.length;
+        const finished = prog.finished || 0;
+        progressMsg = `您這次送洗共 ${total} 件，目前已完成清潔 ${finished} 件：\n\n`;
+        prog.details.forEach(d => {
+          if (d.includes('完成') || d.includes('掛衣號')) {
+            const name = d.replace(/\s*\(掛衣號:完成\)/, '').replace(/\s*\(完成\)/, '').trim();
+            progressMsg += `✅ ${name}\n`;
+          } else {
+            const name = d.replace(/\s*\(清潔中\)/, '').trim();
+            progressMsg += `⏳ ${name}（清潔中）\n`;
+          }
+        });
+      } else {
+        progressMsg = '您的衣物目前仍在清潔程序中，';
+      }
 
       const record = notifyRecord[orderNo] || {};
 
       // 第一次通知（第15天）
       if (diffDays >= 15 && !record.notify1) {
-        const doneList = doneItems.length > 0 ? doneItems.map(i => `  • ${i}`).join('\n') : '  （暫無）';
-        const pendingList = pendingItems.length > 0 ? pendingItems.map(i => `  • ${i}`).join('\n') : '  （暫無）';
-        const totalCount = doneItems.length + pendingItems.length;
-        const msg = `親愛的 ${customerName} 您好 💙\n\n感謝您的耐心等候，為您更新目前洗滌進度：\n\n您這次送洗共 ${totalCount} 件\n✅ 已完成：\n${doneList}\n⏳ 清潔中：\n${pendingList}\n\n非常抱歉讓您久等了，我們正在努力為您的衣物細心清潔，完成後會立即通知您 💙`;
+        const msg = `親愛的 ${customerName} 您好 💙\n\n${progressMsg}\n非常抱歉讓您久等了，我們正在努力為您的衣物細心清潔，完成後會立即通知您 💙`;
+
         if (userId && client) {
           try {
             await client.pushMessage(userId, { type: 'text', text: msg });
             record.notify1 = { sent: true, time: new Date().toISOString(), userId };
+            console.log(`[OverdueNotify] ✅ 第1次通知已發送: ${customerName}`);
           } catch(e) {
             record.notify1 = { sent: false, time: new Date().toISOString(), error: e.message };
+            console.log(`[OverdueNotify] ❌ 第1次通知發送失敗: ${customerName}`, e.message);
           }
         } else {
           record.notify1 = { sent: false, time: new Date().toISOString(), error: 'no_userId' };
+          console.log(`[OverdueNotify] ⚠️ 找不到 userId: ${customerName}`);
         }
         record.customerName = customerName;
         record.orderDate = row[0];
@@ -6111,15 +6144,16 @@ async function runOverdueNotify() {
 
       // 第二次通知（第25天）
       if (diffDays >= 25 && !record.notify2) {
-        const doneList2 = doneItems.length > 0 ? doneItems.map(i => `  • ${i}`).join('\n') : '  （暫無）';
-        const pendingList2 = pendingItems.length > 0 ? pendingItems.map(i => `  • ${i}`).join('\n') : '  （暫無）';
-        const msg = `親愛的 ${customerName} 您好 💙\n\n🙏 非常非常抱歉，因近期送洗衣物量較多，處理時間比預期延長，造成您的不便，我們深感抱歉。\n\n目前您的洗滌進度：\n✅ 已完成：\n${doneList2}\n⏳ 清潔中：\n${pendingList2}\n\n我們正在全力趕工，衣物清潔完成後會立即通知您取件。\n再次誠摯道歉，感謝您的諒解 💙`;
+        const msg = `親愛的 ${customerName} 您好 💙\n\n🙏 非常非常抱歉，因近期送洗衣物量較多，處理時間比預期延長，造成您的不便，我們深感抱歉。\n\n${progressMsg}\n我們正在全力趕工，完成後會立即通知您取件。\n再次誠摯道歉，感謝您的諒解 💙`;
+
         if (userId && client) {
           try {
             await client.pushMessage(userId, { type: 'text', text: msg });
             record.notify2 = { sent: true, time: new Date().toISOString(), userId };
+            console.log(`[OverdueNotify] ✅ 第2次通知已發送: ${customerName}`);
           } catch(e) {
             record.notify2 = { sent: false, time: new Date().toISOString(), error: e.message };
+            console.log(`[OverdueNotify] ❌ 第2次通知發送失敗: ${customerName}`, e.message);
           }
         } else {
           record.notify2 = { sent: false, time: new Date().toISOString(), error: 'no_userId' };
