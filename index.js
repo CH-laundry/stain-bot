@@ -6302,36 +6302,27 @@ if (openDate < START_DATE) return; // 4/27 之前的訂單忽略
 const diffDays = Math.floor((now - openDate) / (1000 * 60 * 60 * 24));
 if (diffDays < OVERDUE_DAYS) return;
 
+      // 查客戶編號
+      const allCust = orderManager.getAllCustomerNumbers();
+      const matchedCust = allCust.find(c =>
+        (c.name || '').replace(/\s/g,'') === customerName.replace(/\s/g,'')
+      );
+      const customerNo = matchedCust
+        ? String(matchedCust.number).padStart(3, '0')
+        : '---';
+
       seen.add(orderNo);
       overdue.push({
         id: orderNo,
         orderNo,
+        customerNo,
         customerName,
         itemType,
         openDate: dateStr,
         diffDays,
         rowIndex: idx + 2
       });
-    });// 查客戶編號
-const allCust = orderManager.getAllCustomerNumbers();
-const matchedCust = allCust.find(c =>
-  (c.name || '').replace(/\s/g,'') === customerName.replace(/\s/g,'')
-);
-const customerNo = matchedCust
-  ? String(matchedCust.number).padStart(3, '0')
-  : '---';
-
-seen.add(orderNo);
-overdue.push({
-  id: orderNo,
-  orderNo,
-  customerNo,
-  customerName,
-  itemType,
-  openDate: dateStr,
-  diffDays,
-  rowIndex: idx + 2
-});
+    });
 
     res.json({ success: true, overdue });
   } catch (e) {
