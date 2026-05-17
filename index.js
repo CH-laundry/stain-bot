@@ -6010,7 +6010,7 @@ app.get('/api/photos-by-name/:displayName', async (req, res) => {
 // ========================================
 // 逾期自動通知客人 (第15天/第21天)
 // ========================================
-const OVERDUE_NOTIFY_FILE = path.join(__dirname, 'overdue-notify.json');
+const OVERDUE_NOTIFY_FILE = '/data/overdue-notify.json';
 
 function loadOverdueNotify() {
   try {
