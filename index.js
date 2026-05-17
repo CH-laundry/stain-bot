@@ -6121,7 +6121,8 @@ async function runOverdueNotify() {
 
       // 第一次通知（第15天）
       if (diffDays >= 15 && !record.notify1) {
-        const msg = `親愛的 ${customerName} 您好 💙\n\n${progressMsg}\n非常抱歉讓您久等了，我們正在努力為您的衣物細心清潔，完成後會立即通知您 💙`;
+        const allDone = prog && prog.finished > 0 && prog.finished >= prog.total;
+const msg = `親愛的 ${customerName} 您好 💙\n\n${progressMsg}\n非常抱歉讓您久等了，${allDone ? '您的衣物已全部清潔完成，歡迎來店取件 💙' : '我們正在努力為您的衣物細心清潔，完成後會立即通知您 💙'}`;
 
         if (userId && client) {
           try {
