@@ -6028,181 +6028,144 @@ function saveOverdueNotify(data) {
 async function runOverdueNotify() {
   console.log('🔔 開始執行逾期通知掃描...');
   try {
-    const { google } = require('googleapis');  // ← 修正：加上 require
-    const auth = new google.auth.GoogleAuth({
-      credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT),
-      scopes: ['https://www.googleapis.com/auth/spreadsheets']
+    const token = await getPosToken();
+    if (!token) { console.log('[OverdueNotify] POS 登入失敗'); return; }
+
+    const headers = {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Host': 'yidianyuan.ao-lan.cn',
+      'Authorization': `Bearer ${token}`
+    };
+
+    // 從 POS 撈最近 90 天訂單
+    const today = new Date();
+    const start = new Date(today);
+    start.setDate(today.getDate() - 90);
+    const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+
+    const searchRes = await fetch('http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/SearchPage', {
+      method: 'POST', headers,
+      body: JSON.stringify([
+        { Key: 'BranchID', Value: 'b0aee8e3-6a6e-4863-b74a-08da8958f7f9' },
+        { Key: 'StartDate', Value: fmt(start) },
+        { Key: 'EndDate', Value: fmt(today) },
+        { Key: 'PageSize', Value: '200' },
+        { Key: 'PageIndex', Value: '1' }
+      ])
     });
-    const sheets = google.sheets({ version: 'v4', auth });
-    const result = await sheets.spreadsheets.values.get({
-      spreadsheetId: process.env.GOOGLE_SHEETS_ID_CUSTOMER,
-      range: '營業紀錄!A2:M'
-    });
-    const rows = result.data.values || [];
+    const searchData = await searchRes.json();
+    const orders = searchData?.Data?.Data ?? [];
+    console.log(`[OverdueNotify] POS 共找到 ${orders.length} 筆訂單`);
+
     const notifyRecord = loadOverdueNotify();
-    const START_DATE = new Date('2026-04-27');
-    const now = new Date();
-
-    // 自動清除已上掛完成的通知紀錄
-    for (const orderNo of Object.keys(notifyRecord)) {
-      const matchRow = rows.find(row => (row[2] || '') === orderNo);
-      if (matchRow && matchRow[12]) {
-        delete notifyRecord[orderNo];
-        console.log(`[OverdueNotify] ✅ 已自動清除已上掛訂單: ${orderNo}`);
-      }
-    }
-    saveOverdueNotify(notifyRecord);
-
-    // 讀取 laundry_progress.json
-    const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
-    const PROGRESS_FILE = path.join(baseDir, 'laundry_progress.json');
-    let progressData = {};
-    if (fs.existsSync(PROGRESS_FILE)) {
-      try {
-        progressData = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8'));
-      } catch(e) {
-        console.log('[OverdueNotify] 讀取 progress 失敗:', e.message);
-      }
-    }
-
+    const ignoredData = loadOverdueData();
     const customers = orderManager.getAllCustomerNumbers();
+    const START_DATE = new Date('2026-04-27');
 
-    for (const row of rows) {
-      const orderDate = row[0] ? new Date(row[0]) : null;
-      const orderNo = row[2] || '';
-      const customerName = row[3] || '';
-      const locationDate = row[12] || '';
+    for (const order of orders) {
+      const orderNo = order.ReceivingOrderNumber || '';
+      const customerName = order.CustomerName || '';
+      if (!orderNo || !customerName) continue;
 
-      if (!orderDate || !orderNo) continue;
-      if (orderDate < START_DATE) continue;
-      if (locationDate) continue; // 已上掛，不通知
-
-      const ignoredData = loadOverdueData();
+      // 跳過已刪除/忽略的
       if (ignoredData[orderNo]) continue;
 
-      const openDate = new Date(orderDate);
+      // 計算開單天數
+      const openDate = new Date(order.ReceivedDate || '');
       if (isNaN(openDate)) continue;
+      if (openDate < START_DATE) continue;
 
-      const diffDays = Math.floor((now - openDate) / (1000 * 60 * 60 * 24));
+      const diffDays = Math.floor((today - openDate) / (1000 * 60 * 60 * 24));
       if (diffDays < 15) continue;
 
-// ★ 發送前先去 POS 驗證 LocationDate
+      // ★ 直接去 POS 查 LocationDate，這是唯一判斷標準
+      let hasLocation = false;
+      let itemDetails = [];
       try {
-        const posToken = await getPosToken();
-        if (posToken) {
-          const posHeaders = {
-            'Content-Type': 'application/json; charset=utf-8',
-            'Host': 'yidianyuan.ao-lan.cn',
-            'Authorization': `Bearer ${posToken}`
-          };
-          const searchRes = await fetch('http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/SearchPage', {
-            method: 'POST',
-            headers: posHeaders,
-            body: JSON.stringify([
-              { Key: 'BranchID', Value: 'b0aee8e3-6a6e-4863-b74a-08da8958f7f9' },
-              { Key: 'KeyWord', Value: orderNo },
-              { Key: 'PageSize', Value: '10' },
-              { Key: 'PageIndex', Value: '1' }
-            ])
-          });
-          const searchData = await searchRes.json();
-          const found = (searchData?.Data?.Data ?? []).find(o => o.ReceivingOrderNumber === orderNo);
-          if (found) {
-            const detailRes = await fetch(`http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/GetData/${found.Id}`, {
-              method: 'GET', headers: posHeaders
-            });
-            const detailData = await detailRes.json();
-            const items = detailData?.Data?.ReceivingItemList || [];
-            const hasLocation = items.some(item => item.LocationDate);
-            if (hasLocation) {
-              console.log(`[OverdueNotify] ⏭️ POS 已上掛，跳過: ${orderNo} ${customerName}`);
-              continue; // 跳過這筆，不發通知
-            }
-          }
-        }
-      } catch(posErr) {
-        console.log(`[OverdueNotify] POS 驗證失敗，保守跳過: ${orderNo}`, posErr.message);
-        continue; // POS 查不到就保守跳過，寧可不發也不亂發
+        const detailRes = await fetch(`http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/GetData/${order.Id}`, {
+          method: 'GET', headers
+        });
+        const detailData = await detailRes.json();
+        const items = detailData?.Data?.ReceivingItemList || [];
+        hasLocation = items.every(item => item.LocationDate); // 全部品項都上掛才算完成
+        itemDetails = items.map(item => {
+          const name = item?.Goods?.GoodsName || '未知品項';
+          return item.LocationDate ? `✅ ${name}` : `⏳ ${name}（清潔中）`;
+        });
+      } catch(e) {
+        console.log(`[OverdueNotify] POS 查詢失敗，保守跳過: ${orderNo}`, e.message);
+        continue; // 查不到就跳過，絕不亂發
       }
-      
+
+      // 有任何一件已上掛但還有未上掛 → 部分完成；全部上掛 → 跳過不發
+      if (hasLocation) {
+        console.log(`[OverdueNotify] ⏭️ 全部已上掛，跳過: ${orderNo} ${customerName}`);
+        // 順手清除通知紀錄
+        if (notifyRecord[orderNo]) {
+          delete notifyRecord[orderNo];
+          saveOverdueNotify(notifyRecord);
+        }
+        continue;
+      }
+
       // 找 userId
       const matched = customers.find(c =>
         (c.name || '').replace(/\s/g, '') === customerName.replace(/\s/g, '')
       );
       const userId = matched?.userId || null;
 
-      // 從 laundry_progress.json 讀取清潔狀態
-      const cleanKey = matched
-        ? String(matched.number).replace(/\D/g, '').replace(/^0+/, '')
-        : null;
-      const prog = cleanKey ? progressData[cleanKey] : null;
-
-      // 組訊息內容
-      let progressMsg = '';
-      if (prog && prog.details && prog.details.length > 0) {
-        const total = prog.total || prog.details.length;
-        const finished = prog.finished || 0;
-        progressMsg = `您這次送洗共 ${total} 件，目前已完成清潔 ${finished} 件：\n\n`;
-        prog.details.forEach(d => {
-          if (d.includes('完成') || d.includes('掛衣號')) {
-            const name = d.replace(/\s*\(掛衣號:完成\)/, '').replace(/\s*\(完成\)/, '').trim();
-            progressMsg += `✅ ${name}\n`;
-          } else {
-            const name = d.replace(/\s*\(清潔中\)/, '').trim();
-            progressMsg += `⏳ ${name}（清潔中）\n`;
-          }
-        });
-      } else {
-        progressMsg = '您的衣物目前仍在清潔程序中，';
-      }
+      // 組訊息
+      const total = itemDetails.length;
+      const finished = itemDetails.filter(d => d.startsWith('✅')).length;
+      const allDone = finished === total;
+      const progressMsg = `您這次送洗共 ${total} 件，目前已完成清潔 ${finished} 件：\n\n${itemDetails.join('\n')}`;
 
       const record = notifyRecord[orderNo] || {};
 
-      // 第一次通知（第15天）
+      // 第1次通知（第15天）
       if (diffDays >= 15 && !record.notify1) {
-        const allDone = prog && prog.finished > 0 && prog.finished >= prog.total;
-const msg = `親愛的 ${customerName} 您好 💙\n\n${progressMsg}\n非常抱歉讓您久等了，${allDone ? '您的衣物已全部清潔完成，歡迎來店取件 💙' : '我們正在努力為您的衣物細心清潔，完成後會立即通知您 💙'}`;
-
-        if (userId && client) {
+        const msg = `親愛的 ${customerName} 您好 💙\n\n${progressMsg}\n\n非常抱歉讓您久等了，${allDone ? '您的衣物已全部清潔完成，歡迎來店取件 💙' : '我們正在努力為您的衣物細心清潔，完成後會立即通知您 💙'}`;
+        if (userId) {
           try {
             await client.pushMessage(userId, { type: 'text', text: msg });
-            record.notify1 = { sent: true, time: new Date().toISOString(), userId };
-            console.log(`[OverdueNotify] ✅ 第1次通知已發送: ${customerName}`);
+            record.notify1 = { sent: true, time: new Date().toISOString() };
+            console.log(`[OverdueNotify] ✅ 第1次通知: ${customerName} ${orderNo}`);
           } catch(e) {
-            record.notify1 = { sent: false, time: new Date().toISOString(), error: e.message };
-            console.log(`[OverdueNotify] ❌ 第1次通知發送失敗: ${customerName}`, e.message);
+            record.notify1 = { sent: false, error: e.message, time: new Date().toISOString() };
+            console.log(`[OverdueNotify] ❌ 發送失敗: ${customerName}`, e.message);
           }
         } else {
-          record.notify1 = { sent: false, time: new Date().toISOString(), error: 'no_userId' };
+          record.notify1 = { sent: false, error: 'no_userId', time: new Date().toISOString() };
           console.log(`[OverdueNotify] ⚠️ 找不到 userId: ${customerName}`);
         }
         record.customerName = customerName;
-        record.orderDate = row[0];
+        record.orderNo = orderNo;
         notifyRecord[orderNo] = record;
         saveOverdueNotify(notifyRecord);
       }
 
-      // 第二次通知（第25天）
+      // 第2次通知（第25天）
       if (diffDays >= 25 && !record.notify2) {
-        const allDone = prog && prog.finished > 0 && prog.finished >= prog.total;
-        const msg = `親愛的 ${customerName} 您好 💙\n\n🙏 非常非常抱歉，因近期送洗衣物量較多，處理時間比預期延長，造成您的不便，我們深感抱歉。\n\n${progressMsg}\n${allDone ? '您的衣物已全部清潔完成，歡迎來店取件 💙' : '我們正在全力趕工，完成後會立即通知您取件。\n再次誠摯道歉，感謝您的諒解 💙'}`;
-
-        if (userId && client) {
+        const allDone2 = finished === total;
+        const msg = `親愛的 ${customerName} 您好 💙\n\n🙏 非常非常抱歉，因近期送洗衣物量較多，處理時間比預期延長，造成您的不便，我們深感抱歉。\n\n${progressMsg}\n\n${allDone2 ? '您的衣物已全部清潔完成，歡迎來店取件 💙' : '我們正在全力趕工，完成後會立即通知您取件。\n再次誠摯道歉，感謝您的諒解 💙'}`;
+        if (userId) {
           try {
             await client.pushMessage(userId, { type: 'text', text: msg });
-            record.notify2 = { sent: true, time: new Date().toISOString(), userId };
-            console.log(`[OverdueNotify] ✅ 第2次通知已發送: ${customerName}`);
+            record.notify2 = { sent: true, time: new Date().toISOString() };
+            console.log(`[OverdueNotify] ✅ 第2次通知: ${customerName} ${orderNo}`);
           } catch(e) {
-            record.notify2 = { sent: false, time: new Date().toISOString(), error: e.message };
-            console.log(`[OverdueNotify] ❌ 第2次通知發送失敗: ${customerName}`, e.message);
+            record.notify2 = { sent: false, error: e.message, time: new Date().toISOString() };
           }
         } else {
-          record.notify2 = { sent: false, time: new Date().toISOString(), error: 'no_userId' };
+          record.notify2 = { sent: false, error: 'no_userId', time: new Date().toISOString() };
         }
         notifyRecord[orderNo] = record;
         saveOverdueNotify(notifyRecord);
       }
+
+      await new Promise(r => setTimeout(r, 300)); // 避免打太快
     }
+
     console.log('✅ 逾期通知掃描完成');
   } catch(e) {
     console.error('❌ 逾期通知掃描失敗:', e.message);
