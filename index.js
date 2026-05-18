@@ -6262,71 +6262,86 @@ app.post('/api/overdue-notify/delete', (req, res) => {
 // 取得所有逾期未上掛訂單
 app.get('/api/overdue-alerts', async (req, res) => {
   try {
-    const { google } = require('googleapis');
-    const auth = new google.auth.GoogleAuth({
-      credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT),
-      scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly']
+    const token = await getPosToken();
+    if (!token) return res.json({ success: false, error: 'POS 登入失敗' });
+
+    const headers = {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Host': 'yidianyuan.ao-lan.cn',
+      'Authorization': `Bearer ${token}`
+    };
+
+    const today = new Date();
+    const start = new Date(today);
+    start.setDate(today.getDate() - 90);
+    const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+
+    const searchRes = await fetch('http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/SearchPage', {
+      method: 'POST', headers,
+      body: JSON.stringify([
+        { Key: 'BranchID', Value: 'b0aee8e3-6a6e-4863-b74a-08da8958f7f9' },
+        { Key: 'StartDate', Value: fmt(start) },
+        { Key: 'EndDate', Value: fmt(today) },
+        { Key: 'PageSize', Value: '200' },
+        { Key: 'PageIndex', Value: '1' }
+      ])
     });
-    const sheets = google.sheets({ version: 'v4', auth });
-    const spreadsheetId = process.env.GOOGLE_SHEETS_ID_CUSTOMER;
+    const searchData = await searchRes.json();
+    const orders = searchData?.Data?.Data ?? [];
 
-    const sheetInfo = await sheets.spreadsheets.get({ spreadsheetId, fields: 'sheets.properties' });
-    const targetSheet = sheetInfo.data.sheets.find(s => s.properties.sheetId === 756780563);
-    if (!targetSheet) return res.json({ success: false, error: '找不到工作表' });
-
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: `'${targetSheet.properties.title}'!A:M`
-    });
-
-    const rows = response.data.values || [];
-    const now = new Date();
-    const OVERDUE_DAYS = 15;
+    const ignoredData = loadOverdueData();
+    const allCust = orderManager.getAllCustomerNumbers();
     const START_DATE = new Date('2026-04-27');
-    const seen = new Set();
     const overdue = [];
 
-    rows.slice(1).forEach((row, idx) => {
-      const dateStr = (row[0] || '').toString().replace(/\//g, '-').substring(0, 10);
-      const orderNo = row[2] || '';
-      const customerName = row[3] || '';
-      const itemType = row[5] || '';
-      const locationDate = row[12] || ''; // M 欄
+    for (const order of orders) {
+      const orderNo = order.ReceivingOrderNumber || '';
+      const customerName = order.CustomerName || '';
+      if (!orderNo || !customerName) continue;
+      if (ignoredData[orderNo]) continue;
 
-      if (!dateStr || !orderNo || !customerName) return;
-      if (seen.has(orderNo)) return;
-      if (locationDate) return; // 已上掛，跳過
-      const ignoredData = loadOverdueData();
-if (ignoredData[orderNo]) return; // 已刪除/忽略，跳過
+      const openDate = new Date(order.ReceivedDate || '');
+      if (isNaN(openDate) || openDate < START_DATE) continue;
 
-      const openDate = new Date(dateStr);
-if (isNaN(openDate)) return;
-if (openDate < START_DATE) return; // 4/27 之前的訂單忽略
+      const diffDays = Math.floor((today - openDate) / (1000 * 60 * 60 * 24));
+      if (diffDays < 15) continue;
 
-const diffDays = Math.floor((now - openDate) / (1000 * 60 * 60 * 24));
-if (diffDays < OVERDUE_DAYS) return;
+      // 查 POS 品項上掛狀態
+      let allHung = false;
+      let itemType = '';
+      try {
+        const detailRes = await fetch(`http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/GetData/${order.Id}`, {
+          method: 'GET', headers
+        });
+        const detailData = await detailRes.json();
+        const items = detailData?.Data?.ReceivingItemList || [];
+        allHung = items.length > 0 && items.every(item => item.LocationDate);
+        itemType = items.map(item => item?.Goods?.GoodsName || '').filter(Boolean).join('、');
+      } catch(e) {
+        continue; // 查不到保守跳過
+      }
 
-      // 查客戶編號
-      const allCust = orderManager.getAllCustomerNumbers();
+      if (allHung) continue; // 全部上掛就不顯示
+
       const matchedCust = allCust.find(c =>
-        (c.name || '').replace(/\s/g,'') === customerName.replace(/\s/g,'')
+        (c.name || '').replace(/\s/g, '') === customerName.replace(/\s/g, '')
       );
       const customerNo = matchedCust
         ? String(matchedCust.number).padStart(3, '0')
         : '---';
 
-      seen.add(orderNo);
       overdue.push({
         id: orderNo,
         orderNo,
         customerNo,
         customerName,
         itemType,
-        openDate: dateStr,
-        diffDays,
-        rowIndex: idx + 2
+        openDate: openDate.toISOString().substring(0, 10),
+        diffDays
       });
-    });
+
+      await new Promise(r => setTimeout(r, 200));
+    }
 
     res.json({ success: true, overdue });
   } catch (e) {
