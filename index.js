@@ -6086,6 +6086,45 @@ async function runOverdueNotify() {
       const diffDays = Math.floor((now - openDate) / (1000 * 60 * 60 * 24));
       if (diffDays < 15) continue;
 
+// ★ 發送前先去 POS 驗證 LocationDate
+      try {
+        const posToken = await getPosToken();
+        if (posToken) {
+          const posHeaders = {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Host': 'yidianyuan.ao-lan.cn',
+            'Authorization': `Bearer ${posToken}`
+          };
+          const searchRes = await fetch('http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/SearchPage', {
+            method: 'POST',
+            headers: posHeaders,
+            body: JSON.stringify([
+              { Key: 'BranchID', Value: 'b0aee8e3-6a6e-4863-b74a-08da8958f7f9' },
+              { Key: 'KeyWord', Value: orderNo },
+              { Key: 'PageSize', Value: '10' },
+              { Key: 'PageIndex', Value: '1' }
+            ])
+          });
+          const searchData = await searchRes.json();
+          const found = (searchData?.Data?.Data ?? []).find(o => o.ReceivingOrderNumber === orderNo);
+          if (found) {
+            const detailRes = await fetch(`http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/GetData/${found.Id}`, {
+              method: 'GET', headers: posHeaders
+            });
+            const detailData = await detailRes.json();
+            const items = detailData?.Data?.ReceivingItemList || [];
+            const hasLocation = items.some(item => item.LocationDate);
+            if (hasLocation) {
+              console.log(`[OverdueNotify] ⏭️ POS 已上掛，跳過: ${orderNo} ${customerName}`);
+              continue; // 跳過這筆，不發通知
+            }
+          }
+        }
+      } catch(posErr) {
+        console.log(`[OverdueNotify] POS 驗證失敗，保守跳過: ${orderNo}`, posErr.message);
+        continue; // POS 查不到就保守跳過，寧可不發也不亂發
+      }
+      
       // 找 userId
       const matched = customers.find(c =>
         (c.name || '').replace(/\s/g, '') === customerName.replace(/\s/g, '')
