@@ -6315,6 +6315,7 @@ console.log('[OverdueAlerts] 第一筆訂單範例:', JSON.stringify(orders[0]).
         });
         const detailData = await detailRes.json();
         const items = detailData?.Data?.ReceivingItemList || [];
+        if (items.length > 0) console.log('[OverdueAlerts] 品項範例:', JSON.stringify(items[0]).substring(0, 400));
         allHung = items.length > 0 && items.every(item => item.LocationDate);
         itemType = items.map(item => item?.Goods?.GoodsName || '').filter(Boolean).join('、');
       } catch(e) {
