@@ -6294,7 +6294,8 @@ console.log('[OverdueAlerts] 第一筆訂單範例:', JSON.stringify(orders[0]).
     const START_DATE = new Date('2026-04-27');
     const overdue = [];
 
-    for (const order of orders) {
+   for (const order of orders) {
+      console.log('[OverdueAlerts] 處理訂單:', order.ReceivingOrderNumber, order.ReceivedDate);
       const orderNo = order.ReceivingOrderNumber || '';
       const customerName = order.CustomerName || '';
       if (!orderNo || !customerName) continue;
