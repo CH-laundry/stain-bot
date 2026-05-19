@@ -6100,10 +6100,15 @@ async function runOverdueNotify() {
       // 有任何一件已上掛但還有未上掛 → 部分完成；全部上掛 → 跳過不發
       if (hasLocation) {
         console.log(`[OverdueNotify] ⏭️ 全部已上掛，跳過: ${orderNo} ${customerName}`);
-        // 順手清除通知紀錄
         if (notifyRecord[orderNo]) {
           delete notifyRecord[orderNo];
           saveOverdueNotify(notifyRecord);
+        }
+        // 自動寫入刪除清單，前端不再顯示
+        const alertsData = loadOverdueData();
+        if (!alertsData[orderNo]) {
+          alertsData[orderNo] = { deleted: true, deletedAt: new Date().toISOString(), auto: true };
+          saveOverdueData(alertsData);
         }
         continue;
       }
