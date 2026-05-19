@@ -6040,7 +6040,7 @@ async function runOverdueNotify() {
     // 從 POS 撈最近 90 天訂單
     const today = new Date();
     const start = new Date(today);
-    start.setDate(today.getDate() - 90);
+    start.setDate(today.getDate() - 30);
     const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 
     const searchRes = await fetch('http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/SearchPage', {
@@ -6273,7 +6273,7 @@ app.get('/api/overdue-alerts', async (req, res) => {
 
     const today = new Date();
     const start = new Date(today);
-    start.setDate(today.getDate() - 90);
+    start.setDate(today.getDate() - 30);
     const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 
     const searchRes = await fetch('http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/SearchPage', {
