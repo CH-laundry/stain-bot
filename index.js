@@ -6319,8 +6319,9 @@ console.log('[OverdueAlerts] 第一筆訂單範例:', JSON.stringify(orders[0]).
         if (items.length > 0) console.log('[OverdueAlerts] 品項範例:', JSON.stringify(items[0]).substring(0, 400));
         allHung = items.length > 0 && items.every(item => item.LocationDate);
         itemType = items.map(item => item?.Goods?.GoodsName || '').filter(Boolean).join('、');
-      } catch(e) {
-        continue; // 查不到保守跳過
+     } catch(e) {
+        console.log('[OverdueAlerts] GetData 失敗:', order.ReceivingOrderNumber, e.message);
+        continue;
       }
 
       if (allHung) continue; // 全部上掛就不顯示
