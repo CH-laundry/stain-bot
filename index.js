@@ -6394,6 +6394,18 @@ app.get('/api/overdue-alerts/reminded', (req, res) => {
 });
 
 // 刪除逾期紀錄
+app.post('/api/overdue-alerts/skip-first', (req, res) => {
+  try {
+    const { orderNo } = req.body;
+    const data = loadOverdueNotify();
+    if (!data[orderNo]) data[orderNo] = {};
+    data[orderNo].notify1 = { sent: true, skipped: true, time: new Date().toISOString() };
+    saveOverdueNotify(data);
+    res.json({ success: true });
+  } catch(e) {
+    res.json({ success: false, error: e.message });
+  }
+});
 app.post('/api/overdue-alerts/delete', (req, res) => {
   try {
     const { orderNo } = req.body;
