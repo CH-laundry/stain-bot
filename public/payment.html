@@ -5272,8 +5272,9 @@ async function loadOverdueAlerts() {
             ${notify1Badge}
             ${notify2Badge}
           </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+         <div style="display:flex;gap:8px;flex-wrap:wrap;">
             <button class="btn btn-small" style="background:#17a2b8;color:#fff;" onclick="manualSendNotify('${o.orderNo}')">📤 手動補發</button>
+            <button class="btn btn-small" style="background:#ff9800;color:#fff;" onclick="skipFirstNotify('${o.orderNo}')">⏭️ 略過第1次</button>
             ${!reminded ? `<button class="btn btn-small btn-secondary" onclick="markOverdueReminded('${o.orderNo}')">✅ 已提醒</button>` : ''}
             <button class="btn btn-small btn-danger" onclick="deleteOverdueAlert('${o.orderNo}')">🗑️ 刪除</button>
           </div>
@@ -5533,6 +5534,26 @@ async function checkOverdueOnLoad() {
   }
 }
 
+async function skipFirstNotify(orderNo) {
+  if (!confirm('確定略過第1次通知？系統將直接等到第25天才發第2次通知。')) return;
+  try {
+    const res = await fetch('/api/overdue-alerts/skip-first', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderNo })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showResult('success', '✅ 已略過第1次，第25天才會發通知');
+      loadOverdueAlerts();
+    } else {
+      showResult('error', '❌ ' + (data.error || '操作失敗'));
+    }
+  } catch(e) {
+    showResult('error', '❌ ' + e.message);
+  }
+}
+  
 async function testOverdueNotify() {
   if (!confirm('確定要對客戶編號 625 測試發送逾期通知嗎？\n\n將立即觸發一次掃描並嘗試發送 LINE 通知。')) return;
   try {
