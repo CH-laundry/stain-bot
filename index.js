@@ -6288,7 +6288,7 @@ app.get('/api/overdue-alerts', async (req, res) => {
     });
     const searchData = await searchRes.json();
     const orders = searchData?.Data?.Data ?? [];
-
+console.log('[OverdueAlerts] 第一筆訂單範例:', JSON.stringify(orders[0]).substring(0, 300));
     const ignoredData = loadOverdueData();
     const allCust = orderManager.getAllCustomerNumbers();
     const START_DATE = new Date('2026-04-27');
