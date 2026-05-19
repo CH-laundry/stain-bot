@@ -6305,6 +6305,7 @@ console.log('[OverdueAlerts] 第一筆訂單範例:', JSON.stringify(orders[0]).
       if (isNaN(openDate) || openDate < START_DATE) continue;
 
       const diffDays = Math.floor((today - openDate) / (1000 * 60 * 60 * 24));
+      console.log('[OverdueAlerts] 天數計算:', order.ReceivingOrderNumber, 'diffDays:', diffDays);
       if (diffDays < 15) continue;
 
       // 查 POS 品項上掛狀態
