@@ -5146,29 +5146,7 @@ html += '<span style="background:rgba(255,255,255,0.15); color:#ddd; padding:4px
 html += '</div>';
 
 // 洗前洗後兩欄
-html += '<div style="display:grid; grid-template-columns:1fr 1fr; background:#fff;">';
 
-['before','after'].forEach(function(ph) {
-  var photos = g[ph];
-  var label = ph === 'before' ? '• 清洗前' : '• 清洗後';
-  var labelColor = ph === 'before' ? '#1a6b4a' : '#8a2c2c';
-  var borderRight = ph === 'before' ? 'border-right:1px solid #eee;' : '';
-
-  html += '<div style="padding:14px 12px; ' + borderRight + '">';
-  html += '<div style="font-size:12px; font-weight:700; color:' + labelColor + '; margin-bottom:10px; letter-spacing:1px;">' + label + '</div>';
-
-  if (photos.length > 0) {
-    photos.forEach(function(p) {
-      html += '<div style="margin-bottom:10px;">';
-      html += '<img src="' + p.url + '" style="width:100%; border-radius:8px; cursor:pointer; display:block;" onclick="window.open(\'' + p.url + '\',\'_blank\')">';
-      html += '<button onclick="deleteArchivePhoto(\'' + p.name + '\',\'' + cleanNo + '\',\'' + p.url + '\')" style="margin-top:6px; width:100%; padding:6px; background:#fff; border:1px solid #fcc; color:#dc3545; border-radius:6px; cursor:pointer; font-size:12px;">🗑️ 刪除</button>';
-      html += '</div>';
-    });
-  } else {
-    html += '<div style="background:#f5f5f5; border-radius:8px; aspect-ratio:1; display:flex; align-items:center; justify-content:center; font-size:32px; border:1.5px dashed #e0e0e0; color:#ccc;">📷</div>';
-  }
-
-  html += '</div>';
 });
 
 
