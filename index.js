@@ -4668,11 +4668,11 @@ cron.schedule('0 8 * * *', async () => {
 }, { timezone: 'Asia/Taipei' });
 
   
-// 每天早上 9 點掃描逾期通知
-cron.schedule('0 9 * * *', async () => {
-  console.log('⏰ 每日逾期通知掃描啟動');
-  await runOverdueNotify();
-});
+// 每天早上 9 點掃描逾期通知（暫時停用）
+// cron.schedule('0 9 * * *', async () => {
+//   console.log('⏰ 每日逾期通知掃描啟動');
+//   await runOverdueNotify();
+// });
 
   
   // ====== 每天凌晨2點同步 POS 訂單到 Google Sheets ======
