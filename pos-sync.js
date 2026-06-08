@@ -74,6 +74,26 @@ router.post('/delivery-notify', async (req, res) => {
     const customerNumber = data.CustomerNumber || data.customerNumber || 'unknown';
     const customerName = data.CustomerName || data.userName || '未知客戶';
     const orderNo = data.ReceivingOrderID || data.orderNo || '';
+
+    // 用客戶編號去 customer-numbers.json 查 LINE 名字
+    let lineDisplayName = customerName;
+    try {
+      const cleanNo = String(customerNumber).replace(/\D/g, '').replace(/^0+/, '');
+      const orderManager = require('./services/orderManager');
+      const customers = orderManager.getAllCustomerNumbers();
+      const found = customers.find(c => {
+        const dbNo = String(c.number).replace(/\D/g, '').replace(/^0+/, '');
+        return dbNo === cleanNo;
+      });
+      if (found && found.name) {
+        lineDisplayName = found.name;
+        console.log(`[delivery-notify] 編號 ${cleanNo} → LINE名字: ${lineDisplayName}（POS: ${customerName}）`);
+      } else {
+        console.log(`[delivery-notify] 編號 ${cleanNo} 在 customer-numbers 找不到，用 POS 名字: ${customerName}`);
+      }
+    } catch(e) {
+      console.log('[delivery-notify] 查詢 customer-numbers 失敗:', e.message);
+    }
     
     console.log('📝 處理後的資料:');
     console.log('  - 客戶編號:', customerNumber);
@@ -86,7 +106,7 @@ router.post('/delivery-notify', async (req, res) => {
     // 📊 準備寫入 Sheets 的資料
     const rowData = [
       customerNumber,           // A: 客戶編號
-      customerName,             // B: 客戶姓名
+      lineDisplayName,          // B: 客戶姓名
       0,                        // C: 金額
       'sent',                   // D: 通知狀態
       '',                       // E: 指定日期
@@ -126,7 +146,7 @@ router.post('/delivery-notify', async (req, res) => {
           id: `DELIVERY_${Date.now()}`,
           orderNo: orderNo || 'unknown',
           customerNumber: customerNumber,
-          customerName: customerName,
+          customerName: lineDisplayName,
           mobile: '',
           status: 'Pending',
           createdAt: new Date().toISOString(),
