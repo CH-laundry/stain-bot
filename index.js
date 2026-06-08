@@ -1553,6 +1553,7 @@ async function handleLinePayConfirm(transactionId, orderId, parentOrderId) {
       const allCustSync = orderManager.getAllCustomerNumbers();
       const custSync = allCustSync.find(c => c.userId === order.userId);
       const custNoSync = custSync ? String(custSync.number).replace(/\D/g,'').replace(/^0+/,'') : null;
+      console.log(`[PaySync] userId=${order.userId}, custNoSync=${custNoSync}, userName=${order.userName}`);
       global.pendingSyncOrders.push({
         orderId: order.orderId,
         amount: order.amount,
@@ -4869,14 +4870,19 @@ setInterval(async () => {
         let candidates = [];
 
         // 方法1：客戶編號 + 未付金額（最精準）
-        if (taskCustomerNo) {
-          candidates = orders.filter(o => {
-            const posNo = String(o.CustomerNumber || '').replace(/\D/g,'').replace(/^0+/,'');
-            const unpaid = parseFloat(o.UnPaidAmount || 0);
-            return posNo === taskCustomerNo && Math.abs(unpaid - amount) < 1;
-          });
-          if (candidates.length > 0) console.log(`[PaySync] 方法1(客戶編號+金額)命中: ${taskCustomerNo}`);
-        }
+if (taskCustomerNo) {
+  console.log(`[PaySync] 處理任務 - orderId: ${orderId}, amount: ${amount}, customerNo: ${taskCustomerNo}`);
+  candidates = orders.filter(o => {
+    const posNo = String(o.CustomerNumber || '').replace(/\D/g,'').replace(/^0+/,'');
+    const unpaid = parseFloat(o.UnPaidAmount || 0);
+    const subTotal = parseFloat(o.SubTotal || o.TotalAmount || 0);
+    return posNo === taskCustomerNo && (
+      Math.abs(unpaid - amount) < 1 ||
+      Math.abs(subTotal - amount) < 1
+    );
+  });
+  if (candidates.length > 0) console.log(`[PaySync] 方法1(客戶編號+金額)命中: ${taskCustomerNo}`);
+}
 
         // 方法2：訂單號精準比對
         if (candidates.length === 0) {
