@@ -4870,11 +4870,15 @@ setInterval(async () => {
         const taskCustomerNo = task.customerNo || null;
         let candidates = [];
 
+        if (orders.length > 0) {
+  const sample = orders[0];
+  console.log(`[PaySync] 客戶編號相關欄位:`, Object.keys(sample).filter(k => k.toLowerCase().includes('customer') || k.toLowerCase().includes('member') || k.toLowerCase().includes('number')));
+}
         // 方法1：客戶編號 + 未付金額（最精準）
 if (taskCustomerNo) {
   console.log(`[PaySync] 處理任務 - orderId: ${orderId}, amount: ${amount}, customerNo: ${taskCustomerNo}`);
   candidates = orders.filter(o => {
-    const posNo = String(o.CustomerNumber || '').replace(/\D/g,'').replace(/^0+/,'');
+   const posNo = String(o.CustomerNumber || o.MemberNumber || o.CustomerNo || '').replace(/\D/g,'').replace(/^0+/,'');
     const unpaid = parseFloat(o.UnPaidAmount || 0);
     const subTotal = parseFloat(o.SubTotal || o.TotalAmount || 0);
     return posNo === taskCustomerNo && (
