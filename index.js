@@ -4864,7 +4864,7 @@ setInterval(async () => {
         });
         const searchData = await searchRes.json();
         const orders = searchData?.Data?.Data ?? [];
-        if (orders.length > 0) console.log(`[PaySync] POS訂單範例:`, JSON.stringify(orders[0]).substring(0, 500));
+        if (orders.length > 0) console.log(`[PaySync] POS訂單範例:`, JSON.stringify(orders[0]).substring(0, 1000));
 
         // 比對優先順序：客戶編號+金額 > 訂單號 > 純金額
         const taskCustomerNo = task.customerNo || null;
