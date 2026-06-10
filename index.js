@@ -4874,21 +4874,39 @@ setInterval(async () => {
   const sample = orders[0];
   console.log(`[PaySync] 客戶編號相關欄位:`, Object.keys(sample).filter(k => k.toLowerCase().includes('customer') || k.toLowerCase().includes('member') || k.toLowerCase().includes('number')));
 }
-        // 方法1：客戶編號 + 未付金額（最精準）
+        // 方法1：先篩金額符合的候選，再用 GetData 確認客戶編號
 if (taskCustomerNo) {
   console.log(`[PaySync] 處理任務 - orderId: ${orderId}, amount: ${amount}, customerNo: ${taskCustomerNo}`);
-  candidates = orders.filter(o => {
-   const posNo = String(o.CustomerNumber || o.MemberNumber || o.CustomerNo || '').replace(/\D/g,'').replace(/^0+/,'');
+  
+  // 先找金額符合的訂單
+  const amountCandidates = orders.filter(o => {
     const unpaid = parseFloat(o.UnPaidAmount || 0);
-    const subTotal = parseFloat(o.SubTotal || o.TotalAmount || 0);
-    return posNo === taskCustomerNo && (
-      Math.abs(unpaid - amount) < 1 ||
-      Math.abs(subTotal - amount) < 1
-    );
+    const subTotal = parseFloat(o.SubTotal || 0);
+    return Math.abs(unpaid - amount) < 1 || Math.abs(subTotal - amount) < 1;
   });
-  if (candidates.length > 0) console.log(`[PaySync] 方法1(客戶編號+金額)命中: ${taskCustomerNo}`);
-}
 
+  // 再用 GetData 逐一確認客戶編號
+  for (const candidate of amountCandidates) {
+    try {
+      const detailRes = await fetch(`http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/GetData/${candidate.Id}`, {
+        method: 'GET',
+        headers: headers
+      });
+      const detailData = await detailRes.json();
+      console.log(`[PaySync] GetData 回傳:`, JSON.stringify(detailData?.Data?.Customer).substring(0, 200));
+      const customerNo = detailData?.Data?.Customer?.CustomerNumber || '';
+      const cleanPosNo = String(customerNo).replace(/\D/g,'').replace(/^0+/,'');
+      console.log(`[PaySync] GetData 客戶編號: ${customerNo} → ${cleanPosNo}`);
+      if (cleanPosNo === taskCustomerNo) {
+        candidates = [candidate];
+        console.log(`[PaySync] 方法1(編號確認)命中: ${taskCustomerNo}`);
+        break;
+      }
+    } catch(e) {
+      console.log(`[PaySync] GetData 失敗:`, e.message);
+    }
+  }
+}
         // 方法2：訂單號精準比對
         if (candidates.length === 0) {
           candidates = orders.filter(o => o.ReceivingOrderNumber === orderId);
