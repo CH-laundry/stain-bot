@@ -2022,6 +2022,22 @@ async function handleTextMessage(userMessage, userId = null) {
 //     // 查詢失敗時繼續用 Claude AI 回答
 //   }
 // }
+
+// ====================================
+// 🔴 端午節店休（6/19，用完刪除）
+// ====================================
+const nowCheck = new Date();
+const taipeiCheck = new Date(nowCheck.toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
+const isHolidayCheck = taipeiCheck.getMonth() + 1 === 6 && taipeiCheck.getDate() === 19;
+
+if (isHolidayCheck) {
+  const holidayKeywords = /營業|開門|有開|今天有沒有|今天幾點|來拿|來領|去拿|去領|過去拿|過去領|可以來嗎|可以取件|取件|來店|來店裡|今天可以|到府收|來收|收件/;
+  if (holidayKeywords.test(userMessage)) {
+    return '今天端午節連假店休一天，不好意思 💙\n\n明天週六也是固定公休\n\n週日正常營業，歡迎您那時再來，謝謝您 🙏';
+  }
+}
+// ====================================
+    
 //     // 🔥🔥🔥 洗衣系統查詢整合（結束）🔥🔥🔥
     console.log('📩 收到訊息:', userMessage);
     console.log('📩 訊息長度:', userMessage.length);
