@@ -2023,20 +2023,7 @@ async function handleTextMessage(userMessage, userId = null) {
 //   }
 // }
 
-// ====================================
-// 🔴 端午節店休（6/19，用完刪除）
-// ====================================
-const nowCheck = new Date();
-const taipeiCheck = new Date(nowCheck.toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
-const isHolidayCheck = taipeiCheck.getMonth() + 1 === 6 && taipeiCheck.getDate() === 19;
 
-if (isHolidayCheck) {
-  const holidayKeywords = /營業|開門|有開|今天有沒有|今天幾點|來拿|來領|去拿|去領|過去拿|過去領|可以來嗎|可以取件|取件|來店|來店裡|今天可以|到府收|來收|收件/;
-  if (holidayKeywords.test(userMessage)) {
-    return '今天端午節連假店休一天，不好意思 💙\n\n明天週六也是固定公休\n\n週日正常營業，歡迎您那時再來，謝謝您 🙏';
-  }
-}
-// ====================================
     
 //     // 🔥🔥🔥 洗衣系統查詢整合（結束）🔥🔥🔥
     console.log('📩 收到訊息:', userMessage);
@@ -2100,6 +2087,8 @@ if (isEmojiOnly || isGibberish) {
 
 console.log('✅ 非表情符號，繼續處理');
 
+
+
 // ====================================
 // 🔴 第一步：先算時間（必須在所有判斷之前）
 // （注意：這段只留一份，後面不要再宣告 now/taipeiTime/dayNames）
@@ -2122,6 +2111,17 @@ const tomorrowDate = tomorrow.getDate();
 
 const isSaturday = currentDay === 6;
 const isTomorrowSaturday = tomorrowDay === 6;
+
+// ====================================
+// 🔴 端午節店休（6/19，用完刪除）
+// ====================================
+if (currentMonth === 6 && currentDate === 19) {
+  const holidayKeywords = /營業|開門|有開|今天有沒有|今天幾點|來拿|來領|去拿|去領|過去拿|過去領|可以來嗎|可以取件|取件|來店|來店裡|今天可以|到府收|來收|收件|可以收嗎|能收嗎|收得到嗎/;
+  if (holidayKeywords.test(userMessage)) {
+    return '今天端午節連假店休一天，不好意思 💙\n\n明天週六也是固定公休\n\n週日正常營業，歡迎您那時再來，謝謝您 🙏';
+  }
+}
+// ====================================    
 
  // ====================================
 // 🔴 取件硬決策（客人自己來拿衣服）
