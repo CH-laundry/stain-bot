@@ -5010,6 +5010,52 @@ function photoLookupCustomer() {
   });
   photoCurrentCount = { before: 0, after: 0 };
 
+  // 查詢已有幾組，給出建議
+  var groupHint = document.getElementById('photoGroupHint');
+  if (groupHint) groupHint.remove();
+
+  fetch('/api/photos/' + cleanNo).then(function(r){ return r.json(); }).then(function(data) {
+    var photos = data.photos || [];
+    // 找出已存在的組別號碼
+    var usedGroups = {};
+    photos.forEach(function(p) {
+      var nameParts = (p.name || '').split('_');
+      var gPart = nameParts.find(function(s){ return /^g\d+$/.test(s); });
+      var gNo = gPart ? parseInt(gPart.replace('g','')) : 1;
+      var itemType = p.itemType || '未知';
+      var key = itemType + '_g' + gNo;
+      if (!usedGroups[key]) usedGroups[key] = { gNo: gNo, itemType: itemType, before: 0, after: 0 };
+      if (p.phase === 'before') usedGroups[key].before++;
+      else usedGroups[key].after++;
+    });
+
+    var keys = Object.keys(usedGroups);
+    var hint = document.createElement('div');
+    hint.id = 'photoGroupHint';
+    hint.style.cssText = 'background:#fff8e1; border:2px solid #ffc107; border-radius:10px; padding:12px 16px; margin-bottom:12px; font-size:14px;';
+
+    if (keys.length === 0) {
+      hint.innerHTML = '📋 此客戶尚無照片紀錄，<strong style="color:#28a745;">建議選第 1 組</strong>';
+    } else {
+      var maxGroup = Math.max.apply(null, keys.map(function(k){ return usedGroups[k].gNo; }));
+      var nextGroup = maxGroup + 1;
+      var detail = keys.sort(function(a,b){ return usedGroups[a].gNo - usedGroups[b].gNo; }).map(function(k){
+        var g = usedGroups[k];
+        return '第' + g.gNo + '組（' + g.itemType + '）洗前 ' + g.before + ' 張／洗後 ' + g.after + ' 張';
+      }).join('<br>');
+      hint.innerHTML =
+        '📋 此客戶已有 <strong>' + keys.length + ' 組</strong> 照片：<br>' +
+        '<span style="color:#666; font-size:13px;">' + detail + '</span><br><br>' +
+        (nextGroup <= 5
+          ? '👉 <strong style="color:#667eea;">建議選第 ' + nextGroup + ' 組</strong>'
+          : '⚠️ 已達 5 組上限，請確認是否要覆蓋舊照片');
+    }
+
+    var banner = document.getElementById('photoBanner');
+    banner.parentNode.insertBefore(hint, banner.nextSibling);
+  }).catch(function(){
+    // 查詢失敗就不顯示，不影響主流程
+  });
 }
 
   
@@ -5119,49 +5165,72 @@ async function loadArchivePhotos() {
       return;
     }
 
-    // 依日期+品項分組，每組保留所有 before 和 after
+    // 分組
     var groups = {};
-data.photos.forEach(function(p) {
-  var d = new Date(p.date).toLocaleDateString('zh-TW');
-  var nameParts = (p.name || '').split('_');
-  var gPart = nameParts.find(function(s) { return /^g\d+$/.test(s); });
-  var groupNo = gPart ? gPart.replace('g','') : '1';
-  var key = p.itemType + '_g' + groupNo;
-if (!groups[key]) groups[key] = { date: d, itemType: p.itemType, groupNo: groupNo, before: [], after: [] };
-  if (p.phase === 'before') groups[key].before.push(p);
-  else groups[key].after.push(p);
-});
+    data.photos.forEach(function(p) {
+      var nameParts = (p.name || '').split('_');
+      var gPart = nameParts.find(function(s) { return /^g\d+$/.test(s); });
+      var groupNo = gPart ? gPart.replace('g','') : '1';
+      var key = p.itemType + '_g' + groupNo;
+      if (!groups[key]) groups[key] = { date: (p.date||'').substring(0,10), itemType: p.itemType, groupNo: groupNo, before: [], after: [] };
+      if (p.phase === 'before') groups[key].before.push(p);
+      else groups[key].after.push(p);
+    });
 
     var html = '';
     Object.values(groups).sort(function(a,b){ return b.date.localeCompare(a.date); }).forEach(function(g) {
-      html += '<div style="border:1px solid #e0e0e0; border-radius:10px; margin-bottom:15px; overflow:hidden;">';
-      html += '<div style="background:#f0f4ff; padding:10px 15px; display:flex; justify-content:space-between;">';
-      html += '<span style="font-weight:600; color:#667eea;">📅 ' + g.date + '</span>';
-      html += '<span style="background:#667eea; color:#fff; padding:3px 10px; border-radius:10px; font-size:12px;">' + g.itemType + ' 第' + g.groupNo + '組</span>';
+      var d = new Date(g.date);
+      var dateLabel = g.date ? (d.getFullYear() + '/' + (d.getMonth()+1) + '/' + d.getDate()) : '-';
+
+      html += '<div style="background:#fff; border-radius:16px; overflow:hidden; box-shadow:0 4px 20px rgba(0,0,0,.07); border:1px solid #ede8e0; margin-bottom:20px;">';
+      
+      // header
+      html += '<div style="padding:14px 18px; display:flex; justify-content:space-between; align-items:center; background:#2a2420;">';
+      html += '<span style="font-size:13px; color:rgba(255,255,255,.6);">📅 ' + dateLabel + '</span>';
+      html += '<span style="font-size:11px; font-weight:600; letter-spacing:1.5px; color:#b8966e; background:rgba(184,150,110,.15); border:1px solid rgba(184,150,110,.3); padding:4px 12px; border-radius:20px;">' + (g.itemType||'') + ' 第' + g.groupNo + '組</span>';
       html += '</div>';
+
+      // 左右欄
       html += '<div style="display:grid; grid-template-columns:1fr 1fr;">';
 
       ['before','after'].forEach(function(ph) {
         var photos = g[ph];
-        var label = ph === 'before' ? '洗前' : '洗後';
-        var color = ph === 'before' ? '#1a6b4a' : '#8a2c2c';
-        html += '<div style="padding:12px; border-right:' + (ph==='before'?'1px solid #e0e0e0':'none') + ';">';
-        html += '<div style="font-size:11px; font-weight:700; letter-spacing:1.5px; color:' + color + '; margin-bottom:8px;">' + label + '（' + photos.length + '張）</div>';
+        var label = ph === 'before' ? '清洗前' : '清洗後';
+        var dotColor = ph === 'before' ? '#1a4a3a' : '#3a1a1a';
+        var borderRight = ph === 'before' ? 'border-right:1px solid #ede8e0;' : '';
+
+        html += '<div style="padding:14px; ' + borderRight + '">';
+        html += '<div style="font-size:10px; font-weight:600; letter-spacing:2px; color:' + dotColor + '; margin-bottom:10px; display:flex; align-items:center; gap:6px;">';
+        html += '<span style="width:6px; height:6px; border-radius:50%; background:' + dotColor + '; display:inline-block;"></span>' + label;
+        html += '</div>';
+
         if (photos.length > 0) {
           photos.forEach(function(p) {
             html += '<div style="margin-bottom:8px;">';
-            html += '<img src="' + p.url + '" style="width:100%; border-radius:8px; cursor:pointer;" onclick="window.open(\'' + p.url + '\',\'_blank\')">';
+            html += '<img src="' + p.url + '" style="width:100%; aspect-ratio:3/4; object-fit:cover; border-radius:10px; cursor:pointer;" onclick="window.open(\'' + p.url + '\',\'_blank\')">';
             html += '<button onclick="deleteArchivePhoto(\'' + p.name + '\',\'' + cleanNo + '\',\'' + p.url + '\')" style="margin-top:4px; width:100%; padding:5px; background:#fff; border:1px solid #fcc; color:#dc3545; border-radius:6px; cursor:pointer; font-size:12px;">🗑️ 刪除</button>';
             html += '</div>';
           });
         } else {
-          html += '<div style="background:#f5f5f5; border-radius:8px; aspect-ratio:4/3; display:flex; align-items:center; justify-content:center; font-size:28px; border:1.5px dashed #e0e0e0;">📷</div>';
+          html += '<div style="width:100%; aspect-ratio:3/4; background:#f7f4ef; border-radius:10px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; border:1.5px dashed #ede8e0;">';
+          html += '<span style="font-size:24px; opacity:.4;">' + (ph==='before' ? '📷' : '✨') + '</span>';
+          html += '<span style="font-size:11px; color:#a09080;">待拍照</span>';
+          html += '</div>';
         }
+
         html += '</div>';
       });
 
-      html += '</div></div>';
+      html += '</div>';
+
+      // footer
+      html += '<div style="padding:10px 18px; border-top:1px solid #ede8e0; display:flex; justify-content:flex-end;">';
+      html += '<span style="font-size:11px; color:#a09080;">C.H 精緻洗衣 · ' + dateLabel + '</span>';
+      html += '</div>';
+
+      html += '</div>';
     });
+
     container.innerHTML = html;
   } catch(e) {
     container.innerHTML = '<p style="text-align:center; color:#dc3545;">' + e.message + '</p>';
