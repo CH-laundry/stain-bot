@@ -3286,6 +3286,14 @@ console.log(`[AutoProgress] 共找到 ${orders.length} 筆訂單`);
       .map(item => item.LocationDate);
     const firstLocationDate = locationDates.length > 0 ? locationDates[0] : null;
 
+// 如果已有資料，比較開單日期，舊的就跳過
+const existingDate = progressData[cleanNo]?.orderReceivedDate || '';
+const thisDate = order.ReceivedDate || '';
+if (existingDate && thisDate && thisDate < existingDate) {
+  console.log(`[AutoProgress] ⏭️ 跳過舊訂單: ${customerName}`);
+  continue;
+}
+    
     progressData[cleanNo] = {
       total: items.length,
       finished: itemDetails.filter(d => d.includes('完成')).length,
@@ -3293,7 +3301,8 @@ console.log(`[AutoProgress] 共找到 ${orders.length} 筆訂單`);
       customerName: customerName,
       userId: userId,
       updateTime: new Date().toISOString(),
-      locationDate: firstLocationDate || null
+      locationDate: firstLocationDate || null,
+      orderReceivedDate: order.ReceivedDate || ''
     };
 
     console.log(`[AutoProgress] ✅ 已更新 ${customerName} (#${cleanNo})`);
@@ -4495,13 +4504,22 @@ setInterval(async () => {
       return `${goodsName} (清潔中)`;
     });
 
+// 如果已有資料，比較開單日期，舊的就跳過
+const existingDate = progressData[cleanNo]?.orderReceivedDate || '';
+const thisDate = order.ReceivedDate || '';
+if (existingDate && thisDate && thisDate < existingDate) {
+  console.log(`[AutoProgress] ⏭️ 跳過舊訂單: ${customerName}`);
+  continue;
+}
+    
     progressData[cleanNo] = {
       total: items.length,
       finished: itemDetails.filter(d => d.includes('完成')).length,
       details: itemDetails,
       customerName: customerName,
       userId: userId,
-      updateTime: new Date().toISOString()
+      updateTime: new Date().toISOString(),
+      orderReceivedDate: order.ReceivedDate || ''
     };
 
     console.log(`[AutoProgress] ✅ 已更新 ${customerName} (#${cleanNo})`);
