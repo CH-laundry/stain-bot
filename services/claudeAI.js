@@ -2329,17 +2329,18 @@ console.log(`📜 對話記憶: ${history.length} 則歷史訊息`);
       (userMessage.includes('？') && userMessage.split('？').length > 2)
     );
     
-    // 選擇模型
-    const modelToUse = isComplexQuestion 
-      ? "claude-sonnet-4-20250514"  // 複雜問題用 Sonnet 4（準確率高）
-      : "claude-haiku-4-5-20251001"; // 簡單問題用 Haiku 3.5（便宜 95%）
+   // 選擇模型
+    const modelToUse = "claude-haiku-4-5-20251001"; // 全部用 Haiku 省費用
     
     console.log(`🤖 使用模型: ${modelToUse} (${isComplexQuestion ? '複雜問題' : '簡單問題'})`);
     
     const message = await anthropic.messages.create({
   model: modelToUse,
   max_tokens: 1500,
- system: LAUNDRY_KNOWLEDGE + `
+ system: [
+    {
+      type: "text",
+      text: LAUNDRY_KNOWLEDGE + `
 
 【🔴 超級重要最終指令】
 如果客人的訊息：
@@ -2359,7 +2360,10 @@ console.log(`📜 對話記憶: ${history.length} 則歷史訊息`);
 ❌ 任何反問客人的話
 
 記住：看不懂就閉嘴！直接回 UNRELATED 就好！
-`,  // ← 注意這裡要有逗號！
+`,
+      cache_control: { type: "ephemeral" }
+    }
+  ],
   messages: messages
 });
 
