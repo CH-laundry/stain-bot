@@ -2026,6 +2026,32 @@ async function handleTextMessage(userMessage, userId = null) {
 
     
 //     // 🔥🔥🔥 洗衣系統查詢整合（結束）🔥🔥🔥
+
+// ====================================
+    // 🔴 最優先：店休公告（7/7-7/12）
+    // ====================================
+    const nowForHoliday = new Date();
+    const taipeiForHoliday = new Date(nowForHoliday.toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
+    const holidayMonth = taipeiForHoliday.getMonth() + 1;
+    const holidayDate = taipeiForHoliday.getDate();
+    const isHolidayPeriod = (holidayMonth === 7 && holidayDate >= 7 && holidayDate <= 12);
+    const holidayKeywords = (
+      /營業|開門|有開|有在|幾點|店休|休息|休假|暑假|假期|放假|打烊|開著|有開嗎|今天有|明天有/.test(userMessage) ||
+      /來收|收件|到府收|送洗|送件|可以收|今天收|明天收|等會來|等一下來|送過去|拿過去|帶過去/.test(userMessage) ||
+      /去拿|去領|來取|過去拿|過去領|去取件|可以拿|可以領|什麼時候拿|幾點可以拿|今天拿|明天拿/.test(userMessage) ||
+      /送回|送到家|何時送|幾點送|什麼時候送|送回來|幫我送/.test(userMessage) ||
+      /好了嗎|好了沒|洗好了|完工了|完成了|可以拿了|幾天好|什麼時候好|快好了嗎/.test(userMessage) ||
+      /急件|趕緊|盡快|快一點|急著要|需要用|幾天會好/.test(userMessage)
+    );
+    if (isHolidayPeriod && holidayKeywords) {
+      const holidayReply = `C.H 精緻洗衣 💙 將於 7/7（二）～ 7/12（日）店休 6 天\n\n店休期間到府收件照常服務，外收人員會正常前往收回 💙\n若衣物已完成，7/13（一）起即可於營業時間內前來領取\n\n7/13（一）起恢復正常營業\n感謝您的體諒，我們將以更好的品質繼續為您服務 🙏`;
+      console.log('🏖️ 店休公告觸發');
+      if (userId) {
+        await logToGoogleSheets(userId, userMessage, holidayReply, '店休公告', '😊 正常');
+      }
+      return holidayReply;
+    }
+    
     console.log('📩 收到訊息:', userMessage);
     console.log('📩 訊息長度:', userMessage.length);
     console.log('📩 訊息前50字:', userMessage.substring(0, 50));
