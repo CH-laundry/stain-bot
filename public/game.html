@@ -6,691 +6,856 @@
   <title>C.H 洗衣小鎮</title>
   <script src="https://static.line-scdn.net/liff/edge/versions/2.22.3/sdk.js"></script>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+    body { font-family:'Microsoft JhengHei',sans-serif; background:#1a1a2e; overflow:hidden; height:100vh; width:100vw; }
 
-    body {
-      font-family: 'Segoe UI', 'Microsoft JhengHei', sans-serif;
-      background: #1a1a2e;
-      color: #fff;
-      min-height: 100vh;
-      overflow-x: hidden;
-    }
-
-    /* ── 載入畫面 ── */
+    /* 載入畫面 */
     #loadingScreen {
-      position: fixed; inset: 0;
-      background: linear-gradient(135deg, #1a1a2e, #16213e);
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      z-index: 999;
+      position:fixed; inset:0; z-index:999;
+      background:linear-gradient(135deg,#1a1a2e,#16213e);
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
     }
-    .load-logo { font-size: 64px; margin-bottom: 16px; animation: bounce 1s infinite; }
-    .load-title { font-size: 24px; font-weight: bold; color: #ffd700; margin-bottom: 8px; }
-    .load-sub { font-size: 14px; color: rgba(255,255,255,0.5); }
-    .load-bar { width: 200px; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; margin-top: 24px; overflow: hidden; }
-    .load-fill { height: 100%; background: linear-gradient(90deg, #ffd700, #ff6b35); border-radius: 3px; animation: loading 1.5s ease-in-out infinite; }
-    @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
-    @keyframes loading { 0%{width:0%} 100%{width:100%} }
+    .load-logo { font-size:72px; animation:bounce 1s infinite; }
+    .load-title { font-size:26px; font-weight:bold; color:#ffd700; margin:12px 0 6px; }
+    .load-sub { font-size:14px; color:rgba(255,255,255,0.5); }
+    .load-bar { width:200px; height:6px; background:rgba(255,255,255,0.1); border-radius:3px; margin-top:24px; overflow:hidden; }
+    .load-fill { height:100%; background:linear-gradient(90deg,#ffd700,#ff6b35); animation:loadAnim 1.8s ease-in-out infinite; }
+    @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
+    @keyframes loadAnim{0%{width:0%}100%{width:100%}}
 
-    /* ── 頂部狀態列 ── */
+    /* 頂部 */
     #topBar {
-      background: linear-gradient(135deg, #16213e, #0f3460);
-      padding: 12px 16px;
-      display: flex; align-items: center; justify-content: space-between;
-      border-bottom: 2px solid rgba(255,215,0,0.3);
-      position: sticky; top: 0; z-index: 100;
+      position:fixed; top:0; left:0; right:0; z-index:100;
+      background:rgba(15,25,60,0.95);
+      backdrop-filter:blur(10px);
+      padding:10px 14px;
+      display:flex; align-items:center; justify-content:space-between;
+      border-bottom:2px solid rgba(255,215,0,0.25);
     }
-    .player-info { display: flex; align-items: center; gap: 10px; }
-    .player-avatar { width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg,#667eea,#764ba2); display: flex; align-items: center; justify-content: center; font-size: 20px; border: 2px solid #ffd700; }
-    .player-name { font-size: 14px; font-weight: bold; }
-    .player-level { font-size: 11px; color: #ffd700; }
-    .coins-display { display: flex; align-items: center; gap: 6px; background: rgba(255,215,0,0.15); padding: 6px 12px; border-radius: 20px; border: 1px solid rgba(255,215,0,0.3); }
-    .coins-icon { font-size: 18px; }
-    .coins-amount { font-size: 16px; font-weight: bold; color: #ffd700; }
+    .player-info { display:flex; align-items:center; gap:10px; }
+    .avatar { width:38px; height:38px; border-radius:50%; background:linear-gradient(135deg,#667eea,#764ba2); display:flex; align-items:center; justify-content:center; font-size:20px; border:2px solid #ffd700; }
+    .player-name { font-size:14px; font-weight:bold; color:#fff; }
+    .player-level { font-size:11px; color:#ffd700; }
+    .top-title { font-size:15px; font-weight:bold; color:#ffd700; letter-spacing:1px; }
 
-    /* ── 主內容區 ── */
-    #mainContent { padding: 16px; padding-bottom: 80px; }
-
-    /* ── 歡迎橫幅 ── */
-    .welcome-banner {
-      background: linear-gradient(135deg, #0f3460, #533483);
-      border-radius: 16px; padding: 20px;
-      margin-bottom: 16px;
-      border: 1px solid rgba(255,215,0,0.2);
-      position: relative; overflow: hidden;
+    /* 遊戲世界容器 */
+    #gameWorld {
+      position:fixed; inset:0;
+      top:60px;
+      overflow:hidden;
+      cursor:grab;
     }
-    .welcome-banner::before {
-      content: '🏪';
-      position: absolute; right: 16px; top: 50%; transform: translateY(-50%);
-      font-size: 64px; opacity: 0.15;
-    }
-    .welcome-banner h2 { font-size: 20px; color: #ffd700; margin-bottom: 6px; }
-    .welcome-banner p { font-size: 13px; color: rgba(255,255,255,0.7); line-height: 1.5; }
+    #gameWorld:active { cursor:grabbing; }
 
-    /* ── 今日任務 ── */
-    .section-title {
-      font-size: 16px; font-weight: bold;
-      color: #ffd700; margin-bottom: 12px;
-      display: flex; align-items: center; gap: 8px;
+    /* 地圖畫布 */
+    #mapCanvas {
+      position:absolute;
+      image-rendering:pixelated;
     }
 
-    .task-card {
-      background: rgba(255,255,255,0.05);
-      border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 12px; padding: 14px;
-      margin-bottom: 10px;
-      display: flex; align-items: center; gap: 14px;
-      cursor: pointer; transition: all 0.2s;
-      position: relative; overflow: hidden;
+    /* NPC 精靈 */
+    .npc {
+      position:absolute;
+      display:flex; flex-direction:column; align-items:center;
+      cursor:pointer;
+      transition:transform 0.1s;
+      z-index:10;
+      user-select:none;
     }
-    .task-card:active { transform: scale(0.97); }
-    .task-card.completed { opacity: 0.5; }
-    .task-card.completed::after {
-      content: '✅ 完成'; position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
-      background: #28a745; color: #fff; padding: 4px 10px; border-radius: 10px; font-size: 12px;
+    .npc:active { transform:scale(0.9); }
+    .npc-body { font-size:32px; position:relative; animation:npcIdle 2s ease-in-out infinite; }
+    .npc-shadow { width:28px; height:8px; background:rgba(0,0,0,0.3); border-radius:50%; margin-top:-4px; }
+    .npc-name {
+      background:rgba(0,0,0,0.7); color:#fff;
+      font-size:11px; padding:2px 8px; border-radius:10px;
+      margin-top:4px; white-space:nowrap; border:1px solid rgba(255,255,255,0.2);
     }
-    .task-icon { font-size: 36px; flex-shrink: 0; }
-    .task-info { flex: 1; }
-    .task-name { font-size: 15px; font-weight: bold; margin-bottom: 4px; }
-    .task-desc { font-size: 12px; color: rgba(255,255,255,0.6); }
-    .task-reward { font-size: 13px; color: #ffd700; font-weight: bold; margin-top: 4px; }
+    .npc-bubble {
+      position:absolute; top:-36px; left:50%; transform:translateX(-50%);
+      background:#fff; color:#333;
+      font-size:12px; padding:4px 8px; border-radius:10px;
+      white-space:nowrap; border:2px solid #ffd700;
+      animation:bubblePop 0.3s ease-out;
+      pointer-events:none;
+    }
+    .npc-bubble::after {
+      content:''; position:absolute; bottom:-8px; left:50%; transform:translateX(-50%);
+      border:4px solid transparent; border-top-color:#ffd700;
+    }
+    @keyframes npcIdle{0%,100%{transform:translateY(0) scaleX(1)}50%{transform:translateY(-4px) scaleX(1)}}
+    @keyframes bubblePop{0%{transform:translateX(-50%) scale(0.5);opacity:0}100%{transform:translateX(-50%) scale(1);opacity:1}}
 
-    /* ── 污漬解謎 Modal ── */
-    .modal-overlay {
-      position: fixed; inset: 0;
-      background: rgba(0,0,0,0.8);
-      display: flex; align-items: flex-end; justify-content: center;
-      z-index: 200; opacity: 0; pointer-events: none;
-      transition: opacity 0.3s;
+    /* 建築物 */
+    .building {
+      position:absolute;
+      display:flex; flex-direction:column; align-items:center;
+      cursor:pointer; z-index:5;
+      filter:drop-shadow(0 4px 8px rgba(0,0,0,0.5));
+      transition:transform 0.15s;
     }
-    .modal-overlay.active { opacity: 1; pointer-events: all; }
-    .modal-sheet {
-      background: #16213e;
-      border-radius: 20px 20px 0 0;
-      padding: 24px 20px 40px;
-      width: 100%; max-width: 480px;
-      transform: translateY(100%); transition: transform 0.3s ease;
-      border-top: 3px solid rgba(255,215,0,0.3);
+    .building:active { transform:scale(0.95); }
+    .building-body { font-size:56px; animation:buildingFloat 3s ease-in-out infinite; }
+    .building-label {
+      background:rgba(255,255,255,0.9); color:#333;
+      font-size:11px; font-weight:bold;
+      padding:3px 10px; border-radius:12px;
+      margin-top:-4px; border:2px solid rgba(255,215,0,0.5);
+      white-space:nowrap;
     }
-    .modal-overlay.active .modal-sheet { transform: translateY(0); }
-    .modal-handle { width: 40px; height: 4px; background: rgba(255,255,255,0.3); border-radius: 2px; margin: 0 auto 20px; }
-    .modal-title { font-size: 18px; font-weight: bold; color: #ffd700; margin-bottom: 6px; }
-    .modal-sub { font-size: 13px; color: rgba(255,255,255,0.6); margin-bottom: 20px; }
+    @keyframes buildingFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
 
-    /* ── 污漬題目 ── */
-    .stain-scene {
-      background: rgba(255,255,255,0.05);
-      border-radius: 12px; padding: 16px;
-      margin-bottom: 20px; text-align: center;
-    }
-    .stain-emoji { font-size: 48px; margin-bottom: 10px; }
-    .stain-story { font-size: 14px; color: rgba(255,255,255,0.8); line-height: 1.6; }
-    .stain-question { font-size: 15px; font-weight: bold; margin-top: 10px; color: #fff; }
+    /* 裝飾物 */
+    .deco { position:absolute; font-size:28px; z-index:4; pointer-events:none; }
+    .deco.tree { animation:treeSway 3s ease-in-out infinite; }
+    @keyframes treeSway{0%,100%{transform:rotate(-2deg)}50%{transform:rotate(2deg)}}
 
-    .quiz-options { display: grid; gap: 10px; }
-    .quiz-btn {
-      background: rgba(255,255,255,0.08);
-      border: 2px solid rgba(255,255,255,0.15);
-      border-radius: 12px; padding: 14px 16px;
-      color: #fff; font-size: 14px; text-align: left;
-      cursor: pointer; transition: all 0.2s;
-      display: flex; align-items: center; gap: 10px;
+    /* 對話框 Modal */
+    #dialogModal {
+      position:fixed; inset:0; z-index:500;
+      background:rgba(0,0,0,0.6);
+      display:flex; align-items:flex-end; justify-content:center;
+      opacity:0; pointer-events:none; transition:opacity 0.25s;
     }
-    .quiz-btn:active { transform: scale(0.97); }
-    .quiz-btn.correct { background: rgba(40,167,69,0.3); border-color: #28a745; }
-    .quiz-btn.wrong { background: rgba(220,53,69,0.3); border-color: #dc3545; }
-    .quiz-btn.disabled { pointer-events: none; opacity: 0.6; }
-    .option-label { width: 28px; height: 28px; border-radius: 50%; background: rgba(255,215,0,0.2); display: flex; align-items: center; justify-content: center; font-weight: bold; color: #ffd700; font-size: 13px; flex-shrink: 0; }
+    #dialogModal.open { opacity:1; pointer-events:all; }
+    .dialog-sheet {
+      background:#1a2744;
+      border-radius:20px 20px 0 0;
+      padding:20px 20px 40px;
+      width:100%; max-width:480px;
+      transform:translateY(100%); transition:transform 0.3s ease;
+      border-top:3px solid rgba(255,215,0,0.4);
+    }
+    #dialogModal.open .dialog-sheet { transform:translateY(0); }
+    .dialog-handle { width:36px; height:4px; background:rgba(255,255,255,0.25); border-radius:2px; margin:0 auto 16px; }
+    .dialog-npc { display:flex; align-items:center; gap:12px; margin-bottom:14px; }
+    .dialog-avatar { font-size:44px; }
+    .dialog-who { font-size:16px; font-weight:bold; color:#ffd700; }
+    .dialog-role { font-size:12px; color:rgba(255,255,255,0.5); margin-top:2px; }
+    .dialog-text {
+      background:rgba(255,255,255,0.06);
+      border-radius:12px; padding:14px;
+      font-size:15px; color:#fff; line-height:1.7;
+      border-left:3px solid rgba(255,215,0,0.4);
+      min-height:60px; margin-bottom:16px;
+    }
+    .dialog-choices { display:grid; gap:8px; }
+    .choice-btn {
+      background:rgba(255,255,255,0.07);
+      border:1px solid rgba(255,255,255,0.15);
+      border-radius:12px; padding:12px 14px;
+      color:#fff; font-size:14px; text-align:left;
+      cursor:pointer; transition:all 0.2s;
+      display:flex; align-items:center; gap:10px;
+    }
+    .choice-btn:active { background:rgba(255,215,0,0.15); border-color:#ffd700; }
+    .choice-icon { font-size:20px; }
 
-    .quiz-result {
-      display: none; text-align: center;
-      padding: 20px; border-radius: 12px;
-      margin-top: 16px;
+    /* 污漬解謎 */
+    #quizPanel {
+      position:fixed; inset:0; z-index:600;
+      background:rgba(0,0,0,0.85);
+      display:flex; align-items:flex-end; justify-content:center;
+      opacity:0; pointer-events:none; transition:opacity 0.25s;
     }
-    .quiz-result.correct { background: rgba(40,167,69,0.2); border: 1px solid #28a745; }
-    .quiz-result.wrong { background: rgba(220,53,69,0.2); border: 1px solid #dc3545; }
-    .result-emoji { font-size: 48px; margin-bottom: 10px; }
-    .result-text { font-size: 16px; font-weight: bold; margin-bottom: 6px; }
-    .result-sub { font-size: 13px; color: rgba(255,255,255,0.7); }
-    .result-coins { font-size: 20px; color: #ffd700; font-weight: bold; margin-top: 8px; }
+    #quizPanel.open { opacity:1; pointer-events:all; }
+    .quiz-sheet {
+      background:#0f1f45;
+      border-radius:20px 20px 0 0;
+      padding:20px 18px 40px;
+      width:100%; max-width:480px;
+      transform:translateY(100%); transition:transform 0.3s ease;
+      border-top:3px solid #ffd700;
+      max-height:90vh; overflow-y:auto;
+    }
+    #quizPanel.open .quiz-sheet { transform:translateY(0); }
+    .quiz-header { display:flex; align-items:center; gap:10px; margin-bottom:14px; }
+    .quiz-step { font-size:12px; color:rgba(255,255,255,0.4); margin-left:auto; }
+    .quiz-scene {
+      background:rgba(255,255,255,0.05);
+      border-radius:14px; padding:16px; margin-bottom:16px; text-align:center;
+    }
+    .quiz-emoji { font-size:52px; margin-bottom:10px; }
+    .quiz-story { font-size:13px; color:rgba(255,255,255,0.75); line-height:1.7; }
+    .quiz-q { font-size:15px; font-weight:bold; color:#fff; margin-top:10px; }
+    .opts { display:grid; gap:9px; }
+    .opt-btn {
+      background:rgba(255,255,255,0.07); border:2px solid rgba(255,255,255,0.12);
+      border-radius:12px; padding:13px 14px;
+      color:#fff; font-size:14px; text-align:left;
+      cursor:pointer; display:flex; align-items:center; gap:10px; transition:all 0.15s;
+    }
+    .opt-btn:active { transform:scale(0.97); }
+    .opt-btn.correct { background:rgba(40,167,69,0.25); border-color:#28a745; }
+    .opt-btn.wrong { background:rgba(220,53,69,0.25); border-color:#dc3545; }
+    .opt-btn.locked { pointer-events:none; }
+    .opt-lbl { width:28px; height:28px; border-radius:50%; background:rgba(255,215,0,0.15); display:flex; align-items:center; justify-content:center; font-weight:bold; color:#ffd700; font-size:13px; flex-shrink:0; }
+    .result-box { border-radius:12px; padding:16px; text-align:center; margin-top:12px; display:none; }
+    .result-box.ok { background:rgba(40,167,69,0.2); border:1px solid #28a745; }
+    .result-box.ng { background:rgba(220,53,69,0.2); border:1px solid #dc3545; }
+    .result-emoji { font-size:44px; }
+    .result-title { font-size:17px; font-weight:bold; margin:8px 0 4px; }
+    .result-explain { font-size:13px; color:rgba(255,255,255,0.7); line-height:1.6; }
+    .btn-next { width:100%; padding:14px; background:linear-gradient(135deg,#ffd700,#ff9500); color:#1a1a2e; font-size:16px; font-weight:bold; border:none; border-radius:12px; cursor:pointer; margin-top:14px; display:none; }
+    .btn-close-quiz { width:100%; padding:11px; background:rgba(255,255,255,0.08); color:#fff; border:1px solid rgba(255,255,255,0.2); border-radius:10px; cursor:pointer; font-size:14px; margin-top:8px; }
 
-    /* ── 商店說明 ── */
-    .shop-section {
-      background: linear-gradient(135deg, rgba(102,126,234,0.2), rgba(118,75,162,0.2));
-      border: 1px solid rgba(102,126,234,0.3);
-      border-radius: 16px; padding: 20px;
-      margin-bottom: 16px;
-    }
-    .earn-list { list-style: none; margin-top: 12px; }
-    .earn-item {
-      display: flex; align-items: center; gap: 12px;
-      padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.05);
-    }
-    .earn-item:last-child { border-bottom: none; }
-    .earn-icon { font-size: 24px; }
-    .earn-info { flex: 1; }
-    .earn-name { font-size: 14px; font-weight: bold; }
-    .earn-desc { font-size: 12px; color: rgba(255,255,255,0.5); }
-    .earn-coins { font-size: 14px; color: #ffd700; font-weight: bold; }
-
-    /* ── 底部導覽 ── */
-    #bottomNav {
-      position: fixed; bottom: 0; left: 0; right: 0;
-      background: #0f1f45;
-      border-top: 2px solid rgba(255,215,0,0.2);
-      display: flex; padding: 8px 0 20px;
-    }
-    .nav-item {
-      flex: 1; display: flex; flex-direction: column;
-      align-items: center; gap: 4px;
-      cursor: pointer; padding: 6px;
-      transition: all 0.2s;
-    }
-    .nav-icon { font-size: 24px; }
-    .nav-label { font-size: 10px; color: rgba(255,255,255,0.5); }
-    .nav-item.active .nav-icon { filter: drop-shadow(0 0 6px #ffd700); }
-    .nav-item.active .nav-label { color: #ffd700; }
-
-    /* ── 金幣動畫 ── */
-    .coin-pop {
-      position: fixed; pointer-events: none;
-      font-size: 20px; font-weight: bold; color: #ffd700;
-      animation: coinFly 1s ease-out forwards;
-      z-index: 999;
-    }
-    @keyframes coinFly {
-      0%   { opacity:1; transform: translateY(0) scale(1); }
-      100% { opacity:0; transform: translateY(-80px) scale(1.5); }
-    }
-
-    /* ── 排行榜 ── */
-    .rank-card {
-      background: rgba(255,255,255,0.05);
-      border-radius: 12px; padding: 14px;
-      margin-bottom: 10px;
-      display: flex; align-items: center; gap: 12px;
-    }
-    .rank-num { font-size: 20px; font-weight: bold; min-width: 32px; text-align: center; }
-    .rank-num.gold { color: #ffd700; }
-    .rank-num.silver { color: #c0c0c0; }
-    .rank-num.bronze { color: #cd7f32; }
-    .rank-info { flex: 1; }
-    .rank-name { font-size: 14px; font-weight: bold; }
-    .rank-coins { font-size: 13px; color: #ffd700; }
-
-    /* ── 通用按鈕 ── */
-    .btn-primary {
-      width: 100%; padding: 14px;
-      background: linear-gradient(135deg, #ffd700, #ff9500);
-      color: #1a1a2e; font-size: 16px; font-weight: bold;
-      border: none; border-radius: 12px;
-      cursor: pointer; margin-top: 16px;
-      transition: all 0.2s;
-    }
-    .btn-primary:active { transform: scale(0.97); }
-    .btn-close {
-      background: rgba(255,255,255,0.1); color: #fff;
-      border: 1px solid rgba(255,255,255,0.2);
-      border-radius: 10px; padding: 10px 20px;
-      cursor: pointer; font-size: 14px; margin-top: 10px; width: 100%;
+    /* 天氣/時間裝飾 */
+    #weatherDeco {
+      position:fixed; top:70px; right:14px; z-index:50;
+      font-size:22px; opacity:0.8;
+      filter:drop-shadow(0 2px 4px rgba(0,0,0,0.5));
     }
 
-    /* ── 頁面切換 ── */
-    .page { display: none; }
-    .page.active { display: block; }
+    /* 小地圖提示 */
+    #mapHint {
+      position:fixed; bottom:20px; right:14px; z-index:50;
+      background:rgba(0,0,0,0.6); color:rgba(255,255,255,0.6);
+      font-size:11px; padding:6px 10px; border-radius:10px;
+      pointer-events:none;
+    }
 
-    /* 通知 toast */
+    /* Toast */
     #toast {
-      position: fixed; top: 80px; left: 50%; transform: translateX(-50%);
-      background: rgba(0,0,0,0.85); color: #fff;
-      padding: 10px 20px; border-radius: 20px;
-      font-size: 14px; z-index: 500;
-      opacity: 0; transition: opacity 0.3s;
-      white-space: nowrap;
+      position:fixed; top:80px; left:50%; transform:translateX(-50%);
+      background:rgba(0,0,0,0.85); color:#fff;
+      padding:10px 20px; border-radius:20px; font-size:14px;
+      z-index:700; opacity:0; transition:opacity 0.3s; white-space:nowrap;
     }
-    #toast.show { opacity: 1; }
+    #toast.show { opacity:1; }
+
+    /* 走路動畫 */
+    @keyframes walkL{0%,100%{transform:scaleX(-1) translateY(0)}50%{transform:scaleX(-1) translateY(-5px)}}
+    @keyframes walkR{0%,100%{transform:scaleX(1) translateY(0)}50%{transform:scaleX(1) translateY(-5px)}}
+    .walking-l .npc-body { animation:walkL 0.4s steps(2) infinite !important; }
+    .walking-r .npc-body { animation:walkR 0.4s steps(2) infinite !important; }
   </style>
 </head>
 <body>
 
-<!-- 載入畫面 -->
 <div id="loadingScreen">
   <div class="load-logo">🧺</div>
   <div class="load-title">C.H 洗衣小鎮</div>
-  <div class="load-sub">正在進入小鎮...</div>
+  <div class="load-sub">小鎮正在甦醒中...</div>
   <div class="load-bar"><div class="load-fill"></div></div>
 </div>
 
-<!-- Toast 通知 -->
 <div id="toast"></div>
 
-<!-- 頂部狀態列 -->
+<!-- 頂部 -->
 <div id="topBar" style="display:none;">
   <div class="player-info">
-    <div class="player-avatar">🧑</div>
+    <div class="avatar" id="playerAvatar">🧑</div>
     <div>
-      <div class="player-name" id="playerName">載入中...</div>
+      <div class="player-name" id="playerName">載入中</div>
       <div class="player-level" id="playerLevel">Lv.1 小店員</div>
     </div>
   </div>
-  <div class="coins-display">
-    <span class="coins-icon">🪙</span>
-    <span class="coins-amount" id="coinsAmount">0</span>
+  <div class="top-title">🧺 洗衣小鎮</div>
+</div>
+
+<!-- 天氣 -->
+<div id="weatherDeco" style="display:none;"></div>
+
+<!-- 地圖提示 -->
+<div id="mapHint" style="display:none;">拖動畫面探索小鎮</div>
+
+<!-- 遊戲世界 -->
+<div id="gameWorld" style="display:none;">
+  <canvas id="mapCanvas"></canvas>
+</div>
+
+<!-- 對話框 -->
+<div id="dialogModal">
+  <div class="dialog-sheet">
+    <div class="dialog-handle"></div>
+    <div class="dialog-npc">
+      <div class="dialog-avatar" id="dlgAvatar">🧓</div>
+      <div>
+        <div class="dialog-who" id="dlgName">-</div>
+        <div class="dialog-role" id="dlgRole">-</div>
+      </div>
+    </div>
+    <div class="dialog-text" id="dlgText">...</div>
+    <div class="dialog-choices" id="dlgChoices"></div>
   </div>
 </div>
 
-<!-- 主內容 -->
-<div id="mainContent" style="display:none;">
-
-  <!-- 首頁 -->
-  <div class="page active" id="page-home">
-    <div class="welcome-banner">
-      <h2>歡迎回來！</h2>
-      <p id="welcomeMsg">今天也要努力經營洗衣店喔！</p>
+<!-- 污漬解謎 -->
+<div id="quizPanel">
+  <div class="quiz-sheet">
+    <div class="quiz-header">
+      <span style="font-size:18px; font-weight:bold; color:#ffd700;">🔬 污漬解謎</span>
+      <span class="quiz-step" id="quizStep">1 / 3</span>
     </div>
-
-    <div class="section-title">⚡ 今日任務</div>
-
-    <div class="task-card" id="task-quiz" onclick="openQuiz()">
-      <div class="task-icon">🔬</div>
-      <div class="task-info">
-        <div class="task-name">污漬解謎挑戰</div>
-        <div class="task-desc">幫助客人解決頑固污漬！</div>
-        <div class="task-reward">🪙 答對得 50 金幣</div>
-      </div>
+    <div class="quiz-scene">
+      <div class="quiz-emoji" id="qEmoji">☕</div>
+      <div class="quiz-story" id="qStory"></div>
+      <div class="quiz-q" id="qQuestion"></div>
     </div>
-
-    <div class="task-card" id="task-wash" onclick="showToast('送洗任務：帶衣物到 C.H 精緻洗衣即可獲得！')">
-      <div class="task-icon">👔</div>
-      <div class="task-info">
-        <div class="task-name">真實送洗</div>
-        <div class="task-desc">將衣物送到實體店面清洗</div>
-        <div class="task-reward">🪙 每次送洗得 500 金幣</div>
-      </div>
+    <div class="opts" id="qOpts"></div>
+    <div class="result-box" id="qResult">
+      <div class="result-emoji" id="rEmoji"></div>
+      <div class="result-title" id="rTitle"></div>
+      <div class="result-explain" id="rExplain"></div>
     </div>
-
-    <div class="task-card" id="task-member" onclick="showToast('成為 LINE 官方帳號好友即可獲得金幣！')">
-      <div class="task-icon">💎</div>
-      <div class="task-info">
-        <div class="task-name">加入 LINE 會員</div>
-        <div class="task-desc">成為 C.H 精緻洗衣的好友</div>
-        <div class="task-reward">🪙 一次性獲得 100 金幣</div>
-      </div>
-    </div>
-
-    <div class="task-card" onclick="showToast('介紹朋友加入 LINE 官方帳號即可獲得！')">
-      <div class="task-icon">👥</div>
-      <div class="task-info">
-        <div class="task-name">介紹朋友</div>
-        <div class="task-desc">每介紹一位朋友來洗衣</div>
-        <div class="task-reward">🪙 每位朋友得 1000 金幣</div>
-      </div>
-    </div>
-
-    <!-- 金幣說明 -->
-    <div class="shop-section" style="margin-top:20px;">
-      <div class="section-title" style="margin-bottom:8px;">🏪 金幣可以換什麼？</div>
-      <p style="font-size:13px; color:rgba(255,255,255,0.6);">累積金幣可以兌換洗衣折扣、免費清潔服務等好禮，敬請期待！</p>
-      <ul class="earn-list" style="margin-top:10px;">
-        <li class="earn-item">
-          <span class="earn-icon">🎁</span>
-          <div class="earn-info"><div class="earn-name">洗衣折扣券</div><div class="earn-desc">即將推出</div></div>
-          <span class="earn-coins">1000🪙</span>
-        </li>
-        <li class="earn-item">
-          <span class="earn-icon">✨</span>
-          <div class="earn-info"><div class="earn-name">免費去漬服務</div><div class="earn-desc">即將推出</div></div>
-          <span class="earn-coins">2000🪙</span>
-        </li>
-      </ul>
-    </div>
-  </div>
-
-  <!-- 排行榜頁 -->
-  <div class="page" id="page-rank">
-    <div class="section-title">🏆 金幣排行榜</div>
-    <p style="font-size:13px; color:rgba(255,255,255,0.5); margin-bottom:16px;">和其他常客一起競爭吧！</p>
-    <div id="rankList">
-      <p style="text-align:center; color:rgba(255,255,255,0.3); padding:40px;">載入中...</p>
-    </div>
-  </div>
-
-  <!-- 我的頁 -->
-  <div class="page" id="page-mine">
-    <div class="section-title">👤 我的小鎮</div>
-    <div style="background:rgba(255,255,255,0.05); border-radius:16px; padding:20px; margin-bottom:16px;">
-      <div style="text-align:center; margin-bottom:20px;">
-        <div style="font-size:64px; margin-bottom:10px;">🧑</div>
-        <div style="font-size:20px; font-weight:bold;" id="myName">-</div>
-        <div style="font-size:13px; color:rgba(255,255,255,0.5);" id="myUserId">-</div>
-      </div>
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
-        <div style="background:rgba(255,215,0,0.1); border-radius:12px; padding:16px; text-align:center;">
-          <div style="font-size:28px; font-weight:bold; color:#ffd700;" id="myCoins">0</div>
-          <div style="font-size:12px; color:rgba(255,255,255,0.5);">累積金幣</div>
-        </div>
-        <div style="background:rgba(102,126,234,0.15); border-radius:12px; padding:16px; text-align:center;">
-          <div style="font-size:28px; font-weight:bold; color:#a78bfa;" id="myStain">0</div>
-          <div style="font-size:12px; color:rgba(255,255,255,0.5);">解謎次數</div>
-        </div>
-      </div>
-    </div>
-    <div style="background:rgba(255,255,255,0.05); border-radius:12px; padding:16px;">
-      <div style="font-size:14px; color:rgba(255,255,255,0.6); line-height:1.8;">
-        📍 店家地址：新北市板橋區<br>
-        📞 聯絡方式：LINE 官方帳號<br>
-        ⏰ 營業時間：週一至週六 10:00-19:00
-      </div>
-    </div>
-  </div>
-
-</div>
-
-<!-- 底部導覽 -->
-<div id="bottomNav" style="display:none;">
-  <div class="nav-item active" onclick="switchPage('home',this)">
-    <span class="nav-icon">🏠</span>
-    <span class="nav-label">首頁</span>
-  </div>
-  <div class="nav-item" onclick="switchPage('rank',this)">
-    <span class="nav-icon">🏆</span>
-    <span class="nav-label">排行榜</span>
-  </div>
-  <div class="nav-item" onclick="switchPage('mine',this)">
-    <span class="nav-icon">👤</span>
-    <span class="nav-label">我的</span>
-  </div>
-</div>
-
-<!-- 污漬解謎 Modal -->
-<div class="modal-overlay" id="quizModal" onclick="closeQuizByOverlay(event)">
-  <div class="modal-sheet">
-    <div class="modal-handle"></div>
-    <div class="modal-title">🔬 污漬解謎挑戰</div>
-    <div class="modal-sub" id="quizProgress">第 1 題，共 3 題</div>
-
-    <div class="stain-scene">
-      <div class="stain-emoji" id="quizEmoji">☕</div>
-      <div class="stain-story" id="quizStory">載入中...</div>
-      <div class="stain-question" id="quizQuestion">應該怎麼處理？</div>
-    </div>
-
-    <div class="quiz-options" id="quizOptions"></div>
-
-    <div class="quiz-result" id="quizResult">
-      <div class="result-emoji" id="resultEmoji"></div>
-      <div class="result-text" id="resultText"></div>
-      <div class="result-sub" id="resultSub"></div>
-      <div class="result-coins" id="resultCoins"></div>
-    </div>
-
-    <button class="btn-primary" id="quizNextBtn" style="display:none;" onclick="nextQuestion()">下一題 →</button>
-    <button class="btn-primary" id="quizFinishBtn" style="display:none;" onclick="closeQuiz()">完成挑戰 🎉</button>
-    <button class="btn-close" onclick="closeQuiz()">關閉</button>
+    <button class="btn-next" id="btnNext" onclick="nextQ()">下一題 →</button>
+    <button class="btn-next" id="btnFinish" onclick="finishQuiz()">完成挑戰 🎉</button>
+    <button class="btn-close-quiz" onclick="closeQuiz()">關閉</button>
   </div>
 </div>
 
 <script>
-const LIFF_ID = '2008313382-NFMAIRRS';
+// ══════════════════════════════════════
+//  設定
+// ══════════════════════════════════════
+const LIFF_ID  = '2008313382-NFMAIRRS';
 const API_BASE = 'https://stain-bot-production-2593.up.railway.app';
 
-let currentUser = null;
-let playerData = null;
-let currentQ = 0;
-let correctCount = 0;
-let todayQuizDone = false;
+const MAP_W = 1400;
+const MAP_H = 1100;
 
-// ── 題庫 ──
-const questions = [
-  {
-    id: 'q1',
-    emoji: '☕',
-    story: '👩 王太太說：「咖啡不小心打翻在白色棉質襯衫上，還沒乾！」',
-    question: '最佳的第一步處理方式是？',
-    options: [
-      { label: 'A', text: '立刻用冷水沖洗，從污漬外圍往內輕拍', correct: true },
-      { label: 'B', text: '馬上用熱水燙，讓污漬融化', correct: false },
-      { label: 'C', text: '直接揉搓，讓污漬分散', correct: false },
-      { label: 'D', text: '先放著等乾了再處理', correct: false },
+let currentUser = null;
+let playerData  = null;
+let dragStart   = null;
+let camX = 0, camY = 0;
+let isDragging  = false;
+
+// ── NPC 資料 ──
+const NPCS = [
+  { id:'granny', emoji:'👵', name:'阿婆', role:'街坊鄰居', x:220, y:340,
+    dialogs:[
+      { text:'哎呀孩子！我的羽絨外套不小心沾到醬油，這要怎麼洗啊？', choices:[
+        { icon:'💬', label:'問我你問對人了！', next:'a1' },
+        { icon:'🤷', label:'我也不太清楚...', next:'a2' },
+      ]},
     ],
-    explain: '咖啡是水溶性污漬，要立刻用冷水（不是熱水！）沖洗，熱水會讓蛋白質固化，更難處理。'
+    extra:{
+      a1:{ text:'是嗎？那太好了！你說說看，醬油是什麼性質的污漬啊？', choices:[
+        { icon:'🔬', label:'挑戰污漬解謎！', action:'quiz' },
+        { icon:'💬', label:'應該用冷水先沖吧', next:'a3' },
+      ]},
+      a2:{ text:'哎...那我去問問旁邊的 C.H 洗衣店好了，聽說他們很厲害！', choices:[
+        { icon:'👋', label:'對，去問他們！', close:true },
+      ]},
+      a3:{ text:'冷水沖是對的！醬油是水溶性污漬，不能用熱水，熱水會讓蛋白質固化喔！你真的很懂！', choices:[
+        { icon:'😊', label:'謝謝你，再見！', close:true },
+      ]},
+    }
   },
-  {
-    id: 'q2',
-    emoji: '🛢️',
-    story: '👨 林先生說：「修車時機油沾到西裝褲，不知道能洗掉嗎？」',
-    question: '機油污漬最正確的處理方式是？',
-    options: [
-      { label: 'A', text: '直接泡水搓洗', correct: false },
-      { label: 'B', text: '用去漬劑或洗碗精先預處理，再送洗', correct: true },
-      { label: 'C', text: '用漂白水漂白', correct: false },
-      { label: 'D', text: '丟進洗衣機直接洗', correct: false },
+  { id:'uncle', emoji:'👨‍💼', name:'林先生', role:'上班族常客', x:680, y:280,
+    dialogs:[
+      { text:'哎，每週都要送西裝來洗，但品質真的很好，洗完挺起來帥多了！', choices:[
+        { icon:'😄', label:'是嗎！怎麼說？', next:'b1' },
+        { icon:'👔', label:'西裝常洗嗎？', next:'b2' },
+      ]},
     ],
-    explain: '機油是油脂類污漬，水洗效果差，要先用去漬劑或洗碗精（含界面活性劑）預處理，分解油脂後才送洗，效果更好。'
+    extra:{
+      b1:{ text:'他們去漬技術很專業，連袖口那種汗漬都能處理乾淨，而且布料不會縮水！', choices:[
+        { icon:'👍', label:'聽起來很厲害！', next:'b3' },
+      ]},
+      b2:{ text:'西裝建議每穿 3-5 次就送洗一次，太久才洗污漬會固化，更難清！', choices:[
+        { icon:'📝', label:'記下來了，謝謝！', next:'b3' },
+      ]},
+      b3:{ text:'對了，你知道怎麼處理油漬嗎？我昨天吃飯不小心滴到了...', choices:[
+        { icon:'🔬', label:'來挑戰污漬解謎看看！', action:'quiz' },
+        { icon:'🤔', label:'這個問題好難...', close:true },
+      ]},
+    }
   },
-  {
-    id: 'q3',
-    emoji: '🍷',
-    story: '👧 小婉說：「紅酒濺到白色洋裝上，現在已經過了一個晚上...」',
-    question: '隔夜紅酒污漬，下列哪個方式最有效？',
-    options: [
-      { label: 'A', text: '用熱水直接搓洗', correct: false },
-      { label: 'B', text: '直接漂白', correct: false },
-      { label: 'C', text: '送專業洗衣店處理，說明污漬狀況', correct: true },
-      { label: 'D', text: '泡在冷水裡三天', correct: false },
+  { id:'girl', emoji:'👧', name:'小雅', role:'大學生', x:960, y:420,
+    dialogs:[
+      { text:'哇！你也來洗衣小鎮玩啊！我每次等衣服洗好都來這裡逛逛！', choices:[
+        { icon:'😊', label:'對！這裡好有趣！', next:'c1' },
+        { icon:'🏠', label:'這個小鎮是什麼呀？', next:'c2' },
+      ]},
     ],
-    explain: '隔夜紅酒污漬已氧化，家庭處理效果有限，且白色衣物直接漂白可能傷害纖維。最佳方式是送專業洗衣店，並告知污漬類型和時間，讓師傅判斷最佳處理方式。'
-  }
+    extra:{
+      c1:{ text:'對吧！而且還可以學污漬知識！上次我咖啡灑到新買的白裙子，靠這裡學到的方法救回來了！', choices:[
+        { icon:'☕', label:'真的嗎！怎麼救的？', next:'c3' },
+        { icon:'🔬', label:'我也想挑戰看看！', action:'quiz' },
+      ]},
+      c2:{ text:'這是 C.H 精緻洗衣的互動小鎮！可以跟小鎮居民對話、挑戰污漬解謎，超好玩的！', choices:[
+        { icon:'🎮', label:'聽起來很好玩！', next:'c1' },
+      ]},
+      c3:{ text:'立刻用冷水沖！然後用洗碗精輕輕拍，不要搓，最後再送洗。白色衣服要跟師傅說清楚是咖啡漬！', choices:[
+        { icon:'📝', label:'學到了！謝謝你！', close:true },
+        { icon:'🔬', label:'那我來挑戰解謎！', action:'quiz' },
+      ]},
+    }
+  },
+  { id:'chef', emoji:'👨‍🍳', name:'阿明師傅', role:'餐廳老闆', x:420, y:620,
+    dialogs:[
+      { text:'唉，開餐廳最麻煩就是廚師服每天都油污，要不是有 C.H 幫我洗，我早就頭痛死了！', choices:[
+        { icon:'🤔', label:'油污很難洗嗎？', next:'d1' },
+        { icon:'😄', label:'C.H 很厲害嗎？', next:'d2' },
+      ]},
+    ],
+    extra:{
+      d1:{ text:'超難！油漬是脂肪類，水洗根本沒用，要先用去漬劑或洗碗精預處理，讓油脂分解後才能送洗！', choices:[
+        { icon:'👍', label:'原來如此！學到了！', next:'d3' },
+        { icon:'🔬', label:'我想挑戰油漬解謎！', action:'quiz' },
+      ]},
+      d2:{ text:'當然！他們連頑固油漬都能搞定，而且交件時間很準時，不耽誤我的生意！', choices:[
+        { icon:'😊', label:'聽起來真的很讚！', next:'d3' },
+      ]},
+      d3:{ text:'你要去挑戰污漬解謎嗎？我每次都挑戰失敗，哈哈！', choices:[
+        { icon:'🔬', label:'那我來試試看！', action:'quiz' },
+        { icon:'👋', label:'下次再說，再見！', close:true },
+      ]},
+    }
+  },
+  { id:'kid', emoji:'🧒', name:'小寶', role:'小學生', x:800, y:640,
+    dialogs:[
+      { text:'叔叔/阿姨！我昨天打球把褲子弄髒了，媽媽說要送去洗衣店！', choices:[
+        { icon:'⚽', label:'是泥巴嗎？', next:'e1' },
+        { icon:'😄', label:'你好可愛！', next:'e2' },
+      ]},
+    ],
+    extra:{
+      e1:{ text:'對！泥巴加草漬，好多喔！你知道怎麼洗嗎？', choices:[
+        { icon:'🤔', label:'先讓泥巴乾掉再刷...', next:'e3' },
+        { icon:'💦', label:'用水泡？', next:'e4' },
+      ]},
+      e2:{ text:'嘿嘿！我知道很多洗衣知識喔！你要考我嗎？', choices:[
+        { icon:'❓', label:'那泥巴怎麼洗？', next:'e3' },
+        { icon:'🔬', label:'不如我們一起解謎吧！', action:'quiz' },
+      ]},
+      e3:{ text:'答對了！泥巴要先讓它乾掉，再用乾刷子刷掉表面，然後才能送洗！如果直接水洗，泥巴會染更深！', choices:[
+        { icon:'👏', label:'哇好厲害！學到了！', close:true },
+      ]},
+      e4:{ text:'不對喔！泥巴直接泡水會讓污漬擴散更深。要先讓泥巴乾掉，再刷掉表面，才送洗！', choices:[
+        { icon:'📝', label:'原來如此！謝謝你！', close:true },
+      ]},
+    }
+  },
 ];
 
-// ── 初始化 LIFF ──
-async function initLiff() {
-  try {
-    await liff.init({ liffId: LIFF_ID });
-    if (!liff.isLoggedIn()) {
-      liff.login();
-      return;
+// ── 題庫 ──
+const QUESTIONS = [
+  {
+    emoji:'☕', story:'👩 王太太說：「咖啡不小心打翻在白色棉質襯衫上，還沒乾！」',
+    question:'最佳的第一步處理方式是？',
+    opts:[
+      { lbl:'A', text:'立刻用冷水沖洗，從污漬外圍往內輕拍', ok:true },
+      { lbl:'B', text:'用熱水燙，讓污漬融化', ok:false },
+      { lbl:'C', text:'直接揉搓讓污漬分散', ok:false },
+      { lbl:'D', text:'先放著等乾了再處理', ok:false },
+    ],
+    explain:'咖啡是水溶性污漬，要立刻用冷水（不是熱水！）沖洗。熱水會讓蛋白質固化，更難處理。',
+  },
+  {
+    emoji:'🛢️', story:'👨 林先生說：「修車時機油沾到西裝褲，不知道能洗掉嗎？」',
+    question:'機油污漬最正確的處理方式？',
+    opts:[
+      { lbl:'A', text:'直接泡水用力搓洗', ok:false },
+      { lbl:'B', text:'用去漬劑或洗碗精預處理後送洗', ok:true },
+      { lbl:'C', text:'用漂白水漂白', ok:false },
+      { lbl:'D', text:'直接丟進洗衣機', ok:false },
+    ],
+    explain:'機油是油脂類污漬，純水洗效果差。要先用去漬劑或洗碗精分解油脂，再送洗才有效。',
+  },
+  {
+    emoji:'🍷', story:'👧 小婉說：「紅酒濺到白色洋裝，已經過了一個晚上...」',
+    question:'隔夜紅酒污漬，哪個方式最有效？',
+    opts:[
+      { lbl:'A', text:'用熱水直接搓洗', ok:false },
+      { lbl:'B', text:'直接漂白', ok:false },
+      { lbl:'C', text:'送專業洗衣店，說明污漬狀況', ok:true },
+      { lbl:'D', text:'泡冷水三天', ok:false },
+    ],
+    explain:'隔夜紅酒已氧化，家庭處理效果有限。最佳方式是送專業洗衣店，並告知污漬類型和時間，讓師傅判斷最佳處理方式。',
+  },
+];
+
+// ══════════════════════════════════════
+//  地圖繪製
+// ══════════════════════════════════════
+function drawMap() {
+  const canvas = document.getElementById('mapCanvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width  = MAP_W;
+  canvas.height = MAP_H;
+
+  // 天空漸層
+  const sky = ctx.createLinearGradient(0,0,0,MAP_H*0.45);
+  sky.addColorStop(0,'#1a3a6e');
+  sky.addColorStop(1,'#2a5298');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0,0,MAP_W,MAP_H*0.45);
+
+  // 星星
+  ctx.fillStyle='rgba(255,255,255,0.7)';
+  [[100,60],[300,30],[550,80],[800,25],[1050,65],[1250,40],[1350,90],[150,120],[700,110]].forEach(([x,y])=>{
+    ctx.beginPath(); ctx.arc(x,y,1.5,0,Math.PI*2); ctx.fill();
+  });
+
+  // 地面漸層
+  const ground = ctx.createLinearGradient(0,MAP_H*0.4,0,MAP_H);
+  ground.addColorStop(0,'#2d5a27');
+  ground.addColorStop(0.3,'#3a7a32');
+  ground.addColorStop(1,'#2a5a22');
+  ctx.fillStyle = ground;
+  ctx.fillRect(0,MAP_H*0.4,MAP_W,MAP_H*0.6);
+
+  // 道路（橫）
+  ctx.fillStyle='#555';
+  ctx.fillRect(0,MAP_H*0.52,MAP_W,90);
+  // 道路（縱）
+  ctx.fillStyle='#555';
+  ctx.fillRect(580,MAP_H*0.4,90,MAP_H*0.6);
+
+  // 路中線
+  ctx.setLineDash([30,20]);
+  ctx.strokeStyle='rgba(255,255,200,0.4)';
+  ctx.lineWidth=3;
+  ctx.beginPath(); ctx.moveTo(0,MAP_H*0.52+45); ctx.lineTo(MAP_W,MAP_H*0.52+45); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(580+45,MAP_H*0.4); ctx.lineTo(580+45,MAP_H); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // 人行道
+  ctx.fillStyle='#777';
+  ctx.fillRect(0,MAP_H*0.5,MAP_W,18);
+  ctx.fillRect(0,MAP_H*0.52+90,MAP_W,18);
+  ctx.fillRect(578,MAP_H*0.4,18,MAP_H);
+  ctx.fillRect(652,MAP_H*0.4,18,MAP_H);
+
+  // 水池
+  const pond = ctx.createRadialGradient(1150,750,10,1150,750,80);
+  pond.addColorStop(0,'#3ab4dc');
+  pond.addColorStop(1,'#1a6fa0');
+  ctx.fillStyle=pond;
+  ctx.beginPath(); ctx.ellipse(1150,750,85,55,0,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,0.3)'; ctx.lineWidth=2;
+  ctx.stroke();
+
+  // 草叢裝飾
+  ctx.fillStyle='#4a8a42';
+  [[200,470],[400,460],[750,455],[950,475],[1200,460],[1100,480]].forEach(([x,y])=>{
+    ctx.beginPath(); ctx.arc(x,y,18,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x-14,y+8,14,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x+14,y+8,14,0,Math.PI*2); ctx.fill();
+  });
+
+  // 花朵
+  [['#ff6b9d',320,490],['#ffd700',480,480],['#ff8c42',860,470],['#a78bfa',1050,490]].forEach(([c,x,y])=>{
+    ctx.fillStyle=c;
+    for(let i=0;i<6;i++){
+      ctx.beginPath();
+      ctx.arc(x+Math.cos(i*60*Math.PI/180)*8, y+Math.sin(i*60*Math.PI/180)*8, 5, 0, Math.PI*2);
+      ctx.fill();
     }
-    const profile = await liff.getProfile();
-    currentUser = profile;
-    await loadPlayer(profile.userId, profile.displayName);
-    showApp();
-  } catch (e) {
-    console.error('LIFF init error:', e);
-    // 開發模式：使用假資料
-    currentUser = { userId: 'dev_' + Date.now(), displayName: '開發測試' };
-    await loadPlayer(currentUser.userId, currentUser.displayName);
-    showApp();
-  }
+    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2); ctx.fill();
+  });
 }
 
-// ── 載入玩家資料 ──
-async function loadPlayer(userId, displayName) {
-  try {
-    const res = await fetch(`${API_BASE}/api/game/player/${userId}`);
-    const data = await res.json();
-    if (data.success) {
-      playerData = data.player;
+// ══════════════════════════════════════
+//  NPC 精靈建立
+// ══════════════════════════════════════
+let npcElements = {};
+let npcStates   = {};
+
+function spawnNPCs() {
+  const world = document.getElementById('gameWorld');
+  NPCS.forEach(npc => {
+    const el = document.createElement('div');
+    el.className = 'npc';
+    el.id = 'npc_' + npc.id;
+    el.innerHTML = `
+      <div class="npc-body">${npc.emoji}</div>
+      <div class="npc-shadow"></div>
+      <div class="npc-name">${npc.name}</div>
+    `;
+    el.style.left = npc.x + 'px';
+    el.style.top  = npc.y + 'px';
+    el.addEventListener('click', (e) => { e.stopPropagation(); talkTo(npc.id); });
+    world.appendChild(el);
+    npcElements[npc.id] = el;
+    npcStates[npc.id] = { x: npc.x, y: npc.y, tx: npc.x, ty: npc.y, wait: Math.random()*180 };
+  });
+}
+
+// NPC 隨機遊走
+function updateNPCs() {
+  NPCS.forEach(npc => {
+    const el  = npcElements[npc.id];
+    const st  = npcStates[npc.id];
+    if(!el || !st) return;
+
+    // 接近目標
+    const dx = st.tx - st.x;
+    const dy = st.ty - st.y;
+    const dist = Math.sqrt(dx*dx+dy*dy);
+
+    if(dist < 2) {
+      // 到達目標，等一下再決定下一個目標
+      st.wait--;
+      if(st.wait <= 0) {
+        // 以初始位置為中心，半徑100內隨機
+        const range = 90;
+        st.tx = npc.x + (Math.random()-0.5)*range*2;
+        st.ty = npc.y + (Math.random()-0.5)*range;
+        st.tx = Math.max(60, Math.min(MAP_W-60, st.tx));
+        st.ty = Math.max(200, Math.min(MAP_H-100, st.ty));
+        st.wait = 120 + Math.random()*200;
+        el.classList.remove('walking-l','walking-r');
+      }
+    } else {
+      const speed = 0.6;
+      st.x += (dx/dist)*speed;
+      st.y += (dy/dist)*speed;
+      el.style.left = st.x + 'px';
+      el.style.top  = st.y + 'px';
+
+      // 走路動畫方向
+      if(dx < -1) { el.classList.add('walking-l'); el.classList.remove('walking-r'); }
+      else if(dx > 1) { el.classList.add('walking-r'); el.classList.remove('walking-l'); }
     }
-  } catch (e) {
-    playerData = { userId, coins: 0, level: 1, exp: 0, stainSolved: 0 };
-  }
-
-  // 更新 UI
-  document.getElementById('playerName').textContent = displayName || '神秘玩家';
-  document.getElementById('playerLevel').textContent = getLevelTitle(playerData.level || 1);
-  document.getElementById('coinsAmount').textContent = (playerData.coins || 0).toLocaleString();
-  document.getElementById('myName').textContent = displayName || '-';
-  document.getElementById('myUserId').textContent = userId;
-  document.getElementById('myCoins').textContent = (playerData.coins || 0).toLocaleString();
-  document.getElementById('myStain').textContent = playerData.stainSolved || 0;
-
-  // 歡迎語
-  const hour = new Date().getHours();
-  let greeting = hour < 12 ? '早安！' : hour < 18 ? '午安！' : '晚安！';
-  document.getElementById('welcomeMsg').textContent = `${greeting}${displayName || ''}，今天也要努力經營洗衣店喔！`;
-
-  // 檢查今天是否已做過解謎
-  const todayKey = new Date().toISOString().substring(0, 10);
-  const lastQuiz = localStorage.getItem('lastQuizDate_' + userId);
-  todayQuizDone = (lastQuiz === todayKey);
-  if (todayQuizDone) {
-    document.getElementById('task-quiz').classList.add('completed');
-  }
+  });
 }
 
-function getLevelTitle(level) {
-  const titles = ['', 'Lv.1 小店員', 'Lv.2 洗衣師', 'Lv.3 去漬達人', 'Lv.4 洗衣大師', 'Lv.5 洗衣王'];
-  return titles[Math.min(level, titles.length - 1)] || 'Lv.' + level;
+// ══════════════════════════════════════
+//  建築物
+// ══════════════════════════════════════
+const BUILDINGS = [
+  { emoji:'🏪', label:'C.H 精緻洗衣', x:80,  y:160 },
+  { emoji:'🍜', label:'阿明麵館',      x:740, y:150 },
+  { emoji:'🌸', label:'小雅花店',      x:1080,y:160 },
+  { emoji:'📚', label:'社區圖書館',    x:370, y:150 },
+];
+const DECOS = [
+  { emoji:'🌳', x:50,  y:430, cls:'tree' },
+  { emoji:'🌳', x:320, y:430, cls:'tree' },
+  { emoji:'🌲', x:700, y:440, cls:'tree' },
+  { emoji:'🌳', x:900, y:430, cls:'tree' },
+  { emoji:'🌲', x:1180,y:430, cls:'tree' },
+  { emoji:'💡', x:200, y:490 },
+  { emoji:'💡', x:500, y:490 },
+  { emoji:'💡', x:900, y:490 },
+  { emoji:'🚗', x:140, y:555 },
+  { emoji:'🚙', x:850, y:545 },
+  { emoji:'🛵', x:1100,y:548 },
+  { emoji:'🐈', x:1250,y:700 },
+  { emoji:'🦆', x:1100,y:760 },
+  { emoji:'🦆', x:1200,y:780 },
+];
+
+function spawnBuildings() {
+  const world = document.getElementById('gameWorld');
+  BUILDINGS.forEach(b => {
+    const el = document.createElement('div');
+    el.className = 'building';
+    el.innerHTML = `<div class="building-body">${b.emoji}</div><div class="building-label">${b.label}</div>`;
+    el.style.left = b.x + 'px';
+    el.style.top  = b.y + 'px';
+    el.addEventListener('click', e => { e.stopPropagation(); showToast('📍 ' + b.label); });
+    world.appendChild(el);
+  });
+  DECOS.forEach(d => {
+    const el = document.createElement('div');
+    el.className = 'deco' + (d.cls ? ' '+d.cls : '');
+    el.textContent = d.emoji;
+    el.style.left = d.x + 'px';
+    el.style.top  = d.y + 'px';
+    world.appendChild(el);
+  });
 }
 
-// ── 顯示 App ──
-function showApp() {
-  setTimeout(() => {
-    document.getElementById('loadingScreen').style.display = 'none';
-    document.getElementById('topBar').style.display = 'flex';
-    document.getElementById('mainContent').style.display = 'block';
-    document.getElementById('bottomNav').style.display = 'flex';
-  }, 1500);
+// ══════════════════════════════════════
+//  鏡頭拖拽
+// ══════════════════════════════════════
+function initDrag() {
+  const world = document.getElementById('gameWorld');
+  let startX, startY, startCamX, startCamY, moved = false;
+
+  world.addEventListener('pointerdown', e => {
+    isDragging = true; moved = false;
+    startX = e.clientX; startY = e.clientY;
+    startCamX = camX; startCamY = camY;
+  });
+  window.addEventListener('pointermove', e => {
+    if(!isDragging) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    if(Math.abs(dx)+Math.abs(dy) > 5) moved = true;
+    const ww = window.innerWidth, wh = window.innerHeight - 60;
+    camX = Math.max(0, Math.min(MAP_W-ww,  startCamX - dx));
+    camY = Math.max(0, Math.min(MAP_H-wh, startCamY - dy));
+    document.getElementById('mapCanvas').style.transform = `translate(${-camX}px,${-camY}px)`;
+    document.querySelectorAll('.npc,.building,.deco').forEach(el => {
+      el.style.transform = `translate(${-camX}px,${-camY}px)`;
+    });
+  });
+  window.addEventListener('pointerup', () => { isDragging = false; });
 }
 
-// ── 頁面切換 ──
-function switchPage(name, el) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.getElementById('page-' + name).classList.add('active');
-  el.classList.add('active');
-  if (name === 'rank') loadRank();
+// ══════════════════════════════════════
+//  對話系統
+// ══════════════════════════════════════
+let curNPC = null, curDialog = null;
+
+function talkTo(id) {
+  curNPC = NPCS.find(n => n.id === id);
+  if(!curNPC) return;
+  curDialog = curNPC.dialogs[0];
+  renderDialog(curDialog);
+  document.getElementById('dialogModal').classList.add('open');
+  // 顯示說話泡泡
+  showBubble(id, '...');
 }
 
-// ── 排行榜 ──
-async function loadRank() {
-  // 簡單展示：未來可串接後端
-  const wrap = document.getElementById('rankList');
-  wrap.innerHTML = `
-    <div class="rank-card">
-      <div class="rank-num gold">🥇</div>
-      <div class="rank-info">
-        <div class="rank-name">${currentUser?.displayName || '你'}</div>
-        <div class="rank-coins">🪙 ${(playerData?.coins || 0).toLocaleString()} 金幣</div>
-      </div>
-    </div>
-    <div style="text-align:center; padding:30px; color:rgba(255,255,255,0.3); font-size:14px;">
-      🌟 成為第一位金幣玩家！<br>邀請朋友一起來挑戰
-    </div>
-  `;
+function showBubble(id, text) {
+  const el = npcElements[id];
+  if(!el) return;
+  let b = el.querySelector('.npc-bubble');
+  if(b) b.remove();
+  b = document.createElement('div');
+  b.className = 'npc-bubble';
+  b.textContent = text;
+  el.appendChild(b);
+  setTimeout(() => { if(b.parentNode) b.remove(); }, 3000);
 }
 
-// ── 污漬解謎 ──
-function openQuiz() {
-  if (todayQuizDone) {
-    showToast('今天已經完成解謎囉！明天再來 😊');
+function renderDialog(dlg) {
+  document.getElementById('dlgAvatar').textContent = curNPC.emoji;
+  document.getElementById('dlgName').textContent   = curNPC.name;
+  document.getElementById('dlgRole').textContent   = curNPC.role;
+  document.getElementById('dlgText').textContent   = dlg.text;
+
+  const cc = document.getElementById('dlgChoices');
+  cc.innerHTML = '';
+  dlg.choices.forEach(c => {
+    const btn = document.createElement('button');
+    btn.className = 'choice-btn';
+    btn.innerHTML = `<span class="choice-icon">${c.icon}</span>${c.label}`;
+    btn.addEventListener('click', () => handleChoice(c));
+    cc.appendChild(btn);
+  });
+}
+
+function handleChoice(c) {
+  if(c.action === 'quiz') {
+    closeDialog();
+    openQuiz();
     return;
   }
-  currentQ = 0;
-  correctCount = 0;
-  renderQuestion();
-  document.getElementById('quizModal').classList.add('active');
+  if(c.close) {
+    closeDialog();
+    return;
+  }
+  if(c.next && curNPC.extra && curNPC.extra[c.next]) {
+    renderDialog(curNPC.extra[c.next]);
+  }
+}
+
+function closeDialog() {
+  document.getElementById('dialogModal').classList.remove('open');
+  curNPC = null;
+}
+
+// 點背景關閉
+document.getElementById('dialogModal').addEventListener('click', e => {
+  if(e.target === e.currentTarget) closeDialog();
+});
+
+// ══════════════════════════════════════
+//  污漬解謎
+// ══════════════════════════════════════
+let curQ = 0, correctCnt = 0, quizDone = false;
+
+function openQuiz() {
+  const todayKey = new Date().toISOString().substring(0,10);
+  const lastKey  = localStorage.getItem('quiz_done_' + (currentUser?.userId||'dev'));
+  if(lastKey === todayKey) {
+    showToast('今天已完成解謎！明天再來 😊');
+    return;
+  }
+  curQ = 0; correctCnt = 0;
+  document.getElementById('btnNext').style.display   = 'none';
+  document.getElementById('btnFinish').style.display = 'none';
+  document.getElementById('qResult').style.display   = 'none';
+  renderQ();
+  document.getElementById('quizPanel').classList.add('open');
+}
+
+function renderQ() {
+  const q = QUESTIONS[curQ];
+  document.getElementById('quizStep').textContent = `${curQ+1} / ${QUESTIONS.length}`;
+  document.getElementById('qEmoji').textContent   = q.emoji;
+  document.getElementById('qStory').textContent   = q.story;
+  document.getElementById('qQuestion').textContent = q.question;
+  document.getElementById('qResult').style.display = 'none';
+  document.getElementById('btnNext').style.display   = 'none';
+  document.getElementById('btnFinish').style.display = 'none';
+
+  const opts = document.getElementById('qOpts');
+  opts.innerHTML = '';
+  q.opts.forEach((o,i) => {
+    const btn = document.createElement('button');
+    btn.className = 'opt-btn';
+    btn.innerHTML = `<span class="opt-lbl">${o.lbl}</span>${o.text}`;
+    btn.addEventListener('click', () => answerQ(i));
+    opts.appendChild(btn);
+  });
+}
+
+function answerQ(idx) {
+  const q    = QUESTIONS[curQ];
+  const btns = document.querySelectorAll('.opt-btn');
+  btns.forEach(b => b.classList.add('locked'));
+  q.opts.forEach((o,i) => {
+    if(o.ok) btns[i].classList.add('correct');
+    else if(i===idx && !o.ok) btns[i].classList.add('wrong');
+  });
+
+  const ok  = q.opts[idx].ok;
+  if(ok) correctCnt++;
+
+  const rb = document.getElementById('qResult');
+  rb.style.display = 'block';
+  rb.className = 'result-box ' + (ok ? 'ok' : 'ng');
+  document.getElementById('rEmoji').textContent  = ok ? '🎉' : '😅';
+  document.getElementById('rTitle').textContent  = ok ? '答對了！' : '答錯了...';
+  document.getElementById('rExplain').textContent = q.explain;
+
+  if(curQ < QUESTIONS.length-1) {
+    document.getElementById('btnNext').style.display = 'block';
+  } else {
+    document.getElementById('btnFinish').style.display = 'block';
+    // 記錄今日已完成
+    const todayKey = new Date().toISOString().substring(0,10);
+    localStorage.setItem('quiz_done_' + (currentUser?.userId||'dev'), todayKey);
+  }
+}
+
+function nextQ() {
+  curQ++;
+  document.getElementById('btnNext').style.display   = 'none';
+  document.getElementById('btnFinish').style.display = 'none';
+  renderQ();
+}
+
+function finishQuiz() {
+  closeQuiz();
+  showToast(`✅ 挑戰完成！答對 ${correctCnt} / ${QUESTIONS.length} 題`);
 }
 
 function closeQuiz() {
-  document.getElementById('quizModal').classList.remove('active');
-  document.getElementById('quizResult').style.display = 'none';
-  document.getElementById('quizNextBtn').style.display = 'none';
-  document.getElementById('quizFinishBtn').style.display = 'none';
-  document.querySelectorAll('.quiz-btn').forEach(b => { b.classList.remove('correct','wrong','disabled'); });
+  document.getElementById('quizPanel').classList.remove('open');
 }
 
-function closeQuizByOverlay(e) {
-  if (e.target === e.currentTarget) closeQuiz();
+// ══════════════════════════════════════
+//  天氣裝飾
+// ══════════════════════════════════════
+function setWeather() {
+  const h = new Date().getHours();
+  const el = document.getElementById('weatherDeco');
+  if(h >= 6 && h < 18)  el.textContent = h < 10 ? '🌤️' : h < 15 ? '☀️' : '⛅';
+  else el.textContent = '🌙';
+  el.style.display = 'block';
 }
 
-function renderQuestion() {
-  const q = questions[currentQ];
-  document.getElementById('quizProgress').textContent = `第 ${currentQ + 1} 題，共 ${questions.length} 題`;
-  document.getElementById('quizEmoji').textContent = q.emoji;
-  document.getElementById('quizStory').textContent = q.story;
-  document.getElementById('quizQuestion').textContent = q.question;
-  document.getElementById('quizResult').style.display = 'none';
-  document.getElementById('quizNextBtn').style.display = 'none';
-  document.getElementById('quizFinishBtn').style.display = 'none';
-
-  const opts = document.getElementById('quizOptions');
-  opts.innerHTML = q.options.map((opt, i) => `
-    <button class="quiz-btn" onclick="answerQuiz(${i})">
-      <span class="option-label">${opt.label}</span>
-      ${opt.text}
-    </button>
-  `).join('');
-}
-
-async function answerQuiz(index) {
-  const q = questions[currentQ];
-  const btns = document.querySelectorAll('.quiz-btn');
-  btns.forEach(b => b.classList.add('disabled'));
-
-  const isCorrect = q.options[index].correct;
-
-  // 標記答案
-  q.options.forEach((opt, i) => {
-    if (opt.correct) btns[i].classList.add('correct');
-    else if (i === index && !opt.correct) btns[i].classList.add('wrong');
-  });
-
-  // 顯示結果
-  const result = document.getElementById('quizResult');
-  result.style.display = 'block';
-  result.className = 'quiz-result ' + (isCorrect ? 'correct' : 'wrong');
-  document.getElementById('resultEmoji').textContent = isCorrect ? '🎉' : '😅';
-  document.getElementById('resultText').textContent = isCorrect ? '答對了！' : '答錯了...';
-  document.getElementById('resultSub').textContent = q.explain;
-  document.getElementById('resultCoins').textContent = isCorrect ? '+50 🪙' : '';
-
-  if (isCorrect) {
-    correctCount++;
-    popCoins('+50🪙');
-    // 打 API 加金幣
-    try {
-      await fetch(`${API_BASE}/api/game/stain-quiz`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: currentUser?.userId, questionId: q.id, answer: q.options[index].label })
-      });
-    } catch(e) {}
-  }
-
-  // 按鈕
-  if (currentQ < questions.length - 1) {
-    document.getElementById('quizNextBtn').style.display = 'block';
-  } else {
-    document.getElementById('quizFinishBtn').style.display = 'block';
-    // 標記今日已完成
-    const todayKey = new Date().toISOString().substring(0, 10);
-    localStorage.setItem('lastQuizDate_' + currentUser?.userId, todayKey);
-    todayQuizDone = true;
-    document.getElementById('task-quiz').classList.add('completed');
-    // 重新載入玩家資料更新金幣
-    if (currentUser) setTimeout(() => loadPlayer(currentUser.userId, currentUser.displayName), 1000);
-  }
-}
-
-function nextQuestion() {
-  currentQ++;
-  renderQuestion();
-}
-
-// ── 金幣彈出動畫 ──
-function popCoins(text) {
-  const el = document.createElement('div');
-  el.className = 'coin-pop';
-  el.textContent = text;
-  el.style.left = (Math.random() * 60 + 20) + '%';
-  el.style.top = '30%';
-  document.body.appendChild(el);
-  setTimeout(() => el.remove(), 1000);
-}
-
-// ── Toast 通知 ──
+// ══════════════════════════════════════
+//  Toast
+// ══════════════════════════════════════
 function showToast(msg) {
   const el = document.getElementById('toast');
   el.textContent = msg;
@@ -698,7 +863,55 @@ function showToast(msg) {
   setTimeout(() => el.classList.remove('show'), 2500);
 }
 
-// ── 啟動 ──
+// ══════════════════════════════════════
+//  LIFF 初始化
+// ══════════════════════════════════════
+async function initLiff() {
+  try {
+    await liff.init({ liffId: LIFF_ID });
+    if(!liff.isLoggedIn()) { liff.login(); return; }
+    const profile = await liff.getProfile();
+    currentUser = profile;
+  } catch(e) {
+    currentUser = { userId:'dev', displayName:'小玩家' };
+  }
+
+  // 更新頂部
+  document.getElementById('playerName').textContent = currentUser.displayName || '神秘玩家';
+
+  // 載入玩家資料
+  try {
+    const res  = await fetch(`${API_BASE}/api/game/player/${currentUser.userId}`);
+    const data = await res.json();
+    if(data.success) playerData = data.player;
+  } catch(e) {}
+
+  // 初始化世界
+  drawMap();
+  spawnBuildings();
+  spawnNPCs();
+  initDrag();
+  setWeather();
+
+  // 初始鏡頭置中
+  camX = Math.max(0,(MAP_W - window.innerWidth)/2);
+  camY = Math.max(0,(MAP_H - (window.innerHeight-60))/2 - 60);
+  document.getElementById('mapCanvas').style.transform = `translate(${-camX}px,${-camY}px)`;
+
+  // 顯示 App
+  setTimeout(() => {
+    document.getElementById('loadingScreen').style.display = 'none';
+    document.getElementById('topBar').style.display = 'flex';
+    document.getElementById('gameWorld').style.display = 'block';
+    document.getElementById('mapHint').style.display = 'block';
+    setTimeout(() => { document.getElementById('mapHint').style.display='none'; }, 3000);
+    showToast('👋 歡迎來到洗衣小鎮！點擊居民對話吧！');
+  }, 2000);
+
+  // 遊戲主循環
+  setInterval(updateNPCs, 16);
+}
+
 initLiff();
 </script>
 </body>
