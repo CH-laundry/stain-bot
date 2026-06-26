@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>C.H 洗衣小鎮</title>
+  <script src="https://static.line-scdn.net/liff/edge/versions/2.22.3/sdk.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    body {
+      font-family: 'Segoe UI', 'Microsoft JhengHei', sans-serif;
+      background: #1a1a2e;
+      color: #fff;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── 載入畫面 ── */
+    #loadingScreen {
+      position: fixed; inset: 0;
+      background: linear-gradient(135deg, #1a1a2e, #16213e);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      z-index: 999;
+    }
+    .load-logo { font-size: 64px; margin-bottom: 16px; animation: bounce 1s infinite; }
+    .load-title { font-size: 24px; font-weight: bold; color: #ffd700; margin-bottom: 8px; }
+    .load-sub { font-size: 14px; color: rgba(255,255,255,0.5); }
+    .load-bar { width: 200px; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; margin-top: 24px; overflow: hidden; }
+    .load-fill { height: 100%; background: linear-gradient(90deg, #ffd700, #ff6b35); border-radius: 3px; animation: loading 1.5s ease-in-out infinite; }
+    @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
+    @keyframes loading { 0%{width:0%} 100%{width:100%} }
+
+    /* ── 頂部狀態列 ── */
+    #topBar {
+      background: linear-gradient(135deg, #16213e, #0f3460);
+      padding: 12px 16px;
+      display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 2px solid rgba(255,215,0,0.3);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .player-info { display: flex; align-items: center; gap: 10px; }
+    .player-avatar { width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg,#667eea,#764ba2); display: flex; align-items: center; justify-content: center; font-size: 20px; border: 2px solid #ffd700; }
+    .player-name { font-size: 14px; font-weight: bold; }
+    .player-level { font-size: 11px; color: #ffd700; }
+    .coins-display { display: flex; align-items: center; gap: 6px; background: rgba(255,215,0,0.15); padding: 6px 12px; border-radius: 20px; border: 1px solid rgba(255,215,0,0.3); }
+    .coins-icon { font-size: 18px; }
+    .coins-amount { font-size: 16px; font-weight: bold; color: #ffd700; }
+
+    /* ── 主內容區 ── */
+    #mainContent { padding: 16px; padding-bottom: 80px; }
+
+    /* ── 歡迎橫幅 ── */
+    .welcome-banner {
+      background: linear-gradient(135deg, #0f3460, #533483);
+      border-radius: 16px; padding: 20px;
+      margin-bottom: 16px;
+      border: 1px solid rgba(255,215,0,0.2);
+      position: relative; overflow: hidden;
+    }
+    .welcome-banner::before {
+      content: '🏪';
+      position: absolute; right: 16px; top: 50%; transform: translateY(-50%);
+      font-size: 64px; opacity: 0.15;
+    }
+    .welcome-banner h2 { font-size: 20px; color: #ffd700; margin-bottom: 6px; }
+    .welcome-banner p { font-size: 13px; color: rgba(255,255,255,0.7); line-height: 1.5; }
+
+    /* ── 今日任務 ── */
+    .section-title {
+      font-size: 16px; font-weight: bold;
+      color: #ffd700; margin-bottom: 12px;
+      display: flex; align-items: center; gap: 8px;
+    }
+
+    .task-card {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px; padding: 14px;
+      margin-bottom: 10px;
+      display: flex; align-items: center; gap: 14px;
+      cursor: pointer; transition: all 0.2s;
+      position: relative; overflow: hidden;
+    }
+    .task-card:active { transform: scale(0.97); }
+    .task-card.completed { opacity: 0.5; }
+    .task-card.completed::after {
+      content: '✅ 完成'; position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+      background: #28a745; color: #fff; padding: 4px 10px; border-radius: 10px; font-size: 12px;
+    }
+    .task-icon { font-size: 36px; flex-shrink: 0; }
+    .task-info { flex: 1; }
+    .task-name { font-size: 15px; font-weight: bold; margin-bottom: 4px; }
+    .task-desc { font-size: 12px; color: rgba(255,255,255,0.6); }
+    .task-reward { font-size: 13px; color: #ffd700; font-weight: bold; margin-top: 4px; }
+
+    /* ── 污漬解謎 Modal ── */
+    .modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.8);
+      display: flex; align-items: flex-end; justify-content: center;
+      z-index: 200; opacity: 0; pointer-events: none;
+      transition: opacity 0.3s;
+    }
+    .modal-overlay.active { opacity: 1; pointer-events: all; }
+    .modal-sheet {
+      background: #16213e;
+      border-radius: 20px 20px 0 0;
+      padding: 24px 20px 40px;
+      width: 100%; max-width: 480px;
+      transform: translateY(100%); transition: transform 0.3s ease;
+      border-top: 3px solid rgba(255,215,0,0.3);
+    }
+    .modal-overlay.active .modal-sheet { transform: translateY(0); }
+    .modal-handle { width: 40px; height: 4px; background: rgba(255,255,255,0.3); border-radius: 2px; margin: 0 auto 20px; }
+    .modal-title { font-size: 18px; font-weight: bold; color: #ffd700; margin-bottom: 6px; }
+    .modal-sub { font-size: 13px; color: rgba(255,255,255,0.6); margin-bottom: 20px; }
+
+    /* ── 污漬題目 ── */
+    .stain-scene {
+      background: rgba(255,255,255,0.05);
+      border-radius: 12px; padding: 16px;
+      margin-bottom: 20px; text-align: center;
+    }
+    .stain-emoji { font-size: 48px; margin-bottom: 10px; }
+    .stain-story { font-size: 14px; color: rgba(255,255,255,0.8); line-height: 1.6; }
+    .stain-question { font-size: 15px; font-weight: bold; margin-top: 10px; color: #fff; }
+
+    .quiz-options { display: grid; gap: 10px; }
+    .quiz-btn {
+      background: rgba(255,255,255,0.08);
+      border: 2px solid rgba(255,255,255,0.15);
+      border-radius: 12px; padding: 14px 16px;
+      color: #fff; font-size: 14px; text-align: left;
+      cursor: pointer; transition: all 0.2s;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .quiz-btn:active { transform: scale(0.97); }
+    .quiz-btn.correct { background: rgba(40,167,69,0.3); border-color: #28a745; }
+    .quiz-btn.wrong { background: rgba(220,53,69,0.3); border-color: #dc3545; }
+    .quiz-btn.disabled { pointer-events: none; opacity: 0.6; }
+    .option-label { width: 28px; height: 28px; border-radius: 50%; background: rgba(255,215,0,0.2); display: flex; align-items: center; justify-content: center; font-weight: bold; color: #ffd700; font-size: 13px; flex-shrink: 0; }
+
+    .quiz-result {
+      display: none; text-align: center;
+      padding: 20px; border-radius: 12px;
+      margin-top: 16px;
+    }
+    .quiz-result.correct { background: rgba(40,167,69,0.2); border: 1px solid #28a745; }
+    .quiz-result.wrong { background: rgba(220,53,69,0.2); border: 1px solid #dc3545; }
+    .result-emoji { font-size: 48px; margin-bottom: 10px; }
+    .result-text { font-size: 16px; font-weight: bold; margin-bottom: 6px; }
+    .result-sub { font-size: 13px; color: rgba(255,255,255,0.7); }
+    .result-coins { font-size: 20px; color: #ffd700; font-weight: bold; margin-top: 8px; }
+
+    /* ── 商店說明 ── */
+    .shop-section {
+      background: linear-gradient(135deg, rgba(102,126,234,0.2), rgba(118,75,162,0.2));
+      border: 1px solid rgba(102,126,234,0.3);
+      border-radius: 16px; padding: 20px;
+      margin-bottom: 16px;
+    }
+    .earn-list { list-style: none; margin-top: 12px; }
+    .earn-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .earn-item:last-child { border-bottom: none; }
+    .earn-icon { font-size: 24px; }
+    .earn-info { flex: 1; }
+    .earn-name { font-size: 14px; font-weight: bold; }
+    .earn-desc { font-size: 12px; color: rgba(255,255,255,0.5); }
+    .earn-coins { font-size: 14px; color: #ffd700; font-weight: bold; }
+
+    /* ── 底部導覽 ── */
+    #bottomNav {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: #0f1f45;
+      border-top: 2px solid rgba(255,215,0,0.2);
+      display: flex; padding: 8px 0 20px;
+    }
+    .nav-item {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; gap: 4px;
+      cursor: pointer; padding: 6px;
+      transition: all 0.2s;
+    }
+    .nav-icon { font-size: 24px; }
+    .nav-label { font-size: 10px; color: rgba(255,255,255,0.5); }
+    .nav-item.active .nav-icon { filter: drop-shadow(0 0 6px #ffd700); }
+    .nav-item.active .nav-label { color: #ffd700; }
+
+    /* ── 金幣動畫 ── */
+    .coin-pop {
+      position: fixed; pointer-events: none;
+      font-size: 20px; font-weight: bold; color: #ffd700;
+      animation: coinFly 1s ease-out forwards;
+      z-index: 999;
+    }
+    @keyframes coinFly {
+      0%   { opacity:1; transform: translateY(0) scale(1); }
+      100% { opacity:0; transform: translateY(-80px) scale(1.5); }
+    }
+
+    /* ── 排行榜 ── */
+    .rank-card {
+      background: rgba(255,255,255,0.05);
+      border-radius: 12px; padding: 14px;
+      margin-bottom: 10px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .rank-num { font-size: 20px; font-weight: bold; min-width: 32px; text-align: center; }
+    .rank-num.gold { color: #ffd700; }
+    .rank-num.silver { color: #c0c0c0; }
+    .rank-num.bronze { color: #cd7f32; }
+    .rank-info { flex: 1; }
+    .rank-name { font-size: 14px; font-weight: bold; }
+    .rank-coins { font-size: 13px; color: #ffd700; }
+
+    /* ── 通用按鈕 ── */
+    .btn-primary {
+      width: 100%; padding: 14px;
+      background: linear-gradient(135deg, #ffd700, #ff9500);
+      color: #1a1a2e; font-size: 16px; font-weight: bold;
+      border: none; border-radius: 12px;
+      cursor: pointer; margin-top: 16px;
+      transition: all 0.2s;
+    }
+    .btn-primary:active { transform: scale(0.97); }
+    .btn-close {
+      background: rgba(255,255,255,0.1); color: #fff;
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 10px; padding: 10px 20px;
+      cursor: pointer; font-size: 14px; margin-top: 10px; width: 100%;
+    }
+
+    /* ── 頁面切換 ── */
+    .page { display: none; }
+    .page.active { display: block; }
+
+    /* 通知 toast */
+    #toast {
+      position: fixed; top: 80px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.85); color: #fff;
+      padding: 10px 20px; border-radius: 20px;
+      font-size: 14px; z-index: 500;
+      opacity: 0; transition: opacity 0.3s;
+      white-space: nowrap;
+    }
+    #toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+
+<!-- 載入畫面 -->
+<div id="loadingScreen">
+  <div class="load-logo">🧺</div>
+  <div class="load-title">C.H 洗衣小鎮</div>
+  <div class="load-sub">正在進入小鎮...</div>
+  <div class="load-bar"><div class="load-fill"></div></div>
+</div>
+
+<!-- Toast 通知 -->
+<div id="toast"></div>
+
+<!-- 頂部狀態列 -->
+<div id="topBar" style="display:none;">
+  <div class="player-info">
+    <div class="player-avatar">🧑</div>
+    <div>
+      <div class="player-name" id="playerName">載入中...</div>
+      <div class="player-level" id="playerLevel">Lv.1 小店員</div>
+    </div>
+  </div>
+  <div class="coins-display">
+    <span class="coins-icon">🪙</span>
+    <span class="coins-amount" id="coinsAmount">0</span>
+  </div>
+</div>
+
+<!-- 主內容 -->
+<div id="mainContent" style="display:none;">
+
+  <!-- 首頁 -->
+  <div class="page active" id="page-home">
+    <div class="welcome-banner">
+      <h2>歡迎回來！</h2>
+      <p id="welcomeMsg">今天也要努力經營洗衣店喔！</p>
+    </div>
+
+    <div class="section-title">⚡ 今日任務</div>
+
+    <div class="task-card" id="task-quiz" onclick="openQuiz()">
+      <div class="task-icon">🔬</div>
+      <div class="task-info">
+        <div class="task-name">污漬解謎挑戰</div>
+        <div class="task-desc">幫助客人解決頑固污漬！</div>
+        <div class="task-reward">🪙 答對得 50 金幣</div>
+      </div>
+    </div>
+
+    <div class="task-card" id="task-wash" onclick="showToast('送洗任務：帶衣物到 C.H 精緻洗衣即可獲得！')">
+      <div class="task-icon">👔</div>
+      <div class="task-info">
+        <div class="task-name">真實送洗</div>
+        <div class="task-desc">將衣物送到實體店面清洗</div>
+        <div class="task-reward">🪙 每次送洗得 500 金幣</div>
+      </div>
+    </div>
+
+    <div class="task-card" id="task-member" onclick="showToast('成為 LINE 官方帳號好友即可獲得金幣！')">
+      <div class="task-icon">💎</div>
+      <div class="task-info">
+        <div class="task-name">加入 LINE 會員</div>
+        <div class="task-desc">成為 C.H 精緻洗衣的好友</div>
+        <div class="task-reward">🪙 一次性獲得 100 金幣</div>
+      </div>
+    </div>
+
+    <div class="task-card" onclick="showToast('介紹朋友加入 LINE 官方帳號即可獲得！')">
+      <div class="task-icon">👥</div>
+      <div class="task-info">
+        <div class="task-name">介紹朋友</div>
+        <div class="task-desc">每介紹一位朋友來洗衣</div>
+        <div class="task-reward">🪙 每位朋友得 1000 金幣</div>
+      </div>
+    </div>
+
+    <!-- 金幣說明 -->
+    <div class="shop-section" style="margin-top:20px;">
+      <div class="section-title" style="margin-bottom:8px;">🏪 金幣可以換什麼？</div>
+      <p style="font-size:13px; color:rgba(255,255,255,0.6);">累積金幣可以兌換洗衣折扣、免費清潔服務等好禮，敬請期待！</p>
+      <ul class="earn-list" style="margin-top:10px;">
+        <li class="earn-item">
+          <span class="earn-icon">🎁</span>
+          <div class="earn-info"><div class="earn-name">洗衣折扣券</div><div class="earn-desc">即將推出</div></div>
+          <span class="earn-coins">1000🪙</span>
+        </li>
+        <li class="earn-item">
+          <span class="earn-icon">✨</span>
+          <div class="earn-info"><div class="earn-name">免費去漬服務</div><div class="earn-desc">即將推出</div></div>
+          <span class="earn-coins">2000🪙</span>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 排行榜頁 -->
+  <div class="page" id="page-rank">
+    <div class="section-title">🏆 金幣排行榜</div>
+    <p style="font-size:13px; color:rgba(255,255,255,0.5); margin-bottom:16px;">和其他常客一起競爭吧！</p>
+    <div id="rankList">
+      <p style="text-align:center; color:rgba(255,255,255,0.3); padding:40px;">載入中...</p>
+    </div>
+  </div>
+
+  <!-- 我的頁 -->
+  <div class="page" id="page-mine">
+    <div class="section-title">👤 我的小鎮</div>
+    <div style="background:rgba(255,255,255,0.05); border-radius:16px; padding:20px; margin-bottom:16px;">
+      <div style="text-align:center; margin-bottom:20px;">
+        <div style="font-size:64px; margin-bottom:10px;">🧑</div>
+        <div style="font-size:20px; font-weight:bold;" id="myName">-</div>
+        <div style="font-size:13px; color:rgba(255,255,255,0.5);" id="myUserId">-</div>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+        <div style="background:rgba(255,215,0,0.1); border-radius:12px; padding:16px; text-align:center;">
+          <div style="font-size:28px; font-weight:bold; color:#ffd700;" id="myCoins">0</div>
+          <div style="font-size:12px; color:rgba(255,255,255,0.5);">累積金幣</div>
+        </div>
+        <div style="background:rgba(102,126,234,0.15); border-radius:12px; padding:16px; text-align:center;">
+          <div style="font-size:28px; font-weight:bold; color:#a78bfa;" id="myStain">0</div>
+          <div style="font-size:12px; color:rgba(255,255,255,0.5);">解謎次數</div>
+        </div>
+      </div>
+    </div>
+    <div style="background:rgba(255,255,255,0.05); border-radius:12px; padding:16px;">
+      <div style="font-size:14px; color:rgba(255,255,255,0.6); line-height:1.8;">
+        📍 店家地址：新北市板橋區<br>
+        📞 聯絡方式：LINE 官方帳號<br>
+        ⏰ 營業時間：週一至週六 10:00-19:00
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- 底部導覽 -->
+<div id="bottomNav" style="display:none;">
+  <div class="nav-item active" onclick="switchPage('home',this)">
+    <span class="nav-icon">🏠</span>
+    <span class="nav-label">首頁</span>
+  </div>
+  <div class="nav-item" onclick="switchPage('rank',this)">
+    <span class="nav-icon">🏆</span>
+    <span class="nav-label">排行榜</span>
+  </div>
+  <div class="nav-item" onclick="switchPage('mine',this)">
+    <span class="nav-icon">👤</span>
+    <span class="nav-label">我的</span>
+  </div>
+</div>
+
+<!-- 污漬解謎 Modal -->
+<div class="modal-overlay" id="quizModal" onclick="closeQuizByOverlay(event)">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">🔬 污漬解謎挑戰</div>
+    <div class="modal-sub" id="quizProgress">第 1 題，共 3 題</div>
+
+    <div class="stain-scene">
+      <div class="stain-emoji" id="quizEmoji">☕</div>
+      <div class="stain-story" id="quizStory">載入中...</div>
+      <div class="stain-question" id="quizQuestion">應該怎麼處理？</div>
+    </div>
+
+    <div class="quiz-options" id="quizOptions"></div>
+
+    <div class="quiz-result" id="quizResult">
+      <div class="result-emoji" id="resultEmoji"></div>
+      <div class="result-text" id="resultText"></div>
+      <div class="result-sub" id="resultSub"></div>
+      <div class="result-coins" id="resultCoins"></div>
+    </div>
+
+    <button class="btn-primary" id="quizNextBtn" style="display:none;" onclick="nextQuestion()">下一題 →</button>
+    <button class="btn-primary" id="quizFinishBtn" style="display:none;" onclick="closeQuiz()">完成挑戰 🎉</button>
+    <button class="btn-close" onclick="closeQuiz()">關閉</button>
+  </div>
+</div>
+
+<script>
+const LIFF_ID = '2008313382-NFMAIRRS';
+const API_BASE = 'https://stain-bot-production-2593.up.railway.app';
+
+let currentUser = null;
+let playerData = null;
+let currentQ = 0;
+let correctCount = 0;
+let todayQuizDone = false;
+
+// ── 題庫 ──
+const questions = [
+  {
+    id: 'q1',
+    emoji: '☕',
+    story: '👩 王太太說：「咖啡不小心打翻在白色棉質襯衫上，還沒乾！」',
+    question: '最佳的第一步處理方式是？',
+    options: [
+      { label: 'A', text: '立刻用冷水沖洗，從污漬外圍往內輕拍', correct: true },
+      { label: 'B', text: '馬上用熱水燙，讓污漬融化', correct: false },
+      { label: 'C', text: '直接揉搓，讓污漬分散', correct: false },
+      { label: 'D', text: '先放著等乾了再處理', correct: false },
+    ],
+    explain: '咖啡是水溶性污漬，要立刻用冷水（不是熱水！）沖洗，熱水會讓蛋白質固化，更難處理。'
+  },
+  {
+    id: 'q2',
+    emoji: '🛢️',
+    story: '👨 林先生說：「修車時機油沾到西裝褲，不知道能洗掉嗎？」',
+    question: '機油污漬最正確的處理方式是？',
+    options: [
+      { label: 'A', text: '直接泡水搓洗', correct: false },
+      { label: 'B', text: '用去漬劑或洗碗精先預處理，再送洗', correct: true },
+      { label: 'C', text: '用漂白水漂白', correct: false },
+      { label: 'D', text: '丟進洗衣機直接洗', correct: false },
+    ],
+    explain: '機油是油脂類污漬，水洗效果差，要先用去漬劑或洗碗精（含界面活性劑）預處理，分解油脂後才送洗，效果更好。'
+  },
+  {
+    id: 'q3',
+    emoji: '🍷',
+    story: '👧 小婉說：「紅酒濺到白色洋裝上，現在已經過了一個晚上...」',
+    question: '隔夜紅酒污漬，下列哪個方式最有效？',
+    options: [
+      { label: 'A', text: '用熱水直接搓洗', correct: false },
+      { label: 'B', text: '直接漂白', correct: false },
+      { label: 'C', text: '送專業洗衣店處理，說明污漬狀況', correct: true },
+      { label: 'D', text: '泡在冷水裡三天', correct: false },
+    ],
+    explain: '隔夜紅酒污漬已氧化，家庭處理效果有限，且白色衣物直接漂白可能傷害纖維。最佳方式是送專業洗衣店，並告知污漬類型和時間，讓師傅判斷最佳處理方式。'
+  }
+];
+
+// ── 初始化 LIFF ──
+async function initLiff() {
+  try {
+    await liff.init({ liffId: LIFF_ID });
+    if (!liff.isLoggedIn()) {
+      liff.login();
+      return;
+    }
+    const profile = await liff.getProfile();
+    currentUser = profile;
+    await loadPlayer(profile.userId, profile.displayName);
+    showApp();
+  } catch (e) {
+    console.error('LIFF init error:', e);
+    // 開發模式：使用假資料
+    currentUser = { userId: 'dev_' + Date.now(), displayName: '開發測試' };
+    await loadPlayer(currentUser.userId, currentUser.displayName);
+    showApp();
+  }
+}
+
+// ── 載入玩家資料 ──
+async function loadPlayer(userId, displayName) {
+  try {
+    const res = await fetch(`${API_BASE}/api/game/player/${userId}`);
+    const data = await res.json();
+    if (data.success) {
+      playerData = data.player;
+    }
+  } catch (e) {
+    playerData = { userId, coins: 0, level: 1, exp: 0, stainSolved: 0 };
+  }
+
+  // 更新 UI
+  document.getElementById('playerName').textContent = displayName || '神秘玩家';
+  document.getElementById('playerLevel').textContent = getLevelTitle(playerData.level || 1);
+  document.getElementById('coinsAmount').textContent = (playerData.coins || 0).toLocaleString();
+  document.getElementById('myName').textContent = displayName || '-';
+  document.getElementById('myUserId').textContent = userId;
+  document.getElementById('myCoins').textContent = (playerData.coins || 0).toLocaleString();
+  document.getElementById('myStain').textContent = playerData.stainSolved || 0;
+
+  // 歡迎語
+  const hour = new Date().getHours();
+  let greeting = hour < 12 ? '早安！' : hour < 18 ? '午安！' : '晚安！';
+  document.getElementById('welcomeMsg').textContent = `${greeting}${displayName || ''}，今天也要努力經營洗衣店喔！`;
+
+  // 檢查今天是否已做過解謎
+  const todayKey = new Date().toISOString().substring(0, 10);
+  const lastQuiz = localStorage.getItem('lastQuizDate_' + userId);
+  todayQuizDone = (lastQuiz === todayKey);
+  if (todayQuizDone) {
+    document.getElementById('task-quiz').classList.add('completed');
+  }
+}
+
+function getLevelTitle(level) {
+  const titles = ['', 'Lv.1 小店員', 'Lv.2 洗衣師', 'Lv.3 去漬達人', 'Lv.4 洗衣大師', 'Lv.5 洗衣王'];
+  return titles[Math.min(level, titles.length - 1)] || 'Lv.' + level;
+}
+
+// ── 顯示 App ──
+function showApp() {
+  setTimeout(() => {
+    document.getElementById('loadingScreen').style.display = 'none';
+    document.getElementById('topBar').style.display = 'flex';
+    document.getElementById('mainContent').style.display = 'block';
+    document.getElementById('bottomNav').style.display = 'flex';
+  }, 1500);
+}
+
+// ── 頁面切換 ──
+function switchPage(name, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  el.classList.add('active');
+  if (name === 'rank') loadRank();
+}
+
+// ── 排行榜 ──
+async function loadRank() {
+  // 簡單展示：未來可串接後端
+  const wrap = document.getElementById('rankList');
+  wrap.innerHTML = `
+    <div class="rank-card">
+      <div class="rank-num gold">🥇</div>
+      <div class="rank-info">
+        <div class="rank-name">${currentUser?.displayName || '你'}</div>
+        <div class="rank-coins">🪙 ${(playerData?.coins || 0).toLocaleString()} 金幣</div>
+      </div>
+    </div>
+    <div style="text-align:center; padding:30px; color:rgba(255,255,255,0.3); font-size:14px;">
+      🌟 成為第一位金幣玩家！<br>邀請朋友一起來挑戰
+    </div>
+  `;
+}
+
+// ── 污漬解謎 ──
+function openQuiz() {
+  if (todayQuizDone) {
+    showToast('今天已經完成解謎囉！明天再來 😊');
+    return;
+  }
+  currentQ = 0;
+  correctCount = 0;
+  renderQuestion();
+  document.getElementById('quizModal').classList.add('active');
+}
+
+function closeQuiz() {
+  document.getElementById('quizModal').classList.remove('active');
+  document.getElementById('quizResult').style.display = 'none';
+  document.getElementById('quizNextBtn').style.display = 'none';
+  document.getElementById('quizFinishBtn').style.display = 'none';
+  document.querySelectorAll('.quiz-btn').forEach(b => { b.classList.remove('correct','wrong','disabled'); });
+}
+
+function closeQuizByOverlay(e) {
+  if (e.target === e.currentTarget) closeQuiz();
+}
+
+function renderQuestion() {
+  const q = questions[currentQ];
+  document.getElementById('quizProgress').textContent = `第 ${currentQ + 1} 題，共 ${questions.length} 題`;
+  document.getElementById('quizEmoji').textContent = q.emoji;
+  document.getElementById('quizStory').textContent = q.story;
+  document.getElementById('quizQuestion').textContent = q.question;
+  document.getElementById('quizResult').style.display = 'none';
+  document.getElementById('quizNextBtn').style.display = 'none';
+  document.getElementById('quizFinishBtn').style.display = 'none';
+
+  const opts = document.getElementById('quizOptions');
+  opts.innerHTML = q.options.map((opt, i) => `
+    <button class="quiz-btn" onclick="answerQuiz(${i})">
+      <span class="option-label">${opt.label}</span>
+      ${opt.text}
+    </button>
+  `).join('');
+}
+
+async function answerQuiz(index) {
+  const q = questions[currentQ];
+  const btns = document.querySelectorAll('.quiz-btn');
+  btns.forEach(b => b.classList.add('disabled'));
+
+  const isCorrect = q.options[index].correct;
+
+  // 標記答案
+  q.options.forEach((opt, i) => {
+    if (opt.correct) btns[i].classList.add('correct');
+    else if (i === index && !opt.correct) btns[i].classList.add('wrong');
+  });
+
+  // 顯示結果
+  const result = document.getElementById('quizResult');
+  result.style.display = 'block';
+  result.className = 'quiz-result ' + (isCorrect ? 'correct' : 'wrong');
+  document.getElementById('resultEmoji').textContent = isCorrect ? '🎉' : '😅';
+  document.getElementById('resultText').textContent = isCorrect ? '答對了！' : '答錯了...';
+  document.getElementById('resultSub').textContent = q.explain;
+  document.getElementById('resultCoins').textContent = isCorrect ? '+50 🪙' : '';
+
+  if (isCorrect) {
+    correctCount++;
+    popCoins('+50🪙');
+    // 打 API 加金幣
+    try {
+      await fetch(`${API_BASE}/api/game/stain-quiz`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentUser?.userId, questionId: q.id, answer: q.options[index].label })
+      });
+    } catch(e) {}
+  }
+
+  // 按鈕
+  if (currentQ < questions.length - 1) {
+    document.getElementById('quizNextBtn').style.display = 'block';
+  } else {
+    document.getElementById('quizFinishBtn').style.display = 'block';
+    // 標記今日已完成
+    const todayKey = new Date().toISOString().substring(0, 10);
+    localStorage.setItem('lastQuizDate_' + currentUser?.userId, todayKey);
+    todayQuizDone = true;
+    document.getElementById('task-quiz').classList.add('completed');
+    // 重新載入玩家資料更新金幣
+    if (currentUser) setTimeout(() => loadPlayer(currentUser.userId, currentUser.displayName), 1000);
+  }
+}
+
+function nextQuestion() {
+  currentQ++;
+  renderQuestion();
+}
+
+// ── 金幣彈出動畫 ──
+function popCoins(text) {
+  const el = document.createElement('div');
+  el.className = 'coin-pop';
+  el.textContent = text;
+  el.style.left = (Math.random() * 60 + 20) + '%';
+  el.style.top = '30%';
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 1000);
+}
+
+// ── Toast 通知 ──
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// ── 啟動 ──
+initLiff();
+</script>
+</body>
+</html>
