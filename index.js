@@ -31,6 +31,7 @@ const pickupRoutes = require('./pickupRoutes');
 const deliveryRoutes = require('./routes/deliveryRoutes');
 const urgentRoutes = require('./routes/urgentRoutes');
 const manualRoutes = require('./routes/manualRoutes');
+const gameRoutes = require('./routes/gameRoutes');
 const upload = multer({ storage: multer.memoryStorage() });
 
 // ★ 你的 LIFF ID
@@ -69,6 +70,7 @@ app.use('/api/pickup', pickupRoutes.router);
 app.use('/api/delivery', deliveryRoutes);
 app.use('/api/urgent', urgentRoutes);
 app.use('/api/manual', manualRoutes);
+app.use('/', gameRoutes);
 
 // 🚀 最終精確對接版：使用伺服器上實際存在的 pickup-tracking.json
 app.post('/api/pos-sync/pickup-complete', async (req, res) => {
