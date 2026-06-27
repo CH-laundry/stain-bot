@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>C.H 洗衣小鎮</title>
 <script src="https://static.line-scdn.net/liff/edge/versions/2.22.3/sdk.js"></script>
+<script src="/questions.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{width:100%;height:100%;overflow:hidden;font-family:'Microsoft JhengHei',sans-serif;touch-action:none}
@@ -820,24 +821,8 @@ function talkStaff(){
   document.getElementById('dlgOverlay').classList.add('show');
 }
 
-// ═══ 題庫（15題）═══
-const QUESTIONS=[
-  {emoji:'☕',story:'👩 王太太：「咖啡打翻在白色棉質襯衫，還沒乾！馬上要出門！」',question:'第一步最佳處理方式？',opts:[{lbl:'A',text:'立刻用冷水沖洗，從外圍往內輕拍',ok:true},{lbl:'B',text:'用熱水燙，讓污漬融化',ok:false},{lbl:'C',text:'用力揉搓讓污漬散開',ok:false},{lbl:'D',text:'先放著等乾了再處理',ok:false}],explain:'咖啡是水溶性污漬，立刻用冷水從外往內輕拍。熱水會讓蛋白質固化，用力搓會讓污漬擴散，都是錯誤做法！'},
-  {emoji:'🛢️',story:'👨 林先生：「修車時機油沾到西裝褲，能救嗎？」',question:'機油污漬最正確的處理方式？',opts:[{lbl:'A',text:'直接泡水用力搓洗',ok:false},{lbl:'B',text:'先用去漬劑或洗碗精預處理，再送洗',ok:true},{lbl:'C',text:'用漂白水漂白',ok:false},{lbl:'D',text:'直接丟進洗衣機',ok:false}],explain:'機油是油脂類污漬，純水洗效果極差。要先用去漬劑或含界面活性劑的洗碗精預處理，分解油脂後才能有效送洗！'},
-  {emoji:'🍷',story:'👧 小婉：「紅酒濺到白色洋裝，已經過了一個晚上...」',question:'隔夜紅酒污漬哪個方式最有效？',opts:[{lbl:'A',text:'用熱水直接搓洗',ok:false},{lbl:'B',text:'直接漂白，白衣服可以用',ok:false},{lbl:'C',text:'送專業洗衣店，詳細說明污漬類型和時間',ok:true},{lbl:'D',text:'泡冷水泡三天自然溶解',ok:false}],explain:'隔夜紅酒已氧化，家庭處理效果有限。直接漂白可能損傷纖維。最佳方式是送專業洗衣，告知師傅詳情！'},
-  {emoji:'🥚',story:'🍳 早餐店老闆：「蛋液滴在廚師服上，已經半乾了...」',question:'半乾蛋液污漬怎麼處理？',opts:[{lbl:'A',text:'用熱水泡，讓蛋液溶解',ok:false},{lbl:'B',text:'先用冷水泡，輕輕剝除固體，再用冷水沖',ok:true},{lbl:'C',text:'用酒精擦拭',ok:false},{lbl:'D',text:'直接丟洗衣機高溫洗',ok:false}],explain:'蛋液含蛋白質，熱水會讓蛋白質凝固更難洗！要用冷水先泡軟，輕剝固體部分，再用冷水沖。千萬避免熱水！'},
-  {emoji:'🩸',story:'🏃 跑者：「運動時膝蓋擦傷，血漬沾到運動褲，怎麼辦？」',question:'血漬（新鮮）最佳處理方法？',opts:[{lbl:'A',text:'立刻用熱水沖洗',ok:false},{lbl:'B',text:'用鹽水或冷水立刻浸泡，輕輕搓洗',ok:true},{lbl:'C',text:'用雙氧水直接倒上去',ok:false},{lbl:'D',text:'放著等乾，比較好處理',ok:false}],explain:'血漬含血紅蛋白，熱水會讓它固化！要用冷水或鹽水立刻浸泡。新鮮血漬相對好處理，乾掉後難度大增！'},
-  {emoji:'🌿',story:'👒 登山客：「登山時草汁沾到登山褲，整片綠色！」',question:'草汁污漬要怎麼處理？',opts:[{lbl:'A',text:'用酒精輕拍，再用清水沖洗',ok:true},{lbl:'B',text:'直接用漂白水',ok:false},{lbl:'C',text:'用熱水搓洗',ok:false},{lbl:'D',text:'用鹽巴搓',ok:false}],explain:'草汁是植物色素，可先用酒精輕拍使色素分解，再用清水沖。彩色衣物要先測試不褪色再處理！'},
-  {emoji:'🍝',story:'🧒 小寶媽媽：「孩子吃番茄肉醬義大利麵，整件白T都是！」',question:'番茄醬汁污漬的正確步驟？',opts:[{lbl:'A',text:'先刮除固體，再用冷水沖，最後用去漬劑處理',ok:true},{lbl:'B',text:'直接搓洗',ok:false},{lbl:'C',text:'用漂白水浸泡',ok:false},{lbl:'D',text:'先用熱水泡',ok:false}],explain:'番茄醬是混合性污漬（含果糖和色素）。先刮除固體殘留，再用冷水沖，最後用去漬劑或小蘇打處理。千萬不要用熱水！'},
-  {emoji:'🎨',story:'✏️ 美術老師：「上課時壓克力顏料噴到制服...還沒乾」',question:'壓克力顏料（未乾）如何處理？',opts:[{lbl:'A',text:'馬上用大量清水沖洗，趁未完全固化',ok:true},{lbl:'B',text:'等它乾了再處理比較簡單',ok:false},{lbl:'C',text:'用去光水（丙酮）溶解',ok:false},{lbl:'D',text:'用熱水加洗衣精搓洗',ok:false}],explain:'壓克力顏料未乾時是水溶性的！要馬上用大量清水沖，趁它固化前清除。一旦乾掉就變成塑料，極難去除！'},
-  {emoji:'🍫',story:'🍫 巧克力工廠員工：「黑巧克力沾到白色工作服！」',question:'巧克力污漬的正確處理？',opts:[{lbl:'A',text:'先刮除固體，再用冷水沖，最後用洗碗精處理',ok:true},{lbl:'B',text:'立刻用熱水沖，讓巧克力融化好清洗',ok:false},{lbl:'C',text:'用牛奶浸泡',ok:false},{lbl:'D',text:'放冰箱讓巧克力固化再剝除',ok:false}],explain:'巧克力含油脂和色素，熱水雖然讓它融化但同時也讓蛋白質固化更難洗。要先刮除固體，冷水沖，再用洗碗精（去油脂）！'},
-  {emoji:'🔴',story:'💄 上班族：「口紅不小心蹭到白色西裝！面試要遲到了！」',question:'口紅污漬緊急處理方式？',opts:[{lbl:'A',text:'用卸妝油輕拍，再用清水沖洗',ok:true},{lbl:'B',text:'用水使勁搓洗',ok:false},{lbl:'C',text:'用刀刮掉',ok:false},{lbl:'D',text:'用噴髮膠後再刷',ok:false}],explain:'口紅是蠟質加顏料，卸妝油（含油脂溶劑）可以有效溶解蠟質。輕拍不要搓，再用清水沖。西裝建議事後送洗處理！'},
-  {emoji:'🍺',story:'🍻 聚會後：「啤酒潑到棉麻材質的夏天衣物上！」',question:'啤酒污漬怎麼處理最好？',opts:[{lbl:'A',text:'立刻用冷水或溫水浸泡，加少許白醋',ok:true},{lbl:'B',text:'放著不管，啤酒乾了就沒痕跡',ok:false},{lbl:'C',text:'用鹽巴大量撒上去',ok:false},{lbl:'D',text:'用熱水加漂白水',ok:false}],explain:'啤酒含酵母和色素，放著乾掉會留下黃漬！用冷水或微溫水立刻浸泡，加少許白醋有助中和啤酒的酸性。'},
-  {emoji:'🖊️',story:'📋 辦公室職員：「原子筆漏水，整個口袋和襯衫都黑了！」',question:'原子筆墨水污漬最有效的處理方式？',opts:[{lbl:'A',text:'用酒精（rubbing alcohol）輕拍後用清水沖',ok:true},{lbl:'B',text:'用水直接搓洗',ok:false},{lbl:'C',text:'用牙膏擦拭',ok:false},{lbl:'D',text:'用醋浸泡',ok:false}],explain:'原子筆是油性墨水，酒精是最有效的溶劑。輕拍不要搓，從污漬外圍往內，避免擴散。處理後送洗效果更完整！'},
-  {emoji:'🌺',story:'👔 男士：「衣服上有黃色汗漬，是放太久沒洗的舊衣服。」',question:'陳舊黃色汗漬如何處理？',opts:[{lbl:'A',text:'用小蘇打加白醋調成糊狀，塗抹30分鐘後送洗',ok:true},{lbl:'B',text:'直接用漂白水，黃色要漂白',ok:false},{lbl:'C',text:'用熱水浸泡三天',ok:false},{lbl:'D',text:'這種洗不掉了，丟掉算了',ok:false}],explain:'陳舊汗漬是蛋白質氧化造成。小蘇打（鹼性）加白醋（酸性）可以分解氧化物質。直接漂白對彩色衣物有破壞性！'},
-  {emoji:'🐾',story:'🐕 養狗族：「狗狗在泥地打滾後撲上來，泥巴爪印滿身！」',question:'泥巴污漬（衣物）的正確處理順序？',opts:[{lbl:'A',text:'立刻用水沖洗，防止變乾',ok:false},{lbl:'B',text:'讓泥巴完全乾燥，再用刷子輕刷，最後送洗',ok:true},{lbl:'C',text:'用熱水加肥皂搓洗',ok:false},{lbl:'D',text:'立刻用濕布使勁擦',ok:false}],explain:'泥巴不能濕著處理！潮濕狀態下搓揉會讓泥土滲進纖維。要讓泥巴完全乾燥，再用軟刷輕輕刷除表面，再送洗！'},
-  {emoji:'🧴',story:'💆 護膚達人：「乳液跟化妝品混合一起，沾到絲質上衣了...」',question:'絲質衣物沾到乳液和化妝品，怎麼辦？',opts:[{lbl:'A',text:'立刻送去專業洗衣店，告知是絲質和化妝品污漬',ok:true},{lbl:'B',text:'用冷水手洗搓揉',ok:false},{lbl:'C',text:'丟洗衣機，選手洗模式',ok:false},{lbl:'D',text:'用酒精擦拭',ok:false}],explain:'絲質非常嬌貴！搓揉或機洗都可能損傷纖維。化妝品含油脂、色素多種成分，需要專業洗衣師針對絲質判斷用什麼清潔劑！'},
-];
+// 題庫由 questions.js 提供
+const QUESTIONS=window.QUIZ_QUESTIONS||[];
 
 let curQ=0,correctCnt=0;
 function openQuiz(){
@@ -909,13 +894,20 @@ async function init(){
 
   try{
     await liff.init({liffId:LIFF_ID});
-    if(!liff.isLoggedIn()){liff.login();return}
-    const p=await liff.getProfile();
-    window._uid=p.userId;
-    document.getElementById('topName').textContent=p.displayName||'探險家';
+    if(liff.isInClient()){
+      if(!liff.isLoggedIn()){liff.login();return}
+      const p=await liff.getProfile();
+      window._uid=p.userId;
+      document.getElementById('topName').textContent=p.displayName||'探險家';
+    } else {
+      // 瀏覽器模式：繼續執行不阻塞
+      window._uid='guest_'+Date.now();
+      document.getElementById('topName').textContent='小鎮訪客';
+    }
   }catch(e){
+    // LIFF init 失敗：繼續執行遊戲
     window._uid='dev_'+Date.now();
-    document.getElementById('topName').textContent='開發模式';
+    document.getElementById('topName').textContent='探險家';
   }
 
   // 建立世界
