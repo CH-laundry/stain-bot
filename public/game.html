@@ -84,7 +84,7 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'Microsoft JhengHei
 .shop-name-en{font-size:11px;color:rgba(77,184,255,.6);letter-spacing:1px}
 .shop-desc{font-size:13px;color:rgba(255,255,255,.65);line-height:1.75;margin-bottom:14px;padding:10px 12px;background:rgba(77,184,255,.07);border-radius:10px;border-left:3px solid rgba(77,184,255,.35)}
 .shop-svcs{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:14px}
-.svc{background:rgba(77,184,255,.1);border:1px solid rgba(77,184,255,.22);border-radius:12px;padding:12px;text-align:center}
+.svc{background:rgba(77,184,255,.1);border:1px solid rgba(77,184,255,.22);border-radius:12px;padding:12px;text-align:center;transition:all .2s}.svc:active{background:rgba(77,184,255,.25);transform:scale(.95)}
 .svc-ico{font-size:28px;margin-bottom:5px}
 .svc-nm{font-size:13px;font-weight:bold;color:#fff}
 .svc-de{font-size:11px;color:rgba(255,255,255,.48);margin-top:2px}
@@ -183,17 +183,31 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'Microsoft JhengHei
       </div>
       <div class="shop-desc">📍 新北市板橋區｜🌟 精緻洗衣、洗鞋、洗包、護理<br>從日常衣物到高端奢侈品，每件都由專業師傅細心呵護。20年洗衣工藝，品質保證！</div>
       <div class="shop-hours">⏰ <strong>營業時間：</strong>週一至週六 10:30–20:00｜週日公休</div>
+      <div style="font-size:12px;color:rgba(77,184,255,.7);margin-bottom:10px;">👆 點擊服務項目了解更多知識</div>
       <div class="shop-svcs">
-        <div class="svc"><div class="svc-ico">👔</div><div class="svc-nm">精緻衣物</div><div class="svc-de">西裝・禮服・羽絨外套</div></div>
-        <div class="svc"><div class="svc-ico">👟</div><div class="svc-nm">球鞋清潔</div><div class="svc-de">各種材質皆可處理</div></div>
-        <div class="svc"><div class="svc-ico">👜</div><div class="svc-nm">名牌包保養</div><div class="svc-de">LV・Chanel・Gucci</div></div>
-        <div class="svc"><div class="svc-ico">🛏️</div><div class="svc-nm">棉被床單</div><div class="svc-de">大型寢具深層清洗</div></div>
-        <div class="svc"><div class="svc-ico">🧥</div><div class="svc-nm">大衣皮革</div><div class="svc-de">特殊材質專業處理</div></div>
-        <div class="svc"><div class="svc-ico">🎽</div><div class="svc-nm">運動衣物</div><div class="svc-de">異味去除・抗菌處理</div></div>
+        <div class="svc" onclick="showSvcInfo('suit')" style="cursor:pointer"><div class="svc-ico">👔</div><div class="svc-nm">精緻衣物</div><div class="svc-de">西裝・禮服・羽絨外套</div></div>
+        <div class="svc" onclick="showSvcInfo('shoe')" style="cursor:pointer"><div class="svc-ico">👟</div><div class="svc-nm">球鞋清潔</div><div class="svc-de">各種材質皆可處理</div></div>
+        <div class="svc" onclick="showSvcInfo('bag')" style="cursor:pointer"><div class="svc-ico">👜</div><div class="svc-nm">名牌包保養</div><div class="svc-de">LV・Chanel・Gucci</div></div>
+        <div class="svc" onclick="showSvcInfo('bedding')" style="cursor:pointer"><div class="svc-ico">🛏️</div><div class="svc-nm">棉被床單</div><div class="svc-de">大型寢具深層清洗</div></div>
+        <div class="svc" onclick="showSvcInfo('coat')" style="cursor:pointer"><div class="svc-ico">🧥</div><div class="svc-nm">大衣皮革</div><div class="svc-de">特殊材質專業處理</div></div>
+        <div class="svc" onclick="showSvcInfo('sport')" style="cursor:pointer"><div class="svc-ico">🎽</div><div class="svc-nm">運動衣物</div><div class="svc-de">異味去除・抗菌處理</div></div>
       </div>
       <button class="btn-talk" onclick="talkStaff()">💬 和店員說話</button>
       <button class="btn-back" onclick="closeShop()">← 返回小鎮</button>
     </div>
+  </div>
+</div>
+
+<!-- 服務知識 Modal -->
+<div id="svcModal" style="position:fixed;inset:0;z-index:700;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s;padding:20px">
+  <div style="background:linear-gradient(160deg,#0d2040,#081428);border-radius:20px;border:2px solid #4db8ff;padding:24px 20px;max-width:440px;width:100%;max-height:80vh;overflow-y:auto;position:relative">
+    <button onclick="closeSvcModal()" style="position:absolute;top:12px;right:12px;background:rgba(255,255,255,.1);border:none;color:#fff;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:16px">✕</button>
+    <div id="svcModalIcon" style="font-size:48px;text-align:center;margin-bottom:10px"></div>
+    <div id="svcModalTitle" style="font-size:18px;font-weight:bold;color:#4db8ff;text-align:center;margin-bottom:6px"></div>
+    <div id="svcModalSub" style="font-size:12px;color:rgba(77,184,255,.6);text-align:center;margin-bottom:16px"></div>
+    <div id="svcModalBody" style="font-size:13px;color:rgba(255,255,255,.8);line-height:1.8"></div>
+    <div id="svcModalTips" style="margin-top:14px;display:grid;gap:8px"></div>
+    <button onclick="closeShopTalkStaff()" style="width:100%;margin-top:16px;padding:12px;background:linear-gradient(135deg,#1a6eb5,#4db8ff);color:#fff;font-size:14px;font-weight:bold;border:none;border-radius:12px;cursor:pointer">💬 詢問店員更多</button>
   </div>
 </div>
 
@@ -517,119 +531,196 @@ function drawBuildingCanvas(bld){
   document.getElementById('world').appendChild(el);
 }
 
-function drawCHBuilding(c,w,h){
-  // 藍白外牆
-  c.fillStyle='#e8f0f8';c.fillRect(0,28,w,h-28);
-  // 招牌
-  const sg=c.createLinearGradient(0,0,w,28);sg.addColorStop(0,'#1a6eb5');sg.addColorStop(.5,'#4db8ff');sg.addColorStop(1,'#1a6eb5');
-  c.fillStyle=sg;c.fillRect(0,0,w,34);
-  c.fillStyle='#fff';c.font='bold 11px Microsoft JhengHei,sans-serif';c.textAlign='center';c.fillText('C.H · 精緻洗衣',w/2,21);
-  c.font='8px Microsoft JhengHei,sans-serif';c.fillText('洗衣  洗鞋  洗包  護理',w/2,31);
-  // 玻璃門
-  c.fillStyle='rgba(180,220,255,.3)';c.fillRect(15,38,w-30,h-42);
-  c.strokeStyle='#2a2a2a';c.lineWidth=2;c.strokeRect(15,38,w-30,h-42);
-  c.beginPath();c.moveTo(w/2,38);c.lineTo(w/2,h-4);c.stroke();
-  c.beginPath();c.moveTo(15,80);c.lineTo(w-15,80);c.stroke();
-  // 植物
-  c.fillStyle='#3a7020';c.beginPath();c.arc(8,h-8,10,0,Math.PI*2);c.fill();
-  c.fillStyle='#6b4c1e';c.fillRect(5,h-2,6,4);
-  // 地板
-  c.fillStyle='#c0b8a8';c.fillRect(0,h-4,w,4);
-}
-function drawNoodle(c,w,h){
-  c.fillStyle='#f5e8d0';c.fillRect(0,28,w,h-28);
-  c.fillStyle='#c84020';c.fillRect(0,0,w,34);
-  c.fillStyle='#ffd700';c.font='bold 12px Microsoft JhengHei,sans-serif';c.textAlign='center';c.fillText('阿明麵館',w/2,22);
-  c.font='9px sans-serif';c.fillStyle='rgba(255,255,255,.8)';c.fillText('🍜 道地台灣麵食',w/2,32);
-  c.fillStyle='rgba(255,200,150,.2)';c.fillRect(10,38,w-20,h-42);
-  c.strokeStyle='#8b4513';c.lineWidth=2;c.strokeRect(10,38,w-20,h-42);
-  c.font='24px sans-serif';c.fillText('🍜',w/2,78);
-  c.fillStyle='#a08060';c.fillRect(0,h-4,w,4);
-}
-function drawLib(c,w,h){
-  c.fillStyle='#f0ece4';c.fillRect(0,28,w,h-28);
-  c.fillStyle='#2c5282';c.fillRect(0,0,w,34);
-  c.fillStyle='#fff';c.font='bold 11px Microsoft JhengHei,sans-serif';c.textAlign='center';c.fillText('社區圖書館',w/2,22);
-  c.font='24px sans-serif';c.fillStyle='#333';c.fillText('📚',w/2,78);
-  c.fillStyle='rgba(200,200,180,.3)';c.fillRect(10,38,w-20,h-42);
-  c.strokeStyle='#666';c.lineWidth=2;c.strokeRect(10,38,w-20,h-42);
-  c.fillStyle='#998877';c.fillRect(0,h-4,w,4);
-}
-function drawMart(c,w,h){
-  c.fillStyle='#f8f8f0';c.fillRect(0,28,w,h-28);
-  c.fillStyle='#16a34a';c.fillRect(0,0,w,20);c.fillStyle='#fff';c.fillRect(0,20,w,14);c.fillStyle='#16a34a';c.fillRect(0,34,w,0);
-  c.fillStyle='#16a34a';c.font='bold 10px Microsoft JhengHei,sans-serif';c.textAlign='center';c.fillText('便利商店',w/2,13);
-  c.fillStyle='#fff';c.font='bold 10px sans-serif';c.fillText('OPEN 24H',w/2,29);
-  c.fillStyle='rgba(220,240,220,.3)';c.fillRect(10,38,w-20,h-42);
-  c.strokeStyle='#4a4a4a';c.lineWidth=2;c.strokeRect(10,38,w-20,h-42);
-  c.font='22px sans-serif';c.fillStyle='#333';c.fillText('🏪',w/2,78);
-  c.fillStyle='#c0c0b0';c.fillRect(0,h-4,w,4);
-}
-function drawFlower(c,w,h){
-  c.fillStyle='#fff0f5';c.fillRect(0,28,w,h-28);
-  c.fillStyle='#db2777';c.fillRect(0,0,w,34);
-  c.fillStyle='#fff';c.font='bold 11px Microsoft JhengHei,sans-serif';c.textAlign='center';c.fillText('小雅花店',w/2,22);
-  c.font='22px sans-serif';c.fillStyle='#333';c.fillText('🌸🌷🌺',w/2,78);
-  c.fillStyle='rgba(255,200,220,.2)';c.fillRect(10,38,w-20,h-42);
-  c.strokeStyle='#db2777';c.lineWidth=2;c.strokeRect(10,38,w-20,h-42);
-  c.fillStyle='#d4a0c0';c.fillRect(0,h-4,w,4);
-}
-function drawCafe(c,w,h){
-  c.fillStyle='#f5ede4';c.fillRect(0,28,w,h-28);
-  c.fillStyle='#78350f';c.fillRect(0,0,w,34);
-  c.fillStyle='#f5d0a0';c.font='bold 11px Microsoft JhengHei,sans-serif';c.textAlign='center';c.fillText('香榭咖啡廳',w/2,22);
-  c.font='22px sans-serif';c.fillStyle='#333';c.fillText('☕🧁',w/2,78);
-  c.fillStyle='rgba(200,160,120,.2)';c.fillRect(10,38,w-20,h-42);
-  c.strokeStyle='#78350f';c.lineWidth=2;c.strokeRect(10,38,w-20,h-42);
-  c.fillStyle='#b08060';c.fillRect(0,h-4,w,4);
+function draw3DBuilding(c,w,h,opts){
+  // opts: {roofColor, wallColor, sideColor, winColor, sign, signColor, signText, signText2, icon}
+  var ro=opts.roofColor||'#3a5a8a',wa=opts.wallColor||'#d0d8e8',si=opts.sideColor||'#a0aab8';
+  var depth=18, roofH=22;
+  // 側面（右側陰影）
+  c.fillStyle=si;
+  c.beginPath();
+  c.moveTo(w-2,roofH+2);
+  c.lineTo(w-2+depth,roofH+2-depth*.5);
+  c.lineTo(w-2+depth,h-4-depth*.5);
+  c.lineTo(w-2,h-4);
+  c.closePath(); c.fill();
+  // 主牆
+  c.fillStyle=wa;
+  c.fillRect(2,roofH+2,w-4,h-roofH-6);
+  // 屋頂面
+  c.fillStyle=ro;
+  c.beginPath();
+  c.moveTo(2,roofH+2);
+  c.lineTo(2+depth,roofH+2-depth*.5);
+  c.lineTo(w-2+depth,roofH+2-depth*.5);
+  c.lineTo(w-2,roofH+2);
+  c.closePath(); c.fill();
+  // 屋頂前緣線
+  c.strokeStyle='rgba(0,0,0,.25)'; c.lineWidth=1.5;
+  c.beginPath();
+  c.moveTo(2,roofH+2); c.lineTo(w-2,roofH+2); c.stroke();
+  // 右側邊線
+  c.beginPath();
+  c.moveTo(w-2,roofH+2); c.lineTo(w-2,h-4); c.stroke();
 }
 
-// 建築點擊
-function handleBldClick(bld){
-  if(bld.special==='shop'){openShop();return}
-  var dlgMap={
-    noodle:{e:'👨',name:'阿明師傅',role:'麵館老闆',
-      dlg:{text:'歡迎光臨阿明麵館！廚師服每天都是油漬，幸好有 C.H 幫我處理！',
-        opts:[{i:'🍜',t:'油漬很難洗嗎？',n:'a'},{i:'🔬',t:'挑戰油漬解謎！',action:'quiz'}]},
-      extra:{a:{text:'超難！油漬要先用去漬劑或洗碗精預處理，分解油脂後才送洗！直接丟洗衣機根本沒用！',
-        opts:[{i:'🔬',t:'來挑戰！',action:'quiz'},{i:'👋',t:'謝謝！再見！',close:true}]}}
-    },
-    'lib':{e:'📚',name:'圖書館員',role:'社區圖書館',
-      dlg:{text:'歡迎來到社區圖書館！你對洗衣知識了解多少？',
-        opts:[{i:'📖',t:'幫我推薦洗衣書籍',n:'a'},{i:'🔬',t:'挑戰污漬解謎！',action:'quiz'}]},
-      extra:{a:{text:'我推薦《精緻衣物保養全書》！不過最簡單的就是交給 C.H 精緻洗衣！',
-        opts:[{i:'🔬',t:'先來測試！',action:'quiz'},{i:'😊',t:'謝謝！',close:true}]}}
-    },
-    supermarket:{e:'🏪',name:'便利商店員',role:'便利商店',
-      dlg:{text:'歡迎光臨！你知道衣服沾到咖啡要怎麼處理嗎？我剛剛不小心打翻了...',
-        opts:[{i:'☕',t:'要趕快用冷水沖！',n:'a'},{i:'🤷',t:'我也不知道...',n:'b'}]},
-      extra:{
-        a:{text:'答對了！冷水從外往內輕拍，不能用熱水，更不能搓！你是洗衣達人嗎？',
-          opts:[{i:'🔬',t:'來挑戰解謎！',action:'quiz'},{i:'👋',t:'謝謝，再見！',close:true}]},
-        b:{text:'快去問問 C.H 精緻洗衣！他們超專業，什麼污漬都能解決！',
-          opts:[{i:'🏃',t:'好，我去問！',close:true}]}
-      }
-    },
-    flower:{e:'🌸',name:'小雅',role:'花店老闆娘',
-      dlg:{text:'你好！花粉沾到衣服可是很麻煩的，你知道怎麼處理嗎？',
-        opts:[{i:'🎀',t:'用膠帶黏起來！',n:'a'},{i:'💧',t:'用水洗掉？',n:'b'},{i:'🔬',t:'挑戰解謎！',action:'quiz'}]},
-      extra:{
-        a:{text:'答對了！花粉要先用膠帶輕輕黏起來，不能用手擦或水洗，那樣花粉會滲進布料！',
-          opts:[{i:'📝',t:'學到了！謝謝！',close:true}]},
-        b:{text:'不對喔！水洗會讓花粉溶解滲進布料，越洗越深。要先用膠帶清除！',
-          opts:[{i:'📝',t:'原來如此！謝謝！',close:true}]}
-      }
-    },
-    cafe:{e:'☕',name:'咖啡師',role:'香榭咖啡廳',
-      dlg:{text:'歡迎光臨！常有客人把咖啡灑在衣服上，你知道怎麼處理嗎？',
-        opts:[{i:'💧',t:'立刻用冷水沖！',n:'a'},{i:'🔬',t:'挑戰污漬解謎！',action:'quiz'}]},
-      extra:{a:{text:'答對了！咖啡是水溶性污漬，立刻用冷水從外往內輕拍，千萬不要搓揉！',
-        opts:[{i:'🔬',t:'來挑戰！',action:'quiz'},{i:'☕',t:'謝謝！再見！',close:true}]}}
-    }
-  };
-  var d=dlgMap[bld.id];
-  if(d){curNpc={id:bld.id,e:d.e,name:d.name,role:d.role,dlg:d.dlg,extra:d.extra||{}};renderDlg(curNpc.dlg);document.getElementById('dlgOverlay').classList.add('show')}
-  else showToast('📍 '+bld.label+' — 即將開放');
+function drawWindows(c,x,y,ww,wh,color){
+  c.fillStyle=color||'rgba(180,220,255,.7)';
+  c.fillRect(x,y,ww,wh);
+  c.strokeStyle='rgba(0,0,0,.3)'; c.lineWidth=1;
+  c.strokeRect(x,y,ww,wh);
+  c.strokeStyle='rgba(255,255,255,.5)'; c.lineWidth=.8;
+  c.beginPath(); c.moveTo(x+ww/2,y); c.lineTo(x+ww/2,y+wh); c.stroke();
+  c.beginPath(); c.moveTo(x,y+wh/2); c.lineTo(x+ww,y+wh/2); c.stroke();
+}
+
+function drawCHBuilding(c,w,h){
+  var depth=18,roofH=20;
+  // 側面
+  c.fillStyle='#7aaac8';
+  c.beginPath();c.moveTo(w-2,roofH+2);c.lineTo(w-2+depth,roofH+2-depth*.5);c.lineTo(w-2+depth,h-4-depth*.5);c.lineTo(w-2,h-4);c.closePath();c.fill();
+  // 主牆（白色系）
+  c.fillStyle='#eef4fa'; c.fillRect(2,roofH+2,w-4,h-roofH-6);
+  // 藍白招牌（頂部）
+  var sg=c.createLinearGradient(0,0,w,roofH+2);
+  sg.addColorStop(0,'#1a6eb5');sg.addColorStop(.5,'#4db8ff');sg.addColorStop(1,'#1a6eb5');
+  c.fillStyle=sg; c.fillRect(2,2,w-4,roofH+2);
+  // 屋頂面（藍）
+  c.fillStyle='#1a5a9a';
+  c.beginPath();c.moveTo(2,roofH+2);c.lineTo(2+depth,roofH+2-depth*.5);c.lineTo(w-2+depth,roofH+2-depth*.5);c.lineTo(w-2,roofH+2);c.closePath();c.fill();
+  // 招牌波浪
+  c.fillStyle='rgba(255,255,255,.15)';
+  c.beginPath();c.moveTo(2,roofH+2);
+  for(var x=2;x<=w-2;x+=20){c.quadraticCurveTo(x+10,roofH+7,x+20,roofH+2)}
+  c.lineTo(w-2,roofH+14);c.lineTo(2,roofH+14);c.closePath();c.fill();
+  // 招牌文字
+  c.fillStyle='#fff'; c.font='bold '+(w>180?10:8)+'px Microsoft JhengHei,sans-serif'; c.textAlign='center';
+  c.fillText('C.H · 精緻洗衣',w/2,13);
+  c.font=(w>180?7:6)+'px sans-serif'; c.fillStyle='rgba(255,255,255,.85)';
+  c.fillText('洗衣  洗鞋  洗包  護理',w/2,22);
+  // 玻璃落地窗（左）
+  c.fillStyle='rgba(180,225,255,.35)'; c.fillRect(10,roofH+8,w/2-14,h-roofH-14);
+  c.strokeStyle='#2a3a4a'; c.lineWidth=2; c.strokeRect(10,roofH+8,w/2-14,h-roofH-14);
+  c.beginPath();c.moveTo(w/4,roofH+8);c.lineTo(w/4,h-6);c.stroke();
+  c.beginPath();c.moveTo(10,roofH+8+(h-roofH-14)/2);c.lineTo(w/2-4,roofH+8+(h-roofH-14)/2);c.stroke();
+  // 門把
+  c.fillStyle='#888'; c.fillRect(w/4-8,roofH+20,6,3); c.fillRect(w/4+3,roofH+20,6,3);
+  // 右側玻璃窗
+  c.fillStyle='rgba(180,225,255,.25)'; c.fillRect(w/2+4,roofH+8,w/2-14,h-roofH-14);
+  c.strokeStyle='#2a3a4a'; c.lineWidth=2; c.strokeRect(w/2+4,roofH+8,w/2-14,h-roofH-14);
+  c.beginPath();c.moveTo(w/2+4,roofH+8+(h-roofH-14)/2);c.lineTo(w-10,roofH+8+(h-roofH-14)/2);c.stroke();
+  // 盆栽
+  c.fillStyle='#3a7020'; c.beginPath(); c.arc(6,h-8,8,0,Math.PI*2); c.fill();
+  c.fillStyle='#6b4c1e'; c.fillRect(3,h-4,6,5);
+  // 右角號碼
+  c.fillStyle='#666'; c.font='bold 11px sans-serif'; c.textAlign='right';
+  c.fillText('6',w-4,roofH+20);
+  // 地板
+  c.fillStyle='#c0b8a8'; c.fillRect(0,h-4,w,4);
+  // 邊線
+  c.strokeStyle='rgba(0,0,0,.2)'; c.lineWidth=1.5;
+  c.strokeRect(2,2,w-4,h-6);
+}
+
+function drawNoodle(c,w,h){
+  var depth=14,roofH=18;
+  c.fillStyle='#8a3010';
+  c.beginPath();c.moveTo(w-2,roofH+2);c.lineTo(w-2+depth,roofH+2-depth*.5);c.lineTo(w-2+depth,h-4-depth*.5);c.lineTo(w-2,h-4);c.closePath();c.fill();
+  c.fillStyle='#f5e8d0'; c.fillRect(2,roofH+2,w-4,h-roofH-6);
+  c.fillStyle='#c84020'; c.fillRect(2,2,w-4,roofH+2);
+  c.fillStyle='#8a2010';
+  c.beginPath();c.moveTo(2,roofH+2);c.lineTo(2+depth,roofH+2-depth*.5);c.lineTo(w-2+depth,roofH+2-depth*.5);c.lineTo(w-2,roofH+2);c.closePath();c.fill();
+  c.fillStyle='#ffd700'; c.font='bold 9px Microsoft JhengHei,sans-serif'; c.textAlign='center';
+  c.fillText('阿明麵館',w/2,13);
+  c.font='7px sans-serif'; c.fillStyle='rgba(255,255,255,.8)'; c.fillText('🍜 道地台灣麵食',w/2,22);
+  drawWindows(c,12,roofH+8,w-28,h-roofH-16,'rgba(255,200,150,.3)');
+  c.font='20px sans-serif'; c.fillStyle='#c84020'; c.textAlign='center';
+  c.fillText('🍜',w/2-18,h-16); c.fillText('🥢',w/2+16,h-14);
+  c.fillStyle='#a08060'; c.fillRect(0,h-4,w,4);
+  c.strokeStyle='rgba(0,0,0,.2)'; c.lineWidth=1.2; c.strokeRect(2,2,w-4,h-6);
+}
+
+function drawLib(c,w,h){
+  var depth=14,roofH=18;
+  c.fillStyle='#1a3a6a';
+  c.beginPath();c.moveTo(w-2,roofH+2);c.lineTo(w-2+depth,roofH+2-depth*.5);c.lineTo(w-2+depth,h-4-depth*.5);c.lineTo(w-2,h-4);c.closePath();c.fill();
+  c.fillStyle='#f0ece4'; c.fillRect(2,roofH+2,w-4,h-roofH-6);
+  // 柱子裝飾
+  c.fillStyle='#ddd8cc';
+  c.fillRect(8,roofH+4,6,h-roofH-8);
+  c.fillRect(w-16,roofH+4,6,h-roofH-8);
+  c.fillStyle='#2c5282'; c.fillRect(2,2,w-4,roofH+2);
+  c.fillStyle='#1a2a52';
+  c.beginPath();c.moveTo(2,roofH+2);c.lineTo(2+depth,roofH+2-depth*.5);c.lineTo(w-2+depth,roofH+2-depth*.5);c.lineTo(w-2,roofH+2);c.closePath();c.fill();
+  c.fillStyle='#fff'; c.font='bold 9px Microsoft JhengHei,sans-serif'; c.textAlign='center';
+  c.fillText('社區圖書館',w/2,13);
+  // 三角山牆
+  c.fillStyle='#2c5282';
+  c.beginPath();c.moveTo(w/2,roofH+6);c.lineTo(w/2-20,roofH+18);c.lineTo(w/2+20,roofH+18);c.closePath();c.fill();
+  drawWindows(c,18,roofH+20,w-40,h-roofH-28,'rgba(200,210,240,.4)');
+  c.font='18px sans-serif'; c.fillText('📚',w/2,h-14);
+  c.fillStyle='#998877'; c.fillRect(0,h-4,w,4);
+  c.strokeStyle='rgba(0,0,0,.2)'; c.lineWidth=1.2; c.strokeRect(2,2,w-4,h-6);
+}
+
+function drawMart(c,w,h){
+  var depth=14,roofH=16;
+  c.fillStyle='#0a7a34';
+  c.beginPath();c.moveTo(w-2,roofH+2);c.lineTo(w-2+depth,roofH+2-depth*.5);c.lineTo(w-2+depth,h-4-depth*.5);c.lineTo(w-2,h-4);c.closePath();c.fill();
+  c.fillStyle='#f8f8f0'; c.fillRect(2,roofH+2,w-4,h-roofH-6);
+  // 三色招牌帶
+  c.fillStyle='#16a34a'; c.fillRect(2,2,w-4,8);
+  c.fillStyle='#fff'; c.fillRect(2,10,w-4,6);
+  c.fillStyle='#dc2626'; c.fillRect(2,16,w-4,roofH-14);
+  c.fillStyle='#0a7a34';
+  c.beginPath();c.moveTo(2,roofH+2);c.lineTo(2+depth,roofH+2-depth*.5);c.lineTo(w-2+depth,roofH+2-depth*.5);c.lineTo(w-2,roofH+2);c.closePath();c.fill();
+  c.fillStyle='#fff'; c.font='bold 8px Microsoft JhengHei,sans-serif'; c.textAlign='center';
+  c.fillText('便利商店',w/2,8);
+  c.fillStyle='#dc2626'; c.font='bold 7px sans-serif'; c.fillText('OPEN 24H',w/2,20);
+  drawWindows(c,8,roofH+6,w-20,h-roofH-14,'rgba(200,240,200,.3)');
+  c.font='16px sans-serif'; c.fillText('🏪',w/2,h-14);
+  c.fillStyle='#c0c0b0'; c.fillRect(0,h-4,w,4);
+  c.strokeStyle='rgba(0,0,0,.2)'; c.lineWidth=1.2; c.strokeRect(2,2,w-4,h-6);
+}
+
+function drawFlower(c,w,h){
+  var depth=14,roofH=18;
+  c.fillStyle='#8a1050';
+  c.beginPath();c.moveTo(w-2,roofH+2);c.lineTo(w-2+depth,roofH+2-depth*.5);c.lineTo(w-2+depth,h-4-depth*.5);c.lineTo(w-2,h-4);c.closePath();c.fill();
+  c.fillStyle='#fff5f8'; c.fillRect(2,roofH+2,w-4,h-roofH-6);
+  // 拱形頂
+  c.fillStyle='#db2777'; c.fillRect(2,2,w-4,roofH+2);
+  c.fillStyle='#db2777';
+  c.beginPath();c.arc(w/2,roofH+4,w/2-4,Math.PI,0);c.fill();
+  c.fillStyle='#8a1050';
+  c.beginPath();c.moveTo(2,roofH+2);c.lineTo(2+depth,roofH+2-depth*.5);c.lineTo(w-2+depth,roofH+2-depth*.5);c.lineTo(w-2,roofH+2);c.closePath();c.fill();
+  c.fillStyle='#fff'; c.font='bold 9px Microsoft JhengHei,sans-serif'; c.textAlign='center';
+  c.fillText('小雅花店',w/2,13);
+  drawWindows(c,10,roofH+8,w-22,h-roofH-16,'rgba(255,200,220,.3)');
+  c.font='16px sans-serif'; c.fillText('🌸🌷',w/2,h-13);
+  c.fillStyle='#d4a0c0'; c.fillRect(0,h-4,w,4);
+  c.strokeStyle='rgba(0,0,0,.2)'; c.lineWidth=1.2; c.strokeRect(2,2,w-4,h-6);
+}
+
+function drawCafe(c,w,h){
+  var depth=14,roofH=18;
+  c.fillStyle='#4a2008';
+  c.beginPath();c.moveTo(w-2,roofH+2);c.lineTo(w-2+depth,roofH+2-depth*.5);c.lineTo(w-2+depth,h-4-depth*.5);c.lineTo(w-2,h-4);c.closePath();c.fill();
+  c.fillStyle='#f5ede4'; c.fillRect(2,roofH+2,w-4,h-roofH-6);
+  // 木質招牌
+  c.fillStyle='#78350f'; c.fillRect(2,2,w-4,roofH+2);
+  c.fillStyle='#4a2008';
+  c.beginPath();c.moveTo(2,roofH+2);c.lineTo(2+depth,roofH+2-depth*.5);c.lineTo(w-2+depth,roofH+2-depth*.5);c.lineTo(w-2,roofH+2);c.closePath();c.fill();
+  c.fillStyle='#f5d0a0'; c.font='bold 9px Microsoft JhengHei,sans-serif'; c.textAlign='center';
+  c.fillText('香榭咖啡廳',w/2,13);
+  // 遮陽棚條紋
+  c.fillStyle='#b06030';
+  for(var i=0;i<5;i++){
+    c.fillRect(2+i*(w-4)/5,roofH+4,(w-4)/10,h/3);
+  }
+  drawWindows(c,12,roofH+8,w-26,h-roofH-16,'rgba(200,160,120,.25)');
+  c.font='16px sans-serif'; c.fillText('☕',w/2,h-13);
+  c.fillStyle='#b08060'; c.fillRect(0,h-4,w,4);
+  c.strokeStyle='rgba(0,0,0,.2)'; c.lineWidth=1.2; c.strokeRect(2,2,w-4,h-6);
 }
 
 // 裝飾品
@@ -682,18 +773,18 @@ function spawnCars(){
     const el=document.createElement('div');
     el.className='moving-car';
     el.textContent=car.emoji;
-    el.style.cssText=`left:${car.x}px;top:${car.y}px;font-size:28px;transform:scaleX(${car.dir})`;
+    el.style.cssText=`left:${car.x}px;top:${car.y}px;font-size:28px;transform:scaleX(${car.dir===1?1:-1})`;
     w.appendChild(el);
     carEls.push({el,car});
   });
 }
 function updateCars(){
-  const vw=window.innerWidth;
   carEls.forEach(({el,car})=>{
     car.x+=car.speed*car.dir;
     if(car.dir>0&&car.x>MAP_W+80) car.x=-80;
     if(car.dir<0&&car.x<-80) car.x=MAP_W+80;
     el.style.left=car.x+'px';
+    el.style.transform='scaleX('+(car.dir===1?1:-1)+')';
   });
 }
 
@@ -852,6 +943,111 @@ function talkStaff(){
   renderDlg(curNpc.dlg);
   document.getElementById('dlgOverlay').classList.add('show');
 }
+
+// ═══ 服務知識 ═══
+var SVC_INFO = {
+  suit:{
+    icon:'👔', title:'精緻衣物清洗', sub:'西裝・禮服・羽絨・毛衣',
+    body:'精緻衣物洗滌需要格外小心，不同材質有不同的處理方式。C.H 精緻洗衣由專業師傅手工處理每件衣物，確保品質和版型！',
+    tips:[
+      {icon:'✅', text:'西裝：手工蒸洗，低溫定型，保持版型挺括'},
+      {icon:'✅', text:'羽絨：專業機器低溫洗，加網球烘乾防結塊'},
+      {icon:'✅', text:'毛衣/羊絨：冷水手洗，平放晾乾不能掛'},
+      {icon:'✅', text:'禮服：特殊處理，珠飾刺繡部分保護'},
+      {icon:'⚠️', text:'西裝建議乾洗或每3-5次水洗，過度清洗會影響版型'},
+      {icon:'⚠️', text:'羊絨怕熱水和揉搓，高溫會不可逆縮水'},
+    ]
+  },
+  shoe:{
+    icon:'👟', title:'球鞋清潔服務', sub:'各種材質・各種品牌',
+    body:'球鞋清潔是技術活！不同材質有不同的清潔方法，錯誤的清潔方式會損傷鞋面材質或讓膠水脫膠。C.H 提供專業評估！',
+    tips:[
+      {icon:'✅', text:'帆布鞋：溫水加洗劑輕刷，自然晾乾'},
+      {icon:'✅', text:'皮革鞋：皮革清潔劑，乾燥後皮革保養油'},
+      {icon:'✅', text:'麂皮鞋：麂皮橡皮擦乾刷，禁止水洗'},
+      {icon:'✅', text:'限量球鞋：交給專業，避免自行處理損壞'},
+      {icon:'⚠️', text:'泥巴要先讓泥巴完全乾透，再軟刷刷除'},
+      {icon:'⚠️', text:'禁止丟進洗衣機！會脫膠、變形、損傷'},
+    ]
+  },
+  bag:{
+    icon:'👜', title:'名牌包保養服務', sub:'LV・Chanel・Gucci・Hermès',
+    body:'名牌包是精密工藝品，每個品牌的材質和塗層各不相同。錯誤的清潔方式可能造成不可逆的損傷！C.H 有豐富的名牌包保養經驗。',
+    tips:[
+      {icon:'✅', text:'LV 帆布：有特殊 Monogram 塗層，需專用清潔劑'},
+      {icon:'✅', text:'Chanel 羊皮：極度嬌貴，皮革清潔需謹慎'},
+      {icon:'✅', text:'Gucci 皮革：定期保養油防止龜裂'},
+      {icon:'✅', text:'帶包來時，告知材質、品牌、污漬位置'},
+      {icon:'⚠️', text:'汗漬會讓皮革變黃，定期保養才能預防'},
+      {icon:'⚠️', text:'自行用嬰兒濕紙巾擦可能破壞塗層！'},
+    ]
+  },
+  bedding:{
+    icon:'🛏️', title:'棉被床單清洗', sub:'大型寢具深層清潔',
+    body:'棉被和床單是蟎蟲和細菌的溫床！建議每3個月深層清洗一次。大型寢具需要專業設備，家用洗衣機通常容量不足！',
+    tips:[
+      {icon:'✅', text:'棉被建議每3個月送洗一次，殺滅塵蟎'},
+      {icon:'✅', text:'羽絨棉被：低溫清洗，烘乾時放網球打散羽絨'},
+      {icon:'✅', text:'乳膠墊：不能水洗，只能擦拭'},
+      {icon:'✅', text:'枕頭套、床單：每1-2週換洗'},
+      {icon:'⚠️', text:'家用洗衣機洗大棉被：轉速不均容易損壞'},
+      {icon:'⚠️', text:'棉被洗後沒晾乾直接收藏，容易發霉！'},
+    ]
+  },
+  coat:{
+    icon:'🧥', title:'大衣皮革護理', sub:'特殊材質專業處理',
+    body:'大衣和皮革是衣櫃裡最貴重的單品，也是最需要專業護理的！不當處理可能造成縮水、褪色、龜裂等不可逆損傷。',
+    tips:[
+      {icon:'✅', text:'羊毛大衣：乾洗為主，可保護毛料質感'},
+      {icon:'✅', text:'皮衣：皮革清潔劑去污，保養油滋潤'},
+      {icon:'✅', text:'麂皮大衣：麂皮刷輕刷，遠離水'},
+      {icon:'✅', text:'收藏前一定要洗乾淨，避免蟲蛀'},
+      {icon:'⚠️', text:'皮衣遇水要立刻用乾布吸除，不能日曬'},
+      {icon:'⚠️', text:'大衣水洗可能縮水，標示乾洗Only一定要乾洗！'},
+    ]
+  },
+  sport:{
+    icon:'🎽', title:'運動衣物清潔', sub:'異味去除・抗菌處理',
+    body:'運動衣物最大的問題是汗漬和異味！含有萊卡/彈性纖維的運動服需要特別保養，高溫和漂白會損傷彈性！',
+    tips:[
+      {icon:'✅', text:'運動後盡快清洗，汗漬乾掉更難去除'},
+      {icon:'✅', text:'冷水手洗或機洗30度，保護彈性纖維'},
+      {icon:'✅', text:'酵素洗劑最有效，可分解汗漬蛋白質'},
+      {icon:'✅', text:'泳衣：游泳後立刻冷水沖洗去氯'},
+      {icon:'⚠️', text:'彈性纖維怕熱，禁止高溫洗和烘乾機！'},
+      {icon:'⚠️', text:'柔軟精會包覆纖維影響吸濕排汗功能'},
+    ]
+  }
+};
+
+function showSvcInfo(type){
+  var info=SVC_INFO[type];
+  if(!info) return;
+  document.getElementById('svcModalIcon').textContent=info.icon;
+  document.getElementById('svcModalTitle').textContent=info.title;
+  document.getElementById('svcModalSub').textContent=info.sub;
+  document.getElementById('svcModalBody').textContent=info.body;
+  var tips=document.getElementById('svcModalTips');
+  tips.innerHTML='';
+  info.tips.forEach(function(t){
+    var d=document.createElement('div');
+    d.style.cssText='background:rgba(255,255,255,.05);border-radius:10px;padding:9px 12px;display:flex;align-items:flex-start;gap:8px;font-size:12px;color:rgba(255,255,255,.8)';
+    d.innerHTML='<span style="font-size:14px;flex-shrink:0">'+t.icon+'</span><span>'+t.text+'</span>';
+    tips.appendChild(d);
+  });
+  var m=document.getElementById('svcModal');
+  m.style.opacity='1'; m.style.pointerEvents='all';
+}
+function closeSvcModal(){
+  var m=document.getElementById('svcModal');
+  m.style.opacity='0'; m.style.pointerEvents='none';
+}
+function closeShopTalkStaff(){
+  closeSvcModal();
+  closeShop();
+  talkStaff();
+}
+
 
 // 題庫由 questions.js 提供
 const QUESTIONS=window.QUIZ_QUESTIONS||[];
