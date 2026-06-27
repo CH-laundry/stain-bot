@@ -110,9 +110,8 @@ window.QUIZ_QUESTIONS = [
 {emoji:'💡',story:'💡 知識題：「界面活性劑（洗劑的主成分）為什麼能去油？」',question:'界面活性劑去污的原理？',opts:[{lbl:'A',text:'分子一端親水一端親油，把油包圍後帶入水中',ok:true},{lbl:'B',text:'溶解所有物質',ok:false},{lbl:'C',text:'高溫分解油脂',ok:false},{lbl:'D',text:'磁性吸附污漬',ok:false}],explain:'界面活性劑的分子結構：一端親水（溶於水），一端親油（連接油脂），把油污包圍成膠束，隨水沖走！'},
 {emoji:'🎓',story:'🏫 洗衣達人：「什麼是酵素洗劑？比普通洗衣粉強在哪？」',question:'酵素洗劑的特別之處？',opts:[{lbl:'A',text:'含蛋白酶、脂肪酶等，可分解蛋白質和油脂類污漬',ok:true},{lbl:'B',text:'只是更貴，沒有實際差別',ok:false},{lbl:'C',text:'有漂白效果',ok:false},{lbl:'D',text:'適合高溫洗，不適合低溫',ok:false}],explain:'酵素（生物催化劑）可以針對性分解特定污漬：蛋白酶→蛋白質污漬，脂肪酶→油脂，澱粉酶→澱粉類！'},
 {emoji:'🏅',story:'🏆 終極挑戰：「我是洗衣小鎮冠軍！最後一題！」',question:'下列哪個洗衣觀念完全正確？',opts:[{lbl:'A',text:'不同污漬有不同處理方式，越快處理越好，材質決定方法',ok:true},{lbl:'B',text:'所有污漬都用熱水+大量洗劑就能解決',ok:false},{lbl:'C',text:'衣服越洗越好，多洗幾次都沒關係',ok:false},{lbl:'D',text:'送洗衣店沒有自己洗乾淨',ok:false}],explain:'恭喜你完成所有挑戰！正確觀念：不同污漬有對應方法，及時處理最關鍵，材質決定洗法，專業洗衣有其價值！'},
-];
-// ── 補充題目（達到 120 題）──
-,{emoji:'🫧',story:'🧹 清潔達人：「白色運動鞋鞋底變黃，怎麼救？」',question:'白色鞋底氧化變黃的處理？',opts:[{lbl:'A',text:'牙膏加小刷子輕刷，再用白醋擦拭',ok:true},{lbl:'B',text:'漂白水直接泡',ok:false},{lbl:'C',text:'熱水加洗衣粉',ok:false},{lbl:'D',text:'砂紙磨掉',ok:false}],explain:'白色鞋底氧化，牙膏（研磨粒子）加小刷子可去除表面氧化層，白醋（酸性）可進一步清除殘留污漬！'},
+,
+{emoji:'🫧',story:'🧹 清潔達人：「白色運動鞋鞋底變黃，怎麼救？」',question:'白色鞋底氧化變黃的處理？',opts:[{lbl:'A',text:'牙膏加小刷子輕刷，再用白醋擦拭',ok:true},{lbl:'B',text:'漂白水直接泡',ok:false},{lbl:'C',text:'熱水加洗衣粉',ok:false},{lbl:'D',text:'砂紙磨掉',ok:false}],explain:'白色鞋底氧化，牙膏（研磨粒子）加小刷子可去除表面氧化層，白醋（酸性）可進一步清除殘留污漬！'},
 {emoji:'🧦',story:'🧦 爸爸：「白色棉襪洗一洗就變灰，怎麼辦？」',question:'白色棉襪漸漸變灰的原因和解決方式？',opts:[{lbl:'A',text:'混色洗造成，氧系漂白劑浸泡後可改善',ok:true},{lbl:'B',text:'材質問題，無法解決',ok:false},{lbl:'C',text:'用熱水漂洗就好',ok:false},{lbl:'D',text:'加多一點洗衣粉',ok:false}],explain:'白襪變灰主因是混色洗或洗劑殘留。分類洗，氧系漂白劑（非氯漂）浸泡可讓白色恢復！'},
 {emoji:'👒',story:'👒 女士：「草編帽被雨淋濕，形狀跑掉了！」',question:'草編帽淋雨變形的補救方式？',opts:[{lbl:'A',text:'趁濕潤時用手整形，套在圓筒上自然晾乾',ok:true},{lbl:'B',text:'吹風機熱風吹',ok:false},{lbl:'C',text:'熨斗燙平',ok:false},{lbl:'D',text:'泡水讓它恢復',ok:false}],explain:'草編材質濕潤時可塑性最強！趁濕潤整形，套在同大小圓筒（頭型工具）上晾乾，形狀就會固定！'},
 {emoji:'🩱',story:'🏊 游泳者：「泳衣穿了一季，彈性變差鬆弛！」',question:'泳衣失去彈性的主要原因？',opts:[{lbl:'A',text:'氯水、熱水、烘乾機損傷彈性纖維',ok:true},{lbl:'B',text:'穿太多次',ok:false},{lbl:'C',text:'洗太多次',ok:false},{lbl:'D',text:'品質問題',ok:false}],explain:'泳衣彈性纖維（氨綸/Spandex）怕氯、熱、機洗！每次游泳後立刻冷水手洗，平放晾乾，可大幅延長壽命！'},
