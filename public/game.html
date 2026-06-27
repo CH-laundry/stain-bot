@@ -48,7 +48,7 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'Microsoft JhengHei
 @keyframes walkF{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
 
 /* 移動中的車 */
-.moving-car{position:absolute;font-size:32px;z-index:8;pointer-events:none;will-change:transform}
+.moving-car{position:absolute;font-size:28px;z-index:8;pointer-events:none;display:inline-block}
 
 /* 飄雪/花瓣 */
 .particle{position:absolute;pointer-events:none;z-index:6;will-change:transform,opacity}
@@ -531,6 +531,50 @@ function drawBuildingCanvas(bld){
   document.getElementById('world').appendChild(el);
 }
 
+
+function handleBldClick(bld){
+  if(bld.special==='shop'){openShop();return;}
+  var BDLG={
+    noodle:{e:'👨',name:'阿明師傅',role:'麵館老闆',
+      dlg:{text:'歡迎光臨阿明麵館！廚師服每天都是油漬，幸好有 C.H 幫我處理！',
+        opts:[{i:'🍜',t:'油漬很難洗嗎？',n:'a'},{i:'🔬',t:'挑戰解謎！',action:'quiz'}]},
+      extra:{a:{text:'超難！油漬要先用去漬劑或洗碗精預處理，分解油脂後才送洗！',
+        opts:[{i:'🔬',t:'來挑戰！',action:'quiz'},{i:'👋',t:'謝謝！再見！',close:true}]}}},
+    'lib':{e:'📚',name:'圖書館員',role:'社區圖書館',
+      dlg:{text:'歡迎！你對洗衣知識了解多少？',
+        opts:[{i:'📖',t:'推薦洗衣書籍',n:'a'},{i:'🔬',t:'挑戰解謎！',action:'quiz'}]},
+      extra:{a:{text:'最簡單的就是交給 C.H 精緻洗衣！',
+        opts:[{i:'🔬',t:'先來測試！',action:'quiz'},{i:'😊',t:'謝謝！',close:true}]}}},
+    supermarket:{e:'🏪',name:'店員小美',role:'便利商店',
+      dlg:{text:'歡迎光臨！衣服沾到咖啡要怎麼處理，你知道嗎？',
+        opts:[{i:'☕',t:'趕快用冷水沖！',n:'a'},{i:'🤷',t:'我不知道...',n:'b'}]},
+      extra:{
+        a:{text:'答對！冷水從外往內輕拍，不能搓！你是洗衣達人！',
+          opts:[{i:'🔬',t:'挑戰解謎！',action:'quiz'},{i:'👋',t:'再見！',close:true}]},
+        b:{text:'快去問問 C.H 精緻洗衣！什麼污漬都能解決！',
+          opts:[{i:'🏃',t:'好，去問！',close:true}]}}},
+    flower:{e:'🌸',name:'小雅',role:'花店老闆娘',
+      dlg:{text:'花粉沾到衣服要怎麼處理，你知道嗎？',
+        opts:[{i:'🎀',t:'用膠帶黏起來！',n:'a'},{i:'💧',t:'用水洗？',n:'b'},{i:'🔬',t:'挑戰解謎！',action:'quiz'}]},
+      extra:{
+        a:{text:'答對！花粉先用膠帶黏，不能水洗！',opts:[{i:'📝',t:'學到了！',close:true}]},
+        b:{text:'不對！水洗讓花粉滲進布料！先用膠帶！',opts:[{i:'📝',t:'謝謝！',close:true}]}}},
+    cafe:{e:'☕',name:'咖啡師',role:'香榭咖啡廳',
+      dlg:{text:'常有客人把咖啡灑在衣服，你知道怎麼處理嗎？',
+        opts:[{i:'💧',t:'立刻用冷水沖！',n:'a'},{i:'🔬',t:'挑戰解謎！',action:'quiz'}]},
+      extra:{a:{text:'答對！咖啡是水溶性污漬，立刻冷水從外往內輕拍！',
+        opts:[{i:'🔬',t:'挑戰！',action:'quiz'},{i:'☕',t:'謝謝！再見！',close:true}]}}}
+  };
+  var d=BDLG[bld.id];
+  if(d){
+    curNpc={id:bld.id,e:d.e,name:d.name,role:d.role,dlg:d.dlg,extra:d.extra||{}};
+    renderDlg(curNpc.dlg);
+    document.getElementById('dlgOverlay').classList.add('show');
+  } else {
+    showToast('📍 '+bld.label+' — 即將開放');
+  }
+}
+
 function draw3DBuilding(c,w,h,opts){
   // opts: {roofColor, wallColor, sideColor, winColor, sign, signColor, signText, signText2, icon}
   var ro=opts.roofColor||'#3a5a8a',wa=opts.wallColor||'#d0d8e8',si=opts.sideColor||'#a0aab8';
@@ -773,7 +817,15 @@ function spawnCars(){
     const el=document.createElement('div');
     el.className='moving-car';
     el.textContent=car.emoji;
-    el.style.cssText=`left:${car.x}px;top:${car.y}px;font-size:28px;transform:scaleX(${car.dir===1?1:-1})`;
+    el.style.left=car.x+'px';
+    el.style.top=car.y+'px';
+    el.style.fontSize='28px';
+    el.style.position='absolute';
+    el.style.zIndex='8';
+    el.style.pointerEvents='none';
+    // dir=1往右不翻，dir=-1往左翻
+    el.style.transform = car.dir===1 ? 'scaleX(1)' : 'scaleX(-1)';
+    el.style.display='inline-block';
     w.appendChild(el);
     carEls.push({el,car});
   });
@@ -784,7 +836,7 @@ function updateCars(){
     if(car.dir>0&&car.x>MAP_W+80) car.x=-80;
     if(car.dir<0&&car.x<-80) car.x=MAP_W+80;
     el.style.left=car.x+'px';
-    el.style.transform='scaleX('+(car.dir===1?1:-1)+')';
+    el.style.transform=(car.dir===1)?'scaleX(1)':'scaleX(-1)';
   });
 }
 
