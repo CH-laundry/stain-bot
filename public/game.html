@@ -182,18 +182,33 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'Microsoft JhengHei
         <div><div class="shop-name-big">C.H 精緻洗衣</div><div class="shop-name-en">C.H LAUNDRY SHOP</div></div>
       </div>
       <div class="shop-desc">📍 新北市板橋區｜🌟 精緻洗衣、洗鞋、洗包、護理<br>從日常衣物到高端奢侈品，每件都由專業師傅細心呵護。20年洗衣工藝，品質保證！</div>
-      <div class="shop-hours">⏰ <strong>營業時間：</strong>週一至週六 10:30–20:00｜週日公休</div>
+      <div class="shop-hours">⏰ <strong>營業時間：</strong>週一至週日 10:30–20:00｜週六公休</div>
+      <p style="font-size:11px;color:rgba(77,184,255,.7);margin-bottom:8px;">👆 點擊服務卡片了解專業知識</p>
       <div class="shop-svcs">
-        <div class="svc"><div class="svc-ico">👔</div><div class="svc-nm">精緻衣物</div><div class="svc-de">西裝・禮服・羽絨外套</div></div>
-        <div class="svc"><div class="svc-ico">👟</div><div class="svc-nm">球鞋清潔</div><div class="svc-de">各種材質皆可處理</div></div>
-        <div class="svc"><div class="svc-ico">👜</div><div class="svc-nm">名牌包保養</div><div class="svc-de">LV・Chanel・Gucci</div></div>
-        <div class="svc"><div class="svc-ico">🛏️</div><div class="svc-nm">棉被床單</div><div class="svc-de">大型寢具深層清洗</div></div>
-        <div class="svc"><div class="svc-ico">🧥</div><div class="svc-nm">大衣皮革</div><div class="svc-de">特殊材質專業處理</div></div>
-        <div class="svc"><div class="svc-ico">🎽</div><div class="svc-nm">運動衣物</div><div class="svc-de">異味去除・抗菌處理</div></div>
+        <div class="svc" onclick="showSvcInfo('suit')" style="cursor:pointer;transition:transform .15s" ontouchstart="this.style.transform='scale(.95)'" ontouchend="this.style.transform='scale(1)'"><div class="svc-ico">👔</div><div class="svc-nm">精緻衣物</div><div class="svc-de">西裝・禮服・羽絨外套</div></div>
+        <div class="svc" onclick="showSvcInfo('shoe')" style="cursor:pointer;transition:transform .15s" ontouchstart="this.style.transform='scale(.95)'" ontouchend="this.style.transform='scale(1)'"><div class="svc-ico">👟</div><div class="svc-nm">球鞋清潔</div><div class="svc-de">各種材質皆可處理</div></div>
+        <div class="svc" onclick="showSvcInfo('bag')" style="cursor:pointer;transition:transform .15s" ontouchstart="this.style.transform='scale(.95)'" ontouchend="this.style.transform='scale(1)'"><div class="svc-ico">👜</div><div class="svc-nm">名牌包保養</div><div class="svc-de">LV・Chanel・Gucci</div></div>
+        <div class="svc" onclick="showSvcInfo('bedding')" style="cursor:pointer;transition:transform .15s" ontouchstart="this.style.transform='scale(.95)'" ontouchend="this.style.transform='scale(1)'"><div class="svc-ico">🛏️</div><div class="svc-nm">棉被床單</div><div class="svc-de">大型寢具深層清洗</div></div>
+        <div class="svc" onclick="showSvcInfo('coat')" style="cursor:pointer;transition:transform .15s" ontouchstart="this.style.transform='scale(.95)'" ontouchend="this.style.transform='scale(1)'"><div class="svc-ico">🧥</div><div class="svc-nm">大衣皮革</div><div class="svc-de">特殊材質專業處理</div></div>
+        <div class="svc" onclick="showSvcInfo('sport')" style="cursor:pointer;transition:transform .15s" ontouchstart="this.style.transform='scale(.95)'" ontouchend="this.style.transform='scale(1)'"><div class="svc-ico">🎽</div><div class="svc-nm">運動衣物</div><div class="svc-de">異味去除・抗菌處理</div></div>
       </div>
       <button class="btn-talk" onclick="talkStaff()">💬 和店員說話</button>
       <button class="btn-back" onclick="closeShop()">← 返回小鎮</button>
     </div>
+  </div>
+</div>
+
+
+<!-- 服務知識 Modal -->
+<div id="svcModal" style="position:fixed;inset:0;z-index:700;background:rgba(0,0,0,.82);display:flex;align-items:center;justify-content:center;padding:16px;opacity:0;pointer-events:none;transition:opacity .25s">
+  <div style="background:linear-gradient(160deg,#0d2040,#081428);border-radius:20px;border:2px solid #4db8ff;padding:22px 18px;width:100%;max-width:440px;max-height:82vh;overflow-y:auto;position:relative">
+    <button onclick="closeSvcModal()" style="position:absolute;top:12px;right:12px;background:rgba(255,255,255,.12);border:none;color:#fff;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:16px;line-height:30px">X</button>
+    <div id="svcIco" style="font-size:52px;text-align:center;margin-bottom:8px"></div>
+    <div id="svcTitle" style="font-size:18px;font-weight:bold;color:#4db8ff;text-align:center;margin-bottom:4px"></div>
+    <div id="svcSub" style="font-size:11px;color:rgba(77,184,255,.6);text-align:center;margin-bottom:14px"></div>
+    <div id="svcBody" style="font-size:13px;color:rgba(255,255,255,.78);line-height:1.8;background:rgba(77,184,255,.06);border-radius:10px;padding:12px;margin-bottom:12px"></div>
+    <div id="svcTips" style="display:grid;gap:7px;margin-bottom:14px"></div>
+    <button onclick="closeSvcModal();talkStaff()" style="width:100%;padding:12px;background:linear-gradient(135deg,#1a6eb5,#4db8ff);color:#fff;font-size:14px;font-weight:bold;border:none;border-radius:12px;cursor:pointer">詢問店員更多</button>
   </div>
 </div>
 
@@ -907,6 +922,90 @@ const QUESTIONS=[
 ];
 
 let curQ=0,correctCnt=0;
+
+var SVC={
+  suit:{ico:'👔',title:'精緻衣物清洗',sub:'西裝 . 禮服 . 羽絨 . 毛衣',
+    body:'精緻衣物需要專業師傅手工處理，不同材質洗法完全不同。C.H 每件都由師傅親自評估！',
+    tips:[
+      {ok:1,t:'西裝：手工蒸洗加低溫定型，保持版型挺括'},
+      {ok:1,t:'羽絨：低溫清洗，烘乾放網球防羽絨結塊'},
+      {ok:1,t:'毛衣羊絨：冷水手洗，平放晾乾不能掛'},
+      {ok:1,t:'禮服：珠飾刺繡特別保護，染料固色處理'},
+      {ok:0,t:'西裝不能丟洗衣機，會讓版型永久走樣'},
+      {ok:0,t:'羊絨遇熱水會不可逆縮水，一定要冷水'}
+    ]},
+  shoe:{ico:'👟',title:'球鞋清潔服務',sub:'帆布 . 皮革 . 麂皮 . 限量款',
+    body:'不同材質球鞋清潔方式完全不同，錯誤方式會讓鞋面損傷甚至脫膠！',
+    tips:[
+      {ok:1,t:'帆布鞋：溫水加洗劑輕刷，自然陰涼晾乾'},
+      {ok:1,t:'皮革鞋：皮革清潔劑去污，再用保養油滋潤'},
+      {ok:1,t:'麂皮鞋：麂皮橡皮擦乾刷，完全禁止水洗'},
+      {ok:1,t:'泥巴先讓泥乾透，再軟刷刷除才能清洗'},
+      {ok:0,t:'千萬不能丟洗衣機！會脫膠變形損傷鞋型'},
+      {ok:0,t:'白鞋不能用漂白水直接塗，橡膠會變黃'}
+    ]},
+  bag:{ico:'👜',title:'名牌包保養',sub:'LV . Chanel . Gucci . Hermes',
+    body:'每個品牌材質和塗層不同，錯誤清潔可能造成不可逆損傷！C.H 有豐富名牌包保養經驗。',
+    tips:[
+      {ok:1,t:'LV 帆布：有 Monogram 塗層，需專用清潔劑'},
+      {ok:1,t:'Chanel 羊皮：極度嬌貴，需謹慎評估處理'},
+      {ok:1,t:'帶包來告知：品牌、材質、污漬位置成因'},
+      {ok:1,t:'定期保養油可防皮革龜裂和汗漬變黃'},
+      {ok:0,t:'不能自行用濕紙巾擦，會破壞表面塗層'},
+      {ok:0,t:'漂白水或酒精會永久損傷皮革顏色質感'}
+    ]},
+  bedding:{ico:'🛏',title:'棉被床單清洗',sub:'大型寢具 . 深層殺菌',
+    body:'棉被床單是塵蟎細菌溫床！建議每3個月深層清洗，家用洗衣機容量通常不足。',
+    tips:[
+      {ok:1,t:'棉被每3個月送洗，有效殺滅塵蟎和細菌'},
+      {ok:1,t:'羽絨棉被：低溫清洗，烘乾放網球打散羽絨'},
+      {ok:1,t:'枕頭套床單：每1-2週換洗保持衛生'},
+      {ok:1,t:'送洗前告知材質，避免損傷填充物'},
+      {ok:0,t:'家用洗衣機洗大棉被轉速不均容易結塊'},
+      {ok:0,t:'棉被洗完沒晾乾直接收藏，非常容易發霉'}
+    ]},
+  coat:{ico:'🧥',title:'大衣皮革護理',sub:'毛料 . 皮衣 . 麂皮大衣',
+    body:'大衣和皮革是衣櫃最貴重的單品，需要專業護理，不當處理造成縮水褪色龜裂。',
+    tips:[
+      {ok:1,t:'羊毛大衣：乾洗為主，保護毛料質感和版型'},
+      {ok:1,t:'皮衣：皮革清潔劑去污，定期保養油防龜裂'},
+      {ok:1,t:'麂皮大衣：麂皮刷輕刷，遠離水和油漬'},
+      {ok:1,t:'收藏前務必清洗乾淨，避免蟲蛀和異味'},
+      {ok:0,t:'皮衣淋雨要立刻用乾布吸除，不能日曬'},
+      {ok:0,t:'標示乾洗Only的大衣千萬不能水洗'}
+    ]},
+  sport:{ico:'🎽',title:'運動衣物清潔',sub:'排汗衣 . 泳衣 . 機能布料',
+    body:'運動衣物最大問題是汗漬和異味！含彈性纖維的運動服高溫和漂白會破壞彈性。',
+    tips:[
+      {ok:1,t:'運動後盡快清洗，汗漬乾掉蛋白質固化更難去'},
+      {ok:1,t:'冷水或30度機洗，保護彈性纖維不老化'},
+      {ok:1,t:'酵素洗劑效果最好，可分解汗漬中蛋白質'},
+      {ok:1,t:'泳衣：游泳後立刻冷水沖，去除氯的傷害'},
+      {ok:0,t:'彈性纖維禁止高溫洗和烘乾機，會失去彈性'},
+      {ok:0,t:'柔軟精會包覆纖維，影響吸濕排汗功能'}
+    ]}
+};
+function showSvcInfo(type){
+  var info=SVC[type];if(!info){alert('載入中');return;}
+  document.getElementById('svcIco').textContent=info.ico;
+  document.getElementById('svcTitle').textContent=info.title;
+  document.getElementById('svcSub').textContent=info.sub;
+  document.getElementById('svcBody').textContent=info.body;
+  var tips=document.getElementById('svcTips');tips.innerHTML='';
+  info.tips.forEach(function(t){
+    var d=document.createElement('div');
+    d.style.cssText='background:rgba(255,255,255,.05);border-radius:9px;padding:9px 12px;display:flex;align-items:flex-start;gap:8px;font-size:12px;color:rgba(255,255,255,.82)';
+    d.innerHTML='<span style="font-size:15px;flex-shrink:0">'+(t.ok?'✅':'⚠️')+'</span><span>'+t.t+'</span>';
+    tips.appendChild(d);
+  });
+  var m=document.getElementById('svcModal');
+  m.style.opacity='1';m.style.pointerEvents='all';
+}
+function closeSvcModal(){
+  var m=document.getElementById('svcModal');
+  m.style.opacity='0';m.style.pointerEvents='none';
+}
+
 function openQuiz(){
   const key='quiz_'+(window._uid||'dev'),today=new Date().toISOString().substring(0,10);
   if(localStorage.getItem(key)===today){showToast('今天已完成解謎！明天再來挑戰 😊');return}
@@ -956,8 +1055,9 @@ function showToast(msg){const el=document.getElementById('toast');el.textContent
 
 // ═══ 主迴圈 ═══
 let lastCar=0,lastPar=0;
+var tlTick=0;
 function gameLoop(ts){
-  if(ts-lastCar>16){lastCar=ts;updateCars()}
+  if(ts-lastCar>16){lastCar=ts;updateCars();tlTick++;if(tlTick%2===0)updateTrafficLights();}
   if(ts-lastPar>40){lastPar=ts;if(particles.length)updateParticles()}
   requestAnimationFrame(gameLoop);
 }
@@ -977,6 +1077,8 @@ function init(){
   (async()=>{try{await liff.init({liffId:LIFF_ID});if(liff.isLoggedIn()){const p=await liff.getProfile();window._uid=p.userId;document.getElementById('topName').textContent=p.displayName||'探險家';}}catch(e){}})();
   // 建立世界
   drawMap();
+  initMapDetails();
+  initTrafficLights();
   spawnClouds();
   initBuildingCanvas();
   spawnDecos();
@@ -1005,6 +1107,202 @@ function init(){
 }
 
 // 雲朵
+// ══ 紅綠燈系統 ══
+var tlPhase=0; // 0=紅, 1=黃, 2=綠
+var tlTimer=0;
+var tlDurations=[80,20,80]; // 幀數
+var tlCv=null, tlCx=null;
+
+function initTrafficLights(){
+  tlCv=document.createElement('canvas');
+  tlCv.width=MAP_W; tlCv.height=MAP_H;
+  tlCv.style.cssText='position:absolute;top:0;left:0;pointer-events:none;z-index:10';
+  document.getElementById('world').appendChild(tlCv);
+  tlCx=tlCv.getContext('2d');
+  drawTrafficLights();
+}
+
+function drawTrafficLight(cx,x,y,phase){
+  // 燈桿
+  cx.fillStyle='#4a5568';
+  cx.fillRect(x-3,y,6,55);
+  // 燈箱
+  cx.fillStyle='#1a1a2a';
+  cx.beginPath();cx.roundRect(x-12,y-50,24,48,5);cx.fill();
+  cx.strokeStyle='#333';cx.lineWidth=1.5;
+  cx.beginPath();cx.roundRect(x-12,y-50,24,48,5);cx.stroke();
+  // 三燈
+  var cols=[
+    phase===0?'#ff2020':'#330000',
+    phase===1?'#ffcc00':'#332200',
+    phase===2?'#00dd44':'#003310'
+  ];
+  var glow=[
+    phase===0?'rgba(255,50,50,.5)':'none',
+    phase===1?'rgba(255,200,0,.5)':'none',
+    phase===2?'rgba(0,220,60,.5)':'none'
+  ];
+  [0,1,2].forEach(function(i){
+    var cy=y-43+i*15;
+    // 光暈
+    if(glow[i]!=='none'){
+      var g=cx.createRadialGradient(x,cy,2,x,cy,9);
+      g.addColorStop(0,glow[i]);g.addColorStop(1,'rgba(0,0,0,0)');
+      cx.fillStyle=g;cx.beginPath();cx.arc(x,cy,9,0,Math.PI*2);cx.fill();
+    }
+    cx.fillStyle=cols[i];cx.beginPath();cx.arc(x,cy,5,0,Math.PI*2);cx.fill();
+  });
+  // 橫臂
+  cx.fillStyle='#4a5568';cx.fillRect(x,y-50,22,4);
+}
+
+var TL_POSITIONS=[
+  {x:698,y:555},{x:742,y:555},
+  {x:1410,y:555},{x:1454,y:555}
+];
+
+function drawTrafficLights(){
+  if(!tlCx)return;
+  tlCx.clearRect(0,0,MAP_W,MAP_H);
+  // 奇數位和偶數位燈相反
+  TL_POSITIONS.forEach(function(p,i){
+    var phase=(i%2===0)?tlPhase:(tlPhase+1)%3;
+    drawTrafficLight(tlCx,p.x,p.y,phase);
+  });
+}
+
+function updateTrafficLights(){
+  tlTimer++;
+  if(tlTimer>=tlDurations[tlPhase]){
+    tlTimer=0;
+    tlPhase=(tlPhase+1)%3;
+    drawTrafficLights();
+  }
+}
+
+// ══ 主畫面補充細節（在地圖上層）══
+var detailCv=null,detailCx=null;
+function initMapDetails(){
+  detailCv=document.createElement('canvas');
+  detailCv.width=MAP_W;detailCv.height=MAP_H;
+  detailCv.style.cssText='position:absolute;top:0;left:0;pointer-events:none;z-index:7';
+  document.getElementById('world').appendChild(detailCv);
+  var cx=detailCv.getContext('2d');
+  drawMapDetails(cx);
+}
+
+function drawMapDetails(cx){
+  var si=getSeasonInfo();
+
+  // 更多樹木（靠近建築兩側）
+  function drawTree(x,y,sz,season){
+    // 樹幹
+    cx.fillStyle='#6b4c1e';cx.fillRect(x-4,y,8,sz*.4);
+    // 樹冠
+    var tc=season==='autumn'?'#c84a10':season==='winter'?'#5a8a5a':'#2d8a22';
+    var tc2=season==='autumn'?'#a03808':season==='winter'?'#486a48':'#226818';
+    cx.fillStyle=tc;cx.beginPath();cx.arc(x,y-sz*.3,sz*.38,0,Math.PI*2);cx.fill();
+    cx.fillStyle=tc2;cx.beginPath();cx.arc(x-sz*.15,y-sz*.2,sz*.3,0,Math.PI*2);cx.fill();
+    cx.fillStyle=tc;cx.beginPath();cx.arc(x+sz*.15,y-sz*.22,sz*.28,0,Math.PI*2);cx.fill();
+    // 冬天積雪
+    if(season==='winter'){
+      cx.fillStyle='rgba(255,255,255,.7)';
+      cx.beginPath();cx.ellipse(x,y-sz*.55,sz*.28,sz*.09,0,0,Math.PI*2);cx.fill();
+    }
+  }
+
+  // 建築旁邊加樹木
+  var treeData=[
+    [44,440,38],[330,438,34],[580,442,36],[680,440,32],
+    [1490,440,34],[1710,438,36],[1990,440,34],[2180,442,32],
+    [150,820,30],[500,824,28],[1200,820,30],[1700,822,28]
+  ];
+  treeData.forEach(function(d){drawTree(d[0],d[1],d[2],si.season);});
+
+  // 路燈（改成 Canvas 繪製，更好看）
+  function drawLamp(x,y,isNight){
+    cx.fillStyle='#6a7888';cx.fillRect(x-3,y,6,52);
+    cx.fillStyle='#888';
+    cx.beginPath();cx.moveTo(x,y);cx.quadraticCurveTo(x+18,y-8,x+22,y-14);cx.lineWidth=4;cx.strokeStyle='#888';cx.stroke();
+    // 燈罩
+    cx.fillStyle=isNight?'#ffffaa':'#ccc';
+    cx.beginPath();cx.ellipse(x+22,y-14,8,5,0,0,Math.PI*2);cx.fill();
+    if(isNight){
+      var g=cx.createRadialGradient(x+22,y-14,2,x+22,y-14,45);
+      g.addColorStop(0,'rgba(255,240,150,.25)');g.addColorStop(1,'rgba(255,240,150,0)');
+      cx.fillStyle=g;cx.beginPath();cx.arc(x+22,y-14,45,0,Math.PI*2);cx.fill();
+    }
+  }
+  var h=new Date().getHours(),isNight=h<6||h>=20;
+  [[195,472],[560,472],[1020,472],[1480,472],[1860,472],[2120,472]].forEach(function(p){
+    drawLamp(p[0],p[1],isNight);
+  });
+
+  // 廣場裝飾：旗幟
+  function drawFlag(x,y,col1,col2){
+    cx.fillStyle='#888';cx.fillRect(x,y-60,3,60);
+    cx.fillStyle=col1;cx.fillRect(x+3,y-60,25,14);
+    cx.fillStyle=col2;cx.fillRect(x+3,y-46,25,14);
+    cx.fillStyle='#fff';cx.fillRect(x+3,y-32,25,8);
+  }
+  drawFlag(840,545,'#1a6eb5','#4db8ff');
+  drawFlag(1370,545,'#c84020','#ffd700');
+
+  // 公園：木椅和小徑
+  cx.fillStyle='#8b6914';cx.fillRect(155,942,55,10);cx.fillRect(152,950,8,16);cx.fillRect(200,950,8,16);
+  cx.fillStyle='#6b4c1e';cx.fillRect(155,942,55,4);
+  // 公園花圃
+  ['#ff6bae','#ffd700','#ff8c42','#a78bfa'].forEach(function(col,i){
+    var fx=130+i*20,fy=980;
+    cx.fillStyle=col;cx.beginPath();cx.arc(fx,fy,5,0,Math.PI*2);cx.fill();
+    cx.fillStyle='#2d8a22';cx.fillRect(fx-1,fy,2,10);
+  });
+
+  // 湖邊：小碼頭
+  cx.fillStyle='#6b4c1e';
+  cx.fillRect(1840,1000,8,30);cx.fillRect(1870,1000,8,30);
+  cx.fillRect(1835,1000,48,6);
+  // 湖面倒影
+  cx.fillStyle='rgba(255,255,255,.12)';
+  cx.beginPath();cx.ellipse(1900,1010,60,12,-.1,0,Math.PI*2);cx.fill();
+
+  // 小屋/攤販
+  function drawStall(x,y,col,txt){
+    // 遮陽棚
+    cx.fillStyle=col;
+    cx.beginPath();cx.moveTo(x-30,y-20);cx.lineTo(x+30,y-20);cx.lineTo(x+35,y-5);cx.lineTo(x-35,y-5);cx.closePath();cx.fill();
+    // 桿子
+    cx.fillStyle='#888';cx.fillRect(x-28,y-20,4,30);cx.fillRect(x+24,y-20,4,30);
+    // 台面
+    cx.fillStyle='#d4a060';cx.fillRect(x-30,y+5,60,8);
+    if(txt){cx.fillStyle='#fff';cx.font='bold 8px sans-serif';cx.textAlign='center';cx.fillText(txt,x,y-10);}
+  }
+  drawStall(350,985,'#e06030','飲料');
+  drawStall(1750,975,'#20a060','小食');
+  drawStall(600,990,'#6030c0','氣球');
+
+  // 行人（靜態，裝飾）
+  function drawPerson(x,y,col){
+    cx.fillStyle=col;cx.beginPath();cx.arc(x,y-24,7,0,Math.PI*2);cx.fill();
+    cx.fillRect(x-5,y-17,10,16);
+    cx.fillStyle='#f5c0a0';cx.fillRect(x-4,y-1,4,10);cx.fillRect(x+0,y-1,4,10);
+  }
+  [[168,820,'#4080c0'],[280,812,'#e05050'],[1050,818,'#20a060'],[1850,822,'#c060c0'],
+   [450,985,'#e08020'],[1700,975,'#4060c0']].forEach(function(p){drawPerson(p[0],p[1],p[2]);});
+
+  // 廣場中心地磚花紋
+  cx.strokeStyle='rgba(255,215,0,.12)';cx.lineWidth=1.5;
+  for(var r=20;r<=80;r+=20){
+    cx.beginPath();cx.arc(1110,MAP_H*.45+180,r,0,Math.PI*2);cx.stroke();
+  }
+
+  // 路邊停車位標線
+  cx.strokeStyle='rgba(255,255,255,.18)';cx.lineWidth=1.2;cx.setLineDash([]);
+  [[630,520,30,20],[660,520,30,20],[690,520,30,20]].forEach(function(r){
+    cx.strokeRect(r[0],r[1],r[2],r[3]);
+  });
+}
+
 function spawnClouds(){
   const w=document.getElementById('world');
   [{e:'☁️',y:28,dur:90},{e:'⛅',y:65,dur:115},{e:'☁️',y:44,dur:145}].forEach((cl,i)=>{
