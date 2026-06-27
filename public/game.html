@@ -888,26 +888,31 @@ function updateTopSeason(){
 
 // ═══ 初始化 ═══
 async function init(){
-  // 設定頂部背景
   const si=getSeasonInfo();
   document.getElementById('topBar').style.background=`linear-gradient(135deg,${si.sky1}ee,${si.sky2}ee)`;
 
-  try{
-    await liff.init({liffId:LIFF_ID});
-    if(liff.isInClient()){
-      if(!liff.isLoggedIn()){liff.login();return}
-      const p=await liff.getProfile();
-      window._uid=p.userId;
-      document.getElementById('topName').textContent=p.displayName||'探險家';
-    } else {
-      // 瀏覽器模式：繼續執行不阻塞
-      window._uid='guest_'+Date.now();
-      document.getElementById('topName').textContent='小鎮訪客';
+  // LIFF 初始化：最多等 3 秒，超時直接進遊戲
+  const liffPromise = (async()=>{
+    try{
+      await liff.init({liffId:LIFF_ID});
+      if(liff.isLoggedIn()){
+        const p=await liff.getProfile();
+        window._uid=p.userId;
+        document.getElementById('topName').textContent=p.displayName||'探險家';
+      } else {
+        window._uid='guest_'+Date.now();
+        document.getElementById('topName').textContent='洗衣小鎮居民';
+      }
+    }catch(e){
+      window._uid='player_'+Date.now();
+      document.getElementById('topName').textContent='洗衣小鎮居民';
     }
-  }catch(e){
-    // LIFF init 失敗：繼續執行遊戲
-    window._uid='dev_'+Date.now();
-    document.getElementById('topName').textContent='探險家';
+  })();
+  const timeout = new Promise(r=>setTimeout(r,3000));
+  await Promise.race([liffPromise, timeout]);
+  if(!window._uid){
+    window._uid='player_'+Date.now();
+    document.getElementById('topName').textContent='洗衣小鎮居民';
   }
 
   // 建立世界
