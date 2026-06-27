@@ -587,15 +587,47 @@ function drawCafe(c,w,h){
 // 建築點擊
 function handleBldClick(bld){
   if(bld.special==='shop'){openShop();return}
-  // 其他建築用對話
-  const bldDialogs={
-    noodle:{e:'👨‍🍳',name:'阿明師傅',role:'麵館老闆',dlg:{text:'歡迎光臨阿明麵館！我們的滷肉飯可是一絕，不過廚師服每天都是油漬，幸好有 C.H 幫我處理！',opts:[{i:'🍜',t:'聽說油漬很難洗？',n:'nm1'},{i:'🔬',t:'我來挑戰油漬解謎！',action:'quiz'}]},extra:{nm1:{text:'超難！油漬是脂肪類，要先用去漬劑或洗碗精預處理，分解油脂後才能送洗，直接丟洗衣機根本沒用！',opts:[{i:'💡',t:'學到了！油漬要預處理',n:'nm2'}]},nm2:{text:'對！而且越快處理越好，放久了油脂會氧化，更難清。你要挑戰污漬解謎嗎？',opts:[{i:'🔬',t:'來挑戰！',action:'quiz'},{i:'🍜',t:'謝謝師傅！再見！',close:true}]}}}},
-    lib:{e:'👩‍🏫',name:'圖書館員',role:'社區圖書館',dlg:{text:'歡迎來到社區圖書館！我們有很多關於衣物保養的書籍喔，你對洗衣知識了解多少？',opts:[{i:'📚',t:'幫我推薦洗衣相關書籍',n:'lb1'},{i:'🔬',t:'我想挑戰污漬解謎！',action:'quiz'}]},extra:{lb1:{text:'我推薦《精緻衣物保養全書》，裡面有各種污漬的處理方式！不過最簡單的就是交給 C.H 精緻洗衣！',opts:[{i:'😊',t:'謝謝推薦！',close:true},{i:'🔬',t:'我先來測試一下！',action:'quiz'}]}}},
-    supermarket:{e:'👩‍💼',name:'便利商店員',role:'7-11店員',dlg:{text:'歡迎光臨！需要什麼嗎？對了，你知道衣服沾到咖啡要怎麼處理嗎？我剛剛不小心打翻了...',opts:[{i:'☕',t:'要趕快用冷水沖！',n:'sm1'},{i:'🤷',t:'我也不知道...',n:'sm2'}]},extra:{sm1:{text:'對！你懂的！冷水從外往內輕拍，不能用熱水，更不能搓！你是洗衣達人嗎？',opts:[{i:'🔬',t:'來挑戰解謎看看！',action:'quiz'},{i:'👋',t:'謝謝，再見！',close:true}]},sm2:{text:'快去問問隔壁的 C.H 精緻洗衣！他們超專業的，什麼污漬都能解決！',opts:[{i:'🏃',t:'好，我去問！',close:true}]}}},
-    flower:{e:'👧',name:'小雅',role:'花店老闆娘',dlg:{text:'你好！今天要買花嗎？對了，花粉沾到衣服可是很麻煩的喔，你知道怎麼處理嗎？',opts:[{i:'🌸',t:'要先用膠帶黏起來！',n:'fl1'},{i:'💧',t:'用水洗掉？',n:'fl2'},{i:'🔬',t:'挑戰污漬解謎！',action:'quiz'}]},extra:{fl1:{text:'答對了！花粉要先用膠帶輕輕黏起來，不能用手擦或水洗，那樣會讓花粉滲進布料！',opts:[{i:'📝',t:'學到了！謝謝小雅！',close:true}]},fl2:{text:'不對喔！水洗會讓花粉滲進布料，越洗越深色。要先用膠帶或刷子輕輕清除，再送去專業洗衣！',opts:[{i:'📝',t:'原來如此！謝謝！',close:true}]}}},
-    cafe:{e:'☕',name:'咖啡師',role:'香榭咖啡廳',dlg:{text:'歡迎光臨香榭咖啡！我們的拿鐵很受歡迎，不過常有客人把咖啡灑在衣服上，你知道怎麼處理嗎？',opts:[{i:'💧',t:'立刻用冷水沖！',n:'cf1'},{i:'🔬',t:'我來挑戰污漬解謎！',action:'quiz'}]},extra:{cf1:{text:'答對了！咖啡是水溶性污漬，立刻用冷水（不是熱水！）從外往內輕拍，千萬不要搓揉！',opts:[{i:'👏',t:'謝謝您的知識！',n:'cf2'}]},cf2:{text:'然後越快送去 C.H 精緻洗衣越好！放太久污漬會固化，更難清。你要挑戰解謎嗎？',opts:[{i:'🔬',t:'來挑戰！',action:'quiz'},{i:'☕',t:'謝謝！喝完咖啡再去！',close:true}]}}},
+  var dlgMap={
+    noodle:{e:'👨',name:'阿明師傅',role:'麵館老闆',
+      dlg:{text:'歡迎光臨阿明麵館！廚師服每天都是油漬，幸好有 C.H 幫我處理！',
+        opts:[{i:'🍜',t:'油漬很難洗嗎？',n:'a'},{i:'🔬',t:'挑戰油漬解謎！',action:'quiz'}]},
+      extra:{a:{text:'超難！油漬要先用去漬劑或洗碗精預處理，分解油脂後才送洗！直接丟洗衣機根本沒用！',
+        opts:[{i:'🔬',t:'來挑戰！',action:'quiz'},{i:'👋',t:'謝謝！再見！',close:true}]}}
+    },
+    'lib':{e:'📚',name:'圖書館員',role:'社區圖書館',
+      dlg:{text:'歡迎來到社區圖書館！你對洗衣知識了解多少？',
+        opts:[{i:'📖',t:'幫我推薦洗衣書籍',n:'a'},{i:'🔬',t:'挑戰污漬解謎！',action:'quiz'}]},
+      extra:{a:{text:'我推薦《精緻衣物保養全書》！不過最簡單的就是交給 C.H 精緻洗衣！',
+        opts:[{i:'🔬',t:'先來測試！',action:'quiz'},{i:'😊',t:'謝謝！',close:true}]}}
+    },
+    supermarket:{e:'🏪',name:'便利商店員',role:'便利商店',
+      dlg:{text:'歡迎光臨！你知道衣服沾到咖啡要怎麼處理嗎？我剛剛不小心打翻了...',
+        opts:[{i:'☕',t:'要趕快用冷水沖！',n:'a'},{i:'🤷',t:'我也不知道...',n:'b'}]},
+      extra:{
+        a:{text:'答對了！冷水從外往內輕拍，不能用熱水，更不能搓！你是洗衣達人嗎？',
+          opts:[{i:'🔬',t:'來挑戰解謎！',action:'quiz'},{i:'👋',t:'謝謝，再見！',close:true}]},
+        b:{text:'快去問問 C.H 精緻洗衣！他們超專業，什麼污漬都能解決！',
+          opts:[{i:'🏃',t:'好，我去問！',close:true}]}
+      }
+    },
+    flower:{e:'🌸',name:'小雅',role:'花店老闆娘',
+      dlg:{text:'你好！花粉沾到衣服可是很麻煩的，你知道怎麼處理嗎？',
+        opts:[{i:'🎀',t:'用膠帶黏起來！',n:'a'},{i:'💧',t:'用水洗掉？',n:'b'},{i:'🔬',t:'挑戰解謎！',action:'quiz'}]},
+      extra:{
+        a:{text:'答對了！花粉要先用膠帶輕輕黏起來，不能用手擦或水洗，那樣花粉會滲進布料！',
+          opts:[{i:'📝',t:'學到了！謝謝！',close:true}]},
+        b:{text:'不對喔！水洗會讓花粉溶解滲進布料，越洗越深。要先用膠帶清除！',
+          opts:[{i:'📝',t:'原來如此！謝謝！',close:true}]}
+      }
+    },
+    cafe:{e:'☕',name:'咖啡師',role:'香榭咖啡廳',
+      dlg:{text:'歡迎光臨！常有客人把咖啡灑在衣服上，你知道怎麼處理嗎？',
+        opts:[{i:'💧',t:'立刻用冷水沖！',n:'a'},{i:'🔬',t:'挑戰污漬解謎！',action:'quiz'}]},
+      extra:{a:{text:'答對了！咖啡是水溶性污漬，立刻用冷水從外往內輕拍，千萬不要搓揉！',
+        opts:[{i:'🔬',t:'來挑戰！',action:'quiz'},{i:'☕',t:'謝謝！再見！',close:true}]}}
+    }
   };
-  const d=bldDialogs[bld.id];
+  var d=dlgMap[bld.id];
   if(d){curNpc={id:bld.id,e:d.e,name:d.name,role:d.role,dlg:d.dlg,extra:d.extra||{}};renderDlg(curNpc.dlg);document.getElementById('dlgOverlay').classList.add('show')}
   else showToast('📍 '+bld.label+' — 即將開放');
 }
