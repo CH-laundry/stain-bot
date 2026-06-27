@@ -887,33 +887,23 @@ function updateTopSeason(){
 }
 
 // ═══ 初始化 ═══
-async function init(){
+function init(){
   const si=getSeasonInfo();
   document.getElementById('topBar').style.background=`linear-gradient(135deg,${si.sky1}ee,${si.sky2}ee)`;
 
-  // LIFF 初始化：最多等 3 秒，超時直接進遊戲
-  const liffPromise = (async()=>{
+  // LIFF：背景初始化，不阻塞遊戲啟動
+  window._uid = 'player_' + Date.now();
+  document.getElementById('topName').textContent = '洗衣小鎮居民';
+  (async()=>{
     try{
       await liff.init({liffId:LIFF_ID});
       if(liff.isLoggedIn()){
-        const p=await liff.getProfile();
-        window._uid=p.userId;
-        document.getElementById('topName').textContent=p.displayName||'探險家';
-      } else {
-        window._uid='guest_'+Date.now();
-        document.getElementById('topName').textContent='洗衣小鎮居民';
+        const p = await liff.getProfile();
+        window._uid = p.userId;
+        document.getElementById('topName').textContent = p.displayName || '探險家';
       }
-    }catch(e){
-      window._uid='player_'+Date.now();
-      document.getElementById('topName').textContent='洗衣小鎮居民';
-    }
+    }catch(e){}
   })();
-  const timeout = new Promise(r=>setTimeout(r,3000));
-  await Promise.race([liffPromise, timeout]);
-  if(!window._uid){
-    window._uid='player_'+Date.now();
-    document.getElementById('topName').textContent='洗衣小鎮居民';
-  }
 
   // 建立世界
   drawMap();
