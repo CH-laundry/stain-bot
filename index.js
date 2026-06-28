@@ -77,30 +77,39 @@ app.use('/', gameRoutes);
 // ════════════════════════════════
 
 const ITEM_MAP = {
-  '西裝':  { emoji:'👔', type:'suit'  },
-  '外套':  { emoji:'🧥', type:'coat'  },
-  '羽絨':  { emoji:'🪶', type:'coat'  },
-  '球鞋':  { emoji:'👟', type:'shoe'  },
-  '皮鞋':  { emoji:'👞', type:'shoe'  },
-  '包包':  { emoji:'👜', type:'bag'   },
-  '棉被':  { emoji:'🛏️', type:'bedding'},
-  '床單':  { emoji:'🛏️', type:'bedding'},
-  '運動服':{ emoji:'🎽', type:'sport' },
-  '毛衣':  { emoji:'🧶', type:'suit'  },
-  '旗袍':  { emoji:'👘', type:'suit'  },
-  '禮服':  { emoji:'👗', type:'suit'  },
+  '西裝':  '👔', '外套':  '🧥', '羽絨':  '🪶',
+  '球鞋':  '👟', '皮鞋':  '👞', '包包':  '👜',
+  '棉被':  '🛏️','床單':  '🛏️','運動服': '🎽',
+  '毛衣':  '🧶', '旗袍':  '👘', '禮服':  '👗',
+  '連身裙':'👗', '裙子':  '👗', '褲子':  '👖',
+  '大衣':  '🧥',
 };
 
-function getItemInfo(name) {
-  for (const [key, val] of Object.entries(ITEM_MAP)) {
-    if (name && name.includes(key)) return val;
+function getItemEmoji(name) {
+  for (const [key, emoji] of Object.entries(ITEM_MAP)) {
+    if (name && name.includes(key)) return emoji;
   }
-  return { emoji:'🧺', type:'suit' };
+  return '🧺';
 }
 
-// 取得今日遊戲任務（從 POS 抓當日訂單）
+// ── GET /api/game-tasks ──
+// 只回傳「登入玩家自己的」未完成訂單
+// 用 userId 查對應的客戶姓名，再去 POS 找訂單
 app.get('/api/game-tasks', async (req, res) => {
   try {
+    // 從 query 取 userId（遊戲端會帶過來）
+    const { userId } = req.query;
+    if (!userId) return res.json({ success: true, tasks: [] });
+
+    // 1. 用 userId 找對應的 POS 客戶姓名
+    const allCustomers = orderManager.getAllCustomerNumbers();
+    const matched = allCustomers.find(c => c.userId === userId);
+    if (!matched) {
+      // 找不到綁定就回傳空，不顯示任何 NPC
+      return res.json({ success: true, tasks: [], reason: 'not_bound' });
+    }
+
+    const customerName = matched.name || '';
     const token = await getPosToken();
     if (!token) return res.json({ success: false, tasks: [] });
 
@@ -110,76 +119,80 @@ app.get('/api/game-tasks', async (req, res) => {
       'Authorization': `Bearer ${token}`
     };
 
-    // 查最近7天有進行中的訂單
+    // 2. 用姓名在 POS 搜尋最近 30 天的訂單
     const today = new Date();
     const start = new Date(today);
-    start.setDate(today.getDate() - 7);
+    start.setDate(today.getDate() - 30);
     const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 
     const searchRes = await fetch('http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/SearchPage', {
-      method: 'POST',
-      headers,
+      method: 'POST', headers,
       body: JSON.stringify([
-        { Key: 'BranchID', Value: 'b0aee8e3-6a6e-4863-b74a-08da8958f7f9' },
+        { Key: 'BranchID',  Value: 'b0aee8e3-6a6e-4863-b74a-08da8958f7f9' },
+        { Key: 'KeyWord',   Value: customerName },
         { Key: 'StartDate', Value: fmt(start) },
-        { Key: 'EndDate', Value: fmt(today) },
-        { Key: 'PageSize', Value: '20' },
+        { Key: 'EndDate',   Value: fmt(today) },
+        { Key: 'PageSize',  Value: '10' },
         { Key: 'PageIndex', Value: '1' }
       ])
     });
     const searchData = await searchRes.json();
-    const orders = searchData?.Data?.Data ?? [];
+    const orders = (searchData?.Data?.Data ?? []).filter(o =>
+      (o.CustomerName || '').replace(/\s/g,'') === customerName.replace(/\s/g,'')
+    );
 
+    if (orders.length === 0) {
+      return res.json({ success: true, tasks: [] });
+    }
+
+    // 3. 查每張訂單的品項，找未完成的
     const tasks = [];
-    for (const order of orders.slice(0, 8)) {
-      // 查詳細資料確認是否還有未上掛品項
+    for (const order of orders) {
       try {
-        const detailRes = await fetch(`http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/GetData/${order.Id}`, {
-          method: 'GET', headers
-        });
+        const detailRes = await fetch(
+          `http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/GetData/${order.Id}`,
+          { method: 'GET', headers }
+        );
         const detailData = await detailRes.json();
         const items = detailData?.Data?.ReceivingItemList || [];
+
+        // 全部已上掛就跳過
         const allHung = items.length > 0 && items.every(i => i.LocationDate);
-        if (allHung) continue; // 全部完成不顯示
+        if (allHung) continue;
 
-        const itemName = items[0]?.Goods?.GoodsName || '衣物';
-        const info = getItemInfo(itemName);
-
-        // 客人名稱只取前兩字保護隱私
-        const fullName = order.CustomerName || '';
-        const displayName = fullName.length > 2
-          ? fullName.substring(0, 2) + '...'
-          : fullName;
+        const totalCount = items.length;
+        const doneCount  = items.filter(i => i.LocationDate).length;
+        const firstItem  = items.find(i => !i.LocationDate) || items[0];
+        const itemName   = firstItem?.Goods?.GoodsName || '衣物';
+        const itemEmoji  = getItemEmoji(itemName);
 
         tasks.push({
           taskId:      order.Id,
           orderNo:     order.ReceivingOrderNumber || '',
-          displayName,
+          displayName: customerName,   // 完整姓名，不隱藏
           itemName,
-          itemEmoji:   info.emoji,
-          itemType:    info.type,
+          itemEmoji,
+          itemCount:   totalCount,
+          doneCount,
           receivedAt:  (order.ReceivedDate || '').substring(0, 10),
-          isDone:      false
         });
-      } catch(e) {
-        continue;
-      }
+      } catch(e) { continue; }
       await new Promise(r => setTimeout(r, 200));
     }
 
     res.json({ success: true, tasks, updatedAt: new Date().toISOString() });
   } catch(err) {
-    console.error('game-tasks error:', err);
+    console.error('game-tasks error:', err.message);
     res.json({ success: false, tasks: [] });
   }
 });
 
-// 查詢單一訂單狀態
+// ── GET /api/game-tasks/status/:orderNo ──
 app.get('/api/game-tasks/status/:orderNo', async (req, res) => {
   try {
     const { orderNo } = req.params;
     const token = await getPosToken();
-    if (!token) return res.json({ success: false });
+    if (!token) return res.json({ success: true, statusText: '🫧 清洗中', isDone: false });
 
     const headers = {
       'Content-Type': 'application/json; charset=utf-8',
@@ -187,42 +200,46 @@ app.get('/api/game-tasks/status/:orderNo', async (req, res) => {
       'Authorization': `Bearer ${token}`
     };
 
-    // 先用 SearchPage 找到這張單的 Id
     const searchRes = await fetch('http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/SearchPage', {
       method: 'POST', headers,
       body: JSON.stringify([
-        { Key: 'BranchID', Value: 'b0aee8e3-6a6e-4863-b74a-08da8958f7f9' },
-        { Key: 'KeyWord', Value: orderNo },
-        { Key: 'PageSize', Value: '5' },
+        { Key: 'BranchID',  Value: 'b0aee8e3-6a6e-4863-b74a-08da8958f7f9' },
+        { Key: 'KeyWord',   Value: orderNo },
+        { Key: 'PageSize',  Value: '5' },
         { Key: 'PageIndex', Value: '1' }
       ])
     });
     const searchData = await searchRes.json();
     const found = (searchData?.Data?.Data ?? []).find(o => o.ReceivingOrderNumber === orderNo);
-    if (!found) return res.json({ success: false, statusText: '查無此單' });
+    if (!found) return res.json({ success: true, statusText: '🫧 清洗中', isDone: false });
 
-    const detailRes = await fetch(`http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/GetData/${found.Id}`, {
-      method: 'GET', headers
-    });
+    const detailRes = await fetch(
+      `http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/GetData/${found.Id}`,
+      { method: 'GET', headers }
+    );
     const detailData = await detailRes.json();
     const items = detailData?.Data?.ReceivingItemList || [];
     const total = items.length;
-    const done = items.filter(i => i.LocationDate).length;
+    const done  = items.filter(i => i.LocationDate).length;
     const isDone = total > 0 && done === total;
 
+    const itemList = items.map(item => {
+      const name = item?.Goods?.GoodsName || '衣物';
+      return item.LocationDate ? `✅ ${name}` : `🫧 ${name}（清洗中）`;
+    });
+
     res.json({
-      success: true,
-      orderNo,
-      isDone,
-      statusText: isDone ? '✅ 已完成，可取件！' : `🫧 清洗中（${done}/${total} 件完成）`,
-      statusEmoji: isDone ? '✅' : '🫧'
+      success: true, orderNo, isDone, total, done, itemList,
+      statusText:  isDone ? '✅ 全部完成，歡迎來取件！' : `🫧 清洗中（${done}/${total} 件完成）`,
+      statusEmoji: isDone ? '✅' : '🫧',
+      status: isDone ? 'done' : 'processing'
     });
   } catch(err) {
-    res.json({ success: false, statusText: '查詢失敗' });
+    res.json({ success: true, statusText: '🫧 清洗中', isDone: false });
   }
 });
 
-// 玩家為衣物加油（記錄互動）
+// ── POST /api/game-task-interact ──
 app.post('/api/game-task-interact', (req, res) => {
   const { taskId, playerName, action } = req.body;
   console.log(`[GameTask] ${playerName} ${action} → ${taskId}`);
