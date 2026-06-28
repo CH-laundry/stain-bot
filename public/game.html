@@ -1154,7 +1154,7 @@ const QUESTIONS=[
   {emoji:'🧴',story:'💆 護膚達人：「乳液跟化妝品混合一起，沾到絲質上衣了...」',question:'絲質衣物沾到乳液和化妝品，怎麼辦？',opts:[{lbl:'A',text:'立刻送去專業洗衣店，告知是絲質和化妝品污漬',ok:true},{lbl:'B',text:'用冷水手洗搓揉',ok:false},{lbl:'C',text:'丟洗衣機，選手洗模式',ok:false},{lbl:'D',text:'用酒精擦拭',ok:false}],explain:'絲質非常嬌貴！搓揉或機洗都可能損傷纖維。化妝品含油脂、色素多種成分，需要專業洗衣師針對絲質判斷用什麼清潔劑！'},
 ];
 
-let curQ=0,correctCnt=0;
+let curQ=0,correctCnt=0,quizPool=[];
 
 var SVC={
   suit:{ico:'👔',title:'精緻衣物清洗',sub:'西裝 . 禮服 . 羽絨 . 毛衣',
@@ -1239,9 +1239,16 @@ function closeSvcModal(){
   m.style.opacity='0';m.style.pointerEvents='none';
 }
 
+function shuffleArray(arr){
+  var a=arr.slice();
+  for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=a[i];a[i]=a[j];a[j]=t;}
+  return a;
+}
 function openQuiz(){
-  const key='quiz_'+(window._uid||'dev'),today=new Date().toISOString().substring(0,10);
-  if(localStorage.getItem(key)===today){showToast('今天已完成解謎！明天再來挑戰 😊');return}
+  var all=window.QUIZ_QUESTIONS||(typeof QUESTIONS!=='undefined'?QUESTIONS:[]);
+  if(!all||all.length===0){showToast('題庫載入中，請稍候再試');return;}
+  // 每次都打亂，取前15題，確保每個NPC題目順序不同
+  quizPool=shuffleArray(all).slice(0,Math.min(15,all.length));
   curQ=0;correctCnt=0;
   document.getElementById('btnN').style.display='none';
   document.getElementById('btnF').style.display='none';
@@ -1249,9 +1256,10 @@ function openQuiz(){
   renderQ();document.getElementById('quizOverlay').classList.add('show');
 }
 function renderQ(){
-  const q=QUESTIONS[curQ];
-  document.getElementById('qstep').textContent=`${curQ+1}/${QUESTIONS.length}`;
-  document.getElementById('qprogF').style.width=`${(curQ/QUESTIONS.length)*100}%`;
+  const q=quizPool[curQ];
+  if(!q){finishQuiz();return;}
+  document.getElementById('qstep').textContent=`${curQ+1}/${quizPool.length}`;
+  document.getElementById('qprogF').style.width=`${(curQ/quizPool.length)*100}%`;
   document.getElementById('qemo').textContent=q.emoji;
   document.getElementById('qstory').textContent=q.story;
   document.getElementById('qquest').textContent=q.question;
@@ -1274,11 +1282,11 @@ function answerQ(idx){
   document.getElementById('qrEmo').textContent=ok?'🎉':'😅';
   document.getElementById('qrTi').textContent=ok?'答對了！洗衣達人！':'答錯了，下次加油！';
   document.getElementById('qrEx').textContent=q.explain;
-  if(curQ<QUESTIONS.length-1)document.getElementById('btnN').style.display='block';
+  if(curQ<quizPool.length-1)document.getElementById('btnN').style.display='block';
   else{document.getElementById('btnF').style.display='block';localStorage.setItem('quiz_'+(window._uid||'dev'),new Date().toISOString().substring(0,10))}
 }
 function nextQ(){curQ++;renderQ()}
-function finishQuiz(){closeQuiz();showToast(`🏆 挑戰完成！答對 ${correctCnt}/${QUESTIONS.length} 題，你是污漬達人！`)}
+function finishQuiz(){closeQuiz();showToast(`🏆 挑戰完成！答對 ${correctCnt}/${quizPool.length} 題，你是污漬達人！`)}
 function closeQuiz(){document.getElementById('quizOverlay').classList.remove('show')}
 document.getElementById('quizOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeQuiz()});
 
