@@ -1607,7 +1607,7 @@ function fetchRealTasks(){
   var now=Date.now();
   if(now-lastTaskFetch<60000)return; // 每60秒更新
   lastTaskFetch=now;
-  fetch(API_BASE+'/api/game-tasks')
+  fetch(API_BASE+'/api/game-tasks?userId='+(window._uid||''))
     .then(function(r){return r.json();})
     .then(function(data){
       if(data.success&&data.tasks){
@@ -1651,7 +1651,7 @@ function updateRealTaskNPCs(tasks){
       +'</div>'
       +'<div class="npc-shadow"></div>'
       +'<div class="npc-tag" style="background:rgba(255,215,0,.25);border:1px solid #ffd700;color:#ffd700">'
-        +task.displayName+'的'+task.itemName
+        +task.displayName+'的衣物'+(task.itemCount>1?'('+task.itemCount+'件)':'')
       +'</div>';
     
     el.addEventListener('click',function(ev){
@@ -1694,9 +1694,12 @@ function showRealTaskPanel(task,statusData){
     document.body.appendChild(p);
   }
 
-  var statusText  = statusData?.statusText  || '🫧 清洗中';
-  var statusEmoji = statusData?.statusEmoji || '⏳';
+  var statusText  = statusData?.statusText  || '🫧 清洗中（查詢中）';
+  var statusEmoji = statusData?.statusEmoji || '🫧';
   var isDone      = statusData?.status==='done';
+  var itemList    = statusData?.itemList    || [];
+  var total       = statusData?.total       || task.itemCount || 1;
+  var done        = statusData?.done        || 0;
   var itemEmoji   = ITEM_EMOJI_MAP[task.itemType]||'🧺';
 
   document.getElementById('_rtpInner').innerHTML=
@@ -1709,22 +1712,26 @@ function showRealTaskPanel(task,statusData){
       +'<div style="display:flex;align-items:center;gap:14px;margin-bottom:12px">'
         +'<div style="font-size:48px">'+itemEmoji+'</div>'
         +'<div>'
-          +'<div style="font-size:16px;font-weight:bold;color:#fff">'+task.displayName+'的'+task.itemName+'</div>'
+          +'<div style="font-size:16px;font-weight:bold;color:#fff">'+task.displayName+'的衣物'+(task.itemCount>1?'('+task.itemCount+'件)':'')+'</div>'
           +'<div style="font-size:12px;color:rgba(255,255,255,.55);margin-top:3px">收件：'+task.receivedAt+'</div>'
           
         +'</div>'
       +'</div>'
-      // 進度條
+      // 進度條（根據真實完成比例）
       +'<div style="background:rgba(255,255,255,.1);border-radius:8px;overflow:hidden;height:8px;margin-bottom:8px">'
-        +'<div style="height:100%;background:'+(isDone?'#28a745':'#4db8ff')+';width:'+(isDone?'100%':'55%')+';border-radius:8px;transition:width .8s"></div>'
+        +'<div style="height:100%;background:'+(isDone?'#28a745':'#4db8ff')+';width:'+(isDone?'100':Math.round(done/Math.max(total,1)*100))+';border-radius:8px;transition:width .8s"></div>'
       +'</div>'
-      +'<div style="font-size:13px;font-weight:bold;color:'+(isDone?'#28a745':'#4db8ff')+'">'+statusEmoji+' '+statusText+'</div>'
+      +'<div style="font-size:13px;font-weight:bold;color:'+(isDone?'#28a745':'#4db8ff')+'">' +statusEmoji+' '+statusText+'</div>'
+      // 品項明細列表
+      +(itemList.length>0
+        ? '<div style="margin-top:10px;display:grid;gap:5px">'
+          + itemList.map(function(it){return '<div style="font-size:12px;color:rgba(255,255,255,.75);background:rgba(255,255,255,.06);border-radius:8px;padding:6px 10px">'+it+'</div>';}).join('')
+          + '</div>'
+        : '')
     +'</div>'
     // 專業小知識
     +'<div style="background:rgba(77,184,255,.08);border-radius:12px;padding:13px;margin-bottom:14px">'
-      +'<div style="font-size:11px;color:#4db8ff;font-weight:bold;margin-bottom:6px">💡 洗衣小知識</div>'
       
-    +'</div>'
     // 操作按鈕
     +(isDone
       ?'<div style="background:rgba(40,167,69,.15);border:1px solid #28a745;border-radius:12px;padding:12px;text-align:center;margin-bottom:10px;font-size:14px;color:#28a745">✅ 衣物已完成清洗，歡迎取件！</div>'
