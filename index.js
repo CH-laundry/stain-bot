@@ -72,6 +72,163 @@ app.use('/api/urgent', urgentRoutes);
 app.use('/api/manual', manualRoutes);
 app.use('/', gameRoutes);
 
+// ════════════════════════════════
+// 真實客人任務 API（貼在 app.use('/', gameRoutes); 後面）
+// ════════════════════════════════
+
+const ITEM_MAP = {
+  '西裝':  { emoji:'👔', type:'suit'  },
+  '外套':  { emoji:'🧥', type:'coat'  },
+  '羽絨':  { emoji:'🪶', type:'coat'  },
+  '球鞋':  { emoji:'👟', type:'shoe'  },
+  '皮鞋':  { emoji:'👞', type:'shoe'  },
+  '包包':  { emoji:'👜', type:'bag'   },
+  '棉被':  { emoji:'🛏️', type:'bedding'},
+  '床單':  { emoji:'🛏️', type:'bedding'},
+  '運動服':{ emoji:'🎽', type:'sport' },
+  '毛衣':  { emoji:'🧶', type:'suit'  },
+  '旗袍':  { emoji:'👘', type:'suit'  },
+  '禮服':  { emoji:'👗', type:'suit'  },
+};
+
+function getItemInfo(name) {
+  for (const [key, val] of Object.entries(ITEM_MAP)) {
+    if (name && name.includes(key)) return val;
+  }
+  return { emoji:'🧺', type:'suit' };
+}
+
+// 取得今日遊戲任務（從 POS 抓當日訂單）
+app.get('/api/game-tasks', async (req, res) => {
+  try {
+    const token = await getPosToken();
+    if (!token) return res.json({ success: false, tasks: [] });
+
+    const headers = {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Host': 'yidianyuan.ao-lan.cn',
+      'Authorization': `Bearer ${token}`
+    };
+
+    // 查最近7天有進行中的訂單
+    const today = new Date();
+    const start = new Date(today);
+    start.setDate(today.getDate() - 7);
+    const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+
+    const searchRes = await fetch('http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/SearchPage', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify([
+        { Key: 'BranchID', Value: 'b0aee8e3-6a6e-4863-b74a-08da8958f7f9' },
+        { Key: 'StartDate', Value: fmt(start) },
+        { Key: 'EndDate', Value: fmt(today) },
+        { Key: 'PageSize', Value: '20' },
+        { Key: 'PageIndex', Value: '1' }
+      ])
+    });
+    const searchData = await searchRes.json();
+    const orders = searchData?.Data?.Data ?? [];
+
+    const tasks = [];
+    for (const order of orders.slice(0, 8)) {
+      // 查詳細資料確認是否還有未上掛品項
+      try {
+        const detailRes = await fetch(`http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/GetData/${order.Id}`, {
+          method: 'GET', headers
+        });
+        const detailData = await detailRes.json();
+        const items = detailData?.Data?.ReceivingItemList || [];
+        const allHung = items.length > 0 && items.every(i => i.LocationDate);
+        if (allHung) continue; // 全部完成不顯示
+
+        const itemName = items[0]?.Goods?.GoodsName || '衣物';
+        const info = getItemInfo(itemName);
+
+        // 客人名稱只取前兩字保護隱私
+        const fullName = order.CustomerName || '';
+        const displayName = fullName.length > 2
+          ? fullName.substring(0, 2) + '...'
+          : fullName;
+
+        tasks.push({
+          taskId:      order.Id,
+          orderNo:     order.ReceivingOrderNumber || '',
+          displayName,
+          itemName,
+          itemEmoji:   info.emoji,
+          itemType:    info.type,
+          receivedAt:  (order.ReceivedDate || '').substring(0, 10),
+          isDone:      false
+        });
+      } catch(e) {
+        continue;
+      }
+      await new Promise(r => setTimeout(r, 200));
+    }
+
+    res.json({ success: true, tasks, updatedAt: new Date().toISOString() });
+  } catch(err) {
+    console.error('game-tasks error:', err);
+    res.json({ success: false, tasks: [] });
+  }
+});
+
+// 查詢單一訂單狀態
+app.get('/api/game-tasks/status/:orderNo', async (req, res) => {
+  try {
+    const { orderNo } = req.params;
+    const token = await getPosToken();
+    if (!token) return res.json({ success: false });
+
+    const headers = {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Host': 'yidianyuan.ao-lan.cn',
+      'Authorization': `Bearer ${token}`
+    };
+
+    // 先用 SearchPage 找到這張單的 Id
+    const searchRes = await fetch('http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/SearchPage', {
+      method: 'POST', headers,
+      body: JSON.stringify([
+        { Key: 'BranchID', Value: 'b0aee8e3-6a6e-4863-b74a-08da8958f7f9' },
+        { Key: 'KeyWord', Value: orderNo },
+        { Key: 'PageSize', Value: '5' },
+        { Key: 'PageIndex', Value: '1' }
+      ])
+    });
+    const searchData = await searchRes.json();
+    const found = (searchData?.Data?.Data ?? []).find(o => o.ReceivingOrderNumber === orderNo);
+    if (!found) return res.json({ success: false, statusText: '查無此單' });
+
+    const detailRes = await fetch(`http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/GetData/${found.Id}`, {
+      method: 'GET', headers
+    });
+    const detailData = await detailRes.json();
+    const items = detailData?.Data?.ReceivingItemList || [];
+    const total = items.length;
+    const done = items.filter(i => i.LocationDate).length;
+    const isDone = total > 0 && done === total;
+
+    res.json({
+      success: true,
+      orderNo,
+      isDone,
+      statusText: isDone ? '✅ 已完成，可取件！' : `🫧 清洗中（${done}/${total} 件完成）`,
+      statusEmoji: isDone ? '✅' : '🫧'
+    });
+  } catch(err) {
+    res.json({ success: false, statusText: '查詢失敗' });
+  }
+});
+
+// 玩家為衣物加油（記錄互動）
+app.post('/api/game-task-interact', (req, res) => {
+  const { taskId, playerName, action } = req.body;
+  console.log(`[GameTask] ${playerName} ${action} → ${taskId}`);
+  res.json({ success: true });
+});
+
 // 🚀 最終精確對接版：使用伺服器上實際存在的 pickup-tracking.json
 app.post('/api/pos-sync/pickup-complete', async (req, res) => {
     const { customerNo } = req.body; 
