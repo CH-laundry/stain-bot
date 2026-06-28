@@ -665,7 +665,12 @@ function initCarCanvas(){
   carCv=document.createElement('canvas');carCv.width=MAP_W;carCv.height=MAP_H;
   carCv.style.cssText='position:absolute;top:0;left:0;z-index:9';
   carCv.addEventListener('click',function(ev){
-    showToast('🚗 叭叭！借過借過～');
+    var wx=ev.clientX+camX, wy=ev.clientY-54+camY;
+    var roadY1=LANE_Y[0], roadY2=LANE_Y[1];
+    var onRoad=(Math.abs(wy-roadY1)<25||Math.abs(wy-roadY2)<25);
+    if(!onRoad)return;
+    var horns=['🚗 叭叭！借過～','🚌 公車來囉！','🚚 大車過路！','🛵 外送到！'];
+    showToast(horns[Math.floor(Math.random()*horns.length)]);
   });
   document.getElementById('world').appendChild(carCv);carCx2=carCv.getContext('2d');
 }
@@ -809,8 +814,17 @@ function initBirdCanvas(){
   birdCv.width=MAP_W;birdCv.height=MAP_H;
   birdCv.style.cssText='position:absolute;top:0;left:0;z-index:14';
   birdCv.addEventListener('click',function(ev){
-    var msgs=['🦆 嘎嘎嘎～','🐦 啾啾！','🐕 汪汪！','🐈 喵～'];
-    showToast(msgs[Math.floor(Math.random()*msgs.length)]);
+    // 換算成世界座標
+    var wx=ev.clientX+camX, wy=ev.clientY-54+camY;
+    var hit=null,hitDist=999;
+    dynState.forEach(function(d){
+      var dist=Math.hypot(d.x-wx,d.y-wy);
+      var radius=d.type==='bird'?20:30;
+      if(dist<radius&&dist<hitDist){hit=d;hitDist=dist;}
+    });
+    if(!hit)return;
+    var msgs={'duck':'🦆 嘎嘎嘎！我要魚魚～','bird':'🐦 啾啾！天空真自由～','cat':'🐈 喵～別打擾我曬太陽','dog2':'🐕 汪汪！要摸摸嗎？'};
+    showToast(msgs[hit.type]||'...');
   });
   document.getElementById('world').appendChild(birdCv);
   birdCx=birdCv.getContext('2d');
