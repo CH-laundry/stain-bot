@@ -122,8 +122,10 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'Microsoft JhengHei
 .qprog{height:4px;background:rgba(255,215,0,.15);border-radius:2px;margin-bottom:14px;overflow:hidden}
 .qprog-f{height:100%;background:#ffd700;border-radius:2px;transition:width .3s}
 
+#rain-overlay{position:fixed;inset:0;background:rgba(20,40,80,.15);pointer-events:none;z-index:49;display:none}
 #toast{position:fixed;top:68px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.88);color:#fff;padding:9px 18px;border-radius:18px;font-size:13px;z-index:800;opacity:0;transition:opacity .3s;white-space:nowrap;pointer-events:none;max-width:85vw;text-align:center}
 #toast.show{opacity:1}
+#minimap-toggle{position:fixed;bottom:130px;right:12px;background:rgba(0,0,0,.7);border:1.5px solid rgba(77,184,255,.4);border-radius:8px;padding:4px 8px;font-size:10px;color:#4db8ff;cursor:pointer;z-index:180}
 #hint{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.6);color:rgba(255,255,255,.6);font-size:11px;padding:6px 13px;border-radius:10px;z-index:100;pointer-events:none;transition:opacity .6s;white-space:nowrap}
 </style>
 </head>
@@ -146,6 +148,7 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'Microsoft JhengHei
 </div>
 
 <div id="hint">👆 拖動畫面探索小鎮，點擊居民和建築互動！</div>
+<div id="rain-overlay"></div>
 <div id="toast"></div>
 
 <div id="viewport" style="display:none">
@@ -660,7 +663,10 @@ CARS.forEach(function(c){c.y=LANE_Y[c.lane];});
 var carCv=null,carCx2=null;
 function initCarCanvas(){
   carCv=document.createElement('canvas');carCv.width=MAP_W;carCv.height=MAP_H;
-  carCv.style.cssText='position:absolute;top:0;left:0;pointer-events:none;z-index:9';
+  carCv.style.cssText='position:absolute;top:0;left:0;z-index:9';
+  carCv.addEventListener('click',function(ev){
+    showToast('🚗 叭叭！借過借過～');
+  });
   document.getElementById('world').appendChild(carCv);carCx2=carCv.getContext('2d');
 }
 function drawOneCarr(c2,x,y,type,col,dir){
@@ -734,84 +740,297 @@ function updateParticles(){
 
 // ═══ NPC ═══
 const NPCS=[
-  {id:'granny',e:'👵',name:'阿婆',role:'熱心街坊',bx:320,by:620,
-    dlg:{text:'哎呀孩子！我的羽絨外套沾到醬油，這要怎麼洗啊？你知道嗎？',
-      opts:[{i:'💬',t:'送去 C.H 精緻洗衣準沒錯！',n:'g1'},{i:'🤷',t:'我也不清楚...',n:'g2'}]},
-    extra:{g1:{text:'那家真的很厲害！我上次絲巾上的番茄醬，他們也幫我救回來了～醬油是水溶性的，要盡快處理！',opts:[{i:'🔬',t:'想挑戰污漬解謎！',action:'quiz'},{i:'😊',t:'太棒了！',close:true}]},
-      g2:{text:'哎...那我去問問旁邊的 C.H 洗衣店！醬油污漬拖太久會固化，要快去！',opts:[{i:'👋',t:'對！快去！',close:true}]}}},
-  {id:'uncle',e:'👨‍💼',name:'林先生',role:'上班族常客',bx:860,by:620,
-    dlg:{text:'每週送西裝來洗，品質真的很好！連袖口那種老汗漬都能處理乾淨，布料也不縮水！',
-      opts:[{i:'😄',t:'真的嗎，怎麼說？',n:'u1'},{i:'🔬',t:'挑戰污漬解謎！',action:'quiz'}]},
-    extra:{u1:{text:'他們用的是專業去漬劑，針對不同污漬有不同配方。而且師傅手工處理，不像一般洗衣機那樣粗暴！',opts:[{i:'🤔',t:'那汗漬要怎麼預防？',n:'u2'},{i:'👍',t:'太厲害了！',close:true}]},
-      u2:{text:'下班後盡快換洗！汗漬中的蛋白質如果乾掉就更難洗。另外衣領可以事先噴些去汗漬噴霧！',opts:[{i:'📝',t:'記下來了！謝謝！',n:'u3'}]},
-      u3:{text:'你對污漬知識了解多少？要挑戰解謎嗎？',opts:[{i:'🔬',t:'來挑戰！',action:'quiz'},{i:'👋',t:'謝謝！下次再說！',close:true}]}}},
-  {id:'yaya',e:'👧',name:'小雅',role:'花店老闆娘',bx:1540,by:625,
-    dlg:{text:'你好！我是花店的小雅～來洗衣小鎮逛逛嗎？今天好天氣！',
-      opts:[{i:'🌸',t:'小鎮好可愛！',n:'y1'},{i:'🔬',t:'我想挑戰污漬解謎！',action:'quiz'}]},
-    extra:{y1:{text:'對吧！對了，你知道花粉沾到衣服要怎麼洗嗎？很多客人都問我這個！',opts:[{i:'🏅',t:'要先用膠帶黏起來！',n:'y2'},{i:'💧',t:'直接用水洗掉？',n:'y3'}]},
-      y2:{text:'答對了！用膠帶或軟刷輕輕清除，不能用手擦，那樣會讓花粉滲進纖維！然後再送去 C.H 處理！',opts:[{i:'🔬',t:'挑戰更多解謎！',action:'quiz'},{i:'📝',t:'學到了，謝謝小雅！',close:true}]},
-      y3:{text:'不對喔！水洗會讓花粉溶解滲進布料，越洗越深。要先用膠帶黏，再送去專業洗衣！',ops:[{i:'📝',t:'原來如此！謝謝！',close:true}]}}},
-  {id:'chef',e:'👨‍🍳',name:'阿明師傅',role:'麵館老闆',bx:480,by:850,
-    dlg:{text:'唉，開餐廳最麻煩就是廚師服每天都油污，還好有 C.H 幫我搞定！',
-      opts:[{i:'🤔',t:'油污很難洗嗎？',n:'c1'},{i:'🔬',t:'我想挑戰油漬解謎！',action:'quiz'}]},
-    extra:{c1:{text:'超難！油漬是脂肪類，水洗根本沒用，要先用去漬劑或洗碗精（含界面活性劑）預處理！',opts:[{i:'💡',t:'那預處理怎麼做？',n:'c2'}]},
-      c2:{text:'把去漬劑或洗碗精塗在污漬上，輕輕按壓5分鐘讓它分解油脂，再送洗。千萬不要搓！',opts:[{i:'🔬',t:'挑戰污漬解謎！',action:'quiz'},{i:'👋',t:'謝謝師傅！',close:true}]}}},
-  {id:'kid',e:'🧒',name:'小寶',role:'國小學生',bx:1100,by:850,
-    dlg:{text:'叔叔阿姨！我打球把褲子弄髒了，泥巴污漬要怎麼洗啊？',
-      opts:[{i:'💧',t:'立刻用水泡！',n:'k1'},{i:'🌬️',t:'先讓泥巴乾掉再刷',n:'k2'},{i:'🔬',t:'一起挑戰解謎吧！',action:'quiz'}]},
-    extra:{k1:{text:'答錯囉！泥巴直接泡水會讓污漬滲得更深。要先讓泥巴乾掉，用軟刷輕刷，才送洗！',opts:[{i:'📝',t:'原來如此！謝謝！',close:true}]},
-      k2:{text:'答對了！泥巴先讓它完全乾燥，再用刷子輕輕刷掉表面，然後送去 C.H 精洗，效果最好！',opts:[{i:'😄',t:'你好聰明！謝謝！',close:true}]}}},
-  {id:'couple',e:'👫',name:'恩愛夫妻',role:'觀光客',bx:1820,by:850,
-    dlg:{text:'你好！我們是第一次來板橋，這個 C.H 洗衣店看起來很專業！你推薦嗎？',
+  {id:'granny', e:'👵',name:'阿婆',  role:'熱心街坊', bx:320, by:670,
+    dlg:{text:'哎呀孩子！我的羽絨外套沾到醬油，要怎麼洗啊？',
+      opts:[{i:'💬',t:'送去 C.H 精緻洗衣！',n:'g1'},{i:'🤷',t:'我也不清楚...',n:'g2'}]},
+    extra:{g1:{text:'他們真的很厲害！醬油是水溶性，要盡快處理！你要挑戰污漬解謎嗎？',
+      opts:[{i:'🔬',t:'來挑戰！',action:'quiz'},{i:'😊',t:'棒！',close:true}]},
+      g2:{text:'哎…那我去問問 C.H！醬油污漬拖久會固化，要快去！',
+      opts:[{i:'👋',t:'對！快去！',close:true}]}}},
+  {id:'uncle', e:'👨',name:'林先生',role:'上班族常客', bx:900, by:670,
+    dlg:{text:'每週送西裝來洗，品質很好！連袖口老汗漬都能處理乾淨！',
+      opts:[{i:'😄',t:'真的嗎？',n:'u1'},{i:'🔬',t:'挑戰解謎！',action:'quiz'}]},
+    extra:{u1:{text:'專業去漬劑，針對不同污漬不同配方。而且師傅手工，不像洗衣機那樣粗暴！',
+      opts:[{i:'🔬',t:'挑戰！',action:'quiz'},{i:'👍',t:'太厲害！',close:true}]}}},
+  {id:'yaya',  e:'👧',name:'小雅',  role:'花店老闆娘', bx:1560, by:675,
+    dlg:{text:'你好！花粉沾到衣服很麻煩，你知道怎麼處理嗎？',
+      opts:[{i:'🎀',t:'用膠帶黏起來！',n:'y1'},{i:'💧',t:'用水洗？',n:'y2'},{i:'🔬',t:'挑戰解謎！',action:'quiz'}]},
+    extra:{y1:{text:'答對！先用膠帶輕輕黏，不能水洗！',opts:[{i:'🔬',t:'挑戰！',action:'quiz'},{i:'📝',t:'謝謝！',close:true}]},
+      y2:{text:'不對！水洗讓花粉滲進布料！先用膠帶！',opts:[{i:'📝',t:'謝謝！',close:true}]}}},
+  {id:'chef',  e:'🧑',name:'阿明師傅',role:'麵館老闆', bx:480, by:900,
+    dlg:{text:'開餐廳最麻煩是廚師服每天油污，幸好有 C.H！',
+      opts:[{i:'🤔',t:'油污很難洗嗎？',n:'c1'},{i:'🔬',t:'挑戰油漬解謎！',action:'quiz'}]},
+    extra:{c1:{text:'超難！先用去漬劑或洗碗精預處理5分鐘，分解油脂，再送洗！',
+      opts:[{i:'🔬',t:'挑戰！',action:'quiz'},{i:'👋',t:'謝謝！',close:true}]}}},
+  {id:'kid',   e:'🧒',name:'小寶',  role:'國小學生',  bx:1100, by:900,
+    dlg:{text:'叔叔阿姨！我打球把褲子弄髒了，泥巴污漬怎麼洗？',
+      opts:[{i:'💧',t:'立刻用水泡！',n:'k1'},{i:'🌬️',t:'先讓泥巴乾掉',n:'k2'},{i:'🔬',t:'一起解謎！',action:'quiz'}]},
+    extra:{k1:{text:'答錯！泥巴直接泡水會滲得更深。要先讓泥乾，再刷！',opts:[{i:'📝',t:'謝謝！',close:true}]},
+      k2:{text:'答對！先讓泥乾，再軟刷刷掉，送去 C.H 精洗！',opts:[{i:'😄',t:'謝謝！',close:true}]}}},
+  {id:'couple',e:'👫',name:'觀光夫妻',role:'外來訪客', bx:1850, by:900,
+    dlg:{text:'你好！第一次來板橋，這 C.H 洗衣店看起來很專業，你推薦嗎？',
       opts:[{i:'👍',t:'超推薦！品質一流！',n:'cp1'},{i:'🤔',t:'他們有哪些服務？',n:'cp2'}]},
-    extra:{cp1:{text:'太好了！我們剛剛在吃飯的時候沙拉醬灑到我老公的白衣服了，需要趕快處理！',opts:[{i:'🔬',t:'油醋醬污漬解謎！',action:'quiz'},{i:'💡',t:'要用冷水先沖！',n:'cp3'}]},
-      cp2:{text:'他們洗衣、洗鞋、洗包、護理都有！特別是名牌包保養超專業，LV、Chanel、Gucci都接！',opts:[{i:'😍',t:'哇！真的嗎！',n:'cp1'}]},
-      cp3:{text:'謝謝你！我們快去 C.H 找他們幫忙！油醋醬是混合性污漬，油的部分要用去漬劑，酸的部分要中和！',opts:[{i:'👋',t:'祝你們旅途愉快！',close:true}]}}},
-  {id:'dog_owner',e:'🧑',name:'阿成',role:'遛狗民眾',bx:220,by:1000,
-    dlg:{text:'你好！我家狗剛剛跳上來，泥巴爪印全印在我的毛衣上...😭',
-      opts:[{i:'🐾',t:'毛衣污漬很麻煩？',n:'do1'},{i:'🔬',t:'挑戰毛料污漬解謎！',action:'quiz'}]},
-    extra:{do1:{text:'毛衣最麻煩了！不能用熱水，不能放洗衣機甩乾，要手洗冷水輕柔，或送去 C.H 這種精緻洗衣！',opts:[{i:'🐕',t:'你家狗好可愛！',n:'do2'},{i:'🔬',t:'挑戰解謎！',action:'quiz'}]},
-      do2:{text:'謝謝～他叫小黑，最愛在泥地打滾！以後要送洗衣服一定要快，不然污漬固化就很難洗了！',opts:[{i:'👋',t:'知道了！謝謝！',close:true}]}}},
+    extra:{cp1:{text:'太好了！沙拉醬剛灑到白衣服！',opts:[{i:'🔬',t:'污漬解謎！',action:'quiz'},{i:'💡',t:'要用冷水先沖！',n:'cp3'}]},
+      cp2:{text:'洗衣、洗鞋、洗包、護理都有！名牌包保養超專業！',opts:[{i:'😍',t:'哇！',n:'cp1'}]},
+      cp3:{text:'謝謝！我們快去找 C.H！',opts:[{i:'👋',t:'祝旅途愉快！',close:true}]}}},
+  {id:'dog',   e:'🐕',name:'小黑',  role:'鄰居的狗',  bx:220, by:1050,
+    dlg:{text:'汪！汪汪！（搖尾巴）',
+      opts:[{i:'🦴',t:'好可愛！摸摸你～',n:'d1'},{i:'🔬',t:'考你！寵物污漬怎麼洗？',action:'quiz'}]},
+    extra:{d1:{text:'汪汪！（轉圈圈）你是好人！我主人說 C.H 幫他洗掉了我留下的泥爪印！',
+      opts:[{i:'😄',t:'好厲害的店！',close:true}]}}},
+  {id:'rider', e:'🛵',name:'外送員阿豪',role:'外送員',  bx:1400, by:660,
+    dlg:{text:'不好意思！外送時不小心把醬汁噴到衣服，哪裡可以緊急處理？',
+      opts:[{i:'🧺',t:'C.H 精緻洗衣，就在這裡！',n:'r1'},{i:'🔬',t:'污漬緊急處理解謎！',action:'quiz'}]},
+    extra:{r1:{text:'謝謝！醬汁是複合污漬，趁新鮮送去最好！時間越久越難洗！',
+      opts:[{i:'🏃',t:'快去！',close:true}]}}},
+  {id:'child2',e:'👦',name:'小明',  role:'國小學生',  bx:650, by:1050,
+    dlg:{text:'哥哥姐姐，你們知道這個小鎮有幾個神奇的地方嗎？要探索才能發現喔！',
+      opts:[{i:'🗺️',t:'告訴我！',n:'c2a'},{i:'🔬',t:'挑戰解謎！',action:'quiz'}]},
+    extra:{c2a:{text:'湖邊有小鴨、公園有噴水池、廣場有秘密！記得到處點看看！',
+      opts:[{i:'😲',t:'好！去探索！',close:true}]}}},
 ];
+
+// 動態角色（除 NPC 外的街頭角色，不可對話）
+const DYNAMIC_CHARS=[
+  {type:'duck',  x:1870, y:1005, r:25, spd:.3, color:'#f0d020'},
+  {type:'duck',  x:1920, y:1035, r:20, spd:.25,color:'#e8c818'},
+  {type:'bird',  x:300,  y:250,  r:400,spd:2,  vx:2,  vy:.5},
+  {type:'bird',  x:800,  y:200,  r:350,spd:2.5,vx:2.5,vy:.3},
+  {type:'bird',  x:1500, y:230,  r:380,spd:1.8,vx:1.8,vy:.6},
+  {type:'cat',   x:120,  y:995,  r:30, spd:.2, dir:1},
+  {type:'dog2',  x:1980, y:960,  r:35, spd:.4, dir:1},
+];
+var dynState=[];
+DYNAMIC_CHARS.forEach(function(c){dynState.push(Object.assign({},c,{ox:c.x,oy:c.y,angle:0,tick:0}));});
+
+let birdCv=null,birdCx=null;
+function initBirdCanvas(){
+  birdCv=document.createElement('canvas');
+  birdCv.width=MAP_W;birdCv.height=MAP_H;
+  birdCv.style.cssText='position:absolute;top:0;left:0;z-index:14';
+  birdCv.addEventListener('click',function(ev){
+    var msgs=['🦆 嘎嘎嘎～','🐦 啾啾！','🐕 汪汪！','🐈 喵～'];
+    showToast(msgs[Math.floor(Math.random()*msgs.length)]);
+  });
+  document.getElementById('world').appendChild(birdCv);
+  birdCx=birdCv.getContext('2d');
+}
+
+function drawDuck(cx,x,y,col,size){
+  cx.fillStyle=col;
+  cx.beginPath();cx.ellipse(x,y,size,size*.7,0,0,Math.PI*2);cx.fill();
+  cx.beginPath();cx.ellipse(x+size*.6,y-size*.3,size*.5,size*.4,.3,0,Math.PI*2);cx.fill();
+  cx.fillStyle='#ff8800';cx.beginPath();cx.ellipse(x+size+2,y-size*.4,size*.25,size*.15,0,0,Math.PI*2);cx.fill();
+  cx.fillStyle='#111';cx.beginPath();cx.arc(x+size*.8,y-size*.5,size*.1,0,Math.PI*2);cx.fill();
+}
+
+function drawBird(cx,x,y,wing){
+  cx.strokeStyle='#333';cx.lineWidth=2;cx.lineCap='round';
+  cx.beginPath();
+  var flap=Math.sin(wing)*5;
+  cx.moveTo(x-8,y);cx.quadraticCurveTo(x-4,y+flap,x,y-1);cx.quadraticCurveTo(x+4,y+flap,x+8,y);
+  cx.stroke();
+  cx.fillStyle='#333';cx.beginPath();cx.arc(x+9,y-1,2,0,Math.PI*2);cx.fill();
+}
+
+function drawCatAnim(cx,x,y,dir){
+  cx.save();cx.translate(x,y);if(dir<0)cx.scale(-1,1);
+  cx.fillStyle='#888';
+  cx.beginPath();cx.ellipse(0,0,10,7,0,0,Math.PI*2);cx.fill();
+  cx.beginPath();cx.ellipse(-4,-8,6,5,-.2,0,Math.PI*2);cx.fill();
+  // 耳朵
+  cx.beginPath();cx.moveTo(-8,-11);cx.lineTo(-5,-16);cx.lineTo(-2,-11);cx.fill();
+  cx.beginPath();cx.moveTo(0,-11);cx.lineTo(3,-16);cx.lineTo(6,-11);cx.fill();
+  // 眼睛
+  cx.fillStyle='#00cc00';cx.beginPath();cx.ellipse(-5,-8,2,1.5,0,0,Math.PI*2);cx.fill();
+  cx.beginPath();cx.ellipse(1,-8,2,1.5,0,0,Math.PI*2);cx.fill();
+  // 尾巴
+  cx.strokeStyle='#888';cx.lineWidth=2.5;cx.lineCap='round';
+  cx.beginPath();cx.moveTo(10,0);cx.quadraticCurveTo(18,-6,16,-14);cx.stroke();
+  cx.restore();
+}
+
+function drawDog2Anim(cx,x,y,dir,walk){
+  cx.save();cx.translate(x,y);if(dir<0)cx.scale(-1,1);
+  cx.fillStyle='#c8a060';
+  cx.beginPath();cx.ellipse(0,-2,13,8,0,0,Math.PI*2);cx.fill();
+  cx.beginPath();cx.ellipse(-8,-9,7,6,-.3,0,Math.PI*2);cx.fill();
+  // 耳朵（垂耳）
+  cx.fillStyle='#a07840';
+  cx.beginPath();cx.ellipse(-12,-9,3,7,.3,0,Math.PI*2);cx.fill();
+  cx.beginPath();cx.ellipse(-6,-13,3,6,.1,0,Math.PI*2);cx.fill();
+  // 鼻子
+  cx.fillStyle='#333';cx.beginPath();cx.ellipse(-14,-9,2.5,2,0,0,Math.PI*2);cx.fill();
+  // 眼睛
+  cx.fillStyle='#111';cx.beginPath();cx.arc(-10,-11,1.5,0,Math.PI*2);cx.fill();
+  // 腿（走路動畫）
+  var legPhase=Math.sin(walk)*4;
+  cx.fillStyle='#c8a060';
+  [[-7,5],[0,5],[7,5],[12,5]].forEach(function(p,i){
+    var off=i%2===0?legPhase:-legPhase;
+    cx.fillRect(p[0]-2,p[1],4,8+off);
+  });
+  // 尾巴
+  cx.strokeStyle='#c8a060';cx.lineWidth=3;
+  cx.beginPath();cx.moveTo(13,0);cx.quadraticCurveTo(20,-8,18,-16);cx.stroke();
+  cx.restore();
+}
 
 let npcEls={},npcState={};
 function spawnNPCs(){
   const w=document.getElementById('world');
-  NPCS.forEach(n=>{
-    const el=document.createElement('div');
+  NPCS.forEach(function(n){
+    var el=document.createElement('div');
     el.className='npc-wrap';el.id='npc_'+n.id;
-    el.style.cssText=`left:${n.bx}px;top:${n.by}px`;
-    el.innerHTML=`<div class="npc-body" style="animation:idleF 2.2s ease-in-out infinite">${n.e}</div><div class="npc-shadow"></div><div class="npc-tag">${n.name}</div>`;
-    el.addEventListener('click',ev=>{ev.stopPropagation();openDlg(n.id)});
+    el.style.cssText='left:'+n.bx+'px;top:'+n.by+'px';
+    el.innerHTML='<div class="npc-body" style="animation:idleF 2.2s ease-in-out infinite;font-size:30px">'+n.e+'</div>'
+      +'<div class="npc-shadow"></div><div class="npc-tag">'+n.name+'</div>';
+    el.addEventListener('click',function(ev){ev.stopPropagation();openDlg(n.id);});
     w.appendChild(el);
     npcEls[n.id]=el;
     npcState[n.id]={x:n.bx,y:n.by,tx:n.bx,ty:n.by,wait:Math.random()*200+50};
   });
 }
 
-let lastNpc=0;
+// 小地圖
+var minimapEl=null;
+function initMinimap(){
+  minimapEl=document.createElement('div');
+  minimapEl.id='minimap';
+  minimapEl.style.cssText='position:fixed;bottom:70px;right:12px;width:120px;height:80px;background:rgba(0,0,0,.75);border:1.5px solid rgba(77,184,255,.4);border-radius:10px;z-index:180;overflow:hidden;cursor:pointer';
+  minimapEl.title='點擊切換顯示';
+  var mc=document.createElement('canvas');mc.width=120;mc.height=80;mc.style.cssText='position:absolute;inset:0';
+  minimapEl.appendChild(mc);
+  // 玩家指示點
+  var dot=document.createElement('div');dot.id='mmDot';
+  dot.style.cssText='position:absolute;width:8px;height:8px;background:#4db8ff;border-radius:50%;border:1.5px solid #fff;transform:translate(-50%,-50%);transition:left .3s,top .3s';
+  minimapEl.appendChild(dot);
+  var lbl=document.createElement('div');
+  lbl.style.cssText='position:absolute;bottom:2px;left:0;right:0;text-align:center;font-size:8px;color:rgba(255,255,255,.5)';
+  lbl.textContent='小地圖';
+  minimapEl.appendChild(lbl);
+  document.body.appendChild(minimapEl);
+  // 畫小地圖底圖
+  var ctx=mc.getContext('2d');
+  // 底色
+  ctx.fillStyle='#1e5c18';ctx.fillRect(0,0,120,80);
+  // 路
+  ctx.fillStyle='#3c4858';ctx.fillRect(0,38,120,10);
+  ctx.fillStyle='#3c4858';ctx.fillRect(38,0,8,80);
+  ctx.fillStyle='#3c4858';ctx.fillRect(78,0,8,80);
+  // 建築點
+  [{x:3,c:'#4db8ff'},{x:19,c:'#c84020'},{x:41,c:'#2c5282'},{x:80,c:'#16a34a'},{x:91,c:'#db2777'},{x:104,c:'#78350f'}].forEach(function(b){
+    ctx.fillStyle=b.c;ctx.fillRect(b.x,18,10,16);
+  });
+  // 湖
+  ctx.fillStyle='#4db8ff';ctx.beginPath();ctx.ellipse(100,65,10,6,.2,0,Math.PI*2);ctx.fill();
+  // NPC 點
+  NPCS.forEach(function(n){
+    var mx=n.bx/MAP_W*120,my=n.by/MAP_H*80;
+    ctx.fillStyle='#ffd700';ctx.beginPath();ctx.arc(mx,my,2.5,0,Math.PI*2);ctx.fill();
+  });
+}
+
+function updateMinimap(){
+  if(!minimapEl)return;
+  var dot=document.getElementById('mmDot');if(!dot)return;
+  var vw=window.innerWidth,vh=window.innerHeight-54;
+  var cx=camX+vw/2,cy=camY+vh/2;
+  dot.style.left=(cx/MAP_W*120)+'px';
+  dot.style.top=(cy/MAP_H*80)+'px';
+}
+
+// 雨天系統
+var isRaining=false;
+var rainDrops=[];
+var rainCv=null,rainCx=null;
+
+function initRain(){
+  var h=new Date().getHours();
+  // 模擬雨天：21:00-22:00 或特定條件
+  // 這裡用隨機：每次載入15%機率下雨
+  isRaining=Math.random()<0.15;
+  if(!isRaining)return;
+  var ro=document.getElementById('rain-overlay');if(ro)ro.style.display='block';
+  rainCv=document.createElement('canvas');
+  rainCv.width=window.innerWidth;rainCv.height=window.innerHeight;
+  rainCv.style.cssText='position:fixed;top:54px;left:0;pointer-events:none;z-index:50';
+  document.body.appendChild(rainCv);
+  rainCx=rainCv.getContext('2d');
+  for(var i=0;i<120;i++){
+    rainDrops.push({x:Math.random()*window.innerWidth,y:Math.random()*window.innerHeight,
+      spd:8+Math.random()*6,len:12+Math.random()*8,opacity:.3+Math.random()*.4});
+  }
+}
+
+function updateRain(){
+  if(!rainCx)return;
+  rainCx.clearRect(0,0,window.innerWidth,window.innerHeight);
+  rainCx.strokeStyle='rgba(180,210,255,.5)';rainCx.lineWidth=1;
+  rainDrops.forEach(function(d){
+    d.y+=d.spd;d.x+=d.spd*.2;
+    if(d.y>window.innerHeight){d.y=-20;d.x=Math.random()*window.innerWidth;}
+    rainCx.globalAlpha=d.opacity;
+    rainCx.beginPath();rainCx.moveTo(d.x,d.y);rainCx.lineTo(d.x+d.spd*.15*d.len/10,d.y+d.len);rainCx.stroke();
+  });
+  rainCx.globalAlpha=1;
+}
+
+var lastNpc=0,birdTick=0;
 function npcLoop(ts){
   if(ts-lastNpc>33){
     lastNpc=ts;
-    NPCS.forEach(n=>{
-      const el=npcEls[n.id],st=npcState[n.id];if(!el||!st)return;
-      const dx=st.tx-st.x,dy=st.ty-st.y,dist=Math.hypot(dx,dy);
+    // NPC 走動
+    NPCS.forEach(function(n){
+      var el=npcEls[n.id],st=npcState[n.id];if(!el||!st)return;
+      var dx=st.tx-st.x,dy=st.ty-st.y,dist=Math.hypot(dx,dy);
       if(dist<1.5){
         st.wait--;
         if(st.wait<=0){
-          st.tx=n.bx+(Math.random()-.5)*120;st.ty=n.by+(Math.random()-.5)*70;
-          st.tx=Math.max(30,Math.min(MAP_W-60,st.tx));st.ty=Math.max(350,Math.min(MAP_H-80,st.ty));
-          st.wait=90+Math.random()*240;
-          const b=el.querySelector('.npc-body');b.style.animation='idleF 2.2s ease-in-out infinite';
+          st.tx=n.bx+(Math.random()-.5)*140;st.ty=n.by+(Math.random()-.5)*80;
+          st.tx=Math.max(30,Math.min(MAP_W-60,st.tx));st.ty=Math.max(400,Math.min(MAP_H-80,st.ty));
+          st.wait=80+Math.random()*220;
+          el.querySelector('.npc-body').style.animation='idleF 2.2s ease-in-out infinite';
         }
       } else {
-        const spd=.55;st.x+=dx/dist*spd;st.y+=dy/dist*spd;
+        var spd=.6;st.x+=dx/dist*spd;st.y+=dy/dist*spd;
         el.style.left=st.x+'px';el.style.top=st.y+'px';
-        const b=el.querySelector('.npc-body');
+        var b=el.querySelector('.npc-body');
         b.style.animation='walkF .35s steps(2) infinite';
         b.style.transform=dx<0?'scaleX(-1)':'scaleX(1)';
       }
     });
+    // 動態角色（鳥、鴨、貓、狗）
+    birdTick++;
+    if(birdCx){
+      birdCx.clearRect(0,0,MAP_W,MAP_H);
+      dynState.forEach(function(d){
+        d.tick++;
+        if(d.type==='duck'){
+          d.angle+=.018;
+          d.x=d.ox+Math.cos(d.angle)*d.r;
+          d.y=d.oy+Math.sin(d.angle)*d.r*.4;
+          drawDuck(birdCx,d.x,d.y,'#e8c818',12);
+        } else if(d.type==='bird'){
+          d.x+=d.vx;d.y+=d.vy;
+          if(d.y<100)d.vy=Math.abs(d.vy);
+          if(d.y>400)d.vy=-Math.abs(d.vy);
+          if(d.x>MAP_W+50)d.x=-50;
+          drawBird(birdCx,d.x,d.y,d.tick*.15);
+        } else if(d.type==='cat'){
+          d.x+=d.spd*d.dir;
+          if(d.x>d.ox+d.r)d.dir=-1;
+          if(d.x<d.ox-d.r)d.dir=1;
+          drawCatAnim(birdCx,d.x,d.y,d.dir);
+        } else if(d.type==='dog2'){
+          d.x+=d.spd*d.dir;
+          if(d.x>d.ox+d.r)d.dir=-1;
+          if(d.x<d.ox-d.r)d.dir=1;
+          drawDog2Anim(birdCx,d.x,d.y,d.dir,d.tick*.2);
+        }
+      });
+    }
+    updateMinimap();
   }
   requestAnimationFrame(npcLoop);
 }
@@ -1057,7 +1276,7 @@ function showToast(msg){const el=document.getElementById('toast');el.textContent
 let lastCar=0,lastPar=0;
 var tlTick=0;
 function gameLoop(ts){
-  if(ts-lastCar>16){lastCar=ts;updateCars();tlTick++;if(tlTick%2===0)updateTrafficLights();}
+  if(ts-lastCar>16){lastCar=ts;updateCars();tlTick++;if(tlTick%2===0)updateTrafficLights();if(tlTick%3===0)updateRain();}
   if(ts-lastPar>40){lastPar=ts;if(particles.length)updateParticles()}
   requestAnimationFrame(gameLoop);
 }
@@ -1079,6 +1298,9 @@ function init(){
   drawMap();
   initMapDetails();
   initTrafficLights();
+  initBirdCanvas();
+  initMinimap();
+  initRain();
   spawnClouds();
   initBuildingCanvas();
   spawnDecos();
