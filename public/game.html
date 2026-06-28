@@ -1591,6 +1591,166 @@ function showToast(msg){const el=document.getElementById('toast');el.textContent
 
 // ═══ 主迴圈 ═══
 let lastCar=0,lastPar=0;
+
+// ══ 真實客人 NPC 系統 ══
+var realTasks=[];
+var realNpcEls={};
+var lastTaskFetch=0;
+
+// 真實任務 NPC 的出現位置（沿街道散佈）
+var TASK_SPAWN_POSITIONS=[
+  {x:560, y:640},{x:980, y:645},{x:1300,y:638},
+  {x:700, y:880},{x:1200,y:878},{x:1600,y:882},
+];
+
+function fetchRealTasks(){
+  var now=Date.now();
+  if(now-lastTaskFetch<60000)return; // 每60秒更新
+  lastTaskFetch=now;
+  fetch(API_BASE+'/api/game-tasks')
+    .then(function(r){return r.json();})
+    .then(function(data){
+      if(data.success&&data.tasks){
+        updateRealTaskNPCs(data.tasks);
+      }
+    })
+    .catch(function(){});
+}
+
+var ITEM_EMOJI_MAP={
+  'suit':'👔','shoe':'👟','bag':'👜','bedding':'🛏',
+  'coat':'🧥','sport':'🎽'
+};
+
+function updateRealTaskNPCs(tasks){
+  // 移除舊的真實NPC
+  Object.keys(realNpcEls).forEach(function(id){
+    var el=realNpcEls[id];
+    if(el&&el.parentNode)el.parentNode.removeChild(el);
+  });
+  realNpcEls={};
+  realTasks=tasks;
+
+  var world=document.getElementById('world');
+  tasks.slice(0,6).forEach(function(task,i){
+    var pos=TASK_SPAWN_POSITIONS[i%TASK_SPAWN_POSITIONS.length];
+    var el=document.createElement('div');
+    el.className='npc-wrap';
+    el.id='rtask_'+task.taskId;
+    el.style.cssText='left:'+pos.x+'px;top:'+pos.y+'px;z-index:22';
+    
+    // 閃爍光圈（表示是真實客人）
+    var glow=document.createElement('div');
+    glow.style.cssText='position:absolute;top:-8px;left:50%;transform:translateX(-50%);width:50px;height:50px;border-radius:50%;border:2px solid #ffd700;animation:glowPulse 1.5s ease-in-out infinite;pointer-events:none';
+    
+    var itemEmoji=ITEM_EMOJI_MAP[task.itemType]||'🧺';
+    el.innerHTML=
+      '<div style="position:relative;display:inline-block">'
+        +'<div style="position:absolute;top:-8px;left:50%;transform:translateX(-50%);width:46px;height:46px;border-radius:50%;border:2px solid #ffd700;animation:glowPulse 1.5s ease-in-out infinite;pointer-events:none"></div>'
+        +'<div class="npc-body" style="font-size:28px;animation:idleF 2s ease-in-out infinite">🙋</div>'
+      +'</div>'
+      +'<div class="npc-shadow"></div>'
+      +'<div class="npc-tag" style="background:rgba(255,215,0,.25);border:1px solid #ffd700;color:#ffd700">'
+        +task.displayName+'的'+task.itemName
+      +'</div>';
+    
+    el.addEventListener('click',function(ev){
+      ev.stopPropagation();
+      sfxOpen();
+      openRealTaskDlg(task);
+    });
+    world.appendChild(el);
+    realNpcEls[task.taskId]=el;
+  });
+
+  // 加光圈動畫 CSS
+  if(!document.getElementById('glowStyle')){
+    var s=document.createElement('style');
+    s.id='glowStyle';
+    s.textContent='@keyframes glowPulse{0%,100%{opacity:.5;transform:translateX(-50%) scale(1)}50%{opacity:1;transform:translateX(-50%) scale(1.15)}}';
+    document.head.appendChild(s);
+  }
+}
+
+function openRealTaskDlg(task){
+  // 先查一次最新狀態
+  fetch(API_BASE+'/api/game-tasks/status/'+task.orderNo)
+    .then(function(r){return r.json();})
+    .then(function(statusData){
+      showRealTaskPanel(task,statusData);
+    })
+    .catch(function(){
+      showRealTaskPanel(task,null);
+    });
+}
+
+function showRealTaskPanel(task,statusData){
+  var p=document.getElementById('_rtp');
+  if(!p){
+    p=document.createElement('div');p.id='_rtp';
+    p.style.cssText='position:fixed;inset:0;z-index:600;background:rgba(0,0,0,.82);display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s';
+    p.innerHTML='<div id="_rtpInner" style="background:linear-gradient(160deg,#0d2040,#081428);border-radius:22px 22px 0 0;border-top:3px solid #ffd700;padding:20px 16px 36px;width:100%;max-width:500px;max-height:85vh;overflow-y:auto"></div>';
+    p.addEventListener('click',function(e){if(e.target===p)closeRealTaskPanel();});
+    document.body.appendChild(p);
+  }
+
+  var statusText  = statusData?.statusText  || '🫧 清洗中';
+  var statusEmoji = statusData?.statusEmoji || '⏳';
+  var isDone      = statusData?.status==='done';
+  var itemEmoji   = ITEM_EMOJI_MAP[task.itemType]||'🧺';
+
+  document.getElementById('_rtpInner').innerHTML=
+    '<div style="display:flex;align-items:center;margin-bottom:16px">'
+      +'<div style="font-size:14px;color:#ffd700;font-weight:bold">🌟 今日真實送洗任務</div>'
+      +'<button onclick="closeRealTaskPanel()" style="margin-left:auto;background:rgba(255,255,255,.1);border:none;color:#fff;width:28px;height:28px;border-radius:50%;cursor:pointer">✕</button>'
+    +'</div>'
+    // 任務卡片
+    +'<div style="background:rgba(255,215,0,.08);border:1.5px solid rgba(255,215,0,.3);border-radius:16px;padding:16px;margin-bottom:14px">'
+      +'<div style="display:flex;align-items:center;gap:14px;margin-bottom:12px">'
+        +'<div style="font-size:48px">'+itemEmoji+'</div>'
+        +'<div>'
+          +'<div style="font-size:16px;font-weight:bold;color:#fff">'+task.displayName+'的'+task.itemName+'</div>'
+          +'<div style="font-size:12px;color:rgba(255,255,255,.55);margin-top:3px">收件：'+task.receivedAt+'</div>'
+          
+        +'</div>'
+      +'</div>'
+      // 進度條
+      +'<div style="background:rgba(255,255,255,.1);border-radius:8px;overflow:hidden;height:8px;margin-bottom:8px">'
+        +'<div style="height:100%;background:'+(isDone?'#28a745':'#4db8ff')+';width:'+(isDone?'100%':'55%')+';border-radius:8px;transition:width .8s"></div>'
+      +'</div>'
+      +'<div style="font-size:13px;font-weight:bold;color:'+(isDone?'#28a745':'#4db8ff')+'">'+statusEmoji+' '+statusText+'</div>'
+    +'</div>'
+    // 專業小知識
+    +'<div style="background:rgba(77,184,255,.08);border-radius:12px;padding:13px;margin-bottom:14px">'
+      +'<div style="font-size:11px;color:#4db8ff;font-weight:bold;margin-bottom:6px">💡 洗衣小知識</div>'
+      
+    +'</div>'
+    // 操作按鈕
+    +(isDone
+      ?'<div style="background:rgba(40,167,69,.15);border:1px solid #28a745;border-radius:12px;padding:12px;text-align:center;margin-bottom:10px;font-size:14px;color:#28a745">✅ 衣物已完成清洗，歡迎取件！</div>'
+      :'<button onclick="cheerForTask(\''+task.taskId+'\')" style="width:100%;padding:12px;background:linear-gradient(135deg,#ffd700,#ff9500);color:#1a1a2e;font-size:14px;font-weight:bold;border:none;border-radius:12px;cursor:pointer;margin-bottom:8px">💛 為這件衣物加油！</button>'
+    )
+    +'<button onclick="closeRealTaskPanel();openQuiz()" style="width:100%;padding:11px;background:rgba(77,184,255,.12);color:#4db8ff;border:1.5px solid rgba(77,184,255,.3);border-radius:12px;cursor:pointer;font-size:13px">🔬 挑戰相關污漬解謎</button>';
+
+  p.style.opacity='1';p.style.pointerEvents='all';
+}
+
+function closeRealTaskPanel(){
+  var p=document.getElementById('_rtp');
+  if(p){p.style.opacity='0';p.style.pointerEvents='none';}
+}
+
+function cheerForTask(taskId){
+  fetch(API_BASE+'/api/game-task-interact',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({taskId:taskId,playerUserId:window._uid,playerName:document.getElementById('topName').textContent,action:'cheer'})
+  }).catch(function(){});
+  sfxCorrect();
+  showToast('💛 已為這件衣物加油！師傅會更賣力清洗！');
+  setTimeout(closeRealTaskPanel,1500);
+}
+
 var tlTick=0;
 function gameLoop(ts){
   if(ts-lastCar>16){lastCar=ts;updateCars();tlTick++;if(tlTick%2===0)updateTrafficLights();if(tlTick%3===0)updateRain();}
@@ -1640,6 +1800,8 @@ function init(){
     document.getElementById('viewport').style.display='block';
     setTimeout(()=>{document.getElementById('hint').style.opacity='0'},4500);
     showToast('🧺 歡迎來到洗衣小鎮！點擊居民和建築互動！');
+    fetchRealTasks();
+    setInterval(fetchRealTasks,60000);
     requestAnimationFrame(npcLoop);
     requestAnimationFrame(gameLoop);
   },2200);
