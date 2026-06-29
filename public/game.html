@@ -1632,6 +1632,30 @@ function updateRealTaskNPCs(tasks){
   realTasks=tasks;
 
   var world=document.getElementById('world');
+
+  // 沒有訂單時，顯示「空任務NPC」邀請客人送洗
+  if(!tasks||tasks.length===0){
+    var pos=TASK_SPAWN_POSITIONS[0];
+    var el=document.createElement('div');
+    el.className='npc-wrap';el.id='rtask_empty';
+    el.style.cssText='left:'+pos.x+'px;top:'+pos.y+'px;z-index:22';
+    el.innerHTML=
+      '<div style="position:relative;display:inline-block">'
+        +'<div style="position:absolute;top:-8px;left:50%;transform:translateX(-50%);width:46px;height:46px;border-radius:50%;border:2px dashed rgba(255,255,255,.3);animation:glowPulse 2s ease-in-out infinite;pointer-events:none"></div>'
+        +'<div class="npc-body" style="font-size:28px;animation:idleF 2.5s ease-in-out infinite;opacity:.7">🧺</div>'
+      +'</div>'
+      +'<div class="npc-shadow"></div>'
+      +'<div class="npc-tag" style="background:rgba(255,255,255,.1);border:1px dashed rgba(255,255,255,.3);color:rgba(255,255,255,.6)">我的衣物</div>';
+    el.addEventListener('click',function(ev){
+      ev.stopPropagation();
+      sfxOpen();
+      showEmptyTaskPanel();
+    });
+    world.appendChild(el);
+    realNpcEls['empty']=el;
+    return;
+  }
+
   tasks.slice(0,6).forEach(function(task,i){
     var pos=TASK_SPAWN_POSITIONS[i%TASK_SPAWN_POSITIONS.length];
     var el=document.createElement('div');
@@ -1738,6 +1762,48 @@ function showRealTaskPanel(task,statusData){
       :'<button onclick="cheerForTask(\''+task.taskId+'\')" style="width:100%;padding:12px;background:linear-gradient(135deg,#ffd700,#ff9500);color:#1a1a2e;font-size:14px;font-weight:bold;border:none;border-radius:12px;cursor:pointer;margin-bottom:8px">💛 為這件衣物加油！</button>'
     )
     +'<button onclick="closeRealTaskPanel();openQuiz()" style="width:100%;padding:11px;background:rgba(77,184,255,.12);color:#4db8ff;border:1.5px solid rgba(77,184,255,.3);border-radius:12px;cursor:pointer;font-size:13px">🔬 挑戰相關污漬解謎</button>';
+
+  p.style.opacity='1';p.style.pointerEvents='all';
+}
+
+function showEmptyTaskPanel(){
+  var p=document.getElementById('_rtp');
+  if(!p){
+    p=document.createElement('div');p.id='_rtp';
+    p.style.cssText='position:fixed;inset:0;z-index:600;background:rgba(0,0,0,.82);display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s';
+    p.innerHTML='<div id="_rtpInner" style="background:linear-gradient(160deg,#0d2040,#081428);border-radius:22px 22px 0 0;border-top:3px solid rgba(255,255,255,.2);padding:20px 16px 36px;width:100%;max-width:500px;max-height:85vh;overflow-y:auto"></div>';
+    p.addEventListener('click',function(e){if(e.target===p)closeRealTaskPanel();});
+    document.body.appendChild(p);
+  }
+  document.getElementById('_rtpInner').innerHTML=
+    '<div style="display:flex;align-items:center;margin-bottom:16px">'
+      +'<div style="font-size:14px;color:rgba(255,255,255,.7);font-weight:bold">🧺 我的送洗衣物</div>'
+      +'<button onclick="closeRealTaskPanel()" style="margin-left:auto;background:rgba(255,255,255,.1);border:none;color:#fff;width:28px;height:28px;border-radius:50%;cursor:pointer">✕</button>'
+    +'</div>'
+    // 空狀態插圖
+    +'<div style="text-align:center;padding:30px 16px 20px">'
+      +'<div style="font-size:64px;margin-bottom:14px;opacity:.6">🧺</div>'
+      +'<div style="font-size:16px;font-weight:bold;color:rgba(255,255,255,.8);margin-bottom:8px">目前尚未送洗衣物</div>'
+      +'<div style="font-size:13px;color:rgba(255,255,255,.45);line-height:1.75;margin-bottom:20px">'
+        +'您目前沒有進行中的送洗訂單。<br>將衣物交給 C.H 精緻洗衣後，<br>就能在這裡追蹤清洗進度！'
+      +'</div>'
+    +'</div>'
+    // 引導卡片
+    +'<div style="background:rgba(77,184,255,.08);border:1px solid rgba(77,184,255,.2);border-radius:14px;padding:16px;margin-bottom:14px">'
+      +'<div style="font-size:12px;color:#4db8ff;font-weight:bold;margin-bottom:10px">📍 C.H 精緻洗衣 服務項目</div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+        +['👔 精緻衣物','👟 球鞋清潔','👜 名牌包保養','🛏️ 棉被床單','🧥 大衣皮革','🎽 運動衣物'].map(function(s){
+          return '<div style="font-size:12px;color:rgba(255,255,255,.7);background:rgba(255,255,255,.05);border-radius:8px;padding:7px 10px">'+s+'</div>';
+        }).join('')
+      +'</div>'
+    +'</div>'
+    // 服務時間
+    +'<div style="background:rgba(255,200,50,.08);border:1px solid rgba(255,200,50,.2);border-radius:12px;padding:12px;margin-bottom:14px;font-size:13px;color:rgba(255,255,255,.7)">'
+      +'⏰ <strong style="color:#ffd700">營業時間：</strong>週一至週日 10:30–20:00｜週六公休'
+    +'</div>'
+    // 按鈕
+    +'<button onclick="closeRealTaskPanel();openShop()" style="width:100%;padding:13px;background:linear-gradient(135deg,#1a6eb5,#4db8ff);color:#fff;font-size:14px;font-weight:bold;border:none;border-radius:12px;cursor:pointer;margin-bottom:8px">🏪 前往 C.H 精緻洗衣了解服務</button>'
+    +'<button onclick="closeRealTaskPanel();openQuiz()" style="width:100%;padding:11px;background:rgba(77,184,255,.12);color:#4db8ff;border:1.5px solid rgba(77,184,255,.3);border-radius:12px;cursor:pointer;font-size:13px">🔬 先來挑戰污漬解謎練練功</button>';
 
   p.style.opacity='1';p.style.pointerEvents='all';
 }
