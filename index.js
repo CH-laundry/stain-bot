@@ -78,8 +78,8 @@ app.use('/', gameRoutes);
 
 const ITEM_MAP = {
   '西裝':  '👔', '外套':  '🧥', '羽絨':  '🪶',
-  '球鞋':  '👟', '皮鞋':  '👞', '包包':  '👜',
-  '棉被':  '🛏️','床單':  '🛏️','運動服': '🎽',
+  '球鞋':  '👟', '運動鞋':'👟', '皮鞋':  '👞', '包包':  '👜',
+  '棉被':  '🛏️','床單':  '🛏️','毛毯':  '🛏️','運動服': '🎽',
   '毛衣':  '🧶', '旗袍':  '👘', '禮服':  '👗',
   '連身裙':'👗', '裙子':  '👗', '褲子':  '👖',
   '大衣':  '🧥',
@@ -94,22 +94,22 @@ function getItemEmoji(name) {
 
 // ── GET /api/game-tasks ──
 // 只回傳「登入玩家自己的」未完成訂單
-// 用 userId 查對應的客戶姓名，再去 POS 找訂單
+// 直接用 userId 比對客戶編號，不依賴姓名是否完全相符
 app.get('/api/game-tasks', async (req, res) => {
   try {
-    // 從 query 取 userId（遊戲端會帶過來）
     const { userId } = req.query;
     if (!userId) return res.json({ success: true, tasks: [] });
 
-    // 1. 用 userId 找對應的 POS 客戶姓名
+    // 1. 直接用 userId 找對應的客戶（綁定關係，最準確）
     const allCustomers = orderManager.getAllCustomerNumbers();
     const matched = allCustomers.find(c => c.userId === userId);
     if (!matched) {
-      // 找不到綁定就回傳空，不顯示任何 NPC
       return res.json({ success: true, tasks: [], reason: 'not_bound' });
     }
 
     const customerName = matched.name || '';
+    const customerNo = String(matched.number).replace(/\D/g, '').replace(/^0+/, '');
+
     const token = await getPosToken();
     if (!token) return res.json({ success: false, tasks: [] });
 
@@ -137,15 +137,61 @@ app.get('/api/game-tasks', async (req, res) => {
       ])
     });
     const searchData = await searchRes.json();
-    const orders = (searchData?.Data?.Data ?? []).filter(o =>
+    let orders = searchData?.Data?.Data ?? [];
+
+    // 3. 名字模糊比對失敗時，改用 laundry_progress.json 的客戶編號當備援
+    //    （這個檔案是本地電腦同步上來的，用客戶編號當 key，最可靠）
+    const nameMatched = orders.filter(o =>
       (o.CustomerName || '').replace(/\s/g,'') === customerName.replace(/\s/g,'')
     );
+
+    if (nameMatched.length > 0) {
+      orders = nameMatched;
+    } else {
+      // 名字比對不到任何訂單，嘗試從 laundry_progress.json 撈備援資料
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
+        const PROGRESS_FILE = path.join(baseDir, 'laundry_progress.json');
+        if (fs.existsSync(PROGRESS_FILE)) {
+          const progressData = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8'));
+          const rec = progressData[customerNo];
+          if (rec && rec.details && rec.finished < rec.total) {
+            const itemList = rec.details.map(d => {
+              const isDone = d.includes('完成');
+              const name = d.replace(/\s*\(.*?\)\s*/g, '').trim();
+              return isDone ? `✅ ${name}` : `🫧 ${name}（清潔中）`;
+            });
+            return res.json({
+              success: true,
+              tasks: [{
+                taskId: 'progress_' + customerNo,
+                orderNo: 'progress_' + customerNo,
+                displayName: customerName,
+                itemName: rec.details[0] ? rec.details[0].replace(/\s*\(.*?\)\s*/g, '').trim() : '衣物',
+                itemEmoji: getItemEmoji(rec.details[0] || ''),
+                itemCount: rec.total,
+                doneCount: rec.finished,
+                receivedAt: (rec.orderReceivedDate || rec.updateTime || '').substring(0, 10),
+                fallbackItemList: itemList
+              }],
+              updatedAt: new Date().toISOString(),
+              source: 'progress_fallback'
+            });
+          }
+        }
+      } catch(e) {
+        console.error('[game-tasks] progress fallback failed:', e.message);
+      }
+      orders = [];
+    }
 
     if (orders.length === 0) {
       return res.json({ success: true, tasks: [] });
     }
 
-    // 3. 查每張訂單的品項，找未完成的
+    // 4. 查每張訂單的品項，找未完成的
     const tasks = [];
     for (const order of orders) {
       try {
@@ -156,7 +202,6 @@ app.get('/api/game-tasks', async (req, res) => {
         const detailData = await detailRes.json();
         const items = detailData?.Data?.ReceivingItemList || [];
 
-        // 全部已上掛就跳過
         const allHung = items.length > 0 && items.every(i => i.LocationDate);
         if (allHung) continue;
 
@@ -169,7 +214,7 @@ app.get('/api/game-tasks', async (req, res) => {
         tasks.push({
           taskId:      order.Id,
           orderNo:     order.ReceivingOrderNumber || '',
-          displayName: customerName,   // 完整姓名，不隱藏
+          displayName: customerName,
           itemName,
           itemEmoji,
           itemCount:   totalCount,
@@ -191,6 +236,36 @@ app.get('/api/game-tasks', async (req, res) => {
 app.get('/api/game-tasks/status/:orderNo', async (req, res) => {
   try {
     const { orderNo } = req.params;
+
+    // progress fallback 的訂單號，直接從 laundry_progress.json 讀
+    if (orderNo.startsWith('progress_')) {
+      const customerNo = orderNo.replace('progress_', '');
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        const baseDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
+        const PROGRESS_FILE = path.join(baseDir, 'laundry_progress.json');
+        const progressData = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8'));
+        const rec = progressData[customerNo];
+        if (rec) {
+          const itemList = (rec.details || []).map(d => {
+            const isDone = d.includes('完成');
+            const name = d.replace(/\s*\(.*?\)\s*/g, '').trim();
+            return isDone ? `✅ ${name}` : `🫧 ${name}（清潔中）`;
+          });
+          const isDone = rec.finished >= rec.total;
+          return res.json({
+            success: true, orderNo, isDone,
+            total: rec.total, done: rec.finished, itemList,
+            statusText: isDone ? '✅ 全部完成，歡迎來取件！' : `🫧 清洗中（${rec.finished}/${rec.total} 件完成）`,
+            statusEmoji: isDone ? '✅' : '🫧',
+            status: isDone ? 'done' : 'processing'
+          });
+        }
+      } catch(e) {}
+      return res.json({ success: true, statusText: '🫧 清洗中', isDone: false });
+    }
+
     const token = await getPosToken();
     if (!token) return res.json({ success: true, statusText: '🫧 清洗中', isDone: false });
 
