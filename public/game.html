@@ -1041,8 +1041,6 @@ function npcLoop(ts){
       birdCx.clearRect(0,0,MAP_W,MAP_H);
       dynState.forEach(function(d){
         d.tick++;
-        dynState.forEach(function(d){
-        d.tick++;
         if(d.isPet){
           var comp=npcState['granny'];
           if(comp){
@@ -1062,8 +1060,7 @@ function npcLoop(ts){
           }
           return;
         }
-       if(d.type==='duck'){
-       if(d.type==='duck'){
+        if(d.type==='duck'){
           d.angle+=.018;
           d.x=d.ox+Math.cos(d.angle)*d.r;
           d.y=d.oy+Math.sin(d.angle)*d.r*.4;
