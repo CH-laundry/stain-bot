@@ -810,11 +810,16 @@ const DYNAMIC_CHARS=[
   {type:'dog2',  x:1980, y:960,  r:35, spd:.4, dir:1},
 ];
 var dynState=[];
-DYNAMIC_CHARS.forEach(function(c,idx){dynState.push(Object.assign({},c,{ox:c.x,oy:c.y,angle:0,tick:0,id:idx,happy:0}));});
-
+DYNAMIC_CHARS.forEach(function(c,idx){dynState.push(Object.assign({},c,{ox:c.x,oy:c.y,angle:0,tick:0,id:idx,happy:0,isPet:false}));});
   const FISHING_SPOTS=[
   {id:'lake', x:1900, y:1020, rx:140, ry:95, label:'小湖'},
   {id:'pond', x:400,  y:1100, rx:75,  ry:50, label:'池塘'}
+];
+  const GARDEN_PLOTS=[
+  {id:0,x:80, y:1030},
+  {id:1,x:160,y:1045},
+  {id:2,x:240,y:1030},
+  {id:3,x:300,y:1075}
 ];
   
 let birdCv=null,birdCx=null;
@@ -1036,6 +1041,28 @@ function npcLoop(ts){
       birdCx.clearRect(0,0,MAP_W,MAP_H);
       dynState.forEach(function(d){
         d.tick++;
+        dynState.forEach(function(d){
+        d.tick++;
+        if(d.isPet){
+          var comp=npcState['granny'];
+          if(comp){
+            var tx=comp.x+18,ty=comp.y+6;
+            var dxp=tx-d.x,dyp=ty-d.y,distp=Math.hypot(dxp,dyp);
+            if(distp>4){d.x+=dxp/distp*1.1;d.y+=dyp/distp*1.1;d.dir=dxp<0?-1:1;}
+          }
+          if(d.type==='cat')drawCatAnim(birdCx,d.x,d.y,d.dir||1);
+          else drawDog2Anim(birdCx,d.x,d.y,d.dir||1,d.tick*.2);
+          birdCx.save();birdCx.font='12px serif';birdCx.textAlign='center';birdCx.fillText('💛',d.x,d.y-22);birdCx.restore();
+          if(d.happy>0){
+            d.happy--;
+            birdCx.save();birdCx.globalAlpha=Math.min(1,d.happy/30);
+            birdCx.font='16px serif';birdCx.textAlign='center';
+            birdCx.fillText('❤️',d.x,d.y-24-(90-d.happy)*.4);
+            birdCx.restore();
+          }
+          return;
+        }
+       if(d.type==='duck'){
        if(d.type==='duck'){
           d.angle+=.018;
           d.x=d.ox+Math.cos(d.angle)*d.r;
@@ -1259,7 +1286,11 @@ var ACHIEVEMENTS=[
   {id:'fish10',     icon:'🐟',name:'釣魚好手',  desc:'累積釣到10次',           need:'fishCount',n:10},
   {id:'fish_rare',  icon:'🐠',name:'幸運漁夫',  desc:'釣到稀有魚類',           need:'fishRare',n:1},
   {id:'fish_legend',icon:'🎏',name:'傳說漁夫',  desc:'釣到傳說中的錦鯉',       need:'fishLegend',n:1},
-  {id:'fish_all',   icon:'📖',name:'圖鑑大師',  desc:'收集全部6種魚類',        need:'fishSpecies',n:6},
+ {id:'fish_all',   icon:'📖',name:'圖鑑大師',  desc:'收集全部6種魚類',        need:'fishSpecies',n:6},
+  {id:'garden_first',icon:'🌱',name:'園丁初體驗',desc:'種下第一株花苗',        need:'gardenPlant',n:1},
+  {id:'garden5',    icon:'🌷',name:'小花園主人',desc:'收成5朵花',              need:'gardenHarvest',n:5},
+  {id:'garden20',   icon:'🌺',name:'花園達人',  desc:'收成20朵花',             need:'gardenHarvest',n:20},
+  {id:'pet_adopt',  icon:'🐕',name:'認養寵物',  desc:'讓一隻動物成為小鎮寵物', need:'petAdopt',n:1},
 ];
 var _ak='ch_achv';
 var AV={talk:0,quiz:0,correct:0,perfect:0,shop:0,svc:0,unlocked:[],talkIds:[],svcIds:[]};
@@ -1881,8 +1912,22 @@ function feedAnimal(id,food){
   animal.happy=90;
   sfxCorrect();
   achvAdd('feed',1);
+  loadAV();
+  if(!AV.animalFeeds)AV.animalFeeds={};
+  AV.animalFeeds[id]=(AV.animalFeeds[id]||0)+1;
+  saveAV();
   var msgs={duck:'🦆 鴨子開心地吃掉了'+food+'！',cat:'🐈 貓咪滿足地舔了舔嘴～',dog2:'🐕 小狗開心地搖尾巴！'};
   showToast(msgs[animal.type]||'牠很開心！');
+  if(!AV.petAnimalId&&animal.type!=='duck'&&AV.animalFeeds[id]>=8){
+    AV.petAnimalId=id;
+    animal.isPet=true;
+    saveAV();
+    achvAdd('petAdopt',1);
+    setTimeout(function(){
+      sfxAchieve();
+      showToast('💛 '+FEED_NAMES[animal.type]+'決定跟著你，成為小鎮的寵物了！');
+    },1600);
+  }
 }
 
 // ══ 釣魚系統 ══
@@ -1997,6 +2042,82 @@ function openFishBookPanel(){
     +'</div><div style="display:grid;gap:8px">'+rows+'</div>';
   p.style.opacity='1';p.style.pointerEvents='all';
 }
+
+  // ══ 花園種花系統 ══
+var GARDEN_GROW_MS=6*60*60*1000;
+var GARDEN_FLOWER_TYPES=['🌷','🌻','🌼','🌹','🌺'];
+function loadGarden(){try{var s=localStorage.getItem('ch_garden');return s?JSON.parse(s):{};}catch(e){return{};}}
+function saveGarden(g){try{localStorage.setItem('ch_garden',JSON.stringify(g));}catch(e){}}
+function initGardenPlots(){
+  var w=document.getElementById('world');
+  GARDEN_PLOTS.forEach(function(plot){
+    var el=document.createElement('div');
+    el.id='plot_'+plot.id;
+    el.style.cssText='position:absolute;left:'+(plot.x-16)+'px;top:'+(plot.y-16)+'px;width:32px;height:32px;font-size:26px;cursor:pointer;z-index:16;text-align:center;line-height:32px;user-select:none';
+    el.addEventListener('click',function(ev){ev.stopPropagation();handlePlotClick(plot.id);});
+    w.appendChild(el);
+  });
+  updateGardenVisuals();
+  setInterval(updateGardenVisuals,15000);
+}
+function updateGardenVisuals(){
+  var garden=loadGarden();
+  GARDEN_PLOTS.forEach(function(plot){
+    var el=document.getElementById('plot_'+plot.id);if(!el)return;
+    var rec=garden[plot.id];
+    if(!rec){el.textContent='🟫';el.style.opacity='.55';el.style.filter='none';}
+    else{
+      var elapsed=Date.now()-rec.plantedAt;
+      if(elapsed>=GARDEN_GROW_MS){el.textContent=rec.type;el.style.opacity='1';el.style.filter='drop-shadow(0 0 6px rgba(255,215,0,.6))';}
+      else{el.textContent='🌱';el.style.opacity='.9';el.style.filter='none';}
+    }
+  });
+}
+function handlePlotClick(id){
+  var garden=loadGarden();
+  var rec=garden[id];
+  if(!rec){
+    garden[id]={plantedAt:Date.now(),type:GARDEN_FLOWER_TYPES[Math.floor(Math.random()*GARDEN_FLOWER_TYPES.length)]};
+    saveGarden(garden);
+    sfxOpen();
+    showToast('🌱 種下花苗了！大約6小時後就會開花～');
+    updateGardenVisuals();
+    achvAdd('gardenPlant',1);
+    return;
+  }
+  var elapsed=Date.now()-rec.plantedAt;
+  if(elapsed<GARDEN_GROW_MS){
+    var remainMin=Math.ceil((GARDEN_GROW_MS-elapsed)/60000);
+    var hh=Math.floor(remainMin/60),mm=remainMin%60;
+    showToast('🌱 花苗還在成長，還需 '+(hh>0?hh+'小時':'')+mm+'分鐘');
+    return;
+  }
+  var type=rec.type;
+  delete garden[id];
+  saveGarden(garden);
+  sfxCorrect();
+  achvAdd('gardenHarvest',1);
+  showToast(type+' 收成了一朵美麗的花！已加入你的花園收藏');
+  updateGardenVisuals();
+  renderGardenDecor();
+}
+function renderGardenDecor(){
+  loadAV();
+  var count=Math.min(AV.gardenHarvest||0,8);
+  var el=document.getElementById('gardenDecorRow');
+  if(!el){
+    el=document.createElement('div');
+    el.id='gardenDecorRow';
+    el.style.cssText='position:absolute;left:60px;top:432px;width:220px;font-size:18px;letter-spacing:3px;pointer-events:none;z-index:6';
+    document.getElementById('world').appendChild(el);
+  }
+  var types=['🌷','🌻','🌼','🌹','🌺'];
+  var s='';
+  for(var i=0;i<count;i++){s+=types[i%types.length];}
+  el.textContent=s;
+}
+
+  
   
 function cheerForTask(taskId){
   fetch(API_BASE+'/api/game-task-interact',{
@@ -2042,8 +2163,9 @@ function init(){
   initCarCanvas();
   spawnParticles();
   spawnNPCs();
+  initGardenPlots();
+  renderGardenDecor();
   initDrag();
-
   // 初始鏡頭（對準 C.H 洗衣店附近）
   const vw=window.innerWidth,vh=window.innerHeight-54;
   camX=clamp(0,0,MAP_W-vw);camY=clamp(50,0,MAP_H-vh);
@@ -2054,6 +2176,7 @@ function init(){
 
   setTimeout(()=>{
     document.getElementById('loading').style.display='none';loadAV();var ab=document.getElementById('achvBtn');if(ab)ab.style.display='block';
+    if(AV.petAnimalId!=null){var petA=dynState.find(function(d){return d.id===AV.petAnimalId;});if(petA)petA.isPet=true;}
     document.getElementById('topBar').style.display='flex';
     document.getElementById('viewport').style.display='block';
     setTimeout(()=>{document.getElementById('hint').style.opacity='0'},4500);
