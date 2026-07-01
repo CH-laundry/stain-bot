@@ -1843,8 +1843,9 @@ function init(){
   document.getElementById('topBar').style.background=`linear-gradient(135deg,${si.sky1}ee,${si.sky2}ee)`;
   window._uid='pl_'+Date.now();
   document.getElementById('topName').textContent='洗衣小鎮居民';
-  (async()=>{try{await liff.init({liffId:LIFF_ID});if(liff.isLoggedIn()){const p=await liff.getProfile();window._uid=p.userId;document.getElementById('topName').textContent=p.displayName||'探險家';}}catch(e){}lastTaskFetch=0;
-    fetchRealTasks(true);})();
+ (async()=>{try{await liff.init({liffId:LIFF_ID});if(liff.isLoggedIn()){const p=await liff.getProfile();window._uid=p.userId;document.getElementById('topName').textContent=p.displayName||'探險家';}else{showToast('⚠️ LIFF 未登入 uid='+window._uid);}}catch(e){showToast('❌ LIFF錯誤:'+e.message);}lastTaskFetch=0;
+    fetchRealTasks(true);
+    setTimeout(()=>showToast('uid='+window._uid),3000);})();
   // 建立世界
   drawMap();
   initMapDetails();
