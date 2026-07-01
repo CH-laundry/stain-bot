@@ -1603,9 +1603,9 @@ var TASK_SPAWN_POSITIONS=[
   {x:700, y:880},{x:1200,y:878},{x:1600,y:882},
 ];
 
-function fetchRealTasks(){
+function fetchRealTasks(force){
   var now=Date.now();
-  if(now-lastTaskFetch<60000)return; // 每60秒更新
+  if(!force && now-lastTaskFetch<60000)return;
   lastTaskFetch=now;
   fetch(API_BASE+'/api/game-tasks?userId='+(window._uid||''))
     .then(function(r){return r.json();})
@@ -1843,7 +1843,8 @@ function init(){
   document.getElementById('topBar').style.background=`linear-gradient(135deg,${si.sky1}ee,${si.sky2}ee)`;
   window._uid='pl_'+Date.now();
   document.getElementById('topName').textContent='洗衣小鎮居民';
-  (async()=>{try{await liff.init({liffId:LIFF_ID});if(liff.isLoggedIn()){const p=await liff.getProfile();window._uid=p.userId;document.getElementById('topName').textContent=p.displayName||'探險家';}}catch(e){}})();
+  (async()=>{try{await liff.init({liffId:LIFF_ID});if(liff.isLoggedIn()){const p=await liff.getProfile();window._uid=p.userId;document.getElementById('topName').textContent=p.displayName||'探險家';}}catch(e){}lastTaskFetch=0;
+    fetchRealTasks(true);})();
   // 建立世界
   drawMap();
   initMapDetails();
