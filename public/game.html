@@ -630,6 +630,7 @@ function spawnDecos(){
     {e:'🏮',x:700,y:468,sz:24},{e:'🏮',x:740,y:468,sz:24},{e:'🏮',x:1410,y:468,sz:24},{e:'🏮',x:1450,y:468,sz:24},
     {e:'⛲',x:1080,y:860,sz:30},{e:'🪑',x:1040,y:880,sz:22},{e:'🪑',x:1150,y:880,sz:22},
     {e:'🐈',x:1980,y:920,sz:24},{e:'🦆',x:830,y:945,sz:22},{e:'🦆',x:900,y:960,sz:22},{e:'🦢',x:1920,y:1010,sz:24},
+    {e:'🎣',x:1850,y:945,sz:26},{e:'🎣',x:370,y:1055,sz:22},
     {e:'🌻',x:1500,y:845,sz:28},{e:'🌺',x:180,y:842,sz:24},{e:'🌿',x:430,y:840,sz:24},
     {e:'🗑️',x:680,y:518,sz:20},{e:'🗑️',x:1420,y:518,sz:20},
     
@@ -811,6 +812,11 @@ const DYNAMIC_CHARS=[
 var dynState=[];
 DYNAMIC_CHARS.forEach(function(c,idx){dynState.push(Object.assign({},c,{ox:c.x,oy:c.y,angle:0,tick:0,id:idx,happy:0}));});
 
+  const FISHING_SPOTS=[
+  {id:'lake', x:1900, y:1020, rx:140, ry:95, label:'小湖'},
+  {id:'pond', x:400,  y:1100, rx:75,  ry:50, label:'池塘'}
+];
+  
 let birdCv=null,birdCx=null;
 function initBirdCanvas(){
   birdCv=document.createElement('canvas');
@@ -825,9 +831,16 @@ function initBirdCanvas(){
       var radius=d.type==='bird'?20:30;
       if(dist<radius&&dist<hitDist){hit=d;hitDist=dist;}
     });
-    if(!hit)return;
-    if(hit.type==='bird'){sfxAnimal('bird');showToast('🐦 啾啾！天空真自由～');return;}
-    sfxAnimal(hit.type);openFeedPanel(hit);
+    if(hit){
+      if(hit.type==='bird'){sfxAnimal('bird');showToast('🐦 啾啾！天空真自由～');return;}
+      sfxAnimal(hit.type);openFeedPanel(hit);
+      return;
+    }
+    var spot=FISHING_SPOTS.find(function(s){
+      var dx=(wx-s.x)/s.rx,dy=(wy-s.y)/s.ry;
+      return dx*dx+dy*dy<=1;
+    });
+    if(spot){sfxOpen();openFishingPanel(spot);}
   });
   document.getElementById('world').appendChild(birdCv);
   birdCx=birdCv.getContext('2d');
@@ -1242,6 +1255,11 @@ var ACHIEVEMENTS=[
   {id:'svc_all',    icon:'📋',name:'服務達人',  desc:'點閱全部6項服務知識',    need:'svc',    n:6},
   {id:'feed5',      icon:'🍖',name:'愛心餵食員',desc:'餵食動物5次',            need:'feed',   n:5},
   {id:'feed20',     icon:'🐾',name:'動物之友',  desc:'餵食動物20次',           need:'feed',   n:20},
+  {id:'fish_first', icon:'🎣',name:'初次垂釣',  desc:'釣到第一條魚',           need:'fishCount',n:1},
+  {id:'fish10',     icon:'🐟',name:'釣魚好手',  desc:'累積釣到10次',           need:'fishCount',n:10},
+  {id:'fish_rare',  icon:'🐠',name:'幸運漁夫',  desc:'釣到稀有魚類',           need:'fishRare',n:1},
+  {id:'fish_legend',icon:'🎏',name:'傳說漁夫',  desc:'釣到傳說中的錦鯉',       need:'fishLegend',n:1},
+  {id:'fish_all',   icon:'📖',name:'圖鑑大師',  desc:'收集全部6種魚類',        need:'fishSpecies',n:6},
 ];
 var _ak='ch_achv';
 var AV={talk:0,quiz:0,correct:0,perfect:0,shop:0,svc:0,unlocked:[],talkIds:[],svcIds:[]};
@@ -1251,6 +1269,7 @@ function achvAdd(type,val){
   loadAV();
   if(type==='talkId'){if(AV.talkIds.indexOf(val)<0){AV.talkIds.push(val);AV.talk=AV.talkIds.length;}}
   else if(type==='svcId'){if(AV.svcIds.indexOf(val)<0){AV.svcIds.push(val);AV.svc=AV.svcIds.length;}}
+  else if(type==='fishSpeciesId'){if(!AV.fishSpeciesIds)AV.fishSpeciesIds=[];if(AV.fishSpeciesIds.indexOf(val)<0){AV.fishSpeciesIds.push(val);AV.fishSpecies=AV.fishSpeciesIds.length;}}
   else{AV[type]=(AV[type]||0)+(val||1);}
   checkAV();saveAV();
 }
@@ -1866,6 +1885,119 @@ function feedAnimal(id,food){
   showToast(msgs[animal.type]||'牠很開心！');
 }
 
+// ══ 釣魚系統 ══
+var FISH_TYPES=[
+  {id:'small',   e:'🐟',name:'小魚',   rarity:'普通',weight:46},
+  {id:'shrimp',  e:'🦐',name:'蝦子',   rarity:'普通',weight:30},
+  {id:'tropical',e:'🐠',name:'熱帶魚', rarity:'稀有',weight:14},
+  {id:'puffer',  e:'🐡',name:'河豚',   rarity:'稀有',weight:7},
+  {id:'turtle',  e:'🐢',name:'小烏龜', rarity:'史詩',weight:2.3},
+  {id:'koi',     e:'🎏',name:'錦鯉',   rarity:'傳說',weight:0.7}
+];
+var FISH_MISS_RATE=0.22;
+var FISH_COOLDOWN=8000;
+function pickFish(){
+  var total=FISH_TYPES.reduce(function(s,f){return s+f.weight;},0);
+  var r=Math.random()*total;
+  for(var i=0;i<FISH_TYPES.length;i++){
+    r-=FISH_TYPES[i].weight;
+    if(r<=0)return FISH_TYPES[i];
+  }
+  return FISH_TYPES[0];
+}
+function openFishingPanel(spot){
+  loadAV();
+  var p=document.getElementById('_fh');
+  if(!p){
+    p=document.createElement('div');p.id='_fh';
+    p.style.cssText='position:fixed;inset:0;z-index:600;background:rgba(0,0,0,.78);display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s';
+    p.innerHTML='<div id="_fhInner" style="background:linear-gradient(160deg,#0d2040,#081428);border-radius:22px 22px 0 0;border-top:3px solid #4db8ff;padding:20px 16px 36px;width:100%;max-width:500px;text-align:center"></div>';
+    p.addEventListener('click',function(e){if(e.target===p)closeFishingPanel();});
+    document.body.appendChild(p);
+  }
+  renderFishingIdle(spot);
+  document.getElementById('_fh').style.opacity='1';
+  document.getElementById('_fh').style.pointerEvents='all';
+}
+function renderFishingIdle(spot){
+  var remain=Math.max(0,(AV.lastFishTime||0)+FISH_COOLDOWN-Date.now());
+  var canCast=remain<=0;
+  document.getElementById('_fhInner').innerHTML=
+    '<div style="font-size:44px;margin-bottom:6px">🎣</div>'
+    +'<div style="font-size:15px;font-weight:bold;color:#4db8ff;margin-bottom:16px">'+spot.label+'風平浪靜，適合垂釣～</div>'
+    +(canCast
+      ?'<button onclick="castLine(\''+spot.id+'\')" style="width:100%;padding:13px;background:linear-gradient(135deg,#1a6eb5,#4db8ff);color:#fff;font-size:15px;font-weight:bold;border:none;border-radius:13px;cursor:pointer;margin-bottom:9px">拋竿垂釣</button>'
+      :'<button disabled style="width:100%;padding:13px;background:rgba(255,255,255,.08);color:rgba(255,255,255,.4);font-size:14px;border:none;border-radius:13px;margin-bottom:9px">魚兒還在休息，'+Math.ceil(remain/1000)+' 秒後再來</button>')
+    +'<button onclick="openFishBookPanel()" style="width:100%;padding:11px;background:rgba(77,184,255,.12);color:#4db8ff;border:1.5px solid rgba(77,184,255,.3);border-radius:12px;cursor:pointer;font-size:13px;margin-bottom:8px">📖 我的魚類圖鑑</button>'
+    +'<button onclick="closeFishingPanel()" style="width:100%;padding:10px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:11px;color:rgba(255,255,255,.6);font-size:13px;cursor:pointer">收竿離開</button>';
+}
+function closeFishingPanel(){
+  var p=document.getElementById('_fh');
+  if(p){p.style.opacity='0';p.style.pointerEvents='none';}
+}
+function castLine(spotId){
+  loadAV();
+  AV.lastFishTime=Date.now();
+  saveAV();
+  document.getElementById('_fhInner').innerHTML=
+    '<div style="font-size:44px;margin-bottom:10px;animation:idleF 1s ease-in-out infinite">🎣</div>'
+    +'<div style="font-size:14px;color:rgba(255,255,255,.7)">線正在等待魚兒上鉤...</div>';
+  setTimeout(function(){
+    var miss=Math.random()<FISH_MISS_RATE;
+    if(miss){
+      document.getElementById('_fhInner').innerHTML=
+        '<div style="font-size:44px;margin-bottom:10px">💧</div>'
+        +'<div style="font-size:15px;font-weight:bold;color:#fff;margin-bottom:4px">什麼都沒釣到...</div>'
+        +'<div style="font-size:12px;color:rgba(255,255,255,.5);margin-bottom:16px">再試一次手氣吧！</div>'
+        +'<button onclick="closeFishingPanel()" style="width:100%;padding:12px;background:rgba(255,255,255,.08);color:#fff;border:none;border-radius:12px;cursor:pointer;font-size:14px">好的</button>';
+      sfxWrong();
+      return;
+    }
+    var fish=pickFish();
+    if(!AV.fishCounts)AV.fishCounts={};
+    AV.fishCounts[fish.id]=(AV.fishCounts[fish.id]||0)+1;
+    saveAV();
+    achvAdd('fishCount',1);
+    achvAdd('fishSpeciesId',fish.id);
+    if(fish.rarity==='稀有')achvAdd('fishRare',1);
+    if(fish.rarity==='傳說')achvAdd('fishLegend',1);
+    sfxCorrect();
+    document.getElementById('_fhInner').innerHTML=
+      '<div style="font-size:56px;margin-bottom:10px">'+fish.e+'</div>'
+      +'<div style="font-size:16px;font-weight:bold;color:#ffd700;margin-bottom:4px">釣到了「'+fish.name+'」！</div>'
+      +'<div style="font-size:12px;color:rgba(255,255,255,.5);margin-bottom:16px">稀有度：'+fish.rarity+'</div>'
+      +'<button onclick="renderFishingIdle({id:\''+spotId+'\',label:\''+FISHING_SPOTS.find(function(s){return s.id===spotId;}).label+'\'})" style="width:100%;padding:12px;background:linear-gradient(135deg,#1a6eb5,#4db8ff);color:#fff;font-size:14px;font-weight:bold;border:none;border-radius:12px;cursor:pointer;margin-bottom:8px">再釣一次</button>'
+      +'<button onclick="closeFishingPanel()" style="width:100%;padding:10px;background:rgba(255,255,255,.06);color:rgba(255,255,255,.6);border:1px solid rgba(255,255,255,.15);border-radius:11px;cursor:pointer;font-size:13px">收竿離開</button>';
+  },1200+Math.random()*1000);
+}
+function openFishBookPanel(){
+  loadAV();
+  var counts=AV.fishCounts||{};
+  var p=document.getElementById('_fb');
+  if(!p){
+    p=document.createElement('div');p.id='_fb';
+    p.style.cssText='position:fixed;inset:0;z-index:700;background:rgba(0,0,0,.85);display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s';
+    p.innerHTML='<div id="_fbInner" style="background:linear-gradient(160deg,#0d2040,#081428);border-radius:22px 22px 0 0;border-top:3px solid #ffd700;padding:20px 16px 36px;width:100%;max-width:500px;max-height:80vh;overflow-y:auto"></div>';
+    p.addEventListener('click',function(e){if(e.target===p){p.style.opacity='0';p.style.pointerEvents='none';}});
+    document.body.appendChild(p);
+  }
+  var rows=FISH_TYPES.map(function(f){
+    var c=counts[f.id]||0;
+    var got=c>0;
+    return '<div style="display:flex;align-items:center;gap:11px;background:rgba(255,255,255,.05);border-radius:12px;padding:10px 12px;opacity:'+(got?'1':'.4')+'">'
+      +'<div style="font-size:28px;filter:'+(got?'none':'grayscale(1)')+'">'+f.e+'</div>'
+      +'<div style="flex:1"><div style="font-size:13px;font-weight:bold;color:'+(got?'#fff':'rgba(255,255,255,.5)')+'">'+(got?f.name:'???')+'</div>'
+      +'<div style="font-size:10px;color:rgba(255,255,255,.4)">稀有度：'+f.rarity+'</div></div>'
+      +'<div style="font-size:13px;color:#ffd700;font-weight:bold">x'+c+'</div></div>';
+  }).join('');
+  document.getElementById('_fbInner').innerHTML=
+    '<div style="display:flex;align-items:center;margin-bottom:14px">'
+    +'<div style="font-size:15px;font-weight:bold;color:#ffd700">📖 魚類圖鑑</div>'
+    +'<button onclick="document.getElementById(\'_fb\').style.opacity=\'0\';document.getElementById(\'_fb\').style.pointerEvents=\'none\';" style="margin-left:auto;background:rgba(255,255,255,.1);border:none;color:#fff;width:28px;height:28px;border-radius:50%;cursor:pointer">✕</button>'
+    +'</div><div style="display:grid;gap:8px">'+rows+'</div>';
+  p.style.opacity='1';p.style.pointerEvents='all';
+}
+  
 function cheerForTask(taskId){
   fetch(API_BASE+'/api/game-task-interact',{
     method:'POST',
