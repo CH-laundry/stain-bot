@@ -809,7 +809,7 @@ const DYNAMIC_CHARS=[
   {type:'dog2',  x:1980, y:960,  r:35, spd:.4, dir:1},
 ];
 var dynState=[];
-DYNAMIC_CHARS.forEach(function(c){dynState.push(Object.assign({},c,{ox:c.x,oy:c.y,angle:0,tick:0}));});
+DYNAMIC_CHARS.forEach(function(c,idx){dynState.push(Object.assign({},c,{ox:c.x,oy:c.y,angle:0,tick:0,id:idx,happy:0}));});
 
 let birdCv=null,birdCx=null;
 function initBirdCanvas(){
@@ -826,8 +826,8 @@ function initBirdCanvas(){
       if(dist<radius&&dist<hitDist){hit=d;hitDist=dist;}
     });
     if(!hit)return;
-    var msgs={'duck':'🦆 嘎嘎嘎！我要魚魚～','bird':'🐦 啾啾！天空真自由～','cat':'🐈 喵～別打擾我曬太陽','dog2':'🐕 汪汪！要摸摸嗎？'};
-    sfxAnimal(hit.type);showToast(msgs[hit.type]||'...');
+    if(hit.type==='bird'){sfxAnimal('bird');showToast('🐦 啾啾！天空真自由～');return;}
+    sfxAnimal(hit.type);openFeedPanel(hit);
   });
   document.getElementById('world').appendChild(birdCv);
   birdCx=birdCv.getContext('2d');
@@ -1023,7 +1023,7 @@ function npcLoop(ts){
       birdCx.clearRect(0,0,MAP_W,MAP_H);
       dynState.forEach(function(d){
         d.tick++;
-        if(d.type==='duck'){
+       if(d.type==='duck'){
           d.angle+=.018;
           d.x=d.ox+Math.cos(d.angle)*d.r;
           d.y=d.oy+Math.sin(d.angle)*d.r*.4;
@@ -1044,6 +1044,14 @@ function npcLoop(ts){
           if(d.x>d.ox+d.r)d.dir=-1;
           if(d.x<d.ox-d.r)d.dir=1;
           drawDog2Anim(birdCx,d.x,d.y,d.dir,d.tick*.2);
+        }
+        if(d.happy>0){
+          d.happy--;
+          birdCx.save();
+          birdCx.globalAlpha=Math.min(1,d.happy/30);
+          birdCx.font='16px serif';birdCx.textAlign='center';
+          birdCx.fillText('❤️',d.x,d.y-24-(90-d.happy)*.4);
+          birdCx.restore();
         }
       });
     }
@@ -1232,6 +1240,8 @@ var ACHIEVEMENTS=[
   {id:'perfect',    icon:'🎯',name:'完美挑戰',  desc:'單次15題全對',           need:'perfect',n:1},
   {id:'shop_visit', icon:'🧺',name:'忠實顧客',  desc:'走進C.H精緻洗衣',        need:'shop',   n:1},
   {id:'svc_all',    icon:'📋',name:'服務達人',  desc:'點閱全部6項服務知識',    need:'svc',    n:6},
+  {id:'feed5',      icon:'🍖',name:'愛心餵食員',desc:'餵食動物5次',            need:'feed',   n:5},
+  {id:'feed20',     icon:'🐾',name:'動物之友',  desc:'餵食動物20次',           need:'feed',   n:20},
 ];
 var _ak='ch_achv';
 var AV={talk:0,quiz:0,correct:0,perfect:0,shop:0,svc:0,unlocked:[],talkIds:[],svcIds:[]};
@@ -1811,6 +1821,49 @@ function showEmptyTaskPanel(){
 function closeRealTaskPanel(){
   var p=document.getElementById('_rtp');
   if(p){p.style.opacity='0';p.style.pointerEvents='none';}
+}
+
+  // ══ 動物餵食系統 ══
+var FEED_OPTIONS={
+  duck:[{e:'🐟',t:'小魚乾'},{e:'🍞',t:'麵包屑'}],
+  cat: [{e:'🐟',t:'魚乾'},{e:'🥛',t:'牛奶'}],
+  dog2:[{e:'🦴',t:'骨頭'},{e:'🍖',t:'肉乾'}]
+};
+var FEED_NAMES={duck:'鴨子',cat:'貓咪',dog2:'小狗'};
+function openFeedPanel(animal){
+  var p=document.getElementById('_fp');
+  if(!p){
+    p=document.createElement('div');p.id='_fp';
+    p.style.cssText='position:fixed;inset:0;z-index:600;background:rgba(0,0,0,.75);display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s';
+    p.innerHTML='<div id="_fpInner" style="background:linear-gradient(160deg,#0d2040,#081428);border-radius:22px 22px 0 0;border-top:3px solid #4db8ff;padding:20px 16px 36px;width:100%;max-width:500px"></div>';
+    p.addEventListener('click',function(e){if(e.target===p)closeFeedPanel();});
+    document.body.appendChild(p);
+  }
+  var emo=animal.type==='duck'?'🦆':animal.type==='cat'?'🐈':'🐕';
+  var opts=FEED_OPTIONS[animal.type]||[];
+  document.getElementById('_fpInner').innerHTML=
+    '<div style="text-align:center;font-size:44px;margin-bottom:6px">'+emo+'</div>'
+    +'<div style="text-align:center;font-size:15px;font-weight:bold;color:#4db8ff;margin-bottom:16px">要餵'+FEED_NAMES[animal.type]+'吃什麼呢？</div>'
+    +'<div style="display:grid;gap:9px">'
+    +opts.map(function(o){return '<button onclick="feedAnimal('+animal.id+',\''+o.e+'\')" style="padding:13px;background:rgba(77,184,255,.1);border:1.5px solid rgba(77,184,255,.3);border-radius:12px;color:#fff;font-size:14px;cursor:pointer">'+o.e+' '+o.t+'</button>';}).join('')
+    +'<button onclick="closeFeedPanel()" style="padding:11px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:11px;color:rgba(255,255,255,.6);font-size:13px;cursor:pointer;margin-top:4px">先不要</button>'
+    +'</div>';
+  document.getElementById('_fp').style.opacity='1';
+  document.getElementById('_fp').style.pointerEvents='all';
+}
+function closeFeedPanel(){
+  var p=document.getElementById('_fp');
+  if(p){p.style.opacity='0';p.style.pointerEvents='none';}
+}
+function feedAnimal(id,food){
+  var animal=dynState.find(function(d){return d.id===id;});
+  closeFeedPanel();
+  if(!animal)return;
+  animal.happy=90;
+  sfxCorrect();
+  achvAdd('feed',1);
+  var msgs={duck:'🦆 鴨子開心地吃掉了'+food+'！',cat:'🐈 貓咪滿足地舔了舔嘴～',dog2:'🐕 小狗開心地搖尾巴！'};
+  showToast(msgs[animal.type]||'牠很開心！');
 }
 
 function cheerForTask(taskId){
