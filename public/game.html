@@ -150,7 +150,7 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'Microsoft JhengHei
   <div class="top-season" id="topSeason">☀️</div>
 </div>
 <button onclick="showAchvPanel()" style="position:fixed;top:58px;right:12px;z-index:190;background:rgba(255,215,0,.15);border:1.5px solid rgba(255,215,0,.4);border-radius:20px;padding:5px 12px;font-size:12px;color:#ffd700;cursor:pointer;display:none" id="achvBtn">🏅 成就</button>
-
+<button onclick="openBizPanel()" style="position:fixed;top:58px;right:96px;z-index:190;background:rgba(77,184,255,.15);border:1.5px solid rgba(77,184,255,.4);border-radius:20px;padding:5px 12px;font-size:12px;color:#4db8ff;cursor:pointer;display:none" id="bizBtn">🏬 經營</button>
 <div id="hint">👆 拖動畫面探索小鎮，點擊居民和建築互動！</div>
 <div id="rain-overlay"></div>
 <div id="toast"></div>
@@ -1214,6 +1214,104 @@ function handleOpt(o){
 function closeDlg(){sfxClose();document.getElementById('dlgOverlay').classList.remove('show');curNpc=null}
 document.getElementById('dlgOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeDlg()});
 
+  // ══ 金幣系統 ══
+function addCoins(n){
+  loadAV();
+  AV.coins=(AV.coins||0)+n;
+  saveAV();
+}
+
+// ══ 洗衣店經營系統 ══
+var BIZ_TRACKS=[
+  {id:'machine',  icon:'🧺',name:'洗衣機台', desc:'機台越新，清洗效率與品質越好', baseCost:40},
+  {id:'shopfront',icon:'🏬',name:'店面裝潢', desc:'寬敞明亮的店面，客人更願意上門', baseCost:50},
+  {id:'sign',     icon:'🪧',name:'招牌',     desc:'醒目招牌，路過行人一眼就看到', baseCost:35},
+  {id:'staff',    icon:'🧑‍💼',name:'員工團隊', desc:'服務更穩定，客人回頭率提升', baseCost:60}
+];
+var BIZ_MAX_LEVEL=5;
+function getBizLevel(id){loadAV();return AV['biz_'+id]||1;}
+function getBizCost(id){
+  var lv=getBizLevel(id);
+  if(lv>=BIZ_MAX_LEVEL)return null;
+  var track=BIZ_TRACKS.find(function(t){return t.id===id;});
+  return track.baseCost*lv;
+}
+function recalcBizStars(){
+  loadAV();
+  var sum=BIZ_TRACKS.reduce(function(s,t){return s+(AV['biz_'+t.id]||1);},0);
+  var stars=1+Math.floor((sum-4)/4);
+  AV.bizStars=Math.min(5,Math.max(1,stars));
+  saveAV();
+  checkAV();
+  return AV.bizStars;
+}
+function upgradeTrack(id){
+  loadAV();
+  var lv=getBizLevel(id);
+  if(lv>=BIZ_MAX_LEVEL){showToast('這項已經滿級囉！');return;}
+  var cost=getBizCost(id);
+  if((AV.coins||0)<cost){showToast('金幣不夠喔，還差 '+(cost-(AV.coins||0))+' 枚');return;}
+  AV.coins-=cost;
+  AV['biz_'+id]=lv+1;
+  saveAV();
+  sfxAchieve();
+  var track=BIZ_TRACKS.find(function(t){return t.id===id;});
+  var stars=recalcBizStars();
+  showToast(track.icon+' '+track.name+' 升到 Lv.'+(lv+1)+' 了！目前 '+stars+' 星好店');
+  renderBizPanel();
+}
+function openBizPanel(){
+  sfxOpen();
+  var p=document.getElementById('_biz');
+  if(!p){
+    p=document.createElement('div');p.id='_biz';
+    p.style.cssText='position:fixed;inset:0;z-index:600;background:rgba(0,0,0,.82);display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s';
+    p.innerHTML='<div id="_bizInner" style="background:linear-gradient(160deg,#0d2040,#081428);border-radius:22px 22px 0 0;border-top:3px solid #ffd700;padding:20px 16px 36px;width:100%;max-width:500px;max-height:88vh;overflow-y:auto"></div>';
+    p.addEventListener('click',function(e){if(e.target===p)closeBizPanel();});
+    document.body.appendChild(p);
+  }
+  renderBizPanel();
+  p.style.opacity='1';p.style.pointerEvents='all';
+}
+function closeBizPanel(){
+  var p=document.getElementById('_biz');
+  if(p){p.style.opacity='0';p.style.pointerEvents='none';}
+}
+function renderBizPanel(){
+  loadAV();
+  var stars=recalcBizStars();
+  var starStr='';for(var i=0;i<5;i++)starStr+=(i<stars?'⭐':'☆');
+  var cardsHtml=BIZ_TRACKS.map(function(t){
+    var lv=getBizLevel(t.id);
+    var cost=getBizCost(t.id);
+    var maxed=lv>=BIZ_MAX_LEVEL;
+    return '<div style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:13px;margin-bottom:9px">'
+      +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">'
+        +'<div style="font-size:26px">'+t.icon+'</div>'
+        +'<div style="flex:1"><div style="font-size:14px;font-weight:bold;color:#fff">'+t.name+'</div>'
+        +'<div style="font-size:11px;color:rgba(255,255,255,.5)">'+t.desc+'</div></div>'
+        +'<div style="font-size:12px;color:#ffd700;font-weight:bold">Lv.'+lv+'/'+BIZ_MAX_LEVEL+'</div>'
+      +'</div>'
+      +'<div style="background:rgba(255,255,255,.08);border-radius:6px;height:6px;overflow:hidden;margin-bottom:8px">'
+        +'<div style="height:100%;background:#4db8ff;width:'+(lv/BIZ_MAX_LEVEL*100)+'%;border-radius:6px"></div>'
+      +'</div>'
+      +(maxed
+        ?'<div style="text-align:center;font-size:12px;color:#28a745;padding:8px">✅ 已滿級</div>'
+        :'<button onclick="upgradeTrack(\''+t.id+'\')" style="width:100%;padding:9px;background:linear-gradient(135deg,#1a6eb5,#4db8ff);color:#fff;font-size:12px;font-weight:bold;border:none;border-radius:9px;cursor:pointer">升級（💰 '+cost+'）</button>')
+      +'</div>';
+  }).join('');
+  document.getElementById('_bizInner').innerHTML=
+    '<div style="display:flex;align-items:center;margin-bottom:6px">'
+      +'<div style="font-size:16px;font-weight:bold;color:#ffd700">🏬 我的洗衣店經營</div>'
+      +'<button onclick="closeBizPanel()" style="margin-left:auto;background:rgba(255,255,255,.1);border:none;color:#fff;width:28px;height:28px;border-radius:50%;cursor:pointer">✕</button>'
+    +'</div>'
+    +'<div style="text-align:center;font-size:22px;margin-bottom:4px">'+starStr+'</div>'
+    +'<div style="text-align:center;font-size:12px;color:rgba(255,255,255,.5);margin-bottom:14px">目前評等：'+stars+' 星好店</div>'
+    +'<div style="background:rgba(255,215,0,.1);border:1px solid rgba(255,215,0,.3);border-radius:12px;padding:10px;text-align:center;margin-bottom:16px;font-size:15px;font-weight:bold;color:#ffd700">💰 '+(AV.coins||0)+' 金幣</div>'
+    +cardsHtml
+    +'<div style="font-size:11px;color:rgba(255,255,255,.4);text-align:center;margin-top:10px">答題、釣魚、種花、餵動物都能賺金幣喔！</div>';
+}
+
 // ═══ 清洗工廠 ═══
 var FACTORY_STAGES=[
   {id:'wash', e:'🫧',label:'洗衣',desc:'依材質分類，低溫水洗，溫柔去除表面髒污。',match:['收件','清洗中','洗衣']},
@@ -1488,6 +1586,7 @@ var ACHIEVEMENTS=[
   {id:'garden20',   icon:'🌺',name:'花園達人',  desc:'收成20朵花',             need:'gardenHarvest',n:20},
  {id:'pet_adopt',  icon:'🐕',name:'認養寵物',  desc:'讓一隻動物成為小鎮寵物', need:'petAdopt',n:1},
   {id:'rain_hero',  icon:'☔',name:'雨中英雄',  desc:'在下雨天幫助淋濕衣物的居民', need:'rainHelp',n:1},
+  {id:'five_star',  icon:'🌟',name:'五星好店',  desc:'把洗衣店四項軌道全部升到滿級', need:'bizStars',n:5},
 ];
 var _ak='ch_achv';
 var AV={talk:0,quiz:0,correct:0,perfect:0,shop:0,svc:0,unlocked:[],talkIds:[],svcIds:[]};
@@ -1829,7 +1928,7 @@ function answerQ(idx){
   const q=QUESTIONS[curQ];
   document.querySelectorAll('.qopt').forEach(b=>b.classList.add('locked'));
   q.opts.forEach((o,i)=>{const bs=document.querySelectorAll('.qopt');if(o.ok)bs[i].classList.add('correct');else if(i===idx)bs[i].classList.add('wrong')});
-  const ok=q.opts[idx].ok;if(ok){correctCnt++;achvAdd('correct',1);sfxCorrect();}else{sfxWrong();}
+ const ok=q.opts[idx].ok;if(ok){correctCnt++;achvAdd('correct',1);addCoins(5);sfxCorrect();}else{sfxWrong();}
   const rb=document.getElementById('qres');rb.style.display='block';rb.className='qres '+(ok?'ok':'ng');
   document.getElementById('qrEmo').textContent=ok?'🎉':'😅';
   document.getElementById('qrTi').textContent=ok?'答對了！洗衣達人！':'答錯了，下次加油！';
@@ -2111,6 +2210,7 @@ function feedAnimal(id,food){
   if(!animal)return;
   animal.happy=90;
   sfxCorrect();
+  addCoins(2);
   achvAdd('feed',1);
   loadAV();
   if(!AV.animalFeeds)AV.animalFeeds={};
@@ -2202,6 +2302,8 @@ function castLine(spotId){
     if(!AV.fishCounts)AV.fishCounts={};
     AV.fishCounts[fish.id]=(AV.fishCounts[fish.id]||0)+1;
     saveAV();
+    var fishCoinMap={'普通':3,'稀有':10,'史詩':25,'傳說':60};
+    addCoins(fishCoinMap[fish.rarity]||3);
     achvAdd('fishCount',1);
     achvAdd('fishSpeciesId',fish.id);
     if(fish.rarity==='稀有')achvAdd('fishRare',1);
@@ -2292,10 +2394,11 @@ function handlePlotClick(id){
     showToast('🌱 花苗還在成長，還需 '+(hh>0?hh+'小時':'')+mm+'分鐘');
     return;
   }
-  var type=rec.type;
+ var type=rec.type;
   delete garden[id];
   saveGarden(garden);
   sfxCorrect();
+  addCoins(8);
   achvAdd('gardenHarvest',1);
   showToast(type+' 收成了一朵美麗的花！已加入你的花園收藏');
   updateGardenVisuals();
@@ -2375,7 +2478,7 @@ function init(){
   setInterval(updateTopSeason,60000);
 
   setTimeout(()=>{
-    document.getElementById('loading').style.display='none';loadAV();var ab=document.getElementById('achvBtn');if(ab)ab.style.display='block';
+    document.getElementById('loading').style.display='none';loadAV();var ab=document.getElementById('achvBtn');if(ab)ab.style.display='block';var bb=document.getElementById('bizBtn');if(bb)bb.style.display='block';
     if(AV.petAnimalId!=null){var petA=dynState.find(function(d){return d.id===AV.petAnimalId;});if(petA)petA.isPet=true;}
     document.getElementById('topBar').style.display='flex';
     document.getElementById('viewport').style.display='block';
