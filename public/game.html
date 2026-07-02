@@ -1033,6 +1033,7 @@ function initRain(){
     rainDrops.push({x:Math.random()*window.innerWidth,y:Math.random()*window.innerHeight,
       spd:8+Math.random()*6,len:12+Math.random()*8,opacity:.3+Math.random()*.4});
   }
+  spawnRainEvent();
 }
 
 function updateRain(){
@@ -1046,6 +1047,56 @@ function updateRain(){
     rainCx.beginPath();rainCx.moveTo(d.x,d.y);rainCx.lineTo(d.x+d.spd*.15*d.len/10,d.y+d.len);rainCx.stroke();
   });
   rainCx.globalAlpha=1;
+}
+
+// ══ 每日隨機事件：下雨衣物 ══
+var RAIN_EVENT_SPOTS=[
+  {x:480, y:760},{x:1250,y:770},{x:1750,y:1080}
+];
+function spawnRainEvent(){
+  if(!document.getElementById('glowStyle')){
+    var gs=document.createElement('style');gs.id='glowStyle';
+    gs.textContent='@keyframes glowPulse{0%,100%{opacity:.5;transform:translateX(-50%) scale(1)}50%{opacity:1;transform:translateX(-50%) scale(1.15)}}';
+    document.head.appendChild(gs);
+  }
+  var w=document.getElementById('world');
+  var pos=RAIN_EVENT_SPOTS[Math.floor(Math.random()*RAIN_EVENT_SPOTS.length)];
+  var el=document.createElement('div');
+  el.className='npc-wrap';el.id='rainEvent';
+  el.style.cssText='left:'+pos.x+'px;top:'+pos.y+'px;z-index:23';
+  el.innerHTML=
+    '<div style="position:relative;display:inline-block">'
+      +'<div style="position:absolute;top:-8px;left:50%;transform:translateX(-50%);width:46px;height:46px;border-radius:50%;border:2px solid #4db8ff;animation:glowPulse 1.3s ease-in-out infinite;pointer-events:none"></div>'
+      +'<div class="npc-body" style="font-size:30px;animation:idleF 1.6s ease-in-out infinite">😟</div>'
+    +'</div>'
+    +'<div class="npc-shadow"></div>'
+    +'<div class="npc-tag" style="background:rgba(77,184,255,.25);border:1px solid #4db8ff;color:#4db8ff">衣服淋濕了！</div>';
+  el.addEventListener('click',function(ev){
+    ev.stopPropagation();
+    sfxOpen();
+    openRainEventDlg();
+  });
+  w.appendChild(el);
+}
+function removeRainEvent(){
+  var el=document.getElementById('rainEvent');
+  if(el&&el.parentNode)el.parentNode.removeChild(el);
+}
+function openRainEventDlg(){
+  curNpc={id:'rainEvent',e:'😟',name:'淋雨的路人',role:'緊急求助',
+    dlg:{text:'哎呀！突然下大雨，我來不及收衣服，全部都淋濕了，怎麼辦！',
+      opts:[
+        {i:'🏃',t:'幫忙撿衣服！',n:'pick'},
+        {i:'🧺',t:'帶去 C.H 精緻洗衣！',n:'wash'}
+      ]},
+    extra:{
+      pick:{text:'謝謝你！衣服先收好放進洗衣籃，等雨停再處理，你真是好心人！',
+        opts:[{i:'😊',t:'不客氣！',close:true,action:'rainDone'}]},
+      wash:{text:'太好了！淋濕的衣物如果沒儘快處理容易發霉發臭，C.H 可以幫忙緊急清洗烘乾！',
+        opts:[{i:'🏪',t:'前往 C.H 精緻洗衣',close:true,action:'rainWash'},{i:'🔬',t:'挑戰污漬解謎！',action:'quiz'}]}
+    }};
+  renderDlg(curNpc.dlg);
+  document.getElementById('dlgOverlay').classList.add('show');
 }
 
 var lastNpc=0,birdTick=0;
@@ -1155,6 +1206,8 @@ function renderDlg(dlg){
 }
 function handleOpt(o){
   if(o.action==='quiz'){closeDlg();openQuiz();return}
+  if(o.action==='rainDone'){closeDlg();achvAdd('rainHelp',1);removeRainEvent();showToast('💛 感謝你的幫忙！這份善心也讓 C.H 的服務更有溫度～');return}
+  if(o.action==='rainWash'){closeDlg();achvAdd('rainHelp',1);removeRainEvent();openShop();return}
   if(o.close){closeDlg();return}
   if(o.n&&curNpc.extra&&curNpc.extra[o.n])renderDlg(curNpc.extra[o.n]);
 }
@@ -1433,7 +1486,8 @@ var ACHIEVEMENTS=[
   {id:'garden_first',icon:'🌱',name:'園丁初體驗',desc:'種下第一株花苗',        need:'gardenPlant',n:1},
   {id:'garden5',    icon:'🌷',name:'小花園主人',desc:'收成5朵花',              need:'gardenHarvest',n:5},
   {id:'garden20',   icon:'🌺',name:'花園達人',  desc:'收成20朵花',             need:'gardenHarvest',n:20},
-  {id:'pet_adopt',  icon:'🐕',name:'認養寵物',  desc:'讓一隻動物成為小鎮寵物', need:'petAdopt',n:1},
+ {id:'pet_adopt',  icon:'🐕',name:'認養寵物',  desc:'讓一隻動物成為小鎮寵物', need:'petAdopt',n:1},
+  {id:'rain_hero',  icon:'☔',name:'雨中英雄',  desc:'在下雨天幫助淋濕衣物的居民', need:'rainHelp',n:1},
 ];
 var _ak='ch_achv';
 var AV={talk:0,quiz:0,correct:0,perfect:0,shop:0,svc:0,unlocked:[],talkIds:[],svcIds:[]};
