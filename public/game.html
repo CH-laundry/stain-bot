@@ -2147,7 +2147,7 @@ function init(){
   document.getElementById('topBar').style.background=`linear-gradient(135deg,${si.sky1}ee,${si.sky2}ee)`;
   window._uid='pl_'+Date.now();
   document.getElementById('topName').textContent='洗衣小鎮居民';
- (async()=>{try{await liff.init({liffId:LIFF_ID});if(liff.isLoggedIn()){const p=await liff.getProfile();window._uid=p.userId;document.getElementById('topName').textContent=p.displayName||'探險家';}}catch(e){}lastTaskFetch=0;})();
+(async()=>{try{await liff.init({liffId:LIFF_ID});if(liff.isLoggedIn()){const p=await liff.getProfile();window._uid=p.userId;document.getElementById('topName').textContent=p.displayName||'探險家';}}catch(e){}lastTaskFetch=0;fetchRealTasks(true);})();
   // 建立世界
   drawMap();
   initMapDetails();
@@ -2179,6 +2179,8 @@ function init(){
     document.getElementById('viewport').style.display='block';
     setTimeout(()=>{document.getElementById('hint').style.opacity='0'},4500);
     showToast('🧺 歡迎來到洗衣小鎮！點擊居民和建築互動！');
+    fetchRealTasks();
+    setInterval(fetchRealTasks,60000);
     requestAnimationFrame(npcLoop);
     requestAnimationFrame(gameLoop);
   },2200);
