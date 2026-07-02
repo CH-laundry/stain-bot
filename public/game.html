@@ -197,13 +197,35 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'Microsoft JhengHei
         <div class="svc" onclick="showSvcInfo('coat')" style="cursor:pointer;transition:transform .15s" ontouchstart="this.style.transform='scale(.95)'" ontouchend="this.style.transform='scale(1)'"><div class="svc-ico">🧥</div><div class="svc-nm">大衣皮革</div><div class="svc-de">特殊材質專業處理</div></div>
         <div class="svc" onclick="showSvcInfo('sport')" style="cursor:pointer;transition:transform .15s" ontouchstart="this.style.transform='scale(.95)'" ontouchend="this.style.transform='scale(1)'"><div class="svc-ico">🎽</div><div class="svc-nm">運動衣物</div><div class="svc-de">異味去除・抗菌處理</div></div>
       </div>
-      <button class="btn-talk" onclick="talkStaff()">💬 和店員說話</button>
+      
+
+<button class="btn-talk" onclick="talkStaff()">💬 和店員說話</button>
       <button class="btn-back" onclick="closeShop()">← 返回小鎮</button>
     </div>
   </div>
 </div>
 
+<!-- 工廠 -->
+<div id="factoryOverlay">
+  <div class="shop-panel" style="max-width:560px">
+    <div style="padding:16px 16px 4px">
+      <div class="shop-logo-row">
+        <div style="font-size:34px">🏭</div>
+        <div><div class="shop-name-big">C.H 清洗工廠</div><div class="shop-name-en">FACTORY TOUR</div></div>
+      </div>
+      <div class="shop-desc">帶你看看衣物在工廠裡怎麼被細心呵護，五道工序、缺一不可。</div>
+      <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:14px;margin-bottom:14px">
+        <canvas id="factoryCanvas" height="220" style="display:block;border-radius:14px;background:#0d1f3a"></canvas>
+      </div>
+      <div id="factoryStageInfo" style="font-size:13px;color:rgba(255,255,255,.75);line-height:1.7;background:rgba(77,184,255,.07);border-radius:10px;padding:12px;margin-bottom:14px;min-height:40px"></div>
+      <button class="btn-back" onclick="closeFactory()">← 返回小鎮</button>
+    </div>
+  </div>
+</div>
 
+
+<!-- 服務知識 Modal -->
+  
 <!-- 服務知識 Modal -->
 <div id="svcModal" style="position:fixed;inset:0;z-index:700;background:rgba(0,0,0,.82);display:flex;align-items:center;justify-content:center;padding:16px;opacity:0;pointer-events:none;transition:opacity .25s">
   <div style="background:linear-gradient(160deg,#0d2040,#081428);border-radius:20px;border:2px solid #4db8ff;padding:22px 18px;width:100%;max-width:440px;max-height:82vh;overflow-y:auto;position:relative">
@@ -522,6 +544,7 @@ const BUILDINGS=[
   {id:'supermarket', label:'便利商店',     x:1515, y:283, w:155, h:130},
   {id:'flower',      label:'小雅花店',     x:1733, y:282, w:148, h:132},
   {id:'cafe',        label:'香榭咖啡廳',   x:2002, y:282, w:150, h:130},
+  {id:'factory',     label:'C.H 清洗工廠', x:1080, y:280, w:200, h:145, special:'factory'},
 ];
 function draw3DBld(cx,b){
   var x=b.x,y=b.y,w=b.w,h=b.h,id=b.id;
@@ -595,8 +618,19 @@ function draw3DBld(cx,b){
     cx.strokeStyle='#8a4010';cx.lineWidth=1;cx.strokeRect(x,y+40,w,14);
     cx.fillStyle='rgba(200,160,100,.3)';cx.fillRect(x+8,y+56,w-18,h-62);cx.strokeStyle='#5a2808';cx.lineWidth=2;cx.strokeRect(x+8,y+56,w-18,h-62);
     cx.beginPath();cx.moveTo(x+w/2,y+56);cx.lineTo(x+w/2,y+h-4);cx.stroke();
-    roof('#4a2008');
+   
+  roof('#4a2008');
+  } else if(id==='factory'){
+    side('#2a3a50');cx.fillStyle='#c8d0dc';cx.fillRect(x,y+8,w,h-8);
+    cx.fillStyle='#3a4a60';cx.fillRect(x,y+8,w,30);
+    cx.fillStyle='#7a8a9a';cx.fillRect(x+14,y-18,10,30);
+    cx.fillStyle='rgba(255,255,255,.3)';cx.beginPath();cx.arc(x+19,y-22,4,0,Math.PI*2);cx.fill();
+    cx.fillStyle='#fff';cx.font='bold 11px Microsoft JhengHei,sans-serif';cx.textAlign='center';cx.fillText('C.H 清洗工廠',x+w/2,y+22);
+    cx.font='7px sans-serif';cx.fillStyle='rgba(255,255,255,.75)';cx.fillText('FACTORY TOUR · 歡迎參觀',x+w/2,y+31);
+    for(var wi=0;wi<4;wi++){cx.fillStyle='rgba(180,220,255,.3)';cx.fillRect(x+10+wi*(w-20)/4,y+44,(w-20)/4-6,h-52);cx.strokeStyle='#4a5a6a';cx.lineWidth=1.5;cx.strokeRect(x+10+wi*(w-20)/4,y+44,(w-20)/4-6,h-52);}
+    roof('#22303f');
   }
+  
   var shG=cx.createLinearGradient(x,y+h,x,y+h+18);shG.addColorStop(0,'rgba(0,0,0,.28)');shG.addColorStop(1,'rgba(0,0,0,0)');cx.fillStyle=shG;cx.fillRect(x,y+h,w+dx,18);
   cx.fillStyle='rgba(255,255,255,.92)';cx.font='bold 10px Microsoft JhengHei,sans-serif';cx.textAlign='center';
   var tw=cx.measureText(b.label).width+16;cx.beginPath();cx.roundRect(x+w/2-tw/2,y+h+4,tw,18,5);cx.fill();
@@ -1124,6 +1158,114 @@ function handleOpt(o){
 function closeDlg(){sfxClose();document.getElementById('dlgOverlay').classList.remove('show');curNpc=null}
 document.getElementById('dlgOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeDlg()});
 
+// ═══ 清洗工廠 ═══
+var FACTORY_STAGES=[
+  {id:'wash', e:'🫧',label:'洗衣',desc:'依材質分類，低溫水洗，溫柔去除表面髒污。',match:['收件','清洗中','洗衣']},
+  {id:'stain',e:'🔍',label:'去漬',desc:'師傅針對頑固污漬手工加強處理，一件一件檢查。',match:['去漬','污漬']},
+  {id:'dry',  e:'🌬️',label:'烘乾',desc:'控溫烘乾，避免縮水變形，保持衣物原本手感。',match:['烘乾']},
+  {id:'iron', e:'♨️',label:'整燙',desc:'蒸氣整燙定型，讓每件衣物恢復筆挺。',match:['整燙中','整燙']},
+  {id:'pack', e:'📦',label:'包裝',desc:'摺疊包裝，最後檢查後就能通知您取件囉！',match:['已完成','待取','done']}
+];
+var factoryAnimTimer=null,factoryTick=0,factoryHighlight=null;
+
+function guessFactoryStage(){
+  if(!realTasks||realTasks.length===0)return null;
+  var text=(realTasks[0].statusText||'')+'';
+  for(var i=0;i<FACTORY_STAGES.length;i++){
+    var st=FACTORY_STAGES[i];
+    for(var j=0;j<st.match.length;j++){if(text.indexOf(st.match[j])>-1)return st.id;}
+  }
+  return null;
+}
+function openFactory(){
+  sfxOpen();
+  factoryHighlight=guessFactoryStage();
+  showFactoryStageInfo(factoryHighlight);
+  document.getElementById('factoryOverlay').classList.add('show');
+  if(factoryAnimTimer)clearInterval(factoryAnimTimer);
+  factoryTick=0;
+  factoryAnimTimer=setInterval(function(){
+    factoryTick++;
+    var cv=document.getElementById('factoryCanvas');
+    if(!cv){clearInterval(factoryAnimTimer);return;}
+    cv.width=900;
+    drawFactoryScene(cv.getContext('2d'),900,220,factoryTick,factoryHighlight);
+  },50);
+}
+function closeFactory(){
+  sfxClose();
+  document.getElementById('factoryOverlay').classList.remove('show');
+  if(factoryAnimTimer){clearInterval(factoryAnimTimer);factoryAnimTimer=null;}
+}
+document.getElementById('factoryOverlay').addEventListener('click',function(e){if(e.target===e.currentTarget)closeFactory();});
+
+function showFactoryStageInfo(stageId){
+  var box=document.getElementById('factoryStageInfo');if(!box)return;
+  if(stageId){
+    var st=FACTORY_STAGES.find(function(s){return s.id===stageId;});
+    box.innerHTML='<strong style="color:#ffd700">🌟 你的衣物正在「'+st.label+'」階段！</strong><br>'+st.desc;
+  } else {
+    box.textContent='點擊工廠畫面中的各個工作站，了解衣物在這裡會經過什麼樣的呵護。';
+  }
+}
+function drawFactoryScene(c,w,h,tick,highlight){
+  c.clearRect(0,0,w,h);
+  var bg=c.createLinearGradient(0,0,0,h);bg.addColorStop(0,'#12294f');bg.addColorStop(1,'#0a1830');
+  c.fillStyle=bg;c.fillRect(0,0,w,h);
+  var stageW=w/FACTORY_STAGES.length;
+  FACTORY_STAGES.forEach(function(st,i){
+    var cx0=stageW*i+stageW/2,isHi=highlight===st.id;
+    c.fillStyle=isHi?'rgba(255,215,0,.14)':'rgba(255,255,255,.04)';
+    c.fillRect(stageW*i+8,20,stageW-16,h-40);
+    if(isHi){c.strokeStyle='#ffd700';c.lineWidth=2;c.strokeRect(stageW*i+8,20,stageW-16,h-40);}
+    c.fillStyle=isHi?'#ffd700':'rgba(255,255,255,.7)';
+    c.font='bold 13px Microsoft JhengHei,sans-serif';c.textAlign='center';c.fillText(st.label,cx0,40);
+    drawFactoryIcon(c,st.id,cx0,h/2+10,tick);
+  });
+}
+function drawFactoryIcon(c,id,cx0,cy,tick){
+  var phase=tick*.06;
+  if(id==='wash'){
+    c.fillStyle='#dfe8f2';c.beginPath();c.arc(cx0,cy,34,0,Math.PI*2);c.fill();
+    c.fillStyle='#1a2a3a';c.beginPath();c.arc(cx0,cy,26,0,Math.PI*2);c.fill();
+    c.save();c.translate(cx0,cy);c.rotate(phase);
+    c.fillStyle='rgba(77,184,255,.6)';c.fillRect(-10,-14,20,10);
+    c.fillStyle='rgba(255,140,140,.6)';c.fillRect(-12,4,15,10);
+    c.restore();
+    if(tick%10<5){c.fillStyle='rgba(200,240,255,.6)';c.beginPath();c.arc(cx0-14,cy-16,3,0,Math.PI*2);c.fill();}
+  } else if(id==='stain'){
+    c.fillStyle='rgba(255,255,255,.15)';c.beginPath();c.roundRect(cx0-24,cy-16,48,32,6);c.fill();
+    c.fillStyle='rgba(139,69,19,.4)';c.beginPath();c.ellipse(cx0-4,cy,8,6,0,0,Math.PI*2);c.fill();
+    var mgx=cx0-20+((tick*2)%56);
+    c.strokeStyle='#ffd700';c.lineWidth=2;
+    c.beginPath();c.arc(mgx,cy,10,0,Math.PI*2);c.stroke();
+    c.beginPath();c.moveTo(mgx+7,cy+7);c.lineTo(mgx+14,cy+14);c.stroke();
+  } else if(id==='dry'){
+    c.fillStyle='#dfe8f2';c.beginPath();c.arc(cx0,cy,34,0,Math.PI*2);c.fill();
+    c.fillStyle='#2a1a0a';c.beginPath();c.arc(cx0,cy,26,0,Math.PI*2);c.fill();
+    c.save();c.translate(cx0,cy);c.rotate(-phase*1.4);
+    c.fillStyle='rgba(255,180,100,.55)';c.fillRect(-11,-11,22,22);
+    c.restore();
+    for(var i=0;i<3;i++){
+      var yy=cy-40-((tick*1.5+i*14)%40);
+      c.strokeStyle='rgba(255,180,100,'+(0.4-(cy-yy)/150)+')';c.lineWidth=2;
+      c.beginPath();c.moveTo(cx0-8+i*8,yy+20);c.lineTo(cx0-6+i*8,yy);c.stroke();
+    }
+  } else if(id==='iron'){
+    var ix=cx0-18+Math.sin(tick*.08)*18;
+    c.fillStyle='#888';c.beginPath();c.moveTo(ix-16,cy+10);c.lineTo(ix+16,cy+10);c.lineTo(ix+10,cy-6);c.lineTo(ix-10,cy-6);c.closePath();c.fill();
+    c.fillStyle='#555';c.fillRect(ix-6,cy-16,12,10);
+    c.fillStyle='rgba(255,255,255,.5)';
+    for(var s=0;s<3;s++){c.beginPath();c.arc(ix+6,cy-20-s*8-((tick+s*8)%16),2,0,Math.PI*2);c.fill();}
+  } else if(id==='pack'){
+    c.fillStyle='#c8a060';c.beginPath();c.roundRect(cx0-20,cy-4,40,26,4);c.fill();
+    var foldProg=(tick%40)/40;
+    c.fillStyle='rgba(77,184,255,.7)';c.fillRect(cx0-14,cy-20+foldProg*16,28,14*(1-foldProg*.3));
+  }
+}
+
+
+  
 // ═══ 店面 ═══
 function openShop(){drawShopScene();sfxOpen();achvAdd('shop',1);document.getElementById('shopOverlay').classList.add('show')}
 function closeShop(){stopShopAnimation();sfxClose();document.getElementById('shopOverlay').classList.remove('show')}
@@ -1147,6 +1289,7 @@ function talkStaff(){
 
 function handleBldClick(bld){
   if(bld.special==='shop'){openShop();return;}
+  if(bld.special==='factory'){openFactory();return;}
   var T={
     noodle:{e:'👨',name:'阿明師傅',role:'麵館老闆',
       dlg:{text:'廚師服每天都是油漬，幸好有 C.H 幫我處理！油漬要先預處理！',
@@ -1819,6 +1962,7 @@ function showRealTaskPanel(task,statusData){
       ?'<div style="background:rgba(40,167,69,.15);border:1px solid #28a745;border-radius:12px;padding:12px;text-align:center;margin-bottom:10px;font-size:14px;color:#28a745">✅ 衣物已完成清洗，歡迎取件！</div>'
       :'<button onclick="cheerForTask(\''+task.taskId+'\')" style="width:100%;padding:12px;background:linear-gradient(135deg,#ffd700,#ff9500);color:#1a1a2e;font-size:14px;font-weight:bold;border:none;border-radius:12px;cursor:pointer;margin-bottom:8px">💛 為這件衣物加油！</button>'
     )
+    +'<button onclick="closeRealTaskPanel();openFactory()" style="width:100%;padding:11px;background:rgba(255,215,0,.12);color:#ffd700;border:1.5px solid rgba(255,215,0,.3);border-radius:12px;cursor:pointer;font-size:13px;margin-bottom:8px">🏭 查看工廠實況</button>'
     +'<button onclick="closeRealTaskPanel();openQuiz()" style="width:100%;padding:11px;background:rgba(77,184,255,.12);color:#4db8ff;border:1.5px solid rgba(77,184,255,.3);border-radius:12px;cursor:pointer;font-size:13px">🔬 挑戰相關污漬解謎</button>';
 
   p.style.opacity='1';p.style.pointerEvents='all';
