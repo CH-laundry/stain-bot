@@ -151,6 +151,7 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'Microsoft JhengHei
 </div>
 <button onclick="showAchvPanel()" style="position:fixed;top:58px;right:12px;z-index:190;background:rgba(255,215,0,.15);border:1.5px solid rgba(255,215,0,.4);border-radius:20px;padding:5px 12px;font-size:12px;color:#ffd700;cursor:pointer;display:none" id="achvBtn">🏅 成就</button>
 <button onclick="openBizPanel()" style="position:fixed;top:58px;right:96px;z-index:190;background:rgba(77,184,255,.15);border:1.5px solid rgba(77,184,255,.4);border-radius:20px;padding:5px 12px;font-size:12px;color:#4db8ff;cursor:pointer;display:none" id="bizBtn">🏬 經營</button>
+  <button onclick="openTownShopPanel()" style="position:fixed;top:58px;right:180px;z-index:190;background:rgba(255,107,174,.15);border:1.5px solid rgba(255,107,174,.4);border-radius:20px;padding:5px 12px;font-size:12px;color:#ff6bae;cursor:pointer;display:none" id="tshopBtn">🛒 商店</button>
 <div id="hint">👆 拖動畫面探索小鎮，點擊居民和建築互動！</div>
 <div id="rain-overlay"></div>
 <div id="toast"></div>
@@ -852,11 +853,13 @@ DYNAMIC_CHARS.forEach(function(c,idx){dynState.push(Object.assign({},c,{ox:c.x,o
   {id:'lake', x:1900, y:1020, rx:140, ry:95, label:'小湖'},
   {id:'pond', x:400,  y:1100, rx:75,  ry:50, label:'池塘'}
 ];
-  const GARDEN_PLOTS=[
+ const GARDEN_PLOTS=[
   {id:0,x:80, y:1030},
   {id:1,x:160,y:1045},
   {id:2,x:240,y:1030},
-  {id:3,x:300,y:1075}
+  {id:3,x:300,y:1075},
+  {id:4,x:120,y:1095},
+  {id:5,x:210,y:1105}
 ];
   
 let birdCv=null,birdCx=null;
@@ -1136,9 +1139,10 @@ function npcLoop(ts){
             var dxp=tx-d.x,dyp=ty-d.y,distp=Math.hypot(dxp,dyp);
             if(distp>4){d.x+=dxp/distp*1.1;d.y+=dyp/distp*1.1;d.dir=dxp<0?-1:1;}
           }
-          if(d.type==='cat')drawCatAnim(birdCx,d.x,d.y,d.dir||1);
+         if(d.type==='cat')drawCatAnim(birdCx,d.x,d.y,d.dir||1);
           else drawDog2Anim(birdCx,d.x,d.y,d.dir||1,d.tick*.2);
           birdCx.save();birdCx.font='12px serif';birdCx.textAlign='center';birdCx.fillText('💛',d.x,d.y-22);birdCx.restore();
+          if(CURRENT_PET_ACCESSORY){birdCx.save();birdCx.font='14px serif';birdCx.textAlign='center';birdCx.fillText(CURRENT_PET_ACCESSORY.e,d.x,d.y-34);birdCx.restore();}
           if(d.happy>0){
             d.happy--;
             birdCx.save();birdCx.globalAlpha=Math.min(1,d.happy/30);
@@ -1312,6 +1316,81 @@ function renderBizPanel(){
     +'<div style="font-size:11px;color:rgba(255,255,255,.4);text-align:center;margin-top:10px">答題、釣魚、種花、餵動物都能賺金幣喔！</div>';
 }
 
+  // ══ 小鎮商店（金幣消費）══
+function openTownShopPanel(){
+  sfxOpen();
+  var p=document.getElementById('_tshop');
+  if(!p){
+    p=document.createElement('div');p.id='_tshop';
+    p.style.cssText='position:fixed;inset:0;z-index:600;background:rgba(0,0,0,.82);display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s';
+    p.innerHTML='<div id="_tshopInner" style="background:linear-gradient(160deg,#0d2040,#081428);border-radius:22px 22px 0 0;border-top:3px solid #4db8ff;padding:20px 16px 36px;width:100%;max-width:500px;max-height:88vh;overflow-y:auto"></div>';
+    p.addEventListener('click',function(e){if(e.target===p)closeTownShopPanel();});
+    document.body.appendChild(p);
+  }
+  renderTownShopPanel();
+  p.style.opacity='1';p.style.pointerEvents='all';
+}
+function closeTownShopPanel(){
+  var p=document.getElementById('_tshop');
+  if(p){p.style.opacity='0';p.style.pointerEvents='none';}
+}
+function renderTownShopPanel(){
+  loadAV();
+  var rodLv=AV.rodLevel||1;
+  var rodCost=rodLv>=3?null:(rodLv===1?100:250);
+  var gardenUnlocked=AV.gardenUnlocked||4;
+  var gardenCost=gardenUnlocked>=GARDEN_PLOTS.length?null:(gardenUnlocked===4?150:300);
+  var ownedAcc=AV.ownedAccessories||[];
+  var equippedAcc=AV.petAccessory||null;
+
+  var rodHtml='<div style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:13px;margin-bottom:12px">'
+    +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">'
+      +'<div style="font-size:26px">🎣</div>'
+      +'<div style="flex:1"><div style="font-size:14px;font-weight:bold;color:#fff">釣竿升級</div>'
+      +'<div style="font-size:11px;color:rgba(255,255,255,.5)">目前冷卻 '+(getFishCooldown()/1000)+' 秒 · Lv.'+rodLv+'/3</div></div>'
+    +'</div>'
+    +(rodCost==null
+      ?'<div style="text-align:center;font-size:12px;color:#28a745;padding:6px">✅ 已滿級</div>'
+      :'<button onclick="upgradeRod()" style="width:100%;padding:9px;background:linear-gradient(135deg,#1a6eb5,#4db8ff);color:#fff;font-size:12px;font-weight:bold;border:none;border-radius:9px;cursor:pointer">升級（💰 '+rodCost+'）</button>')
+    +'</div>';
+
+  var gardenHtml='<div style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:13px;margin-bottom:12px">'
+    +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">'
+      +'<div style="font-size:26px">🌱</div>'
+      +'<div style="flex:1"><div style="font-size:14px;font-weight:bold;color:#fff">花園擴建</div>'
+      +'<div style="font-size:11px;color:rgba(255,255,255,.5)">目前 '+gardenUnlocked+'/'+GARDEN_PLOTS.length+' 塊地</div></div>'
+    +'</div>'
+    +(gardenCost==null
+      ?'<div style="text-align:center;font-size:12px;color:#28a745;padding:6px">✅ 已全部解鎖</div>'
+      :'<button onclick="unlockGardenPlot()" style="width:100%;padding:9px;background:linear-gradient(135deg,#1a6eb5,#4db8ff);color:#fff;font-size:12px;font-weight:bold;border:none;border-radius:9px;cursor:pointer">解鎖新地（💰 '+gardenCost+'）</button>')
+    +'</div>';
+
+  var accHtml='<div style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:13px;margin-bottom:8px">'
+    +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">'
+      +'<div style="font-size:26px">🎀</div>'
+      +'<div style="flex:1"><div style="font-size:14px;font-weight:bold;color:#fff">寵物飾品</div>'
+      +'<div style="font-size:11px;color:rgba(255,255,255,.5)">'+(AV.petAnimalId==null?'尚未認養寵物':'裝飾你的小鎮寵物')+'</div></div>'
+    +'</div>'
+    +'<div style="display:grid;gap:8px">'
+    +PET_ACCESSORIES.map(function(a){
+      var owned=ownedAcc.indexOf(a.id)>=0;
+      var equipped=equippedAcc===a.id;
+      return '<button onclick="buyPetAccessory(\''+a.id+'\')" style="display:flex;align-items:center;gap:9px;padding:9px 11px;background:'+(equipped?'rgba(255,215,0,.15)':'rgba(255,255,255,.06)')+';border:1.5px solid '+(equipped?'#ffd700':'rgba(255,255,255,.15)')+';border-radius:10px;color:#fff;font-size:12px;cursor:pointer;text-align:left">'
+        +'<span style="font-size:20px">'+a.e+'</span>'
+        +'<span style="flex:1">'+a.name+(equipped?'（配戴中）':owned?'（已擁有，點擊裝備）':'')+'</span>'
+        +(owned?'':'<span style="color:#ffd700;font-weight:bold">💰'+a.cost+'</span>')
+        +'</button>';
+    }).join('')
+    +'</div></div>';
+
+  document.getElementById('_tshopInner').innerHTML=
+    '<div style="display:flex;align-items:center;margin-bottom:14px">'
+      +'<div style="font-size:16px;font-weight:bold;color:#4db8ff">🛒 小鎮商店</div>'
+      +'<button onclick="closeTownShopPanel()" style="margin-left:auto;background:rgba(255,255,255,.1);border:none;color:#fff;width:28px;height:28px;border-radius:50%;cursor:pointer">✕</button>'
+    +'</div>'
+    +'<div style="background:rgba(255,215,0,.1);border:1px solid rgba(255,215,0,.3);border-radius:12px;padding:10px;text-align:center;margin-bottom:16px;font-size:15px;font-weight:bold;color:#ffd700">💰 '+(AV.coins||0)+' 金幣</div>'
+    +rodHtml+gardenHtml+accHtml;
+}
 // ═══ 清洗工廠 ═══
 var FACTORY_STAGES=[
   {id:'wash', e:'🫧',label:'洗衣',desc:'依材質分類，低溫水洗，溫柔去除表面髒污。',match:['收件','清洗中','洗衣']},
@@ -2241,6 +2320,51 @@ var FISH_TYPES=[
 ];
 var FISH_MISS_RATE=0.22;
 var FISH_COOLDOWN=8000;
+function getFishCooldown(){
+  loadAV();
+  var lv=AV.rodLevel||1;
+  return lv===1?8000:(lv===2?5000:3000);
+}
+function upgradeRod(){
+  loadAV();
+  var lv=AV.rodLevel||1;
+  if(lv>=3){showToast('釣竿已經升到最高等級囉！');return;}
+  var cost=lv===1?100:250;
+  if((AV.coins||0)<cost){showToast('金幣不夠喔，還差 '+(cost-(AV.coins||0))+' 枚');return;}
+  AV.coins-=cost;
+  AV.rodLevel=lv+1;
+  saveAV();
+  sfxAchieve();
+  showToast('🎣 釣竿升級了！冷卻時間縮短為 '+(getFishCooldown()/1000)+' 秒');
+  renderTownShopPanel();
+}
+  var PET_ACCESSORIES=[
+  {id:'collar', e:'🎀',name:'蝴蝶結',cost:80},
+  {id:'bandana',e:'🧣',name:'領巾',  cost:80},
+  {id:'crown',  e:'👑',name:'小皇冠',cost:200}
+];
+var CURRENT_PET_ACCESSORY=null;
+function buyPetAccessory(id){
+  loadAV();
+  if(!AV.ownedAccessories)AV.ownedAccessories=[];
+  if(AV.ownedAccessories.indexOf(id)>=0){equipPetAccessory(id);return;}
+  var item=PET_ACCESSORIES.find(function(a){return a.id===id;});
+  if((AV.coins||0)<item.cost){showToast('金幣不夠喔，還差 '+(item.cost-(AV.coins||0))+' 枚');return;}
+  AV.coins-=item.cost;
+  AV.ownedAccessories.push(id);
+  saveAV();
+  sfxAchieve();
+  showToast(item.e+' 買到了！已自動為寵物戴上～');
+  equipPetAccessory(id);
+}
+function equipPetAccessory(id){
+  loadAV();
+  if(AV.petAnimalId==null){showToast('要先認養一隻寵物才能裝扮喔！');return;}
+  AV.petAccessory=id;
+  saveAV();
+  CURRENT_PET_ACCESSORY=PET_ACCESSORIES.find(function(a){return a.id===id;});
+  renderTownShopPanel();
+}
 function pickFish(){
   var total=FISH_TYPES.reduce(function(s,f){return s+f.weight;},0);
   var r=Math.random()*total;
@@ -2265,7 +2389,7 @@ function openFishingPanel(spot){
   document.getElementById('_fh').style.pointerEvents='all';
 }
 function renderFishingIdle(spot){
-  var remain=Math.max(0,(AV.lastFishTime||0)+FISH_COOLDOWN-Date.now());
+  var remain=Math.max(0,(AV.lastFishTime||0)+getFishCooldown()-Date.now());
   var canCast=remain<=0;
   document.getElementById('_fhInner').innerHTML=
     '<div style="font-size:44px;margin-bottom:6px">🎣</div>'
@@ -2350,17 +2474,35 @@ var GARDEN_GROW_MS=6*60*60*1000;
 var GARDEN_FLOWER_TYPES=['🌷','🌻','🌼','🌹','🌺'];
 function loadGarden(){try{var s=localStorage.getItem('ch_garden');return s?JSON.parse(s):{};}catch(e){return{};}}
 function saveGarden(g){try{localStorage.setItem('ch_garden',JSON.stringify(g));}catch(e){}}
-function initGardenPlots(){
+function createGardenPlotEl(plot){
   var w=document.getElementById('world');
-  GARDEN_PLOTS.forEach(function(plot){
-    var el=document.createElement('div');
-    el.id='plot_'+plot.id;
-    el.style.cssText='position:absolute;left:'+(plot.x-16)+'px;top:'+(plot.y-16)+'px;width:32px;height:32px;font-size:26px;cursor:pointer;z-index:16;text-align:center;line-height:32px;user-select:none';
-    el.addEventListener('click',function(ev){ev.stopPropagation();handlePlotClick(plot.id);});
-    w.appendChild(el);
-  });
+  var el=document.createElement('div');
+  el.id='plot_'+plot.id;
+  el.style.cssText='position:absolute;left:'+(plot.x-16)+'px;top:'+(plot.y-16)+'px;width:32px;height:32px;font-size:26px;cursor:pointer;z-index:16;text-align:center;line-height:32px;user-select:none';
+  el.addEventListener('click',function(ev){ev.stopPropagation();handlePlotClick(plot.id);});
+  w.appendChild(el);
+}
+function initGardenPlots(){
+  loadAV();
+  var unlocked=AV.gardenUnlocked||4;
+  GARDEN_PLOTS.slice(0,unlocked).forEach(function(plot){createGardenPlotEl(plot);});
   updateGardenVisuals();
   setInterval(updateGardenVisuals,15000);
+}
+function unlockGardenPlot(){
+  loadAV();
+  var unlocked=AV.gardenUnlocked||4;
+  if(unlocked>=GARDEN_PLOTS.length){showToast('花園已經全部解鎖囉！');return;}
+  var cost=unlocked===4?150:300;
+  if((AV.coins||0)<cost){showToast('金幣不夠喔，還差 '+(cost-(AV.coins||0))+' 枚');return;}
+  AV.coins-=cost;
+  AV.gardenUnlocked=unlocked+1;
+  saveAV();
+  createGardenPlotEl(GARDEN_PLOTS[unlocked]);
+  updateGardenVisuals();
+  sfxAchieve();
+  showToast('🌱 解鎖了新花圃地！');
+  renderTownShopPanel();
 }
 function updateGardenVisuals(){
   var garden=loadGarden();
@@ -2478,7 +2620,8 @@ function init(){
   setInterval(updateTopSeason,60000);
 
   setTimeout(()=>{
-    document.getElementById('loading').style.display='none';loadAV();var ab=document.getElementById('achvBtn');if(ab)ab.style.display='block';var bb=document.getElementById('bizBtn');if(bb)bb.style.display='block';
+   document.getElementById('loading').style.display='none';loadAV();var ab=document.getElementById('achvBtn');if(ab)ab.style.display='block';var bb=document.getElementById('bizBtn');if(bb)bb.style.display='block';var tb=document.getElementById('tshopBtn');if(tb)tb.style.display='block';
+    if(AV.petAccessory){CURRENT_PET_ACCESSORY=PET_ACCESSORIES.find(function(a){return a.id===AV.petAccessory;});}
     if(AV.petAnimalId!=null){var petA=dynState.find(function(d){return d.id===AV.petAnimalId;});if(petA)petA.isPet=true;}
     document.getElementById('topBar').style.display='flex';
     document.getElementById('viewport').style.display='block';
