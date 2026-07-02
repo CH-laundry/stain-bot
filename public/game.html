@@ -92,6 +92,9 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'Microsoft JhengHei
 .btn-talk{width:100%;padding:13px;background:linear-gradient(135deg,#1a6eb5,#4db8ff);color:#fff;font-size:15px;font-weight:bold;border:none;border-radius:13px;cursor:pointer;margin-bottom:8px}
 .btn-back{width:100%;padding:10px;background:rgba(255,255,255,.07);color:rgba(255,255,255,.65);border:1px solid rgba(255,255,255,.15);border-radius:11px;cursor:pointer;font-size:13px}
 
+#factoryOverlay{position:fixed;inset:0;z-index:400;background:rgba(0,0,0,.78);display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s}
+#factoryOverlay.show{opacity:1;pointer-events:all}
+
 /* ── 解謎 ── */
 #quizOverlay{position:fixed;inset:0;z-index:600;background:rgba(0,0,0,.88);display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s}
 #quizOverlay.show{opacity:1;pointer-events:all}
