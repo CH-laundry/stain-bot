@@ -97,12 +97,32 @@ function getItemEmoji(name) {
 // 直接用 userId 比對客戶編號，不依賴姓名是否完全相符
 app.get('/api/game-tasks', async (req, res) => {
   try {
-    const { userId } = req.query;
-    if (!userId) return res.json({ success: true, tasks: [] });
+    const { userId, displayName } = req.query;
+
+    // ★ 新增：用姓名比對的獨立分支（僅供洗衣小鎮遊戲備援使用，唯一比對才顯示）
+    // 完全獨立、不影響下面原本 userId 邏輯，處理完就直接 return，不會往下執行
+    if (!userId && displayName) {
+      const allCustomersByName = orderManager.getAllCustomerNumbers();
+      const cleanTarget = String(displayName).replace(/\s/g, '');
+      const nameMatches = allCustomersByName.filter(c =>
+        (c.name || '').replace(/\s/g, '') === cleanTarget
+      );
+
+      if (nameMatches.length !== 1) {
+        // 沒找到，或同名多筆，一律不顯示（保守處理，避免顯示錯人）
+        return res.json({ success: true, tasks: [], reason: nameMatches.length === 0 ? 'name_not_found' : 'name_ambiguous' });
+      }
+
+      // 唯一比對到，複用下面既有邏輯：直接把 userId 換成這筆客戶的 userId 繼續往下走
+      req.query.userId = nameMatches[0].userId;
+    }
+
+    const finalUserId = req.query.userId;
+    if (!finalUserId) return res.json({ success: true, tasks: [] });
 
     // 1. 直接用 userId 找對應的客戶（綁定關係，最準確）
     const allCustomers = orderManager.getAllCustomerNumbers();
-    const matched = allCustomers.find(c => c.userId === userId);
+    const matched = allCustomers.find(c => c.userId === finalUserId);
     if (!matched) {
       return res.json({ success: true, tasks: [], reason: 'not_bound' });
     }
