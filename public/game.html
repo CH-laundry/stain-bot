@@ -2381,8 +2381,6 @@ function init(){
     document.getElementById('viewport').style.display='block';
     setTimeout(()=>{document.getElementById('hint').style.opacity='0'},4500);
     showToast('🧺 歡迎來到洗衣小鎮！點擊居民和建築互動！');
-    fetchRealTasks();
-    setInterval(fetchRealTasks,60000);
     requestAnimationFrame(npcLoop);
     requestAnimationFrame(gameLoop);
   },2200);
