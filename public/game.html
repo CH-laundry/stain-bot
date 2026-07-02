@@ -1881,6 +1881,7 @@ var ITEM_EMOJI_MAP={
 };
 
 function updateRealTaskNPCs(tasks){
+  return; // 已停用「我的衣物」功能
   // 移除舊的真實NPC
   Object.keys(realNpcEls).forEach(function(id){
     var el=realNpcEls[id];
