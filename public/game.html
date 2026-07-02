@@ -1664,7 +1664,8 @@ function fetchRealTasks(force){
   var now=Date.now();
   if(!force && now-lastTaskFetch<60000)return;
   lastTaskFetch=now;
-  fetch(API_BASE+'/api/game-tasks?userId='+(window._uid||''))
+  var nm=document.getElementById('topName')?document.getElementById('topName').textContent:'';
+  fetch(API_BASE+'/api/game-tasks?displayName='+encodeURIComponent(nm))
     .then(function(r){return r.json();})
     .then(function(data){
       if(data.success&&data.tasks){
