@@ -6631,11 +6631,38 @@ app.post('/api/overdue-notify/delete', (req, res) => {
   res.json({ success: true });
 });
 
-// 取得所有逾期未上掛訂單
-app.get('/api/overdue-alerts', async (req, res) => {
+// 逾期單件快取（背景計算，讓頁面查詢時秒回）
+const OVERDUE_ITEMS_CACHE_FILE = '/data/overdue-items-cache.json';
+
+function loadOverdueItemsCache() {
+  try {
+    if (fs.existsSync(OVERDUE_ITEMS_CACHE_FILE)) {
+      return JSON.parse(fs.readFileSync(OVERDUE_ITEMS_CACHE_FILE, 'utf8'));
+    }
+  } catch(e) {}
+  return { items: [], updatedAt: null };
+}
+
+function saveOverdueItemsCache(data) {
+  fs.writeFileSync(OVERDUE_ITEMS_CACHE_FILE, JSON.stringify(data, null, 2), 'utf8');
+}
+
+let overdueItemsComputing = false;
+
+async function computeOverdueItems() {
+  if (overdueItemsComputing) {
+    console.log('[OverdueItems] 已有計算在進行中，跳過');
+    return;
+  }
+  overdueItemsComputing = true;
+  console.log('[OverdueItems] 開始計算逾期未上掛品項...');
   try {
     const token = await getPosToken();
-    if (!token) return res.json({ success: false, error: 'POS 登入失敗' });
+    if (!token) {
+      console.log('[OverdueItems] POS 登入失敗');
+      overdueItemsComputing = false;
+      return;
+    }
 
     const headers = {
       'Content-Type': 'application/json; charset=utf-8',
@@ -6659,6 +6686,7 @@ app.get('/api/overdue-alerts', async (req, res) => {
     });
     const searchData = await searchRes.json();
     const orders = searchData?.Data?.Data ?? [];
+    console.log(`[OverdueItems] 共取得 ${orders.length} 筆 POS 訂單`);
 
     const skipData = loadOverdueData();
     const allCust = orderManager.getAllCustomerNumbers();
@@ -6712,13 +6740,26 @@ app.get('/api/overdue-alerts', async (req, res) => {
       await new Promise(r => setTimeout(r, 150));
     }
 
-    res.json({ success: true, items });
+    saveOverdueItemsCache({ items, updatedAt: new Date().toISOString() });
+    console.log(`[OverdueItems] 計算完成，共 ${items.length} 件逾期未上掛`);
   } catch (e) {
-    console.error('逾期單件提醒錯誤:', e);
-    res.json({ success: false, error: e.message });
+    console.error('[OverdueItems] 計算錯誤:', e.message);
+  } finally {
+    overdueItemsComputing = false;
   }
+}
+
+// 取得所有逾期未上掛訂單（直接讀取快取，秒回）
+app.get('/api/overdue-alerts', (req, res) => {
+  const cache = loadOverdueItemsCache();
+  res.json({ success: true, items: cache.items || [], updatedAt: cache.updatedAt || null });
 });
 
+// 手動觸發重新計算（背景執行，立即回應，不會卡住）
+app.post('/api/overdue-alerts/refresh', (req, res) => {
+  res.json({ success: true, message: '已開始重新計算，請稍後約 1-2 分鐘再重新整理查看' });
+  computeOverdueItems();
+});
 // 逾期提醒 JSON 存檔（記錄已提醒狀態）
 const OVERDUE_FILE = '/data/overdue-alerts.json';
 
