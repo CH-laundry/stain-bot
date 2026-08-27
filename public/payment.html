@@ -5334,6 +5334,16 @@ async function manualSendNotify(orderNo) {
     showResult('error', '❌ ' + e.message);
   }
 }
+  
+async function triggerOverdueRefresh() {
+  try {
+    const res = await fetch('/api/overdue-alerts/refresh', { method: 'POST' });
+    const data = await res.json();
+    showResult('success', data.message || '✅ 已開始重新計算');
+  } catch(e) {
+    showResult('error', '❌ ' + e.message);
+  }
+}
 
 async function markOverdueReminded(orderNo) {
   try {
