@@ -6689,6 +6689,9 @@ async function computeOverdueItems() {
     const searchData = await searchRes.json();
     const orders = searchData?.Data?.Data ?? [];
     console.log(`[OverdueItems] 共取得 ${orders.length} 筆 POS 訂單`);
+    if (orders.length > 0) {
+      console.log('[DEBUG] 第一筆訂單完整欄位:', JSON.stringify(orders[0], null, 2));
+    }
 
     const skipData = loadOverdueData();
     const allCust = orderManager.getAllCustomerNumbers();
@@ -6712,6 +6715,9 @@ async function computeOverdueItems() {
         });
         const detailData = await detailRes.json();
         detail = detailData?.Data?.ReceivingItemList || [];
+        if (orders.indexOf(order) === 0) {
+          console.log('[DEBUG] 第一筆訂單 GetData 完整回傳:', JSON.stringify(detailData?.Data, null, 2));
+        }
       } catch (e) {
         console.log('[OverdueItems] GetData 失敗:', orderNo, e.message);
         continue;
