@@ -2613,7 +2613,7 @@ document.addEventListener('DOMContentLoaded', function() {
   loadNotifyTemplates();
   loadDeliveries(true);
   checkTodayDeliveryAlerts();
- // setTimeout(checkOverdueOnLoad, 3000); // 暫時停用
+ setTimeout(checkOverdueOnLoad, 3000);
 });
 
 // ========================================
@@ -5269,83 +5269,32 @@ async function loadOverdueAlerts() {
   wrap.innerHTML = '<p style="text-align:center; color:#999;">查詢中...</p>';
 
   try {
-    const [overdueRes, remindedRes, notifyRes] = await Promise.all([
-      fetch('/api/overdue-alerts'),
-      fetch('/api/overdue-alerts/reminded'),
-      fetch('/api/overdue-notify')
-    ]);
-    const overdueData = await overdueRes.json();
-    const remindedData = await remindedRes.json();
-    const notifyData = await notifyRes.json();
+    const res = await fetch('/api/overdue-alerts');
+    const data = await res.json();
+    const items = data.items || [];
 
-    overdueReminded = remindedData.reminded || {};
-    const notifyRecords = notifyData.records || {};
-    const list = overdueData.overdue || [];
-
-    if (list.length === 0) {
-      wrap.innerHTML = '<div style="text-align:center; padding:40px;"><div style="font-size:48px; margin-bottom:12px;">✅</div><p style="color:#999;">目前沒有逾期未上掛訂單</p></div>';
+    if (items.length === 0) {
+      wrap.innerHTML = '<div style="text-align:center; padding:40px;"><div style="font-size:48px; margin-bottom:12px;">✅</div><p style="color:#999;">目前沒有逾期未上掛的衣物</p></div>';
       return;
     }
 
-    const unreminded = list.filter(o => !overdueReminded[o.orderNo]);
-    if (unreminded.length > 0) {
-      let msg = `⚠️ 共有 ${unreminded.length} 筆訂單超過 15 天未上掛！\n\n`;
-      unreminded.slice(0, 5).forEach(o => {
-        msg += `${o.customerName} - 訂單 ${o.orderNo}（已逾 ${o.diffDays} 天）\n`;
-      });
-      if (unreminded.length > 5) msg += `...還有 ${unreminded.length - 5} 筆`;
-      alert(msg);
-    }
-
     let html = '';
-    list.forEach(o => {
-      const reminded = !!overdueReminded[o.orderNo];
-      const remindedTime = reminded ? new Date(overdueReminded[o.orderNo].remindedAt).toLocaleDateString('zh-TW') : '';
-      const nr = notifyRecords[o.orderNo] || {};
-      const n1 = nr.notify1;
-      const n2 = nr.notify2;
-
-      const notify1Badge = n1
-        ? (n1.sent
-            ? `<span style="background:#28a745;color:#fff;padding:3px 8px;border-radius:5px;font-size:12px;">✅ 第1次已發送 ${n1.time ? new Date(n1.time).toLocaleDateString('zh-TW') : ''}</span>`
-            : `<span style="background:#dc3545;color:#fff;padding:3px 8px;border-radius:5px;font-size:12px;">⚠️ 第1次失敗（${n1.error === 'no_userId' ? '無LINE綁定' : '發送錯誤'}）</span>`)
-        : `<span style="background:#999;color:#fff;padding:3px 8px;border-radius:5px;font-size:12px;">第1次 尚未發送</span>`;
-
-      const notify2Badge = n2
-        ? (n2.sent
-            ? `<span style="background:#28a745;color:#fff;padding:3px 8px;border-radius:5px;font-size:12px;">✅ 第2次已發送 ${n2.time ? new Date(n2.time).toLocaleDateString('zh-TW') : ''}</span>`
-            : `<span style="background:#dc3545;color:#fff;padding:3px 8px;border-radius:5px;font-size:12px;">⚠️ 第2次失敗（${n2.error === 'no_userId' ? '無LINE綁定' : '發送錯誤'}）</span>`)
-        : `<span style="background:#999;color:#fff;padding:3px 8px;border-radius:5px;font-size:12px;">第2次 尚未發送</span>`;
-
+    items.forEach(it => {
       html += `
-        <div style="background:#fff;border-radius:10px;padding:14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,0.08);border-left:4px solid ${reminded ? '#999' : '#dc3545'};">
-          <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-            <input type="checkbox" class="overdue-checkbox" value="${o.orderNo}" onchange="updateOverdueDeleteBtn()" style="width:18px;height:18px;cursor:pointer;">
-            <span style="font-size:12px;color:#999;">選取</span>
-          </label>
+        <div style="background:#fff;border-radius:10px;padding:14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,0.08);border-left:4px solid #dc3545;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:6px;">
             <div>
-              <span style="font-weight:bold;font-size:16px;">${o.customerNo} ${o.customerName}</span>
-              <span style="color:#888;font-size:13px;margin-left:8px;">${o.orderNo}</span>
-              ${reminded
-                ? `<span style="background:#999;color:#fff;padding:3px 8px;border-radius:5px;font-size:12px;margin-left:6px;">✅ 已提醒（${remindedTime}）</span>`
-                : '<span style="background:#dc3545;color:#fff;padding:3px 8px;border-radius:5px;font-size:12px;margin-left:6px;">🔴 未提醒</span>'}
+              <span style="font-weight:bold;font-size:16px;">#${it.customerNo} ${it.customerName}</span>
+              <span style="color:#888;font-size:13px;margin-left:8px;">${it.orderNo}</span>
             </div>
-            <span style="color:#dc3545;font-weight:700;">逾期 ${o.diffDays} 天</span>
+            <span style="color:#dc3545;font-weight:700;">逾期 ${it.diffDays} 天</span>
           </div>
           <div style="font-size:13px;color:#666;margin-bottom:10px;">
-            <div>📅 開單日期：${o.openDate}</div>
-            <div>🧺 品項：${o.itemType}</div>
+            <div>📅 開單日期：${it.openDate}</div>
+            <div>🧺 衣物：${it.itemName}</div>
           </div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
-            ${notify1Badge}
-            ${notify2Badge}
-          </div>
-         <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button class="btn btn-small" style="background:#17a2b8;color:#fff;" onclick="manualSendNotify('${o.orderNo}')">📤 手動補發</button>
-            <button class="btn btn-small" style="background:#ff9800;color:#fff;" onclick="skipFirstNotify('${o.orderNo}')">⏭️ 略過第1次</button>
-            ${!reminded ? `<button class="btn btn-small btn-secondary" onclick="markOverdueReminded('${o.orderNo}')">✅ 已提醒</button>` : ''}
-            <button class="btn btn-small btn-danger" onclick="deleteOverdueAlert('${o.orderNo}')">🗑️ 刪除</button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-small btn-secondary" onclick="skipOverdueItem('${it.itemKey}')">🔕 不再提醒</button>
           </div>
         </div>`;
     });
@@ -5356,6 +5305,20 @@ async function loadOverdueAlerts() {
   }
 }
 
+  async function skipOverdueItem(itemKey) {
+  if (!confirm('確定不再提醒這件衣物？（直到實際上掛完成前，都不會再跳出）')) return;
+  try {
+    await fetch('/api/overdue-alerts/mark-reminded', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ itemKey })
+    });
+    showResult('success', '✅ 已設定不再提醒');
+    loadOverdueAlerts();
+  } catch(e) {
+    showResult('error', '❌ ' + e.message);
+  }
+}
 async function manualSendNotify(orderNo) {
   if (!confirm('確定要手動補發 LINE 通知給此客人？')) return;
   try {
@@ -5578,24 +5541,17 @@ async function deleteStainPhotoDrive(fileId, customerNo) {
 // 頁面載入自動掃描（不需要點 Tab）
 async function checkOverdueOnLoad() {
   try {
-    const [overdueRes, remindedRes] = await Promise.all([
-      fetch('/api/overdue-alerts'),
-      fetch('/api/overdue-alerts/reminded')
-    ]);
-    const overdueData = await overdueRes.json();
-    const remindedData = await remindedRes.json();
+    const res = await fetch('/api/overdue-alerts');
+    const data = await res.json();
+    const items = data.items || [];
 
-    overdueReminded = remindedData.reminded || {};
-
-    const list = overdueData.overdue || [];
-    const unreminded = list.filter(o => !overdueReminded[o.orderNo]);
-
-    if (unreminded.length > 0) {
-      let msg = `⚠️ 注意！共有 ${unreminded.length} 筆訂單超過 15 天未上掛：\n\n`;
-      unreminded.forEach(o => {
-        msg += `• ${o.customerName}｜${o.orderNo}｜已逾 ${o.diffDays} 天\n`;
+    if (items.length > 0) {
+      let msg = `⚠️ 注意！共有 ${items.length} 件衣物超過 15 天未上掛：\n\n`;
+      items.slice(0, 15).forEach(it => {
+        msg += `#${it.customerNo} ${it.customerName}｜${it.itemName}｜開單 ${it.openDate}｜已逾 ${it.diffDays} 天\n`;
       });
-      msg += '\n請至「逾期提醒」Tab 查看詳情並標記已提醒。';
+      if (items.length > 15) msg += `\n...還有 ${items.length - 15} 件`;
+      msg += '\n\n請至「逾期提醒」Tab 查看詳情，可個別按「不再提醒」。';
       alert(msg);
     }
   } catch(e) {
