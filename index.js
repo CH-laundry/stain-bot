@@ -3011,7 +3011,7 @@ app.post('/api/delivery/mark-signed-simple', async (req, res) => {
     });
     if (!matchedCustomerCheck || !matchedCustomerCheck.userId) {
       return res.json({ success: false, error: '找不到客戶資料，請先建檔' });
-    };
+    
     }
 
     // ✅ 更新外送紀錄為已簽收
