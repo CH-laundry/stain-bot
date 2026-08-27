@@ -4738,6 +4738,8 @@ app.listen(PORT, async () => {
   pickupRoutes.checkAndSendReminders();
   }, 60 * 60 * 1000);
   console.log('✅ 取件追蹤系統已啟動');
+  // 🆕 逾期未上掛品項：開機先算一次，之後每30分鐘重算一次
+  computeOverdueItems();
   try {
     await customerDB.loadAllCustomers();
     console.log('客戶資料載入完成');
