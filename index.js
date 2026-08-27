@@ -1832,7 +1832,27 @@ async function handleLinePayConfirm(transactionId, orderId, parentOrderId) {
         userId: order.userId,
         customerNo: custNoSync
       });
-      console.log(`[PaySync] 已加入同步隊列：${order.orderId} NT$${order.amount}`);
+           console.log(`[PaySync] 已加入同步隊列：${order.orderId} NT$${order.amount}`);
+
+      // 🔴 付款成功，刪除取件追蹤記錄
+      try {
+        const baseDirPickupLP = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
+        const PICKUP_FILE_LP = path.join(baseDirPickupLP, 'pickup-tracking.json');
+        if (fs.existsSync(PICKUP_FILE_LP) && custNoSync) {
+          const pickupDataLP = JSON.parse(fs.readFileSync(PICKUP_FILE_LP, 'utf8'));
+          const beforeLP = pickupDataLP.orders ? pickupDataLP.orders.length : 0;
+          pickupDataLP.orders = (pickupDataLP.orders || []).filter(o => {
+            const dbNo = String(o.customerNumber).replace(/\D/g, '').replace(/^0+/, '');
+            return dbNo !== custNoSync;
+          });
+          fs.writeFileSync(PICKUP_FILE_LP, JSON.stringify(pickupDataLP, null, 2), 'utf8');
+          if (pickupDataLP.orders.length < beforeLP) {
+            console.log(`✅ 付款完成，已刪除取件追蹤記錄：客戶編號 ${custNoSync}`);
+          }
+        }
+      } catch (pickupDelErr) {
+        console.error('⚠️ 付款後刪除取件追蹤失敗:', pickupDelErr.message);
+      }
 
       // 寫入收款紀錄
 try {
@@ -2000,6 +2020,26 @@ const allCustSyncEC = orderManager.getAllCustomerNumbers();
           customerNo: custNoSyncEC
         });
 console.log(`[PaySync] 已加入同步隊列：${oid} NT$${order.amount}`);
+
+        // 🔴 付款成功，刪除取件追蹤記錄
+        try {
+          const baseDirPickupEC = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
+          const PICKUP_FILE_EC = path.join(baseDirPickupEC, 'pickup-tracking.json');
+          if (fs.existsSync(PICKUP_FILE_EC) && custNoSyncEC) {
+            const pickupDataEC = JSON.parse(fs.readFileSync(PICKUP_FILE_EC, 'utf8'));
+            const beforeEC = pickupDataEC.orders ? pickupDataEC.orders.length : 0;
+            pickupDataEC.orders = (pickupDataEC.orders || []).filter(o => {
+              const dbNo = String(o.customerNumber).replace(/\D/g, '').replace(/^0+/, '');
+              return dbNo !== custNoSyncEC;
+            });
+            fs.writeFileSync(PICKUP_FILE_EC, JSON.stringify(pickupDataEC, null, 2), 'utf8');
+            if (pickupDataEC.orders.length < beforeEC) {
+              console.log(`✅ 付款完成，已刪除取件追蹤記錄：客戶編號 ${custNoSyncEC}`);
+            }
+          }
+        } catch (pickupDelErrEC) {
+          console.error('⚠️ 付款後刪除取件追蹤失敗:', pickupDelErrEC.message);
+        }
 
         // 寫入收款紀錄
 try {
@@ -2991,16 +3031,21 @@ app.post('/api/delivery/mark-signed-simple', async (req, res) => {
     await deliveryService.markSignedSimple(id, customerNumber, customerName);
 
 
-    // 🔥🔥🔥 自動刪除取件追蹤記錄（開始）🔥🔥🔥
+       // 🔥🔥🔥 自動刪除取件追蹤記錄（開始）🔥🔥🔥
     try {
-      const PICKUP_FILE = path.join(__dirname, 'data', 'pickup.json');
+      const baseDirPickup = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
+      const PICKUP_FILE = path.join(baseDirPickup, 'pickup-tracking.json');
       if (fs.existsSync(PICKUP_FILE)) {
         const pickupData = JSON.parse(fs.readFileSync(PICKUP_FILE, 'utf8'));
         const originalLength = pickupData.orders ? pickupData.orders.length : 0;
-        
+        const cleanNoDel = String(customerNumber).replace(/\D/g, '').replace(/^0+/, '') || customerNumber;
+
         // 刪除符合客戶編號的取件追蹤
         if (pickupData.orders) {
-          pickupData.orders = pickupData.orders.filter(o => o.customerNumber !== customerNumber);
+          pickupData.orders = pickupData.orders.filter(o => {
+            const dbNo = String(o.customerNumber).replace(/\D/g, '').replace(/^0+/, '');
+            return dbNo !== cleanNoDel;
+          });
           fs.writeFileSync(PICKUP_FILE, JSON.stringify(pickupData, null, 2), 'utf8');
           
           const deletedCount = originalLength - pickupData.orders.length;
@@ -3040,6 +3085,17 @@ app.post('/api/delivery/mark-signed-with-payment', async (req, res) => {
       });
     }
 
+    // 🔴 檢查是否有對應客戶資料（LINE User ID）
+    const cleanNoCheck2 = String(customerNumber).replace(/\D/g, '').replace(/^0+/, '') || customerNumber;
+    const allCustomersCheck2 = orderManager.getAllCustomerNumbers();
+    const matchedCustomerCheck2 = allCustomersCheck2.find(c => {
+      const dbNo = String(c.number).replace(/\D/g, '').replace(/^0+/, '');
+      return dbNo === cleanNoCheck2;
+    });
+    if (!matchedCustomerCheck2 || !matchedCustomerCheck2.userId) {
+      return res.json({ success: false, error: '找不到客戶資料，請先建檔' });
+    }
+
     console.log(`🔔 外送簽收付款流程開始: #${customerNumber} - ${customerName} - NT$${amount}`);
 
     // ✅ 1. 更新外送紀錄為已簽收
@@ -3066,26 +3122,7 @@ app.post('/api/delivery/mark-signed-with-payment', async (req, res) => {
     
     console.log(`✅ 訂單已建立: ${result.orderId}`);
 
-    // 🔥🔥🔥 3. 自動刪除取件追蹤記錄 🔥🔥🔥
-    try {
-      const PICKUP_FILE = path.join(__dirname, 'data', 'pickup.json');
-      if (fs.existsSync(PICKUP_FILE)) {
-        const pickupData = JSON.parse(fs.readFileSync(PICKUP_FILE, 'utf8'));
-        const originalLength = pickupData.orders ? pickupData.orders.length : 0;
-        
-        if (pickupData.orders) {
-          pickupData.orders = pickupData.orders.filter(o => o.customerNumber !== customerNumber);
-          fs.writeFileSync(PICKUP_FILE, JSON.stringify(pickupData, null, 2), 'utf8');
-          
-          const deletedCount = originalLength - pickupData.orders.length;
-          if (deletedCount > 0) {
-            console.log(`✅ 已自動刪除 ${deletedCount} 筆取件追蹤記錄（客戶編號：${customerNumber}）`);
-          }
-        }
-      }
-    } catch (pickupErr) {
-      console.error('⚠️ 刪除取件追蹤失敗（不影響簽收）:', pickupErr.message);
-    }
+        // 🔴 已移除：這裡不再立即刪除取件追蹤，改成付款成功時才刪除（見下方 LINE Pay / ECPay 成功處理）
 
     // 🔥🔥🔥 4. 檢查並重新發送付款連結（修復訊息不穩定問題）🔥🔥🔥
     console.log(`🔍 開始檢查訂單狀態...`);
