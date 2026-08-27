@@ -6643,16 +6643,15 @@ app.get('/api/overdue-alerts', async (req, res) => {
       'Authorization': `Bearer ${token}`
     };
 
+    const CUTOFF_DATE = new Date('2026-07-15');
     const today = new Date();
-    const start = new Date(today);
-    start.setDate(today.getDate() - 30);
     const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 
     const searchRes = await fetch('http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/SearchPage', {
       method: 'POST', headers,
       body: JSON.stringify([
         { Key: 'BranchID', Value: 'b0aee8e3-6a6e-4863-b74a-08da8958f7f9' },
-        { Key: 'StartDate', Value: fmt(start) },
+        { Key: 'StartDate', Value: fmt(CUTOFF_DATE) },
         { Key: 'EndDate', Value: fmt(today) },
         { Key: 'PageSize', Value: '200' },
         { Key: 'PageIndex', Value: '1' }
@@ -6660,68 +6659,62 @@ app.get('/api/overdue-alerts', async (req, res) => {
     });
     const searchData = await searchRes.json();
     const orders = searchData?.Data?.Data ?? [];
-console.log('[OverdueAlerts] 第一筆訂單範例:', JSON.stringify(orders[0]).substring(0, 300));
-    const ignoredData = loadOverdueData();
-    const allCust = orderManager.getAllCustomerNumbers();
-    const START_DATE = new Date('2026-04-27');
-    const overdue = [];
 
-   for (const order of orders) {
-      console.log('[OverdueAlerts] 處理訂單:', order.ReceivingOrderNumber, order.ReceivedDate, 'Id:', order.Id);
+    const skipData = loadOverdueData();
+    const allCust = orderManager.getAllCustomerNumbers();
+    const items = [];
+
+    for (const order of orders) {
       const orderNo = order.ReceivingOrderNumber || '';
       const customerName = order.CustomerName || '';
       if (!orderNo || !customerName) continue;
-      if (ignoredData[orderNo]) continue;
 
       const openDate = new Date(order.ReceivedDate || '');
-      if (isNaN(openDate) || openDate < START_DATE) continue;
+      if (isNaN(openDate) || openDate < CUTOFF_DATE) continue;
 
       const diffDays = Math.floor((today - openDate) / (1000 * 60 * 60 * 24));
-      console.log('[OverdueAlerts] 天數計算:', order.ReceivingOrderNumber, 'diffDays:', diffDays);
       if (diffDays < 15) continue;
 
-      // 查 POS 品項上掛狀態
-      let allHung = false;
-      let itemType = '';
+      let detail;
       try {
         const detailRes = await fetch(`http://yidianyuan.ao-lan.cn/wepapi/ReceivingOrder/GetData/${order.Id}`, {
           method: 'GET', headers
         });
         const detailData = await detailRes.json();
-        const items = detailData?.Data?.ReceivingItemList || [];
-        if (items.length > 0) console.log('[OverdueAlerts] 品項範例:', JSON.stringify(items[0]).substring(0, 400));
-        allHung = items.length > 0 && items.every(item => item.LocationDate);
-        itemType = items.map(item => item?.Goods?.GoodsName || '').filter(Boolean).join('、');
-     } catch(e) {
-        console.log('[OverdueAlerts] GetData 失敗:', order.ReceivingOrderNumber, e.message);
+        detail = detailData?.Data?.ReceivingItemList || [];
+      } catch (e) {
+        console.log('[OverdueItems] GetData 失敗:', orderNo, e.message);
         continue;
       }
-
-      if (allHung) continue; // 全部上掛就不顯示
 
       const matchedCust = allCust.find(c =>
         (c.name || '').replace(/\s/g, '') === customerName.replace(/\s/g, '')
       );
-      const customerNo = matchedCust
-        ? String(matchedCust.number).padStart(3, '0')
-        : '---';
+      const customerNo = matchedCust ? String(matchedCust.number).padStart(3, '0') : '---';
 
-      overdue.push({
-        id: orderNo,
-        orderNo,
-        customerNo,
-        customerName,
-        itemType,
-        openDate: openDate.toISOString().substring(0, 10),
-        diffDays
+      detail.forEach((item, idx) => {
+        if (item.LocationDate) return;
+
+        const itemKey = orderNo + '#' + idx;
+        if (skipData[itemKey]) return;
+
+        items.push({
+          itemKey,
+          orderNo,
+          customerNo,
+          customerName,
+          itemName: item?.Goods?.GoodsName || '未知品項',
+          openDate: openDate.toISOString().substring(0, 10),
+          diffDays
+        });
       });
 
-      await new Promise(r => setTimeout(r, 200));
+      await new Promise(r => setTimeout(r, 150));
     }
 
-    res.json({ success: true, overdue });
+    res.json({ success: true, items });
   } catch (e) {
-    console.error('逾期提醒錯誤:', e);
+    console.error('逾期單件提醒錯誤:', e);
     res.json({ success: false, error: e.message });
   }
 });
@@ -6745,9 +6738,9 @@ function saveOverdueData(data) {
 // 標記已提醒
 app.post('/api/overdue-alerts/mark-reminded', (req, res) => {
   try {
-    const { orderNo } = req.body;
+    const { itemKey } = req.body;
     const data = loadOverdueData();
-    data[orderNo] = { remindedAt: new Date().toISOString() };
+    data[itemKey] = { skippedAt: new Date().toISOString() };
     saveOverdueData(data);
     res.json({ success: true });
   } catch(e) {
