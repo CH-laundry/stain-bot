@@ -2962,6 +2962,18 @@ app.post('/api/delivery/mark-signed-simple', async (req, res) => {
       });
     }
 
+    // 🔴 檢查是否有對應客戶資料（LINE User ID）
+    const cleanNoCheck = String(customerNumber).replace(/\D/g, '').replace(/^0+/, '') || customerNumber;
+    const allCustomersCheck = orderManager.getAllCustomerNumbers();
+    const matchedCustomerCheck = allCustomersCheck.find(c => {
+      const dbNo = String(c.number).replace(/\D/g, '').replace(/^0+/, '');
+      return dbNo === cleanNoCheck;
+    });
+    if (!matchedCustomerCheck || !matchedCustomerCheck.userId) {
+      return res.json({ success: false, error: '找不到客戶資料，請先建檔' });
+    };
+    }
+
     // ✅ 更新外送紀錄為已簽收
     const deliveryRoutes = require('./routes/deliveryRoutes');
     const fs = require('fs');
