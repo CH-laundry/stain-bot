@@ -851,7 +851,48 @@ async function getPosToken() {
   }
 }
 
-async function autoLookupAndBind(userId, displayName) {
+  }
+
+  async function autoLookupAndBindByMobile(userId, mobile) {
+    try {
+      const token = await getPosToken();
+      if (!token) return null;
+
+      const headers = {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Host': 'yidianyuan.ao-lan.cn',
+        'Authorization': `Bearer ${token}`
+      };
+
+      console.log(`[AutoBindMobile] 用手機號碼搜尋: ${mobile}`);
+      const res = await fetch('http://yidianyuan.ao-lan.cn/wepapi/Customer/SearchCustomer', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify([{ Key: 'KeyWord', Value: mobile }])
+      });
+      const data = await res.json();
+      const results = data?.Data ?? [];
+      console.log(`[AutoBindMobile] 搜尋結果: ${results.length} 筆`);
+
+      const exact = results.find(r => (r.Mobile || '').replace(/\D/g, '') === mobile.replace(/\D/g, ''));
+      const target = exact || (results.length === 1 ? results[0] : null);
+
+      if (target) {
+        const no = extractCustomerNo(target.CustomerNumber);
+        if (no) {
+          orderManager.saveCustomerNumber(no, target.CustomerName, userId);
+          console.log(`[AutoBindMobile] ✅ 手機比對成功: ${target.CustomerName} → #${no}`);
+          return no;
+        }
+      }
+      return null;
+    } catch (e) {
+      console.error('[AutoBindMobile] 錯誤:', e.message);
+      return null;
+    }
+  }
+
+  async function autoLookupAndBind(userId, displayName) {
   try {
     const token = await getPosToken();
     console.log(`[AutoBind] token: ${token ? '取得成功' : '失敗'}`);
@@ -1203,6 +1244,17 @@ if (!existingCustomer) {
         if (event.message.type === 'text') {
           const userMessage = event.message.text.trim();
           logger.logUserMessage(userId, userMessage);
+          // 🔴 偵測訊息中是否含有手機號碼，自動比對綁定
+        const mobileMatch = userMessage.match(/09\d{8}/);
+        if (mobileMatch) {
+          const detectedMobile = mobileMatch[0];
+          const alreadyBound = orderManager.getAllCustomerNumbers().find(c => c.userId === userId);
+          if (!alreadyBound) {
+            autoLookupAndBindByMobile(userId, detectedMobile).catch(e =>
+              console.error('[AutoBindMobile] 呼叫失敗:', e.message)
+            );
+          }
+        }
 
           // (A0) 廣告影片指令
 if (userMessage.startsWith('產生廣告') || userMessage.startsWith('生成廣告')) {
