@@ -1850,8 +1850,27 @@ async function handleLinePayConfirm(transactionId, orderId, parentOrderId) {
             console.log(`✅ 付款完成，已刪除取件追蹤記錄：客戶編號 ${custNoSync}`);
           }
         }
-      } catch (pickupDelErr) {
+            } catch (pickupDelErr) {
         console.error('⚠️ 付款後刪除取件追蹤失敗:', pickupDelErr.message);
+      }
+
+      // 🔴 付款成功，同時刪除外送排程記錄
+      try {
+        const DELIVERY_FILE_LP = path.join(__dirname, 'data', 'delivery.json');
+        if (fs.existsSync(DELIVERY_FILE_LP) && custNoSync) {
+          const deliveryDataLP = JSON.parse(fs.readFileSync(DELIVERY_FILE_LP, 'utf8'));
+          const beforeDelLP = deliveryDataLP.orders ? deliveryDataLP.orders.length : 0;
+          deliveryDataLP.orders = (deliveryDataLP.orders || []).filter(o => {
+            const dbNo = String(o.customerNumber).replace(/\D/g, '').replace(/^0+/, '');
+            return dbNo !== custNoSync;
+          });
+          fs.writeFileSync(DELIVERY_FILE_LP, JSON.stringify(deliveryDataLP, null, 2), 'utf8');
+          if (deliveryDataLP.orders.length < beforeDelLP) {
+            console.log(`✅ 付款完成，已刪除外送排程記錄：客戶編號 ${custNoSync}`);
+          }
+        }
+      } catch (deliveryDelErr) {
+        console.error('⚠️ 付款後刪除外送排程失敗:', deliveryDelErr.message);
       }
 
       // 寫入收款紀錄
@@ -2037,11 +2056,30 @@ console.log(`[PaySync] 已加入同步隊列：${oid} NT$${order.amount}`);
               console.log(`✅ 付款完成，已刪除取件追蹤記錄：客戶編號 ${custNoSyncEC}`);
             }
           }
-        } catch (pickupDelErrEC) {
-          console.error('⚠️ 付款後刪除取件追蹤失敗:', pickupDelErrEC.message);
-        }
+              } catch (pickupDelErrEC) {
+        console.error('⚠️ 付款後刪除取件追蹤失敗:', pickupDelErrEC.message);
+      }
 
-        // 寫入收款紀錄
+      // 🔴 付款成功，同時刪除外送排程記錄
+      try {
+        const DELIVERY_FILE_EC = path.join(__dirname, 'data', 'delivery.json');
+        if (fs.existsSync(DELIVERY_FILE_EC) && custNoSyncEC) {
+          const deliveryDataEC = JSON.parse(fs.readFileSync(DELIVERY_FILE_EC, 'utf8'));
+          const beforeDelEC = deliveryDataEC.orders ? deliveryDataEC.orders.length : 0;
+          deliveryDataEC.orders = (deliveryDataEC.orders || []).filter(o => {
+            const dbNo = String(o.customerNumber).replace(/\D/g, '').replace(/^0+/, '');
+            return dbNo !== custNoSyncEC;
+          });
+          fs.writeFileSync(DELIVERY_FILE_EC, JSON.stringify(deliveryDataEC, null, 2), 'utf8');
+          if (deliveryDataEC.orders.length < beforeDelEC) {
+            console.log(`✅ 付款完成，已刪除外送排程記錄：客戶編號 ${custNoSyncEC}`);
+          }
+        }
+      } catch (deliveryDelErrEC) {
+        console.error('⚠️ 付款後刪除外送排程失敗:', deliveryDelErrEC.message);
+      }
+
+      // 寫入收款紀錄
 try {
   const { google } = require('googleapis');
   const googleAuth = require('./services/googleAuth');
