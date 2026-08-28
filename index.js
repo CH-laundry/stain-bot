@@ -3020,15 +3020,15 @@ app.post('/api/delivery/mark-signed-simple', async (req, res) => {
     const path = require('path');
     const FILE_PATH = path.join(__dirname, 'data', 'delivery.json');
     
-    const data = JSON.parse(fs.readFileSync(FILE_PATH, 'utf8'));
-    const order = data.orders.find(o => o.id === id);
-    
-    if (order) {
-      order.signed = true;
-      fs.writeFileSync(FILE_PATH, JSON.stringify(data, null, 2), 'utf8');
-    }
+          const data = JSON.parse(fs.readFileSync(FILE_PATH, 'utf8'));
+      const orderIndex = data.orders.findIndex(o => o.id === id);
 
-    await deliveryService.markSignedSimple(id, customerNumber, customerName);
+      if (orderIndex !== -1) {
+        data.orders.splice(orderIndex, 1);
+        fs.writeFileSync(FILE_PATH, JSON.stringify(data, null, 2), 'utf8');
+      }
+
+      await deliveryService.markSignedSimple(id, customerNumber, customerName);
 
 
        // 🔥🔥🔥 自動刪除取件追蹤記錄（開始）🔥🔥🔥
