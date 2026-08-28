@@ -6706,6 +6706,8 @@ async function computeOverdueItems() {
       const customerName = order.CustomerName || '';
       if (!orderNo || !customerName) continue;
 
+      if (order.IsDeliverFinished === true) continue; // 已完成取件/送達，不提醒
+
       const openDate = new Date(order.ReceivedDate || '');
       if (isNaN(openDate) || openDate < CUTOFF_DATE) continue;
 
