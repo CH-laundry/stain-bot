@@ -890,6 +890,7 @@ async function getPosToken() {
       return null;
     }
   }
+global.autoLookupAndBindByMobile = autoLookupAndBindByMobile;
 
   async function autoLookupAndBind(userId, displayName) {
   try {
