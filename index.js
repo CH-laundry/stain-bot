@@ -6698,12 +6698,12 @@ async function computeOverdueItems() {
     const allCust = orderManager.getAllCustomerNumbers();
     const items = [];
 
-    for (const order of orders) {
+           for (const order of orders) {
       const orderNo = order.ReceivingOrderNumber || '';
       const customerName = order.CustomerName || '';
       if (!orderNo || !customerName) continue;
 
-      if (order.IsDeliverFinished === true) continue; // 已完成取件/送達，不提醒
+      if (order.IsDeliverFinished === true) continue;
 
       const openDate = new Date(order.ReceivedDate || '');
       if (isNaN(openDate) || openDate < CUTOFF_DATE) continue;
