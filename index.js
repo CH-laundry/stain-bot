@@ -6689,6 +6689,10 @@ async function computeOverdueItems() {
     const searchData = await searchRes.json();
     const orders = searchData?.Data?.Data ?? [];
     console.log(`[OverdueItems] 共取得 ${orders.length} 筆 POS 訂單`);
+    // 暫時除錯用網址（看完可以之後再拿掉）
+    app.get('/api/debug-order-sample', (req, res) => {
+      res.json(orders[0] || {});
+    });
     if (orders.length > 0) {
       console.log('[DEBUG] 第一筆訂單完整欄位:', JSON.stringify(orders[0], null, 2));
     }
