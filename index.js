@@ -851,7 +851,6 @@ async function getPosToken() {
   }
 }
 
-  }
 
   async function autoLookupAndBindByMobile(userId, mobile) {
     try {
