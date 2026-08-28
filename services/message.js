@@ -318,10 +318,19 @@ class MessageHandler {
     }
 
     // 前置過濾：選單字眼/表情/閒聊/電話/純網址/明顯不相關 → 不回
-    if (ignoredKeywords.some(k => lower.includes(k.toLowerCase())) ||
+        if (ignoredKeywords.some(k => lower.includes(k.toLowerCase())) ||
         isEmojiOrPuncOnly(raw) || isSmallTalk(raw) || isPhoneNumberOnly(raw) ||
         isUrlOnly(raw) || isClearlyUnrelatedTopic(raw)) {
       logger.logToFile(`前置過濾忽略:「${raw}」(User ${userId})`);
+
+      // 🔴 雖然不回覆，但純電話號碼訊息仍嘗試自動比對綁定客戶編號
+      const mobileMatch = raw.match(/09\d{8}/);
+      if (mobileMatch && global.autoLookupAndBindByMobile) {
+        global.autoLookupAndBindByMobile(userId, mobileMatch[0]).catch(e =>
+          logger.logError('[AutoBindMobile] 前置過濾時呼叫失敗', e)
+        );
+      }
+
       return;
     }
 
