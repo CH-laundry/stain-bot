@@ -2006,6 +2006,37 @@ async function handleTextMessage(userMessage, userId = null) {
     console.log('📩 收到訊息:', userMessage);
     console.log('📩 訊息長度:', userMessage.length);
     console.log('📩 訊息前50字:', userMessage.substring(0, 50));
+
+    // ====================================
+    // 🔴 最優先：中秋連假店休公告（9/25-9/28）
+    // ====================================
+    const nowForHoliday = new Date();
+    const taipeiForHoliday = new Date(nowForHoliday.toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
+    const holidayMonth = taipeiForHoliday.getMonth() + 1;
+    const holidayDate = taipeiForHoliday.getDate();
+    const isHolidayPeriod = (holidayMonth === 9 && holidayDate >= 25 && holidayDate <= 28);
+    const isPickupQuery = /去拿|去領|來取|過去拿|過去領|去取件|可以拿|可以領|什麼時候拿|幾點可以拿|今天拿|明天拿|來拿|拿衣服/.test(userMessage);
+    const holidayKeywords = (
+      /營業|開門|有開|有在|幾點|店休|休息|休假|假期|放假|打烊|開著|有開嗎|今天有|明天有/.test(userMessage) ||
+      /來收|收件|到府收|送洗|送件|可以收|今天收|明天收|等會來|等一下來|送過去|拿過去|帶過去/.test(userMessage) ||
+      /去拿|去領|來取|過去拿|過去領|去取件|可以拿|可以領|什麼時候拿|幾點可以拿|今天拿|明天拿/.test(userMessage) ||
+      /送回|送到家|何時送|幾點送|什麼時候送|送回來|幫我送/.test(userMessage) ||
+      /好了嗎|好了沒|洗好了|完工了|完成了|可以拿了|幾天好|什麼時候好|快好了嗎/.test(userMessage) ||
+      /急件|趕緊|盡快|快一點|急著要|需要用|幾天會好/.test(userMessage)
+    );
+    if (isHolidayPeriod && holidayKeywords) {
+      let holidayReply = '';
+      if (isPickupQuery) {
+        holidayReply = `C.H 精緻洗衣 💙 中秋連假期間 9/25（五）～ 9/28（一）店休 4 天\n\n店休期間暫停取件，9/29（二）起恢復正常營業後即可前來領取 💙\n\n造成不便敬請見諒，祝您中秋節快樂 🌕`;
+      } else {
+        holidayReply = `C.H 精緻洗衣 💙 中秋連假期間 9/25（五）～ 9/28（一）店休 4 天\n\n店休期間到府收件照常服務，外收人員會正常前往收回 💙\n若衣物已完成，9/29（二）起即可於營業時間內前來領取\n\n9/29（二）起恢復正常營業\n祝您中秋節快樂 🌕 感謝您一路以來的支持與信任 🙏`;
+      }
+      console.log('🌕 中秋連假店休公告觸發');
+      if (userId) {
+        await logToGoogleSheets(userId, userMessage, holidayReply, '店休公告', '😊 正常');
+      }
+      return holidayReply;
+    }
     
     // 過濾 6宮格固定模板訊息
     const exactMatches = [
