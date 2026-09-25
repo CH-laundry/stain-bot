@@ -2026,16 +2026,7 @@ async function handleTextMessage(userMessage, userId = null) {
 
 
     
-//     // 🔥🔥🔥 洗衣系統查詢整合（結束）🔥🔥🔥
 
-
-    async function handleTextMessage(userMessage, userId = null) {
-  try {
-    // ====================================
-   
-
-    
-    console.log('📩 收到訊息:', userMessage);
     console.log('📩 訊息長度:', userMessage.length);
     console.log('📩 訊息前50字:', userMessage.substring(0, 50));
     
